@@ -10,4 +10,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 @FunctionalInterface
 public interface AstResumeStep {
     Object resume(VirtualFrame frame, Object input);
+
+    /** Instantiate private progress from an immutable captured scope recipe. */
+    default AstResumeStep forInvocation() { return this; }
 }

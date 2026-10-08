@@ -6,12 +6,12 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import static thc.runtime.TupleResults.requireVoidCarrier;
-import java.util.List;
+import java.util.ArrayDeque;
 final class AstMaskScope implements AstResumeStep {
     private final Node node;
     private final MaskingState prior;
-    private final List<AstResumeStep> steps;
-    AstMaskScope(Node node, MaskingState prior, List<AstResumeStep> steps) { this.node = node; this.prior = prior; this.steps = steps; }
+    private final ArrayDeque<AstResumeStep> steps;
+    AstMaskScope(Node node, MaskingState prior, ArrayDeque<AstResumeStep> steps) { this.node = node; this.prior = prior; this.steps = steps; }
     @Override public Object resume(VirtualFrame frame, Object input) {
         try { return AstContinuations.resumeAstSteps(frame, steps, input); }
         catch (AstCapture cut) { throw cut.enclose(remaining -> new AstMaskScope(node, prior, remaining)); }

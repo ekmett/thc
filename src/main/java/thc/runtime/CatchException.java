@@ -7,7 +7,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import static thc.runtime.TupleResults.requireVoidCarrier;
-import java.util.List;
+import java.util.ArrayDeque;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import static thc.runtime.Applications.requireClosure;
 
@@ -97,9 +97,9 @@ public final class CatchException extends Expr {
     private static final class CatchScope implements AstResumeStep, DelimitedStep {
         private final CatchException node;
         private final Object handler;
-        private final List<AstResumeStep> steps;
-        @CompilerDirectives.TruffleBoundary CatchScope(CatchException node, Object handler) { this(node, handler, List.of()); }
-        CatchScope(CatchException node, Object handler, List<AstResumeStep> steps) { this.node = node; this.handler = handler; this.steps = steps; }
+        private final ArrayDeque<AstResumeStep> steps;
+        @CompilerDirectives.TruffleBoundary CatchScope(CatchException node, Object handler) { this(node, handler, new ArrayDeque<>()); }
+        CatchScope(CatchException node, Object handler, ArrayDeque<AstResumeStep> steps) { this.node = node; this.handler = handler; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (GuestException guest) { return node.runHandler(frame, handler, guest.getPayload()); }

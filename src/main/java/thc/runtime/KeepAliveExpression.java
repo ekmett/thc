@@ -7,7 +7,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import java.lang.ref.Reference;
-import java.util.List;
+import java.util.ArrayDeque;
 
 /** Keep the reference alive until actual completion, including every resumed cut. */
 public final class KeepAliveExpression extends Expr {
@@ -22,8 +22,8 @@ public final class KeepAliveExpression extends Expr {
     private static AstCapture enclose(AstCapture cut, Object value) {
         return cut.enclose(steps -> new KeptScope(value, steps));
     }
-    private record KeptScope(Object value, List<AstResumeStep> steps) implements AstResumeStep, DelimitedStep {
-        @TruffleBoundary KeptScope(Object value) { this(value, List.of()); }
+    private record KeptScope(Object value, ArrayDeque<AstResumeStep> steps) implements AstResumeStep, DelimitedStep {
+        @TruffleBoundary KeptScope(Object value) { this(value, new ArrayDeque<>()); }
         @Override public Object resume(VirtualFrame frame, Object input) {
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) { throw enclose(cut, value); }

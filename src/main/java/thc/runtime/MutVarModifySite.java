@@ -107,8 +107,8 @@ public final class MutVarModifySite {
         }
         private Object resumed(Object input) {
             if (input instanceof ChildResume child) {
-                if (child.getFailure() != null) throw child.getFailure();
-                return child.getValue();
+                if (child.getFailure() != null) throw child.takeFailure();
+                return child.takeValue();
             }
             if (input instanceof Throwable failure) throw propagate(failure);
             throw fault("Invalid atomic MutVar modifier resume");
@@ -152,8 +152,8 @@ public final class MutVarModifySite {
         }
         private Object completed(Object input) {
             if (input instanceof ChildResume child) {
-                if (child.getFailure() != null) throw child.getFailure();
-                return child.getValue();
+                if (child.getFailure() != null) throw child.takeFailure();
+                return child.takeValue();
             }
             if (input instanceof Throwable failure) throw propagate(failure);
             throw fault("Invalid atomic MutVar selector resume");

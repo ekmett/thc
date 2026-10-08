@@ -4,7 +4,7 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
-import java.util.List;
+import java.util.ArrayDeque;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import static thc.runtime.Applications.requireClosure;
 
@@ -164,9 +164,9 @@ public final class AstTypedApplication extends Expr {
     }
     private static final class Cleanup implements AstResumeStep, DelimitedStep {
         private final AstTypedApplication owner;
-        private final List<AstResumeStep> steps;
-        @CompilerDirectives.TruffleBoundary Cleanup(AstTypedApplication owner) { this(owner, List.of()); }
-        Cleanup(AstTypedApplication owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
+        private final ArrayDeque<AstResumeStep> steps;
+        @CompilerDirectives.TruffleBoundary Cleanup(AstTypedApplication owner) { this(owner, new ArrayDeque<>()); }
+        Cleanup(AstTypedApplication owner, ArrayDeque<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             boolean suspended = false;
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }

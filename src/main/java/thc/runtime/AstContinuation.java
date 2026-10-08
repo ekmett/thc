@@ -5,16 +5,17 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import java.util.List;
+import java.util.ArrayDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 /** One owned activation; ordinary AST calls neither allocate this nor materialize frames. */
 public final class AstContinuation implements SavedGuestContinuation {
     private final GuestRoot sourceRoot;
-    private final Object yielded;
+    private Object yielded;
     private final MaskingState logicalMask;
     private final MaterializedFrame frame;
-    private final List<AstResumeStep> steps;
+    private final ArrayDeque<AstResumeStep> steps;
     private final StackAnnotationState annotations;
     private final boolean rootEntrySpill;
     private final ManagedSTM.Transaction transaction;
@@ -27,7 +28,7 @@ public final class AstContinuation implements SavedGuestContinuation {
     public AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
                            List<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
         this.sourceRoot = root; this.yielded = yielded; this.logicalMask = mask; this.frame = frame;
-        this.steps = steps; this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
+        this.steps = new ArrayDeque<>(steps); this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
         this.transaction = thc.Language.currentState(root).stm.currentTransaction();
     }
     @Override public GuestRoot getSourceRoot() { return sourceRoot; }
@@ -47,6 +48,7 @@ public final class AstContinuation implements SavedGuestContinuation {
         if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);
         if (!claimed.compareAndSet(false, true)) throw fault("AST continuation was already resumed");
+        yielded = null;
         MaskingState ambient = SynchronousMasking.current(sourceRoot);
         StackAnnotationState ambientAnnotations = StackAnnotations.current(sourceRoot);
         AstStackScope stack = AstStacks.astStackScope(sourceRoot);

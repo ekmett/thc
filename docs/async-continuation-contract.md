@@ -106,6 +106,15 @@ by only the unconsumed old suffix. Completed effects and bindings are not
 replayed. The resuming Java thread regains its previous ambient mask on every
 exit, while the saved computation runs under its logical mask.
 
+Claiming a one-shot AST activation detaches its old yield marker. Resumption
+removes completed steps as it advances, including steps inside lexical scopes.
+After validating a completed child's identity and result, the caller transfers
+that result out of its completion carrier. A discarded result therefore need not
+remain reachable until an unrelated suffix returns. Live frame values, Java
+references and active `keepAlive#` extents retain their normal reachability.
+Reusable delimited suffixes retain immutable scope recipes; each invocation owns
+fresh progress through those recipes, including nested scopes.
+
 Continuation identity must match the suspended body, including legitimate
 Truffle clones, or carry a validated tail-transfer witness. An uncaptured
 callee cannot masquerade as its caller's continuation. The asynchronous payload

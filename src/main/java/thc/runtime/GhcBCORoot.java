@@ -7,7 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.Arrays;
-import java.util.List;
+import java.util.ArrayDeque;
 import thc.Language;
 import static thc.runtime.RuntimeFault.fault;
 
@@ -257,7 +257,7 @@ public final class GhcBCORoot extends GuestRoot {
     private AstCapture own(AstCapture cut) {
         return cut.enclose(steps -> (frame, input) -> resume(frame, steps, input));
     }
-    private Object resume(VirtualFrame frame, List<AstResumeStep> steps, Object input) {
+    private Object resume(VirtualFrame frame, ArrayDeque<AstResumeStep> steps, Object input) {
         requireOwner();
         try { return AstContinuations.resumeAstSteps(frame, steps, input); }
         catch (AstCapture cut) { throw own(cut); }

@@ -569,10 +569,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             Thunk child = suspended.getThunk();
             if (saved != child)
                 throw new IllegalStateException("Forced-value continuation lost its saved child");
-            if (resumed.getFailure() != null) throw resumed.getFailure();
+            if (resumed.getFailure() != null) throw resumed.takeFailure();
             if (child.getState() != 2 || child.getValue() != resumed.getValue())
                 throw new IllegalStateException("Forced-value continuation lost its child update");
-            return resumed.getValue();
+            return resumed.takeValue();
         }
         @Fallback public static Object malformed(Object saved, Object suspended, Object resumed) {
             throw new IllegalStateException("Forced-value continuation requires its exact saved thunk and ChildResume");
@@ -633,7 +633,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ResumeForcedLocal {
         @Specialization public static Object resume(VirtualFrame frame, LocalAccessor local, boolean cell,
                 ThunkSuspended suspended, ChildResume resumed, @Bind("$node") Node node) {
-            if (resumed.getFailure() != null) throw resumed.getFailure();
+            if (resumed.getFailure() != null) throw resumed.takeFailure();
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             Object binding = local.getObject(bytecode, frame);
             Thunk thunk = suspended.getThunk();
@@ -653,7 +653,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     throw new IllegalStateException("Forced-local continuation lost its child update");
                 ForceLocal.publish(frame, local, false, binding, thunk, resumed.getValue(), node);
             }
-            return resumed.getValue();
+            return resumed.takeValue();
         }
         @Fallback public static Object malformed(LocalAccessor local, boolean cell, Object suspended, Object resumed) {
             throw new IllegalStateException("Forced-local continuation requires ChildResume");
@@ -988,11 +988,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return resumed.get();
         }
         @Specialization public static Object resume(CallSegmentSuspended suspended, ChildResume resumed) {
-            if (resumed.getFailure() != null) throw resumed.getFailure();
+            if (resumed.getFailure() != null) throw resumed.takeFailure();
             CallSegment call = suspended.getSegment();
             if (call.getState() != 2 || call.getValue() != resumed.getValue() || resumed.getValue() instanceof ContinuationResult)
                 throw new IllegalStateException("Application continuation lost its call update");
-            return resumed.getValue();
+            return resumed.takeValue();
         }
         @Fallback public static Object malformed(Object suspended, Object resumed) {
             throw new IllegalStateException("Application continuation requires ChildResume");
@@ -2467,8 +2467,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         private final BytecodeInputSource source;
         private final BytecodeTupleSlots destination;
         private final BytecodeRoot root;
-        private final java.util.List<AstResumeStep> steps;
-        TypedInputResume(Closure function, BytecodeInputSource source, BytecodeTupleSlots destination, BytecodeRoot root, java.util.List<AstResumeStep> steps) {
+        private final java.util.ArrayDeque<AstResumeStep> steps;
+        TypedInputResume(Closure function, BytecodeInputSource source, BytecodeTupleSlots destination, BytecodeRoot root, java.util.ArrayDeque<AstResumeStep> steps) {
             this.function = function; this.source = source; this.destination = destination; this.root = root; this.steps = steps;
         }
         @Override public Object resume(VirtualFrame frame, Object input) {
@@ -3260,12 +3260,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ResumeIOAction {
         @Specialization public static void resume(VirtualFrame frame, BytecodeTupleSlots destination,
                 CallSegmentSuspended suspended, ChildResume resumed, @Bind Node node) {
-            if (resumed.getFailure() != null) throw resumed.getFailure();
+            if (resumed.getFailure() != null) throw resumed.takeFailure();
             CallSegment segment = suspended.getSegment();
             if (segment.getTupleShape() != destination.getShape() || segment.getState() != 2 ||
                     segment.getValue() != resumed.getValue() || !(resumed.getValue() instanceof HandoffStorage owned))
                 throw new IllegalStateException("IO action continuation lost its tuple update");
             destination.consume(frame, node, owned);
+            resumed.takeValue();
         }
         @Specialization public static void deliver(BytecodeTupleSlots destination,
                 CallSegmentSuspended suspended, PrivateIOUnwind delivery) {
@@ -3290,13 +3291,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         @Specialization public static void resume(VirtualFrame frame, BytecodeTupleSlots destination,
                 CallSegmentSuspended suspended, ChildResume resumed, @Bind Node node) {
-            if (resumed.getFailure() != null) throw resumed.getFailure();
+            if (resumed.getFailure() != null) throw resumed.takeFailure();
             CallSegment segment = suspended.getSegment();
             if (segment.getCaughtIOAction() || segment.getTupleShape() != destination.getShape() ||
                     segment.getState() != 2 || segment.getValue() != resumed.getValue() ||
                     !(resumed.getValue() instanceof HandoffStorage owned))
                 throw new IllegalStateException("Tuple application continuation lost its result update");
             destination.consume(frame, node, owned);
+            resumed.takeValue();
         }
         @Fallback public static void malformed(BytecodeTupleSlots destination, Object suspended, Object resumed) {
             throw new IllegalStateException("Tuple application continuation requires an owned ChildResume tuple");
