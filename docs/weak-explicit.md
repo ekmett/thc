@@ -38,16 +38,31 @@ returns flag 0 and an unspecified cleared payload. Resurrection does not revive
 a retired registration, and explicit and automatic claims cannot both win.
 
 The JVM-wide drainer takes Jam claims and dispatches each through its owning
-context. A suspended guest finalizer does not block dispatch of other claims.
+context. During normal dispatch, a suspended guest finalizer does not block
+other claims.
 Execution uses an actual `GuestThreads` carrier with the normal masking, call
 and continuation machinery. It runs C callbacks before the Haskell action.
 The exact owning program supplies `THC.Internal.Weak.runWeakFinalizer` lazily;
 that helper invokes GHC's original finalizer batch code, including its current
 exception handler and handling of exceptions from that handler. THC does not
 replace that policy with a Java catch-and-discard adapter. A claim completes
-only after the real carrier terminates, or after shutdown proves abandonment.
+only after the real carrier terminates, unfinished work transfers to its context,
+or shutdown proves abandonment. A start operation can fail after the carrier
+has started; THC still joins that carrier before completing the claim.
 Automatic Haskell actions and attached C callbacks require guest thread
 permission.
+
+If Java setup fails before cleanup begins, the draft retains the untouched
+callbacks and action as context-owned failed work. Dereference and callback
+attachment surface the failure; explicit finalization can settle the original
+cleanup. Begun user cleanup is never replayed. This uses the draft retention
+policy that remains under review. It does not recover from native allocation
+failures that terminate the process.
+
+The drainer also accepts other host clients' ordinary Jam callbacks. If their
+carrier cannot be launched, it invokes the claimed callback synchronously and
+completes only after return or failure. This exceptional fallback can block the
+shared pump; it does not discard another client's cleanup.
 
 [Typed C callbacks](c-finalizers.md) retain their actual declaration, native
 provider and arguments. Each callback capture and native borrow lasts through

@@ -166,6 +166,14 @@ completed-thunk aliases, cooperative pending handoff, capture release, callback
 arbitration and context shutdown. The existing declared fixture producers and
 native oracle were reused with unchanged inputs and outputs.
 
+The failure-ownership follow-up passes six selected methods in each Linux
+handoff mode: 12 cases, including repeated lifetime controls, with no failures
+or skips. One fixture-free regression covers failed pre-start and guest-entry
+setup, a failure after the real carrier starts, and no replay after a callback
+begins. The original pre-start regression failed on the preceding runtime in
+both modes. These injected setup faults do not prove recovery from arbitrary
+JVM allocation failures or native allocation inside `noexcept`.
+
 On native Windows, five fixture-free `ManagedWeakTest` methods pass in each
 handoff mode: 10 actual cases, zero failures or skips. They cover completed-thunk
 aliases and cooperative pending handoff on AST/bytecode, explicit finalization
@@ -179,7 +187,8 @@ registration metadata lifetime remain open. General weak support, Native Image
 application execution and macOS THC execution are unqualified. The current
 supplier package is
 an explicitly labelled `fastdebug` preview; production release-flavor
-qualification is separate from this functional evidence.
+qualification is separate from this functional evidence and is tracked in
+[Jam #10](https://github.com/ekmett/jam/issues/10).
 
 The automatic law requests one major collection and waits on its finalizer
 signal. Its native-GHC oracle, CBDs and audits come from the declared producer.
