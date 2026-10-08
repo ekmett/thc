@@ -13,6 +13,7 @@ Acquisition builds and exports a program; it does not execute the guest.
 | [Word frequency](word-frequency/README.md) | UTF-8 file input, case folding and sorted word counts |
 | [Foreign resource lifetime](foreign-resource/README.md) | Native buffers, interior aliases and automatic Haskell finalizers |
 | [Buffered Handle lifetime](buffered-handle/README.md) | Automatic buffer flushing, file closure and writer-lock release |
+| [Lazy file preview](lazy-file/README.md) | Deferred input retains its Handle; discarding the unread tail allows cleanup |
 | [Weak document cache](weak-cache/README.md) | Reusable lazy analyses whose references back to document keys do not keep them alive |
 | [lens](lens/README.md) | Public optics operations and original upstream tests |
 | [ad](ad/README.md) | Differentiation and sharing-sensitive graph traversal |
