@@ -164,6 +164,10 @@ a Haskell cleanup action when its last owner disappears. It passes on both
 backends and handoff modes on Linux. The [weak thread example](src/examples/README.md)
 observes worker lifetime and uses a finalizer to return mutable state to the
 application, where it can be updated again. It also passes all four combinations.
+The [buffered Handle example](src/examples/standard-apps/buffered-handle/README.md)
+shows original `System.IO` finalizers flushing output and releasing file locks
+when a handle becomes unreachable. It matches GHC on Linux with bytecode/default
+and AST/dense execution.
 The [Jam runtime guide](docs/jam-runtime.md) records the wider JVM/Native Image
 evidence and the remaining production and platform qualification.
 
