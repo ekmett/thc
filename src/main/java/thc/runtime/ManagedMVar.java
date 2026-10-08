@@ -6,7 +6,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.nodes.Node;
 import java.util.ArrayDeque;
-import java.util.HashMap;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -18,22 +17,10 @@ public final class ManagedMVar {
     private final ReentrantLock lock = new ReentrantLock();
     private boolean full;
     private Object value;
-    // Weak values belong to this key. The intrinsic monitor never takes the queue lock.
-    private HashMap<Object, Object> weakValues;
     private final ArrayDeque<Request> takers = new ArrayDeque<>();
     private final ArrayDeque<Request> readers = new ArrayDeque<>();
     private final ArrayDeque<Request> putters = new ArrayDeque<>();
     private static final TruffleSafepoint.InterruptibleFunction<Request, Object> AWAIT_REQUEST = Request::await;
-
-    synchronized void retainWeakValue(Object registration, Object value) {
-        if (weakValues == null) weakValues = new HashMap<>();
-        weakValues.put(registration, value);
-    }
-    synchronized Object weakValue(Object registration) { return weakValues.get(registration); }
-    synchronized void releaseWeakValue(Object registration) {
-        weakValues.remove(registration);
-        if (weakValues.isEmpty()) weakValues = null;
-    }
 
     public static ManagedMVar require(Object value) {
         if (value instanceof ManagedMVar cell) return cell;

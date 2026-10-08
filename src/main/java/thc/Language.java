@@ -240,7 +240,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
             nativeAllocations = new ManagedNativeAllocations(env);
             arguments = new GuestArguments(env);
             environment = new GuestEnvironment(env);
-            weaks = new ManagedWeaks();
+            weaks = new ManagedWeaks(this, language);
             singleThreadedAssumption = Truffle.getRuntime().createAssumption("THC single-threaded context");
             nativeCbits = new AtomicReference<>();
             // This constructor installs a compiler listener; keep it after the inert service constructors.
@@ -364,6 +364,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         try { context.files.shutdownEventManagers(); }
         finally {
             context.signals.requestStop();
+            context.weaks.requestStop();
             // LLVM calls remain permitted before hard exit unwinds all contexts; dispose is idempotent.
             context.iconv.dispose();
         }
@@ -382,7 +383,8 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
     }
     private static Throwable finishState(State context, Throwable failure) {
         return closeOwners(failure, context.sparks::stop, context.files::shutdownEventManagers,
-            context.signals::requestStop, context.threads::stopHostedThreads, context.signals::close, context.iconv::dispose);
+            context.signals::requestStop, context.weaks::requestStop, context.threads::stopHostedThreads,
+            context.weaks::close, context.signals::close, context.iconv::dispose);
     }
     private static Throwable disposeState(State context, Throwable failure) {
         failure = closeOwners(failure, context.compilerRts::close, context.graphRecovery::close,

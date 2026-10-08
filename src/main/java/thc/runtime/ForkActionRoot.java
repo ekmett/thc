@@ -11,13 +11,18 @@ import thc.Language;
 final class ForkActionRoot extends ContextRoot {
     private final Language language;
     private final boolean asyncEnabled;
+    private final int argumentCount;
     @Child private Force force;
     @Child private TupleDispatch dispatch;
     ForkActionRoot(Language language, TupleShape initialShape, boolean asyncEnabled) {
+        this(language, initialShape, asyncEnabled, 1);
+    }
+    ForkActionRoot(Language language, TupleShape initialShape, boolean asyncEnabled, int argumentCount) {
         super(language, new FrameLayout().build());
+        this.argumentCount = argumentCount;
         this.language = language; this.asyncEnabled = asyncEnabled;
         force = new Force(new Metrics(false), asyncEnabled);
-        dispatch = initialShape == null ? null : new TupleDispatch(new ForkDestination(initialShape, language), new Metrics(false), 1, false);
+        dispatch = initialShape == null ? null : new TupleDispatch(new ForkDestination(initialShape, language), new Metrics(false), argumentCount, false);
     }
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
@@ -33,10 +38,13 @@ final class ForkActionRoot extends ContextRoot {
         if (callee == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             TupleShape shape = GuestThreadOps.actionResult(action, asyncEnabled);
-            callee = insert(new TupleDispatch(new ForkDestination(shape, language), new Metrics(false), 1, false));
+            callee = insert(new TupleDispatch(new ForkDestination(shape, language), new Metrics(false), argumentCount, false));
             dispatch = callee;
         }
-        callee.execute(frame, action, new Object[] {thc.runtime.Unit.INSTANCE});
+        Object[] arguments = new Object[argumentCount];
+        System.arraycopy(frame.getArguments(), 1, arguments, 0, argumentCount - 1);
+        arguments[argumentCount - 1] = Unit.INSTANCE;
+        callee.execute(frame, action, arguments);
         return thc.runtime.Unit.INSTANCE;
     }
     @Override public String getName() { return "THC fork action"; }

@@ -257,7 +257,7 @@ public final class ManagedNativeAllocations {
         }
         Owner owner;
         synchronized (this) {
-            owner = freeableOwner(address, allocator);
+            owner = freeableOwner(address, allocator, false);
             if (owner == null) return;
             freeing.add(owner);
         }
@@ -285,7 +285,7 @@ public final class ManagedNativeAllocations {
         if (address == ManagedAddress.nullAddress()) return malloc(size);
         Owner owner;
         synchronized (this) {
-            owner = freeableOwner(address, Allocator.MALLOC);
+            owner = freeableOwner(address, Allocator.MALLOC, false);
             freeing.add(owner);
         }
         var replacement = ManagedAddress.nullAddress();
@@ -324,25 +324,21 @@ public final class ManagedNativeAllocations {
     public synchronized void requireFreeTarget(ManagedAddress address) {
         current();
         address = deallocationAddress(address);
-        if (address.returnedAddress() == null) freeableOwner(address, Allocator.MALLOC);
+        if (address.returnedAddress() == null) freeableOwner(address, Allocator.MALLOC, false);
     }
 
-    /** A direct owned base supplies a referent-independent token; wrappers stay explicit-only. */
+    /** Finalizers invalidate owned storage after its last borrow without blocking a guest carrier. */
     @TruffleBoundary
-    synchronized Owner ownedFreeTarget(ManagedAddress address) {
+    void finalizeFree(ManagedAddress address) {
         current();
-        if (address.returnedAddress() != null) return null;
-        return freeableOwner(address, Allocator.MALLOC);
-    }
-
-    /** Managed GC remains an optional request/inspection path for the same owner retirement. */
-    @TruffleBoundary
-    boolean tryFree(Owner owner) {
-        current();
-        synchronized (this) { if (closed) throw fault("Native allocation registry is closed"); }
-        if (owner == null) return true;
-        owner.requestRetirement(); owner.reportRetirementFailure();
-        return owner.closed;
+        address = deallocationAddress(address);
+        if (address.returnedAddress() != null) {
+            Language.currentState(null).getPackageCbits().free(address.returnedAddress());
+            return;
+        }
+        Owner owner;
+        synchronized (this) { owner = freeableOwner(address, Allocator.MALLOC, true); }
+        if (owner != null) { owner.requestRetirement(); owner.reportRetirementFailure(); }
     }
 
     /** Known aliases retain our ownership checks; external C keeps its allocator contract. */
@@ -357,13 +353,13 @@ public final class ManagedNativeAllocations {
         return address;
     }
 
-    private Owner freeableOwner(ManagedAddress address, Allocator allocator) {
+    private Owner freeableOwner(ManagedAddress address, Allocator allocator, boolean deferred) {
         if (closed) throw fault("Native allocation registry is closed");
         if (address == ManagedAddress.nullAddress()) return null;
         var owner = address.nativeAllocation();
         if (owner == null) throw fault("Native free requires an owned malloc base");
         if (owner.allocator != allocator) throw fault("Native deallocation requires its matching allocator");
-        if (!live.contains(owner) || freeing.contains(owner)) throw fault("Native free requires a live allocation from this context");
+        if (!live.contains(owner) || !deferred && freeing.contains(owner)) throw fault("Native free requires a live allocation from this context");
         if (!address.isNativeBase()) throw fault("Native free requires the allocation base");
         owner.requireNotRetired();
         owner.requireFreeable();

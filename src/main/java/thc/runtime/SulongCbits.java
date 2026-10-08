@@ -108,10 +108,6 @@ public final class SulongCbits {
         if (function == null) return Language.currentState(null).getPackageCbits().dataAddress(null, symbol);
         return function.getAddress();
     }
-    /** Only this live context's canonical label can shed its explicit callback roots. */
-    boolean isOwnedFree(CFinalizerFunction function) {
-        return function == ownedFree && Language.currentState(null).cbits() == this;
-    }
     public void invokeFinalizer(CFinalizerFunction function, ManagedAddress... arguments) {
         function.requireOwner(this);
         function.requireArity(arguments.length);
@@ -121,7 +117,7 @@ public final class SulongCbits {
             catch (Exception failure) { throw rethrow(failure); }
             return;
         }
-        if (function.getSymbol().equals("free")) { Language.currentState(null).getNativeAllocations().free(arguments[0]); return; }
+        if (function.getSymbol().equals("free")) { Language.currentState(null).getNativeAllocations().finalizeFree(arguments[0]); return; }
         throw fault("Unsupported C finalizer");
     }
     public Object iconvLibrary() {

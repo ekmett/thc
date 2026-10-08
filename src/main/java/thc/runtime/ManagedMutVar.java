@@ -5,15 +5,11 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.HashMap;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 /** One mutable guest reference. Reading storage never enters its thunk. */
 public final class ManagedMutVar {
     private volatile Object value;
-    // These values are rooted by this key, not by the context's weak registry.
-    // A value -> key cycle therefore has no external strong root of its own.
-    private HashMap<Object, Object> weakValues;
     private static final VarHandle VALUE_HANDLE;
     static {
         try { VALUE_HANDLE = MethodHandles.lookup().findVarHandle(ManagedMutVar.class, "value", Object.class); }
@@ -22,15 +18,6 @@ public final class ManagedMutVar {
     public ManagedMutVar(Object value) { this.value = value; }
     public Object getValue() { return value; }
     public void setValue(Object value) { this.value = value; }
-    synchronized void retainWeakValue(Object registration, Object value) {
-        if (weakValues == null) weakValues = new HashMap<>();
-        weakValues.put(registration, value);
-    }
-    synchronized Object weakValue(Object registration) { return weakValues.get(registration); }
-    synchronized void releaseWeakValue(Object registration) {
-        weakValues.remove(registration);
-        if (weakValues.isEmpty()) weakValues = null;
-    }
     /** Completed updates are CAS indirections. All other states stay opaque. */
     public static Object completedBoxedIdentity(Object value) {
         return value instanceof Thunk thunk && thunk.getState() == 2 ? thunk.getValue() : value;

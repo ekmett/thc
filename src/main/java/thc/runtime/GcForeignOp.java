@@ -54,7 +54,6 @@ public enum GcForeignOp {
             case HEAP_HINT -> 0L;
             default -> {
                 System.gc(); // Advisory; JVM flags/collector decide when and what to collect.
-                ManagedWeaks.current(null).drainOwnedFrees();
                 yield 0L;
             }
         };
