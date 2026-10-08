@@ -13,8 +13,8 @@ optional environment, in that order around the flag. A zero flag calls
 Registration on a live weak returns 1 and prepends the callback; registration
 on a dead weak returns 0. The original `free` label uses `void (void *)`,
 requires a zero flag and releases a live, context-owned malloc base (or null).
-Dead weak registration returns zero before inspecting an already-freed base;
-function ownership, weak ownership and the ABI flag are still checked.
+Function ownership, weak ownership, the ABI flag and reserved free target are
+checked at admission.
 
 Explicit `finalizeWeak#` atomically makes the weak dead and detaches its payload,
 then runs C callbacks synchronously in reverse registration order outside the
@@ -22,21 +22,23 @@ weak lock. Only after those effects does it return the original Haskell action
 and its validity flag. A weak with only C finalizers returns flag 0 after running
 them. The Haskell action is never executed by the primitive itself.
 
-A single canonical current-context `free` on an actionless registration with
-identical key/value carriers, or a raw managed `MutVar#` or `MVar#` key, has a
-[automatic malloc retirement path](weak-explicit.md). Only a direct owned
-malloc base or null qualifies. The JDK Cleaner action holds only a weak Owner
-reference and an armed flag; it retains no address, function provider, context or
-guest payload. JVM collection can trigger the paired raw native free without a
-managed GC request. Busy borrows or existing free/realloc reservations latch
-pending work, retried at completion without blocking or another collection.
-Explicitly retired owners consume stale tokens without replay; explicit
-free/finalization preserve freed-alias errors. A second callback disarms cleanup
-and promotes the exact key/value to strong ownership with newest-first order.
-Context close disarms registrations and disposes remaining allocations. There
-is no abandoned-context reclamation guarantee. Arena-close/downcall failures
-are retained and terminal as described in the weak guide; Windows LocalFree and
-arbitrary Haskell/package callbacks remain outside automatic retirement.
+The current Jam weak draft retains callbacks as conditional finalizer state
+for arbitrary boxed keys. Adding another callback preserves the same conditional
+association and newest-first order. There is no key-class promotion or JDK
+Cleaner path. Automatic claims dispatch through the owning context's real guest
+carrier before the original Haskell finalizer action; guest thread permission
+is required. General automatic Haskell/package execution remains unqualified;
+see [the weak guide](weak-explicit.md) for current evidence and failures.
+
+The reserved owned `free` uses the existing allocation retirement latch. Busy
+borrows or free/realloc reservations defer retirement until completion without
+blocking or requiring another collection. Already retired owners consume stale
+automatic tokens without replay; ordinary explicit free preserves freed-alias
+errors. Callback captures and native borrows cover their actual use; C captures
+are cleared before the Haskell action can suspend. Context shutdown joins
+admitted guest carriers before disposing providers and remaining allocations.
+Uncertain native effects remain terminal and are not replayed. This does not
+promise reclamation of an abandoned, unclosed context.
 
 Package-owned C finalizers use a separate typed admission path. The
 exporter retains the actual stock `CLabel` declaration, its declared and
@@ -56,8 +58,9 @@ transitive pointer-cell graphs throughout callback execution, including known
 returned aliases. Registration and explicit finalization keep the existing
 DEAD-before-call, newest-first and no-replay rules. The reserved `free` label
 still uses checked allocation ownership; package labels do not acquire that
-special deallocation authority. Automatic Haskell/package finalization and
-arbitrary function pointer calls remain unsupported.
+special deallocation authority. The draft automatic route uses this same
+admission and transport; its public Haskell/package qualification is pending.
+Arbitrary function pointer calls remain unsupported.
 
 The native zlib dependency profile currently supports Linux x86-64 LP64. It
 validates the original LLVM declarations before linking libz, preserving its
@@ -73,7 +76,8 @@ than an expired argument-view lease. Explicit typed address reads recover newly
 written pointer fields; the runtime does not scan scalar fields for pointers.
 Moving buffers and opaque guest objects cannot be embedded as native pointers,
 and raw byte exposure of a pointer-bearing allocation remains rejected. This
-does not add native-to-guest callback support or automatic package finalization.
+does not add native-to-guest callback support or qualify automatic package
+finalization.
 
 Primary implementations at the pinned GHC revision:
 

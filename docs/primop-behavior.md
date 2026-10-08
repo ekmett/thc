@@ -150,14 +150,20 @@ and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `mkWeak#` | Strongly retains its lazy key, value and Haskell action until explicit finalization or context disposal. **No automatic weak-key/ephemeron collection**; otherwise unreachable resources can remain for the context lifetime. Dropping the `Weak#` does not remove its registration. |
-| `mkWeakNoFinalizer#` | Without callbacks, identical key/value carriers are weakly held; raw managed `MutVar#` or `MVar#` keys can also own distinct lazy values without rooting an otherwise unreachable key/value cycle. Finalization/disposal detaches those values. Distinct values with other key carriers remain strongly retained; general ephemeron collection is absent. |
-| `deRefWeak#` | Returns flag 0 after explicit finalization or collection of an identity-only or actionless raw `MutVar#` or `MVar#` key. Otherwise returns the original lazy value without forcing it. |
-| `finalizeWeak#` | Explicit finalization marks the weak dead, invokes registered supported C callbacks, and returns the actual Haskell action to the caller. Returning rather than running that action is intentional GHC primop behavior. JVM collection can automatically retire one canonical owned malloc free on an actionless identity-only or raw `MutVar#`/`MVar#` key; general automatic finalization remains absent. Context close discards outstanding callbacks instead of executing them and disposes remaining native allocations. |
-| `addCFinalizerToWeak#` | Accepts source-certified C callbacks: zero calls `f(object)`, every nonzero flag calls `f(environment, object)`. Typed package callbacks require a retained normalized `FunPtr (Ptr a -> IO ())` or `FunPtr (Ptr env -> Ptr a -> IO ())` declaration and a matching exact rooted `void(pointer)` or `void(pointer, pointer)` definition in a completely linked component. Both arguments use the ordinary typed address transport and shared native borrowing. Unknown labels reject. The reserved `free` remains one-address with zero flag and checked owned allocation bases. A single canonical current-context owned free on an actionless identity-only or raw `MutVar#`/`MVar#` key weakly references its direct malloc owner (or null) and can retire through JDK Cleaner without a managed GC request. Busy borrows/free/realloc defer until completion without waiting or another collection; failures are retained without replay. Other callbacks, including a second callback, restore strong retention of the original key and value and remain explicit-only; a collected registration returns 0. See [C finalizers](c-finalizers.md). |
+| `mkWeak#` | The current draft creates a Jam conditional association retaining the original lazy value and Haskell finalizer state only through independent key reachability. Value/finalizer backedges do not root the key; dropping the handle does not cancel it. The exact program-owned GHC finalizer runner is retained lazily. Automatic actions require guest thread permission. General public Haskell qualification is pending. |
+| `mkWeakNoFinalizer#` | Uses the same conditional association for arbitrary boxed keys and lazy values, with no Haskell action. It has no key-class restriction or Cleaner path. Completed-thunk logical-key retargeting remains missing upstream. |
+| `deRefWeak#` | Returns the original lazy value without forcing it while the association is live; returns flag 0 and a cleared unspecified payload after retirement. The real completed-thunk regression currently returns flag 0 despite a live WHNF alias. |
+| `finalizeWeak#` | Atomically retires the association, runs admitted C callbacks newest first outside the registry lock, and returns the exact reusable Haskell action to the caller. Returning rather than running that action is intentional GHC behavior. Automatic claims run on real guest carriers through the original GHC wrapper; completion follows actual termination or proven abandonment. Context close abandons outstanding claims before disposing native providers. |
+| `addCFinalizerToWeak#` | Accepts source-certified callbacks: zero calls `f(object)`, every nonzero flag calls `f(environment, object)`. Typed package declarations and exact rooted native definitions must agree on the ABI; arguments retain ordinary typed transport and native borrowing. Unknown labels reject. Reserved `free` requires zero flag and checked owned bases; busy borrows/free/realloc defer retirement through the existing nonblocking latch. Adding a callback does not promote conditional key/value reachability. Guest thread permission is required. See [C finalizers](c-finalizers.md). |
 
-This limitation is not shared by stable names: `makeStableName#` really uses a
-weak identity map and does not retain its referent. Stable pointers intentionally
+General `System.Mem.Weak` support is not qualified. Six focused registry checks
+passed, while completed-thunk key retargeting fails in both handoff modes; the
+new genuine automatic Haskell fixture is pending. Upstream dead-record
+reclamation is also unresolved. Native Image qualification remains failed and
+parked. These limits apply to the draft behavior above.
+
+`makeStableName#` uses a weak identity map and does not retain its referent.
+Stable pointers intentionally
 root their referents; their separate native interoperability limits appear below.
 
 Details: [managed weak registrations](weak-explicit.md), [C finalizers](c-finalizers.md),
@@ -357,8 +363,8 @@ The compiler's original `setHeapSize` evaluates its byte-count/state operands an
 returns, ignoring the heap-size advisory: THC does not resize the process-wide
 JVM heap, request GC, or invent mutable native RTS sizing flags.
 Original `performGC`, `performMajorGC` and `performBlockingMajorGC` request JVM
-collection and attempt pending eligible owned frees without waiting for borrows;
-there are no GHC generation or completion guarantees. `getRTSStatsEnabled`
+collection; the JVM-wide Jam drainer owns automatic claims independently of
+these calls. There are no GHC generation or completion guarantees. `getRTSStatsEnabled`
 is false, and direct `getRTSStats` rejects without modifying its buffer; original
 Haskell retains its disabled-statistics exception. `getMonotonicNSec` uses the
 JVM monotonic clock with an arbitrary process-local origin. See

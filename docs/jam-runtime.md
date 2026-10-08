@@ -4,8 +4,10 @@ THC is migrating to JAM-patched GraalVM for JVM execution and JAM-patched
 SubstrateVM for native executables. The purpose is general `System.Mem.Weak`
 semantics, including keys held by Java code and finalizers that can resurrect
 their keys. Selecting the collector alone does not implement THC weak pointers.
-The existing carrier-specific weak registry must be replaced before this
-capability can be advertised.
+The current draft uses real `jam.vm.Weak` associations and guest finalizer
+carriers. General weak support cannot yet be advertised: completed-thunk key
+retargeting fails, public Haskell automatic execution is pending, and upstream
+dead-record reclamation remains unresolved.
 
 ## Toolchain ownership
 
@@ -96,8 +98,13 @@ no longer strongly referenced. The collector must resolve and retarget this
 slot before reclaiming the wrapper. Resolution must not mark the representative,
 force guest code, allocate Java roots, or acquire a stopped mutator's monitor.
 All other objects and non-success thunk states retain identity semantics.
-The currently inspected JAM public API lacks this registration boundary; it is
-an implementation prerequisite for both HotSpot and SubstrateVM.
+The agreed upstream API shape is
+`registerIndirection(Thunk.class, "state", 2, "value")`: an exact registered
+class, volatile int state and Object representative field. This API is
+unimplemented. It is a prerequisite for both HotSpot and SubstrateVM; a forcing
+shim or create-time unwrapping cannot replace it. The real regression currently
+returns dead flag 0 despite the independently live WHNF alias in both handoff
+modes.
 
 ## Finalizer execution
 
@@ -110,18 +117,20 @@ The original GHC code reads the current exception handler and handles handler
 exceptions. THC must not duplicate that behavior with a Java catch-and-discard
 path.
 
-Reuse `GuestThreads` and its ordinary call, masking and continuation machinery.
-A claimed finalizer remains rooted until actual completion or proven
-abandonment. Submission is not completion. A runnable callable through JAM's
-public `pump()` must not return while its guest action is still running.
-The global queue may contain other clients' runnables; queue dispatch must not
-silently discard them or block unrelated claims behind one suspended action.
+The draft uses `GuestThreads` and its ordinary call, masking and continuation
+machinery. A JVM-wide drainer takes claims and dispatches them independently
+through their owning contexts, so a suspended action does not block other
+claims. The claim remains rooted until its actual guest carrier terminates or
+shutdown proves abandonment. The runnable exposed to JAM's public `pump()`
+also waits for that real termination; submission alone is not completion.
+Automatic Haskell actions and C callbacks require guest thread permission.
 
 Context shutdown fences admission before stopping and joining guest carriers.
 It then releases claims cancelled before their runnable entered, including
 in-flight thread construction. Only after this may native providers be closed.
-Keep C callback captures and native borrows valid through their real use, and
-release them before an unrelated Haskell action can remain suspended.
+C callback captures and native borrows remain valid through their real use.
+The draft consumes callback captures in order and clears the remainder before
+the Haskell action can remain suspended.
 
 ## Acceptance evidence
 
@@ -135,8 +144,11 @@ compiled call where relevant.
 
 Linux JVM qualification includes real first-compiled calls on both THC backends
 and handoff modes. The native publication boundary has also passed its focused
-Linux tests. General weak integration and Native Image runtime qualification
-remain incomplete.
+Linux tests. The focused weak integration run passed six registry checks and
+retained the failing completed-thunk regression in both handoff modes. The new
+public `System.Mem.Weak` automatic-finalizer law and its independent native GHC
+oracle have not yet executed. General weak qualification is incomplete; Native
+Image runtime qualification remains failed and parked.
 
 A package startup check proves startup. A native image build proves construction.
 Neither proves general weak semantics, guest compilation or another platform.
