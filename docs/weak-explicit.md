@@ -6,7 +6,9 @@
 The current draft uses real `jam.vm.Weak` associations in both interpreters.
 Selected Linux JVM laws pass on the pinned Jam package: logical keys survive
 thunk evaluation, pending handoffs permit guest progress, and automatic actions
-follow the original GHC finalizer wrapper. General qualification remains open in
+follow the original GHC finalizer wrapper. Windows also passes the selected
+fixture-free bootstrap, handoff and context-lifecycle models in both handoff
+modes. General qualification remains open in
 [issue #1065](https://github.com/ekmett/thc/issues/1065): replacement failure
 policy, native registration lifetime, Native Image and other platforms remain
 unfinished.

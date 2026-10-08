@@ -156,8 +156,9 @@ and forcing through saved continuations. Load requests and ordinary executable
 launches default to async off on both backends: off speculates on a single guest
 admission origin until guest concurrency is admitted. Explicit async opt-in
 enables polling immediately. Delimited capture across STM and GC-driven deadlock detection remain unsupported.
-[Automatic weak finalization](docs/weak-explicit.md) has selected Linux JVM
-qualification; Native Image and the remaining lifecycle boundaries are still open.
+[Automatic weak finalization](docs/weak-explicit.md) has selected Linux and
+Windows JVM qualification; Native Image and the remaining lifecycle boundaries
+are still open.
 
 The public [`thc:runtime` API](docs/runtime-services.md) exposes permissions,
 thread and affinity observations, memory/GC statistics and structured tracing.
