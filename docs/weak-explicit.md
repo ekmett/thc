@@ -8,10 +8,13 @@ Selected Linux JVM laws pass on the pinned Jam package: logical keys survive
 thunk evaluation, pending handoffs permit guest progress, and automatic actions
 follow the original GHC finalizer wrapper. Windows also passes the selected
 fixture-free bootstrap, handoff and context-lifecycle models in both handoff
-modes. General qualification remains open in
+modes. The existing full weak IO program also matches native GHC on Linux
+JVM and in a relocated Native Image built with the diagnostic supplier candidate
+described in [acceptance evidence](jam-runtime.md#acceptance-evidence).
+General qualification remains open in
 [issue #1065](https://github.com/ekmett/thc/issues/1065): replacement failure
-policy, native registration lifetime, Native Image and other platforms remain
-unfinished.
+policy, native registration lifetime, production package qualification and other
+platforms remain unfinished.
 
 For an association `K => (V, F)`, independent reachability of `K`, including an
 ordinary Java root, retains the original lazy value and finalizer state.
@@ -89,8 +92,9 @@ An unresolved thunk uses an ordinary weak registration with a bootstrap finalize
 capturing the thunk, conditional value and real finalizer. The bootstrap executes
 outside GC, inspects resolution without forcing and either publishes a successor
 registration or proceeds to real finalization. Already resolved keys register
-against their result directly. No collector callback or common Lifted interface
-is needed.
+against their result directly. THC value carriers implement Jam's ordinary
+userland `Lifted` protocol; resolution and projection inspect published answers
+without forcing a computation. Bootstrap resolution runs outside collection.
 
 The logical handle remains stable through handoff. A retired bootstrap token
 cannot alone justify a dead dereference; explicit finalization, queued/running

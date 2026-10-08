@@ -190,13 +190,29 @@ blocks on platform/Loom hosting, and actual context-close invalidation. The
 ordinary pinned package passes complete `verifyJamToolchain` verification.
 These Java models do not qualify compiled execution or native GHC fixtures.
 
-This establishes those JVM behaviors. Replacement-failure policy and native
-registration metadata lifetime remain open. General weak support, Native Image
-application execution and macOS THC execution are unqualified. The current
-supplier package is
-an explicitly labelled `fastdebug` preview; production release-flavor
-qualification is separate from this functional evidence and is tracked in
-[Jam #10](https://github.com/ekmett/jam/issues/10).
+The existing `NativeWeak` IO executable matches its complete native-GHC oracle
+on the Linux JVM and in a relocated Native Image. Its eight explicit weak rows
+and automatic-finalizer result exercise the ordinary IO entry and shutdown path,
+including a dropped weak handle and key backreferences in the value and finalizer.
+The image runs with only its declared executable, Jam libraries and test input;
+it has no source, CBD, GHC or JDK dependency at execution time. The original GHC
+finalizer runner is included by the shared Core dependency selector. This check
+does not extend the JVM first-compiled-call evidence to Native Image.
+
+That image uses the diagnostic Linux release provider at Jam `5deba3e` with the
+source-verified root-repair fix in [Jam #18](https://github.com/ekmett/jam/pull/18).
+It is functional evidence, not a production package or acceptable performance
+claim. The current pinned supplier remains an explicitly labelled `fastdebug`
+preview. Production release-flavor qualification is tracked in
+[Jam #10](https://github.com/ekmett/jam/issues/10). Replacement-failure policy,
+native registration metadata lifetime, macOS execution and remaining Windows
+coverage are still open.
+
+The ordinary executable runs reuse verified producer inputs, artifact hashes and
+Core audits. A separate optional `--verify-artifacts` run exceeded its time bound
+while traversing complete Core modules before guest entry. That verification
+performance failure remains unresolved; it is not a weak-finalizer deadlock or
+a passing verification result.
 
 The automatic law requests one major collection and waits on its finalizer
 signal. Its native-GHC oracle, CBDs and audits come from the declared producer.
