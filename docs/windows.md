@@ -124,17 +124,17 @@ without replaying effects. Both methods run in both handoff modes; these checks
 do not qualify compiled execution, exported Core or Native Image execution.
 
 Five fixture-free `ManagedWeakTest` methods pass on the ordinary pinned Jam
-Windows package from producer `a7ebfc52`: 10 actual cases, zero failures or skips,
-in default and dense handoff modes. Completed-thunk aliases and cooperative
+Windows release package from producer `3cb04509`: 10 actual cases, zero failures,
+errors or skips, in default and dense handoff modes. Completed-thunk aliases and cooperative
 pending handoff exercise AST and bytecode. Explicit finalization preserves the
 original action without forcing opaque states; automatic bootstrap death releases
 obsolete captures before a real finalizer blocks under platform/Loom hosting.
 Actual context close invalidates handles and releases conditional values. These
 are Java models, with no native GHC fixture acquisition or compiled-execution
-claim. Complete `verifyJamToolchain` verification stays enabled. The package is
-fastdebug, so this establishes functional behavior, not performance or release
-qualification. General weak support, replacement-failure policy, native
-registration lifetime, exported Core and Native Image remain unqualified.
+claim. Complete `verifyJamToolchain` verification stays enabled. The package's
+`jdk.debug` is `release`; these models establish functional JVM behavior without
+performance or full-platform qualification. General weak support, allocation-failure
+recovery, native registration lifetime, exported Core and Native Image remain unqualified.
 
 The [canonical owned-malloc retirement path](c-finalizers.md) is checked on
 native Windows. After actual JVM key collection, storage retires without a

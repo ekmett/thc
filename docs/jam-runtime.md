@@ -13,7 +13,7 @@ no language resolver callback or additional interface for this design.
 The ordinary `jam.vm.Lifted` value protocol is supplied by the unchanged source
 from Jam commit `92a0cbcda6b9413dc2df3b2a6e327f06d90ea94b` in
 [`nih/pinned/jam-lifted`](../nih/pinned/jam-lifted/README.md), compiled with THC.
-The Linux provider includes this interface; the macOS and Windows pins predate
+The Linux and Windows providers include this interface; the macOS pin predates
 it. This supplemental compile input adds no native API and does not replace
 `jam.vm.Weak` or its bridge. It can be removed when all pinned providers include it. See
 [nonforcing value resolution](thunk-updates.md#nonforcing-lifted-values).
@@ -26,9 +26,9 @@ producer revision, upstream source pins, transport digest and unpacked package
 identities for each platform. A release/version string alone does not establish compatibility.
 
 The upstream owner is now [ekmett/jam](https://github.com/ekmett/jam), including
-its managed-runtime sources under `vm/`. Linux consumes the complete release-flavor
-JVM and Native Image toolchain from `vm-2026.10.08-3cb04509`. macOS and Windows
-retain the fastdebug preview `vm-2026.10.07-a7ebfc52`. Source, archive and
+its managed-runtime sources under `vm/`. Linux and Windows consume the complete release-flavor
+JVM and Native Image toolchain from `vm-2026.10.08-3cb04509`. macOS
+retains the fastdebug preview `vm-2026.10.07-a7ebfc52`. Source, archive and
 installation identities move together within each platform. Native adapter filenames use `jam-vm`; runtime library manifests
 determine deployment membership. The release assets preserve the qualified
 producer bytes beyond temporary CI artifact retention.
@@ -94,8 +94,8 @@ Resurrecting a key does not revive its retired registration. Dead registration
 metadata must be reclaimable without making old tokens valid again; collection
 and idle polling costs must not grow with all registrations since process startup.
 The Linux release reuses retired slots with generation tokens and keeps active
-scans separate from historical capacity. The older macOS and Windows adapters
-still retain and scan dead records. Registration
+scans separate from historical capacity. The older macOS adapter
+still retains and scans dead records. Registration
 metadata failure returns to Java as an allocation failure without publishing a
 partial association. This does not cover arbitrary collector allocation failure.
 Finalizer state retains its actual captures, without an invented reference to the
@@ -190,12 +190,14 @@ both modes. These injected setup faults do not prove recovery from arbitrary
 JVM allocation failures or native allocation inside `noexcept`.
 
 On native Windows, five fixture-free `ManagedWeakTest` methods pass in each
-handoff mode: 10 actual cases, zero failures or skips. They cover completed-thunk
+handoff mode: 10 actual cases, zero failures, errors or skips. They cover completed-thunk
 aliases and cooperative pending handoff on AST/bytecode, explicit finalization
 without forcing opaque states, obsolete capture release before a real finalizer
 blocks on platform/Loom hosting, and actual context-close invalidation. The
-ordinary pinned package passes complete `verifyJamToolchain` verification.
-These Java models do not qualify compiled execution or native GHC fixtures.
+ordinary pinned release package from producer `3cb04509` passes complete
+`verifyJamToolchain` verification and reports `jdk.debug=release`.
+These Java models do not qualify compiled execution, native GHC fixtures,
+registration metadata reclamation or Windows Native Image execution.
 
 The existing `NativeWeak` IO executable matches its complete native-GHC oracle
 on the Linux JVM and in a relocated Native Image. Its eight explicit weak rows
