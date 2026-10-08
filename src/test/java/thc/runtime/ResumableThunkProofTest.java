@@ -111,11 +111,11 @@ class ResumableThunkProofTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var lock = new Object(); var answer = new Object(); var evaluations = new AtomicInteger(); var publications = new AtomicInteger();
+                var lock = new PreparationLock(); var answer = new Object(); var evaluations = new AtomicInteger(); var publications = new AtomicInteger();
                 var root = new GuestRoot(language, com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build()) {
                     @Override public long bloom(VirtualFrame frame) { return 0; }
                     @Override public Object execute(VirtualFrame frame) {
-                        assertFalse(Thread.holdsLock(lock));
+                        assertFalse(lock.isHeldByCurrentThread());
                         assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(this));
                         evaluations.incrementAndGet(); return answer;
                     }
@@ -139,7 +139,7 @@ class ResumableThunkProofTest {
                 var effects = new AtomicInteger(); var publications = new AtomicInteger(); var marker = new Object();
                 var target = ThunkYieldProofRoot.target(language, effects, new AtomicInteger(), new ThunkYieldProofRoot.Gate(), marker);
                 var cell = new GlobalBinding("yielding");
-                cell.defer(new Object(), () -> new GlobalBinding.Initializer(target, new Object[]{0L}, new Metrics(false), publications::incrementAndGet));
+                cell.defer(new PreparationLock(), () -> new GlobalBinding.Initializer(target, new Object[]{0L}, new Metrics(false), publications::incrementAndGet));
                 var body = new GlobalRead(cell).proven(new CoreRepresentation(CoreKind.OBJECT, false, true, java.util.List.of("BoxedRep (Just Lifted)")));
                 var root = new FunctionRoot(language, new FrameLayout().build(), "global read", null, new int[0], new int[0], new int[0],
                     body, new Metrics(false), new CoreRepresentation[0], body.getRepresentation(), null, new boolean[0], null,

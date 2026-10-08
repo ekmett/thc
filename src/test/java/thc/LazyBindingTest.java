@@ -82,7 +82,7 @@ class LazyBindingTest {
             context.initialize("thc"); context.enter();
             try {
                 var cell = new GlobalBinding("cold scalar"); int[] preparations = {0};
-                cell.defer(new Object(), () -> { preparations[0]++; return 17L; });
+                cell.defer(new PreparationLock(), () -> { preparations[0]++; return 17L; });
                 long[] compiled = new long[2]; var target = new ColdCellRoot(cell, compiled).getCallTarget();
                 var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
                 // Exact scalar signature; no execution or fabricated specialization history.
@@ -106,7 +106,7 @@ class LazyBindingTest {
             context.initialize("thc"); context.enter();
             try {
                 var cell = new GlobalBinding("prepared scalar"); int[] preparations = {0};
-                cell.defer(new Object(), () -> { preparations[0]++; return 17L; });
+                cell.defer(new PreparationLock(), () -> { preparations[0]++; return 17L; });
                 assertEquals(17L, cell.read()); // Inert preparation, not guest execution.
                 long[] compiled = new long[3]; var target = new ColdCellRoot(cell, compiled).getCallTarget();
                 var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
@@ -221,7 +221,7 @@ class LazyBindingTest {
         assertEquals(1L, count(program, "initializedBindingCount")); assertEquals(11L, program.entryValue("strict"));
     }); }
     @Test void concurrentPreparationPublishesOnceAndSharesTheProgramLock() throws Exception {
-        var lock = new Object(); var first = new GlobalBinding("first"); var second = new GlobalBinding("second");
+        var lock = new PreparationLock(); var first = new GlobalBinding("first"); var second = new GlobalBinding("second");
         var preparations = new AtomicInteger(); var result = new Object();
         second.defer(lock, () -> { preparations.incrementAndGet(); return result; });
         first.defer(lock, () -> { preparations.incrementAndGet(); return second.read(); });

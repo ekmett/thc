@@ -28,7 +28,7 @@ class DemandPapTest {
             try {
                 var cell = new GlobalBinding("unopened");
                 int[] preparations = {0}, compiled = {0};
-                cell.defer(new Object(), () -> { preparations[0]++; return 17L; });
+                cell.defer(new PreparationLock(), () -> { preparations[0]++; return 17L; });
                 var target = new RootNode(null) {
                     @Override public ExecutionSignature prepareForAOT() { return ExecutionSignature.create(Long.class, new Class<?>[0]); }
                     @Override public Object execute(VirtualFrame frame) {
@@ -63,7 +63,7 @@ class DemandPapTest {
                     @Override public Object execute(VirtualFrame frame) { throw new AssertionError("PAP classification entered its head"); }
                 }.getCallTarget());
                 int[] preparations = {0}; var cell = new GlobalBinding("unopened");
-                cell.defer(new Object(), () -> { preparations[0]++; return head; });
+                cell.defer(new PreparationLock(), () -> { preparations[0]++; return head; });
                 var metrics = new Metrics(true);
                 var target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
                     b.beginRoot(); b.emitEnterRoot(metrics);

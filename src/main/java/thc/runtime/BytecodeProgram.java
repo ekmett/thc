@@ -77,7 +77,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private final Map<Integer, RootCallTarget> hostEntries = new LinkedHashMap<>();
     private final List<BytecodeRoot> roots = new ArrayList<>();
     private int initializedBindingCount;
-    private final Object preparationLock = new Object();
+    private final PreparationLock preparationLock;
     private int nextLocal;
     private int localJoinCount;
     private int nextJoinSource;
@@ -114,6 +114,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
         boxedForeignDeclarations = CoreBoxedForeignDeclarations.admissions(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings value ? value : null;
+        preparationLock = demand == null ? new PreparationLock(thc.Language.currentState().getEnv().getContext()) : demand.getPreparationLock();
+        nativeStartup |= demand != null; // Demand preparation publishes cells; execution initializes them.
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
         weakFinalizer = moduleData.get("selectedWeakFinalizer") instanceof String id ? id : null;
         rubbishLiterals = new RubbishLiterals(language);
@@ -654,6 +656,10 @@ public final class BytecodeProgram implements ExecutableProgram {
         return hostEntries.computeIfAbsent(arity, count -> new EntryRoot(language, count, metrics).getCallTarget());
     }
 
+    @Override public void initializeNative(thc.Language.State owner) {
+        for (var link : foreignLinks) owner.cbits().link(link);
+        for (var link : packageScalarLinks) owner.getPackageCbits().link(link);
+    }
     @Override public Object entryValue(String name) {
         if (!indices.containsKey(name) && demand != null && demand.contains(name))
             return Objects.requireNonNull(globals.get(name)).read();
@@ -754,12 +760,14 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private DataLayout dataLayout(String id) {
-        return dataLayouts.computeIfAbsent(id, key -> {
-            var info = constructors.get(key);
-            if (info == null) throw new RuntimeFault("Missing constructor metadata " + key);
-            return thc.Language.currentState().constructorLayout(language, key, (String) info.get("name"),
-                new CoreFields(info));
-        });
+        try (var ownership = preparationLock.acquire()) {
+            return dataLayouts.computeIfAbsent(id, key -> {
+                var info = constructors.get(key);
+                if (info == null) throw new RuntimeFault("Missing constructor metadata " + key);
+                return thc.Language.currentState().constructorLayout(language, key, (String) info.get("name"),
+                    new CoreFields(info));
+            });
+        }
     }
 
     /** The constructor adapter enforces strict fields before storing them. */

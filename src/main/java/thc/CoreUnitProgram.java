@@ -237,13 +237,9 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         synchronized (moduleSources) {
             linked.put("preparedSources", moduleSources.computeIfAbsent(admitted, ignored -> new CoreSources(linked)));
         }
-        // Another binding may demand a new original CAPI owner. The context
-        // registry checks exact identity and links the component only once.
-        for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
-        for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) {
-            owner.getPackageCbits().link(link);
-        }
         String selectedBackend = CoreModules.backend(admitted.getModule(), id, backend);
+        // Native constructors and Truffle initialization handshakes run in the
+        // demanded cell's execution stage, after lowering ownership ends.
         return selectedBackend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);
     }
     public List<ManagedExportAdmission> registerStartup() {

@@ -65,7 +65,7 @@ public final class Program implements ExecutableProgram {
     private final AtomicInteger attachedRootCount = new AtomicInteger();
     private final AtomicInteger constructedRootCount = new AtomicInteger();
     private final AtomicInteger initializedBindingCount = new AtomicInteger();
-    private final Object preparationLock = new Object();
+    private final PreparationLock preparationLock;
     private final boolean diagnosticUnsupported;
     private final Set<String> deferredUnsupported = new LinkedHashSet<>();
     private final List<Map<String, Object>> bindings;
@@ -121,6 +121,8 @@ public final class Program implements ExecutableProgram {
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
         boxedForeignDeclarations = CoreBoxedForeignDeclarations.admissions(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings found ? found : null;
+        preparationLock = demand == null ? new PreparationLock(thc.Language.currentState().getEnv().getContext()) : demand.getPreparationLock();
+        nativeStartup |= demand != null; // Demand preparation publishes cells; execution initializes them.
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
         weakFinalizer = moduleData.get("selectedWeakFinalizer") instanceof String id ? id : null;
         rubbishLiterals = new RubbishLiterals(language);
@@ -645,6 +647,10 @@ public final class Program implements ExecutableProgram {
         RootCallTarget target = hostEntries.get(arity);
         if (target == null) { target = new EntryRoot(language, arity, metrics).getCallTarget(); hostEntries.put(arity, target); }
         return target;
+    }
+    @Override public void initializeNative(thc.Language.State owner) {
+        for (var link : foreignLinks) owner.cbits().link(link);
+        for (var link : packageScalarLinks) owner.getPackageCbits().link(link);
     }
     @Override public Object entryValue(String name) {
         if (!indices.containsKey(name) && demand != null && demand.contains(name)) return required(globals, name).read();
@@ -1427,24 +1433,28 @@ public final class Program implements ExecutableProgram {
             local.layout.bind("<join result>", reusableCode ? FrameLayout.carrierKind(result) : FrameSlotKind.Illegal),
             nodes, result, recursive, tuple, tupleSlots, delimited);
     }
-    private synchronized DataLayout dataLayout(String id) {
-        DataLayout layout = dataLayouts.get(id);
-        if (layout != null) return layout;
-        Map<String, Object> info = constructors.get(id);
-        if (info == null) throw new RuntimeFault("Missing constructor metadata " + id);
-        CoreFields fields = new CoreFields(info);
-        if (language == null) throw new RuntimeFault("Constructor layout requires a guest language");
-        return constructorStorage(id, (String) info.get("name"), fields);
+    private DataLayout dataLayout(String id) {
+        try (var ownership = preparationLock.acquire()) {
+            DataLayout layout = dataLayouts.get(id);
+            if (layout != null) return layout;
+            Map<String, Object> info = constructors.get(id);
+            if (info == null) throw new RuntimeFault("Missing constructor metadata " + id);
+            CoreFields fields = new CoreFields(info);
+            if (language == null) throw new RuntimeFault("Constructor layout requires a guest language");
+            return constructorStorage(id, (String) info.get("name"), fields);
+        }
     }
-    private synchronized DataLayout constructorStorage(String id, String name, CoreFields fields) {
-        DataLayout layout = dataLayouts.get(id);
-        if (layout != null) return layout;
-        if (reusableCode) {
-            layout = new DataLayout.Reusable(language, id, name, fields).instantiate();
-            int index = constructorIndices.size(); constructorIndices.put(id, index); if (indexedLayouts != null) indexedLayouts[index] = layout;
-        } else layout = thc.Language.currentState().constructorLayout(language, id, name, fields);
-        dataLayouts.put(id, layout);
-        return layout;
+    private DataLayout constructorStorage(String id, String name, CoreFields fields) {
+        try (var ownership = preparationLock.acquire()) {
+            DataLayout layout = dataLayouts.get(id);
+            if (layout != null) return layout;
+            if (reusableCode) {
+                layout = new DataLayout.Reusable(language, id, name, fields).instantiate();
+                int index = constructorIndices.size(); constructorIndices.put(id, index); if (indexedLayouts != null) indexedLayouts[index] = layout;
+            } else layout = thc.Language.currentState().constructorLayout(language, id, name, fields);
+            dataLayouts.put(id, layout);
+            return layout;
+        }
     }
     private Expr globalRead(String id, Scope scope) {
         GlobalBinding global = globals.get(id);

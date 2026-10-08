@@ -11,7 +11,7 @@ public final class GlobalBinding {
     private final String name;
     @CompilationFinal private boolean initialized;
     @CompilationFinal private Object value;
-    @CompilationFinal private Object preparationLock;
+    @CompilationFinal private PreparationLock preparationLock;
     // A prepared cell never changes again. Compilations after publication may
     // fold its identity; earlier cold compilations keep the idempotent boundary
     // below, so publication need not invalidate their still-correct code.
@@ -32,7 +32,7 @@ public final class GlobalBinding {
         this.value = value;
         initialized = true;
     }
-    public void defer(Object lock, Preparation action) {
+    public void defer(PreparationLock lock, Preparation action) {
         if (initialized || preparationLock != null) throw new IllegalStateException("Check failed.");
         preparationLock = java.util.Objects.requireNonNull(lock);
         prepare = java.util.Objects.requireNonNull(action);
@@ -58,13 +58,13 @@ public final class GlobalBinding {
     /** The shared program lock protects lowering builders, never guest evaluation. */
     @CompilerDirectives.TruffleBoundary
     private Object prepareValue() {
-        Object lock = preparationLock;
+        PreparationLock lock = preparationLock;
         if (lock == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new RuntimeFault("Uninitialized global binding");
         }
         Initializer pending;
-        synchronized (lock) {
+        try (var ownership = lock.acquire()) {
             if (prepared) return preparedValue;
             if (preparationFailure != null) return rethrow(preparationFailure);
             if (preparing) throw new IllegalStateException("Recursive Core preparation for " + name);
@@ -85,7 +85,7 @@ public final class GlobalBinding {
         }
         // Guest code, foreign calls and waits must never run under the lowering lock.
         Object result = pending.execute();
-        synchronized (lock) {
+        try (var ownership = lock.acquire()) {
             if (!prepared) {
                 preparedValue = result;
                 prepared = true;
@@ -96,12 +96,17 @@ public final class GlobalBinding {
         }
     }
 
-    /** Inert per-instance code; CallSegment owns execution and failures, including lazy answers. */
+    /** Staged execution outside lowering ownership. CallSegment owns guest initialization;
+     * native provider tasks and nested cells own demanded linkage and entry execution. */
     static final class Initializer {
         private final Force force;
         private final CallSegment segment;
         private final Runnable published;
+        private final ExecutableProgram demanded;
+        private final thc.Language.State owner;
+        private final String binding;
         Initializer(com.oracle.truffle.api.RootCallTarget target, Object[] arguments, Metrics metrics, Runnable published) {
+            demanded = null; owner = null; binding = null;
             force = new Force(metrics, true);
             SavedGuestContinuation entry = new SavedGuestContinuation() {
                 @Override public Object getIdentity() { return this; }
@@ -113,7 +118,17 @@ public final class GlobalBinding {
                 target.getRootNode() instanceof GuestRoot root ? root.getTupleResult() : null);
             this.published = published;
         }
-        Object execute() { return force.executeInitialization(segment); }
+        Initializer(ExecutableProgram demanded, thc.Language.State owner, String binding, Runnable published) {
+            this.demanded = demanded; this.owner = owner; this.binding = binding; this.published = published;
+            force = null; segment = null;
+        }
+        Object execute() {
+            if (demanded == null) return force.executeInitialization(segment);
+            // Native provider tasks and the program's own cells retain execution sharing.
+            demanded.initializeNative(owner);
+            demanded.initializeGlobals();
+            return demanded.entryValue(binding);
+        }
     }
     @SuppressWarnings("unchecked")
     private static <E extends Throwable> Object rethrow(Throwable failure) throws E {
