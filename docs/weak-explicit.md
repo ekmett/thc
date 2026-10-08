@@ -4,24 +4,24 @@
 # Managed weak registrations
 
 The current draft uses real `jam.vm.Weak` associations in both interpreters.
-General `System.Mem.Weak` support is **not qualified**:
-[issue #1065](https://github.com/ekmett/thc/issues/1065) remains open. The real
-completed-thunk regression returns flag 0 while its WHNF alias remains live in
-both handoff modes with the retained release. Public Haskell automatic-finalizer
-laws have executed on a diagnostic provider; those results do not qualify the
-release or general lifted-key normalization. Native Image remains unqualified.
+Selected Linux JVM laws pass on the pinned Jam package: logical keys survive
+thunk evaluation, pending handoffs permit guest progress, and automatic actions
+follow the original GHC finalizer wrapper. General qualification remains open in
+[issue #1065](https://github.com/ekmett/thc/issues/1065): replacement failure
+policy, native registration lifetime, Native Image and other platforms remain
+unfinished.
 
 For an association `K => (V, F)`, independent reachability of `K`, including an
 ordinary Java root, retains the original lazy value and finalizer state.
 References from `V` or `F` back to `K` do not establish that reachability. Jam
 owns this conditional association and its atomic retirement. THC keeps a
-context-owned token handle; neither a live handle nor the context registry
+context-owned token handle; neither an active handle nor normal registry membership
 strongly roots the key or conditional payload. Dropping the handle does not
 cancel the association. This design applies to arbitrary boxed keys, without
-key-class recognition, a Cleaner route or a separate guest heap walk.
+restricting keys to mutable carriers, a Cleaner route or a separate guest heap walk.
 
-The conditional value and finalizer state are separate. Claiming the finalizer
-retains its actual action, program-owned runner and C callback captures without
+The conditional value and real finalizer state are separate. Claiming the real
+finalizer retains its actual action, program-owned runner and C callback captures without
 an invented edge to the value. Neither registration nor dereference forces the
 key, value or action. The runtime retains their independently selected levities
 and the logical State# operands and tuple fields. Malformed representations and
@@ -66,13 +66,21 @@ the resource-lifetime contract; this does not establish reclamation of an
 abandoned, unclosed context. GC requests remain advisory and guarantee neither
 collection nor finalizer completion before returning.
 
-The remaining representation boundary is the general
-[Lifted contract](https://github.com/ekmett/jam/blob/main/docs/vm/lifted-tracing.md).
-THC supplies resolution and selector projection; Jam supplies verified collector
-entries and rewriting of eligible source slots. Normalization must follow a
-key's logical referent without marking it, forcing it or preserving its obsolete
-wrapper. It must also support a selector whose chosen field remains unevaluated.
-Non-success thunk states retain their ownership and suspension semantics.
+THC implements
+[language-level lifted weak handoff](https://github.com/ekmett/jam/issues/7).
+An unresolved thunk uses an ordinary weak registration with a bootstrap finalizer
+capturing the thunk, conditional value and real finalizer. The bootstrap executes
+outside GC, inspects resolution without forcing and either publishes a successor
+registration or proceeds to real finalization. Already resolved keys register
+against their result directly. No collector callback or common Lifted interface
+is needed.
+
+The logical handle remains stable through handoff. A retired bootstrap token
+cannot alone justify a dead dereference; explicit finalization, queued/running
+handoff and shutdown must arbitrate without losing the backing value or running
+the real finalizer twice. Temporary retention and additional collections are
+expected costs. Replacement failure must preserve the cleanup obligation; the
+failure recovery policy is still under review.
 
 The retained Jam package still scans dead registration records. Upstream has
 removed that repeated scan, but package adoption and metadata lifetime remain
@@ -84,4 +92,4 @@ The existing `WeakAudit`/`WeakFixtures` producer owns the public
 externally retained MVar signal. Native GHC supplies its independent result;
 original runtime Core, CBD dependencies and audits are explicit inputs/outputs.
 See [runtime qualification](jam-runtime.md#acceptance-evidence) for the distinction
-between diagnostic execution and supported behavior.
+between tested JVM behavior and the remaining qualification boundaries.

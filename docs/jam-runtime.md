@@ -5,10 +5,10 @@ SubstrateVM for native executables. The purpose is general `System.Mem.Weak`
 semantics, including keys held by Java code and finalizers that can resurrect
 their keys. Selecting the collector alone does not implement THC weak pointers.
 The current draft uses real `jam.vm.Weak` associations and guest finalizer
-carriers. General weak support remains incomplete: the retained release lacks
-collector-safe, language-owned normalization of lifted references. THC must
-implement the [Lifted contract](https://github.com/ekmett/jam/blob/main/docs/vm/lifted-tracing.md)
-on both JVM and Native Image before logical weak-key reachability is correct.
+carriers. General weak support remains unqualified. THC implements
+[language-level lifted weak handoff](https://github.com/ekmett/jam/issues/7)
+using ordinary weak registrations and bootstrap finalizers. The collector needs
+no language resolver callback or additional interface for this design.
 
 ## Toolchain ownership
 
@@ -90,39 +90,37 @@ retains its actual captures, without an invented reference to the entire value
 payload after death.
 
 THC's completed thunk is an indirection to its exact WHNF. Both backends can
-replace a local thunk alias with that value. Therefore a registration created
-before evaluation must continue to follow its logical key when the wrapper is
-no longer strongly referenced. The collector must resolve and retarget this
-slot before reclaiming the wrapper. Resolution must not mark the representative,
-force guest code, allocate Java roots, or acquire a stopped mutator's monitor.
-All other objects and non-success thunk states retain identity semantics.
-The required provider interface is `jam.vm.Lifted`, with language-owned
-`resolve()` and `resolveField(int)` methods. A null result means no replacement;
-both terminal values and unresolved thunks stop resolution that way. Language-owned
-tracing follows available replacements, repairs eligible source slots and then
-requests ordinary tracing of the endpoint. Jam supplies safe execution and the
-slot-repair/claim mechanisms, without selecting a special lifted pointer category
-in the collector. Weak-key normalization must not mark that endpoint. Selector
-contraction must release obsolete captures without evaluating the selected field.
+replace a local thunk alias with that value. A weak registration created before
+evaluation must therefore follow its logical key when the original wrapper dies.
 
-Ordinary weak references preserve object identity. A Haskell-facing lifted weak
-reference adds resolution through its tracing customization. Conditional value,
-ownership and finalizer edges cannot establish independent key liveness. The
-precise resolve/repair versus claim/follow bridge remains under design; these
-requirements do not establish a new runtime ABI.
+The language inspects the key without forcing it. An already resolved key uses
+an ordinary association against its result. An unresolved thunk uses an ordinary
+association whose bootstrap finalizer captures the thunk, conditional value and
+real finalizer. When pumped in normal mutator execution, the bootstrap inspects
+resolution again. A replacement gets a successor association; an unresolved key
+reaches real finalization. Available chains use the same rule, without endlessly
+reinstalling a self-reference or cycle.
 
-Fields eligible for replacement must admit every endpoint through their declared
-representation. A concrete Java `Thunk` reference retains wrapper identity;
-an arbitrary `Object` slot is not automatically a lifted slot. THC must map its
-existing capture, constructor, frame and array storage to this contract. Primitive,
-vector and aggregate layouts remain unchanged, as does normal CBD decoding.
+The outer handle retains tokens and lifecycle state, not an active strong path
+to the key, value or callbacks. Install and publish the successor before releasing
+the old captures. Retiring a bootstrap token is not logical death: dereference
+and callback attachment must settle queued/running handoff, including when called
+from a pump thread or nested finalizer. Explicit finalization races with the same
+claim protocol and runs the real finalizer at most once. Failed replacement must
+preserve its cleanup obligation and report failure; its recovery policy remains
+under review.
 
-Jam owns verified collector entries for language-authored methods, plus slot
-rewriting, relocation and code lifetime on both VM providers. Ordinary Java
-callbacks from a GC worker are insufficient. THC owns its thunk and selector
-semantics, including an alias state distinct from terminal WHNF when the answer
-can still be a thunk. The interface is not yet implemented. A field-descriptor
-registration API cannot substitute for it.
+Bootstrap captures can retain the key, answer and backing value until another
+collection. This may delay finalization and affect other weak associations;
+there is no fixed collection-count or collection-identical GHC guarantee. Before
+real guest finalization, release the bootstrap's obsolete key/value captures so a
+blocked finalizer does not retain the conditional value unnecessarily.
+
+These costs apply to weak registration and handoff. Ordinary strong references,
+constructor/array/frame layouts, CBD decoding and thunk evaluation remain
+unchanged. Collector-time selector contraction is separate work, not a dependency
+of this strategy. `jam::vm` provides ordinary weak associations and pump lifetime;
+core Jam needs no new pointer type, descriptor, scanner rule or entry compiler.
 
 ## Finalizer execution
 
@@ -160,18 +158,23 @@ handler, suspension and shutdown before entry. Native GHC supplies independent
 Haskell expectations. Preserve both backends, both handoff modes and the first
 compiled call where relevant.
 
-The existing Linux JVM checks exercise real first-compiled calls on both
-backends and handoff modes, guest finalizer execution, native callback borrowing,
-sharing, masking and resumable demand loading. Public `System.Mem.Weak` laws have
-executed against a diagnostic provider with a native-GHC oracle. Those private
-diagnostic results do not qualify the retained release or the missing Lifted
-protocol. Native Image application execution and macOS/Windows THC execution
-remain unqualified.
+On Linux, 22 selected JVM checks pass on the retained ordinary Jam package,
+with no failures or skips. They cover both handoff modes, both backends where
+relevant, first compiled calls, the original GHC automatic-finalizer law,
+completed-thunk aliases, cooperative pending handoff, capture release, callback
+arbitration and context shutdown. The existing declared fixture producers and
+native oracle were reused with unchanged inputs and outputs.
+
+This establishes those JVM behaviors. Replacement-failure policy and native
+registration metadata lifetime remain open. Native Image application execution
+and macOS/Windows THC execution are unqualified. The current supplier package is
+an explicitly labelled `fastdebug` preview; production release-flavor
+qualification is separate from this functional evidence.
 
 The automatic law requests one major collection and waits on its finalizer
 signal. Its native-GHC oracle, CBDs and audits come from the declared producer.
 Use that behavior check when qualifying the actual provider; do not accept a
-narrow key representation or an unimplemented collector method merely because a
+narrow key representation or assume pending handoff is death merely because a
 diagnostic case passed.
 
 A package startup check proves startup. A native image build proves construction.

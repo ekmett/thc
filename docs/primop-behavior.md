@@ -150,18 +150,18 @@ and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `mkWeak#` | The current draft creates a Jam conditional association retaining the original lazy value and Haskell finalizer state only through independent key reachability. Value/finalizer backedges do not root the key; dropping the handle does not cancel it. The exact program-owned GHC finalizer runner is retained lazily. Automatic actions require guest thread permission. General public Haskell qualification is pending. |
-| `mkWeakNoFinalizer#` | Uses the same conditional association for arbitrary boxed keys and lazy values, with no Haskell action. It has no key-class restriction or Cleaner path. Completed-thunk logical-key retargeting remains missing upstream. |
-| `deRefWeak#` | Returns the original lazy value without forcing it while the association is live; returns flag 0 and a cleared unspecified payload after retirement. The real completed-thunk regression currently returns flag 0 despite a live WHNF alias. |
+| `mkWeak#` | The current draft creates a Jam conditional association retaining the original lazy value and Haskell finalizer state only through independent key reachability. Value/finalizer backedges do not root the key; dropping the handle does not cancel it. The exact program-owned GHC finalizer runner is retained lazily. Automatic actions require guest thread permission. Selected Linux public Haskell laws pass; full qualification remains open. |
+| `mkWeakNoFinalizer#` | Uses the same conditional association for arbitrary boxed keys and lazy values, with no Haskell action. It has no key-class restriction or Cleaner path. Language-level bootstrap handoff preserves logical keys after later thunk evaluation. |
+| `deRefWeak#` | Returns the original lazy value without forcing it while the association is live; returns flag 0 and a cleared unspecified payload after retirement. Pending bootstrap retirement is settled before deciding whether the logical weak is dead. |
 | `finalizeWeak#` | Atomically retires the association, runs admitted C callbacks newest first outside the registry lock, and returns the exact reusable Haskell action to the caller. Returning rather than running that action is intentional GHC behavior. Automatic claims run on real guest carriers through the original GHC wrapper; completion follows actual termination or proven abandonment. Context close abandons outstanding claims before disposing native providers. |
 | `addCFinalizerToWeak#` | Accepts source-certified callbacks: zero calls `f(object)`, every nonzero flag calls `f(environment, object)`. Typed package declarations and exact rooted native definitions must agree on the ABI; arguments retain ordinary typed transport and native borrowing. Unknown labels reject. Reserved `free` requires zero flag and checked owned bases; busy borrows/free/realloc defer retirement through the existing nonblocking latch. Adding a callback does not promote conditional key/value reachability. Guest thread permission is required. See [C finalizers](c-finalizers.md). |
 
-General `System.Mem.Weak` support is not qualified. Completed-thunk logical-key
-retargeting fails with the retained release in both handoff modes. Public Haskell
-automatic-finalizer laws have executed on a diagnostic provider, but that does
-not qualify the release or the required general Lifted resolution protocol.
-Registration metadata lifetime and Native Image application execution also
-remain qualification requirements. These limits apply to the draft above.
+Selected Linux JVM weak laws pass on the pinned Jam package in both handoff
+modes, including both backends where applicable. General qualification remains
+open: replacement-registration failure policy, native registration metadata
+lifetime, Native Image application execution and other platforms are unfinished.
+Bootstrap captures can delay reclamation and affect other weak associations;
+there is no collection-identical GHC timing guarantee.
 
 `makeStableName#` uses a weak identity map and does not retain its referent.
 Stable pointers intentionally

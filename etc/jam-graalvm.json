@@ -19,7 +19,7 @@
         "tarSha256": "f98df1d7ea7d1ac420bbb3bf3e21edfb872981f1109f4bcea50f13caba1d84c1"
       },
       "qualification": "partial",
-      "qualificationScope": "Selected identity-key weak runtime case with first-compiled AST and bytecode calls in both handoff modes; general weak semantics and Native Image execution unqualified.",
+      "qualificationScope": "22 selected weak runtime checks, zero failures/skips, both handoff modes and AST/bytecode where relevant: logical thunk keys, pending handoff, original GHC automatic finalization and first compiled native calls. Replacement failure policy, native registration lifetime and Native Image execution remain unqualified.",
       "runtime": {
         "implementor": "Jam VM",
         "graalVersion": "25.3.4.1-dev",
