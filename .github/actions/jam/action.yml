@@ -16,7 +16,7 @@ runs:
     - uses: actions/cache/restore@v4
       id: cache
       with:
-        path: ${{ steps.package.outputs.jam-home }}
+        path: ${{ steps.package.outputs.jam-root }}
         key: ${{ steps.package.outputs.jam-key }}
     - name: Acquire the pinned prebuilt package
       shell: bash
@@ -34,5 +34,5 @@ runs:
     - uses: actions/cache/save@v4
       if: steps.cache.outputs.cache-hit != 'true'
       with:
-        path: ${{ steps.package.outputs.jam-home }}
+        path: ${{ steps.package.outputs.jam-root }}
         key: ${{ steps.package.outputs.jam-key }}

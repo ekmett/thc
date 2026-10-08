@@ -56,7 +56,7 @@ runs:
               "enabled": ${{ runner.os == 'macOS' }}
             },
             "graalvm": {
-              "path": "${{ steps.identity.outputs.jam-home }}",
+              "path": "${{ steps.identity.outputs.jam-root }}",
               "key": "${{ steps.identity.outputs.jam-key }}"
             },
             "llvm": {

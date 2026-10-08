@@ -337,7 +337,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("github.sha", immutable)
         self.assertIn("steps.identity.outputs.index", immutable)
         self.assertEqual("${{ steps.identity.outputs.jam-key }}", layers["graalvm"]["key"])
-        self.assertEqual("${{ steps.identity.outputs.jam-home }}", layers["graalvm"]["path"])
+        self.assertEqual("${{ steps.identity.outputs.jam-root }}", layers["graalvm"]["path"])
         self.assertIn('THC_TOOLS="$HOME/.cache/thc-toolchains" python3 .github/scripts/fast_ci.py jam-identity', setup)
         self.assertIn("if: steps.setup.outputs.index-cache-hit != 'true'", setup)
         self.assertEqual(1, setup.count("run: cabal update"))

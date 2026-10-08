@@ -319,7 +319,9 @@ def jam_package(root):
     require(host in pin["platforms"], f"No JAM GraalVM package is pinned for {host}")
     package = pin["platforms"][host]
     runtime, transport = package["runtime"], package["transport"]
-    version = lambda value: tuple(int(part) for part in value.split("."))
+    def version(value):
+        parts = tuple(int(part) for part in value.split("."))
+        return parts + (0,) * max(0, 3 - len(parts))
     if "minimumMacOS" in runtime:
         require(version(platform.mac_ver()[0]) >= version(runtime["minimumMacOS"]),
                 f"Pinned JAM package requires macOS {runtime['minimumMacOS']} or newer")
@@ -340,7 +342,7 @@ def jam_package(root):
 def jam_identity(root):
     _, home, key = jam_package(root)
     with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
-        stream.write(f"jam-home={home.as_posix()}\njam-key={key}\n")
+        stream.write(f"jam-home={home.as_posix()}\njam-root={home.parent.as_posix()}\njam-key={key}\n")
 
 
 def verify_jam(recorder, java_home):

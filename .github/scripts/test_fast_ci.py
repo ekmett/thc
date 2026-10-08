@@ -292,13 +292,15 @@ class FastRunnerTest(unittest.TestCase):
             self.assertNotEqual(key, ci.jam_package(self.root)[2])
             pin["platforms"]["Darwin-arm64"] = pin["platforms"].pop("Linux-x86_64")
             pin["platforms"]["Darwin-arm64"]["runtime"].pop("minimumGlibc")
-            pin["platforms"]["Darwin-arm64"]["runtime"]["minimumMacOS"] = "26"
+            pin["platforms"]["Darwin-arm64"]["runtime"]["minimumMacOS"] = "26.0.0"
             (self.root / "etc/jam-graalvm.json").write_text(json.dumps(pin))
             with patch.object(ci.platform, "system", return_value="Darwin"), \
                  patch.object(ci.platform, "machine", return_value="arm64"), \
                  patch.object(ci.platform, "mac_ver", return_value=("15.7", "", "")):
                 with self.assertRaisesRegex(RuntimeError, "requires macOS 26"):
                     ci.jam_package(self.root)
+                with patch.object(ci.platform, "mac_ver", return_value=("26.0", "", "")):
+                    self.assertIn("Darwin-arm64", ci.jam_package(self.root)[2])
 
     def test_jam_acquisition_checks_archives_and_reuses_exact_cache(self):
         for zipped, corrupt in ((False, ""), (True, ""), (False, "tar"), (True, "tar"), (True, "zip")):
@@ -306,9 +308,10 @@ class FastRunnerTest(unittest.TestCase):
                 tools = Path(directory) / "tools"
                 payload = Path(directory) / "package.tar.gz"
                 with tarfile.open(payload, "w:gz") as tar:
-                    item = tarfile.TarInfo("graalvm/release")
-                    item.size = 3
-                    tar.addfile(item, io.BytesIO(b"jam"))
+                    for name, data in (("graalvm/release", b"jam"), ("upstream/graal25/sdk/mxbuild/dists/nativeimage.jar", b"SDK")):
+                        item = tarfile.TarInfo(name)
+                        item.size = len(data)
+                        tar.addfile(item, io.BytesIO(data))
                 transport = {"kind": "github-release-asset", "url": "https://github.com/ekmett/jam/releases/download/package/linux.tar.gz",
                              "tarSha256": hashlib.sha256(payload.read_bytes()).hexdigest()}
                 source = payload
@@ -327,6 +330,7 @@ class FastRunnerTest(unittest.TestCase):
                 with patch.object(ci, "git", return_value="a" * 40):
                     recorder = ci.Recorder(self.root, Path(directory) / "report")
                 with patch.dict(os.environ, THC_TOOLS=str(tools), GITHUB_ENV=str(self.root / "env"), GITHUB_PATH=str(self.root / "path"),
+                                GITHUB_OUTPUT=str(Path(directory) / "outputs"),
                                 PATH=str(fake.parent) + os.pathsep + os.environ["PATH"]), \
                      patch.object(ci.platform, "system", return_value="Linux"), \
                      patch.object(ci.platform, "machine", return_value="x86_64"):
@@ -337,6 +341,15 @@ class FastRunnerTest(unittest.TestCase):
                     else:
                         home = ci.install_jam(recorder)
                         self.assertEqual(b"jam", (home / "release").read_bytes())
+                        ci.jam_identity(self.root)
+                        cache_root = Path(ci.action_outputs(Path(directory) / "outputs")["jam-root"])
+                        self.assertEqual(home.parent, cache_root)
+                        self.assertTrue(cache_root.name.startswith("jam-"))
+                        cached = Path(directory) / "saved-cache"
+                        ci.shutil.copytree(cache_root, cached)
+                        ci.shutil.rmtree(cache_root)
+                        ci.shutil.copytree(cached, cache_root)
+                        self.assertEqual(b"SDK", (cache_root / "upstream/graal25/sdk/mxbuild/dists/nativeimage.jar").read_bytes())
                         fake.unlink()
                         self.assertEqual(home, ci.install_jam(recorder))
                         self.assertEqual(str(home), recorder.data["jamPackage"]["javaHome"])
