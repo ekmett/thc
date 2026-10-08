@@ -161,9 +161,11 @@ including values and finalizers that refer back to their keys. The
 [foreign resource example](src/examples/standard-apps/foreign-resource/README.md)
 uses ordinary `ForeignPtr` APIs to keep a native buffer alive during use and run
 a Haskell cleanup action when its last owner disappears. It passes on both
-backends and handoff modes on Linux. The [Jam runtime guide](docs/jam-runtime.md)
-records the wider JVM/Native Image evidence and the remaining production and
-platform qualification.
+backends and handoff modes on Linux. The [weak thread example](src/examples/README.md)
+observes worker lifetime and uses a finalizer to return mutable state to the
+application, where it can be updated again. It also passes all four combinations.
+The [Jam runtime guide](docs/jam-runtime.md) records the wider JVM/Native Image
+evidence and the remaining production and platform qualification.
 
 The public [`thc:runtime` API](docs/runtime-services.md) exposes permissions,
 thread and affinity observations, memory/GC statistics and structured tracing.
