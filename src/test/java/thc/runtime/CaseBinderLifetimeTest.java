@@ -8,6 +8,8 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeUtil;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -181,6 +183,128 @@ class CaseBinderLifetimeTest {
                 assertSame(target, program.entryTarget("entry"));
                 assertThrows(RuntimeFault.class, () -> saved.continueWith(7L));
                 assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(target.getRootNode()));
+            } finally { context.leave(); }
+        }
+    }
+
+    private static final class TupleLifetime {
+        WeakReference<Object> produced;
+        int calls;
+    }
+    private static boolean collect(WeakReference<Object> reference) {
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        do {
+            System.gc();
+            if (reference.refersTo(null)) return true;
+            try { Thread.sleep(10); }
+            catch (InterruptedException failure) { Thread.currentThread().interrupt(); throw new AssertionError(failure); }
+        } while (System.nanoTime() < deadline);
+        return reference.refersTo(null);
+    }
+    private static WeakReference<Object> deadWitness() { return new WeakReference<>(new Object()); }
+
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void unusedTupleReferenceDiesWhileTheSelectedBodyStillRuns(String backend) {
+        var object = Map.<String, Object>of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
+        var pair = Map.<String, Object>of("kind", "unknown", "aggregate", "unboxed-tuple",
+                "components", List.of(LONG, object), "primReps", List.of("IntRep", "BoxedRep (Just Lifted)"), "evaluated", true);
+        var payload = Map.of("id", "unused", "name", "unused", "lifted", true, "rep", object);
+        var produce = node("app", node("var", "produce", Map.of("rep", CLOSURE)),
+                List.of(node("lit", "int", "41", Map.of("rep", LONG))), List.of(false), false, false, Map.of("rep", pair));
+        var observe = node("app", node("var", "observe", Map.of("rep", CLOSURE)),
+                List.of(variable("number")), List.of(false), false, false, Map.of("rep", LONG));
+        var expression = node("case", produce, "pair", List.of(node("data", "Pair", List.of("number", "unused"), observe,
+                Map.of("binders", List.of(binder("number"), payload)))),
+                Map.of("rep", LONG, "binder", Map.of("id", "pair", "lifted", false, "rep", pair)));
+        var parameters = List.of(Map.of("id", "produce", "lifted", true, "rep", CLOSURE),
+                Map.of("id", "observe", "lifted", true, "rep", CLOSURE));
+        var module = Map.<String, Object>of("constructors", List.of(Map.of("id", "Pair", "kind", "unboxed-tuple", "arity", 2,
+                "fieldReps", List.of(List.of("IntRep"), List.of("BoxedRep (Just Lifted)")),
+                "fieldLifted", List.of(false, true), "strictFields", List.of(false, false))),
+                "bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                        "expr", node("lam", parameters, expression, Map.of("rep", CLOSURE, "resultRep", LONG)))));
+        // Interpreter frames expose the lifetime contract without depending on a
+        // compiler eliminating the unused reference store as an optimization.
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var observation = new TupleLifetime();
+                var shape = new TupleShape(CoreRepresentations.parse(pair), language);
+                var producer = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureTupleResult(shape); configureEntry(new boolean[]{false}, false); }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        observation.calls++;
+                        Object key = new Object();
+                        observation.produced = new WeakReference<>(key);
+                        var result = shape.getLayout().create();
+                        shape.getLayout().setLong(result, 0, (long) frame.getArguments()[1]);
+                        shape.getLayout().setObject(result, 1, key);
+                        return result;
+                    }
+                };
+                var observer = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false}, false); configureScalarResult(CoreRepresentations.parse(LONG)); }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        Object live = new Object();
+                        var liveReference = new WeakReference<>(live);
+                        var witness = deadWitness();
+                        try {
+                            boolean collected = collect(observation.produced);
+                            assertTrue(witness.refersTo(null), "Independent dead key must establish collector progress");
+                            assertTrue(liveReference.refersTo(live), "A Java-held key remains live");
+                            assertTrue(collected, "Unused tuple payload must die before its case body returns");
+                            return (long) frame.getArguments()[1] + 1;
+                        } finally { Reference.reachabilityFence(live); }
+                    }
+                };
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+                assertEquals(42L, ScalarTestCalls.callScalarTestTarget(program.entryTarget("entry"),
+                        new Object[]{0L, new Closure(null, 1, producer.getCallTarget()), new Closure(null, 1, observer.getCallTarget())}));
+                assertEquals(1, observation.calls, "The scrutinee executes exactly once");
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void liveNestedTupleComponentAndWholeCaseAliasesKeepTheirValues(String backend) {
+        var object = Map.<String, Object>of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
+        var pair = Map.<String, Object>of("kind", "unknown", "aggregate", "unboxed-tuple", "components", List.of(object, LONG),
+                "primReps", List.of("BoxedRep (Just Lifted)", "IntRep"), "evaluated", true);
+        var outer = Map.<String, Object>of("kind", "unknown", "aggregate", "unboxed-tuple", "components", List.of(pair),
+                "primReps", pair.get("primReps"), "evaluated", true);
+        var key = node("var", "key", Map.of("rep", object));
+        var packed = node("app", node("con", "Pair", 2), List.of(key, node("lit", "int", "41", Map.of("rep", LONG))),
+                List.of(true, false), false, false, Map.of("rep", pair));
+        var scrutinee = node("app", node("con", "Outer", 1), List.of(packed), List.of(false), false, false, Map.of("rep", outer));
+        var component = node("var", "component", Map.of("rep", pair));
+        var alternative = node("data", "Outer", List.of("component"), component,
+                Map.of("binders", List.of(Map.of("id", "component", "lifted", false, "rep", pair))));
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean whole : new boolean[]{false, true}) {
+                    var body = whole ? node("case", node("var", "whole", Map.of("rep", outer)), "inner", List.of(alternative),
+                            Map.of("rep", pair, "binder", Map.of("id", "inner", "lifted", false, "rep", outer))) : component;
+                    var arm = whole ? node("default", null, List.of(), body) : alternative;
+                    var expression = node("case", scrutinee, "whole", List.of(arm),
+                            Map.of("rep", pair, "binder", Map.of("id", "whole", "lifted", false, "rep", outer)));
+                    var module = Map.<String, Object>of("constructors", List.of(
+                            Map.of("id", "Pair", "kind", "unboxed-tuple", "arity", 2), Map.of("id", "Outer", "kind", "unboxed-tuple", "arity", 1)),
+                            "bindings", List.of(Map.of("id", "entry", "lifted", true, "rep", CLOSURE,
+                                    "expr", node("lam", List.of(Map.of("id", "key", "lifted", true, "rep", object)), expression,
+                                            Map.of("rep", CLOSURE, "resultRep", pair)))));
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+                    Object marker = new Object();
+                    var shape = new TupleShape(CoreRepresentations.parse(pair), language);
+                    var result = TupleResults.ownedTupleResult(Calls.target(program.entryTarget("entry"), new Object[]{0L, marker}), shape);
+                    assertSame(marker, shape.getLayout().getObject(result, 0));
+                    assertEquals(41L, shape.getLayout().getLong(result, 1));
+                }
             } finally { context.leave(); }
         }
     }

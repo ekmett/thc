@@ -5,13 +5,20 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 public final class TupleCase extends Expr {
     @Child private Expr scrutinee;
     @CompilationFinal(dimensions = 1) private final int[] slots;
     @Child private Expr body;
-    public TupleCase(Expr scrutinee, int[] slots, Expr body) {
-        this.scrutinee = scrutinee; this.slots = slots; this.body = body; setRepresentation(body.getRepresentation());
+    @CompilationFinal(dimensions = 1) private final int[] deadReferences;
+    public TupleCase(Expr scrutinee, int[] slots, Expr body) { this(scrutinee, slots, body, new int[0]); }
+    TupleCase(Expr scrutinee, int[] slots, Expr body, int[] deadReferences) {
+        this.scrutinee = scrutinee; this.slots = slots; this.body = body; this.deadReferences = deadReferences;
+        setRepresentation(body.getRepresentation());
         scrutinee.prepareTuple(slots, 0);
+    }
+    @ExplodeLoop private void releaseUnused(VirtualFrame frame) {
+        for (int slot : deadReferences) frame.clear(slot);
     }
     @Override public void prepareTuple(int[] slots, int offset) { body.prepareTuple(slots, offset); }
     private void prepare(VirtualFrame frame) { prepare(frame, null, 0); }
@@ -19,16 +26,21 @@ public final class TupleCase extends Expr {
         try { scrutinee.executeTuple(frame, slots, 0); }
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
-                @Override public Object resume(VirtualFrame frame, Object input) { return destination == null ? body.execute(frame) : body.executeTuple(frame, destination, offset); }
+                @Override public Object resume(VirtualFrame frame, Object input) {
+                    releaseUnused(frame);
+                    return destination == null ? body.execute(frame) : body.executeTuple(frame, destination, offset);
+                }
             });
         } catch (DelimitedCut cut) {
             if (!DelimitedControl.enabled(this)) throw cut;
             throw cut.append(frame, new DelimitedStep() {
                 @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
-                    input.get(); return destination == null ? body.execute(frame) : body.executeTuple(frame, destination, offset);
+                    input.get(); releaseUnused(frame);
+                    return destination == null ? body.execute(frame) : body.executeTuple(frame, destination, offset);
                 }
             });
         }
+        releaseUnused(frame);
     }
     @Override public Object execute(VirtualFrame frame) { prepare(frame); return body.execute(frame); }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException { prepare(frame); return body.executeInt(frame); }

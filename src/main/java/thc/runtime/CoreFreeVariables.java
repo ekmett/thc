@@ -22,6 +22,31 @@ public final class CoreFreeVariables {
         };
     }
 
+    /** Dead reference leaves after a validated tuple case has completed its scrutinee. */
+    static int[] unusedTupleReferences(List<?> expression, TupleShape shape) {
+        var alternatives = (List<?>) expression.get(3);
+        if (alternatives.isEmpty()) return new int[0];
+        var alternative = (List<?>) alternatives.getFirst();
+        var free = coreFreeVariables((List<?>) alternative.get(3));
+        // The whole aggregate aliases every component, including nested leaves.
+        if (free.contains(expression.get(2))) return new int[0];
+        var live = new boolean[shape.getWidth()];
+        var binders = (List<?>) alternative.get(2);
+        for (int i = 0; i < binders.size(); i++) if (free.contains(binders.get(i))) {
+            int offset = shape.getOffsets()[i];
+            int width = TupleShape.flatten(shape.getComponents()[i]).size();
+            java.util.Arrays.fill(live, offset, offset + width, true);
+        }
+        var dead = new ArrayList<Integer>();
+        for (int i = 0; i < live.length; i++) if (!live[i]) {
+            switch (shape.getLeaves()[i].getKind()) {
+                case LONG, FLOAT, DOUBLE, VOID -> { }
+                default -> dead.add(i);
+            }
+        }
+        return dead.stream().mapToInt(Integer::intValue).toArray();
+    }
+
     private static final class Collector {
         private final Set<String> free = new LinkedHashSet<>();
         private final Set<String> bound = new HashSet<>();

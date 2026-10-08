@@ -1304,7 +1304,10 @@ public final class Program implements ExecutableProgram {
                 else local.bindSlot(id, new Local(slots[offset], component.isLong(), evaluated(field, component.isLong() || component.getEvaluated()), false, null, null, null));
             }
         } else if (!"default".equals(alt.getFirst()) || !ids.isEmpty()) throw new RuntimeFault("Invalid tuple alternative");
-        return new TupleCase(scrutinee, slots, caseArm((List<Object>) alt.get(3), local, tail, 1, false));
+        int[] dead = CoreFreeVariables.unusedTupleReferences(expr, shape);
+        for (int i = 0; i < dead.length; i++) dead[i] = slots[dead[i]];
+        local.layout.clearInitially(dead);
+        return new TupleCase(scrutinee, slots, caseArm((List<Object>) alt.get(3), local, tail, 1, false), dead);
     }
     private Expr joinJump(LocalJoinTarget target, List<List<Object>> args, List<?> flags, Scope scope) {
         return joinJump(target, args, flags, scope, new boolean[args.size()]);

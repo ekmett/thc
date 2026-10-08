@@ -5267,6 +5267,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }
         } else if (!"default".equals(alt.getFirst()) || !ids.isEmpty()) throw new RuntimeFault("Invalid tuple alternative");
+        int[] dead = CoreFreeVariables.unusedTupleReferences(expr, shape);
         var body = compile((List<Object>) alt.get(3), scope, tail);
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
@@ -5283,6 +5284,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }
             scrutinee.emitTuple(e, localSlots(e, fields));
+            for (int index : dead) {
+                b.beginStaticStoreObject(e.locals.get(fields.get(index).id)); b.emitLoadNull(); b.endStaticStoreObject();
+            }
             emitResult(body, e, destination); b.endBlock();
             for (var field : fields) {
                 e.staticResults.remove(e.locals.remove(field.id));

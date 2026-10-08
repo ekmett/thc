@@ -22,6 +22,13 @@ field is a canonical Unit alias; nested closures need no capture field for that
 alias. Existing scalar State# formals and call packets retain their ordinary ABI.
 `ByteArray#` is one unlifted boxed reference, independent of State# erasure.
 
+After a tuple-case scrutinee completes, both backends release reference fields
+whose component binders and whole-tuple binder are unused by the body. This also
+applies when the scrutinee resumes after suspension. A used nested component or
+whole-tuple alias retains its fields; discarding a lazy field never forces it.
+Unused result slots therefore do not keep objects alive during a later body
+collection or loop iteration.
+
 Fixture-free controls execute ordinary scalar State# producers in ignored fields
 and suppress later field work on a guest exception, with released loans after
 failure and recovery. Genuine GHC/export preservation of arbitrary State-producing
