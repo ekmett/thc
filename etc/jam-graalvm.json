@@ -219,20 +219,20 @@
     "Windows-x86_64": {
       "transport": {
         "kind": "github-release-asset",
-        "url": "https://github.com/ekmett/jam/releases/download/vm-2026.10.07-a7ebfc52/jam-graalvm-vm-2026.10.07-a7ebfc52-windows-x86_64.tar.gz",
-        "tarSha256": "84d0538629d37d6760a5b519e1bdff7f9f27eede42fd5689c0c084b73145237f"
+        "url": "https://github.com/ekmett/jam/releases/download/vm-2026.10.08-3cb04509/jam-graalvm-vm-2026.10.08-3cb04509-release-windows-x86_64.tar.gz",
+        "tarSha256": "b0384b6cb9008afee2d3fcc84aa18a30ed8c87689f987e65cfaa5b6acf9b0600"
       },
       "qualification": "partial",
-      "qualificationScope": "10 selected JVM weak-bootstrap cases, zero failures/skips, both handoff modes: completed-thunk aliases and cooperative pending handoff on AST/bytecode, explicit opaque-state finalization, automatic capture release on platform/Loom hosting, and actual context-close invalidation. Functional fastdebug evidence only; compiled execution, native GHC fixtures, general weak support, replacement-failure policy, native registration lifetime and Native Image execution remain unqualified.",
+      "qualificationScope": "Release-flavor Windows package with the SubstrateVM queue lifetime repair. 10 selected JVM weak-bootstrap cases pass with zero failures/errors/skips in both handoff modes: completed-thunk aliases and cooperative pending handoff on AST/bytecode, explicit opaque-state finalization, automatic capture release on platform/Loom hosting, and actual context-close invalidation. Functional JVM models only; compiled execution, native GHC fixtures, general weak support, allocation-failure recovery, native registration lifetime and Native Image execution remain unqualified.",
       "runtime": {
         "implementor": "Jam VM",
         "graalVersion": "25.3.4.1-dev",
         "javaRuntimeVersion": "25.0.4.1+1-jvmci-25.3-b22",
         "installation": {
           "algorithm": "sha256-path-manifest-v1",
-          "sha256": "a50ef1e8afc4f3029154329c1ddb7b33beb77aeb086972a486ce0dfec009c137",
+          "sha256": "d1b64b2aecd57c7dbf80691b72f2b4fd72e4de27a54f6bffd3846dd057ff3446",
           "regularFiles": 690,
-          "bytes": 832426502,
+          "bytes": 614156666,
           "symlinks": 0
         },
         "launcherIdentity": [
@@ -242,23 +242,24 @@
           "bin/jam-vm.dll"
         ],
         "sha256": {
-          "release": "ad1db16a9d70c83fe303e23d064abcaea9ad6aa6415ecfc082a994c6d1f5f756",
+          "release": "20e51223023875dab37dda42b84f4fa12092595f1cc7808688b987a1d9e9c592",
           "bin/java.exe": "f52ddec93eb4e46dec023f64dbfecbcf0639a7562b9f890c9b5067b07d9cbc46",
           "bin/native-image.cmd": "472afa5e9cd591f63d9a45a16d4a8d8c4d35735bfd21b74269c3dbac240259ff",
-          "lib/jam/jam-vm.jar": "745800ce5a096436bd9bdda233fd2b9e8006ee971c88895a8a39808cc918ef98",
+          "lib/jam/jam-vm.jar": "f941954040b74bd1ea44c171ac51aa556486a03b645809e235ed96cfb8eaf56c",
           "lib/jam/runtime-libraries.txt": "c74014327629c37d8cc308e9ba6bba7029fcf560159d8a0c764f4eeda1a06b47",
-          "lib/svm/builder/svm.jar": "c13dc3857f9b120e03f4822bb352512a85d38e6fe47b30bac6f958ec1dd863a0",
-          "bin/server/jvm.dll": "f9b017c24e23af5c194b234ef3f6f522117e9b1b6ce2d1482a50d36d1b9595f8",
-          "bin/jvmcicompiler.dll": "f826ef888fb79c3b95a7d154e3c20b1b848f7a5c7d44ebf2bf39d20d9533199f",
-          "bin/jam_bridge.dll": "2a4c44afd04bc040a5acca9ef06b689e2bbcb43e2627c291fc2801266e9623ab",
-          "bin/jam-vm.dll": "1c641c2c8bed4c380e581a655f25bee47e8671f5e9dd375d596724e899c5c66d",
-          "lib/jam/jam_bridge.dll": "2a4c44afd04bc040a5acca9ef06b689e2bbcb43e2627c291fc2801266e9623ab",
-          "lib/jam/jam-vm.dll": "1c641c2c8bed4c380e581a655f25bee47e8671f5e9dd375d596724e899c5c66d",
+          "lib/svm/builder/svm.jar": "5b64cbe985b78723e6f9e58d5d06b6fb454b1824a5db4badeb50e9b2035e97f2",
+          "bin/server/jvm.dll": "46c563c22a8b7f299a2386a091ef902ec506367bf8c935f70ef1f6bd6ebf4eb3",
+          "bin/jvmcicompiler.dll": "cca9d1d41438bfe9a5dcebbe4194d9681f144b6ba21d2c7dd26db82d9fb8e811",
+          "bin/jam_bridge.dll": "a2e4c34743a4c5fd6f950f42072b8f3906b42af2a665fb586777e0add06e9d32",
+          "bin/jam-vm.dll": "d86cde160399f2ae77a645eda98bca487fe5dbe2a891bce26dd158fe29874de4",
+          "lib/jam/jam_bridge.dll": "a2e4c34743a4c5fd6f950f42072b8f3906b42af2a665fb586777e0add06e9d32",
+          "lib/jam/jam-vm.dll": "d86cde160399f2ae77a645eda98bca487fe5dbe2a891bce26dd158fe29874de4",
           "lib/jam/msvcp140.dll": "0f885b509a685d2bbfa652fed26b5fb31d88fbdab0a978c641d1c7b8aa460aa9",
           "lib/jam/msvcp140_atomic_wait.dll": "640b2aefced484d0368eea5bdd06addd0658a3a70a49256e560d6923b404a479",
           "lib/jam/vcruntime140.dll": "d5e4d9a3e835fa679450145d6a7d94e36573a509317111904d9b3712c30d9066",
           "lib/jam/vcruntime140_1.dll": "1f2d41c4aa5db0bc33ebf7b66d72943a817d7ce6cbe880502a9403823633093f"
-        }
+        },
+        "buildFlavor": "release"
       },
       "paths": {
         "java": "bin/java.exe",
@@ -269,60 +270,60 @@
         "sdk_jars": [
           {
             "path": "upstream/graal25/sdk/mxbuild/dists/collections.jar",
-            "sha256": "e1cf27e45b65ac7a405bdc02e115a0fc8abb9c3b352e5a5f7127b030c76e9a0b",
+            "sha256": "dd9d90d24d52982a6fdd6749438c19cebc25dc4dff916657c2f62a1d5f461f07",
             "bytes": 129483
           },
           {
             "path": "upstream/graal25/sdk/mxbuild/dists/jniutils.jar",
-            "sha256": "0a8f682d2f21b6f16f7211f69e4ae20aee8cc10b3d33984e0479aa9b3cc18a28",
+            "sha256": "0d936602461267dd1e359cd565d0ff589f771614c2647475b19d4dd12d1eea82",
             "bytes": 281944
           },
           {
             "path": "upstream/graal25/sdk/mxbuild/dists/nativebridge.jar",
-            "sha256": "8c6227053f6df84d9b85879cf858a25ffae1e8636b6d1764a1fcda6a5bf4491a",
+            "sha256": "c4a85592305db05a8d4208f724abe431b125548a6bb9bb66ca68a9035cee7993",
             "bytes": 290675
           },
           {
             "path": "upstream/graal25/sdk/mxbuild/dists/nativeimage.jar",
-            "sha256": "8657a941ca08ba3ef407905cef478bcfc7a95940cd93410beddaa2dafa86b38a",
+            "sha256": "c8c56092f630a399808c995bb80788af70b33336c144d886a6221500c670727a",
             "bytes": 249806
           },
           {
             "path": "upstream/graal25/sdk/mxbuild/dists/polyglot.jar",
-            "sha256": "83f7b3648696c8de1fa82933d2a722db65221ca22ef82046f2ae1a404940c67c",
+            "sha256": "ee866afc8a72d85ba5d89d195614a536611b2b3ce670a78e611f938cd2737973",
             "bytes": 537941
           },
           {
             "path": "upstream/graal25/sdk/mxbuild/dists/word.jar",
-            "sha256": "a0d0a3e85508ebe79b3592e110f55083363930c8acebc3723d47f6d4c5d30eb4",
+            "sha256": "a3ef5bb86098e3e1a1f5258840aec94bd205d20cd6c5e66ec61a45fd427d38ca",
             "bytes": 73168
           },
           {
             "path": "upstream/graal25/truffle/mxbuild/dists/truffle-api.jar",
-            "sha256": "810eb6a7c5a38ba5deb0ac102d624a2416f7e068d045fcc2a682002f0d19dcc0",
+            "sha256": "4ca80bab3b68bf3bbe7826ad7c38ea1a7470f030d5fd081022d186a24bc5d348",
             "bytes": 16742362
           },
           {
             "path": "upstream/graal25/truffle/mxbuild/dists/truffle-compiler.jar",
-            "sha256": "74cccb3d5e95b57f08666f894cd5011919541c2a80d1f5c333f44ccf92a53eb9",
+            "sha256": "bc29f68fccf04b05b08f3d053fd5050885211ecb8cbf5d15f06103f6c6c6d545",
             "bytes": 54600
           },
           {
             "path": "upstream/graal25/truffle/mxbuild/dists/truffle-runtime.jar",
-            "sha256": "cd4c0c076f380bd0af045ee3c21632271a6d5efe44b0fe13fa8a0bc4592ff7f5",
+            "sha256": "3c7921b0ee3c8db015a3266a0dde1920a6dc796274d7f279891d1fc75233a8ee",
             "bytes": 935933
           }
         ]
       },
       "producer": {
         "repository": "ekmett/jam",
-        "commit": "a7ebfc52af18db70728a8bb1c2baa3c8eed7ffc2",
+        "commit": "3cb04509bd9180841af15561aa5093981eb98e6d",
         "graalCommit": "7b025988a922a73286d1326e1eddc1ca39d3f569",
         "labsJdkCommit": "f471c3eca82192dcdb1078687723652cf2ed63e7",
-        "releaseTag": "vm-2026.10.07-a7ebfc52",
-        "runId": 37685073105,
-        "manifestUrl": "https://github.com/ekmett/jam/releases/download/vm-2026.10.07-a7ebfc52/manifest.json",
-        "manifestSha256": "662665fce0e3bc233888ef2fc0effbbd5de282439c9adb791ad453ce6505a524"
+        "releaseTag": "vm-2026.10.08-3cb04509",
+        "runId": 37823024629,
+        "manifestUrl": "https://github.com/ekmett/jam/releases/download/vm-2026.10.08-3cb04509/manifest.json",
+        "manifestSha256": "cedcdae054a8cdf47ab61dc08dcf61c3f25a492771a52039cb30ee51af4dd626"
       }
     }
   }
