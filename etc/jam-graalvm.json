@@ -211,7 +211,8 @@
         "url": "https://github.com/ekmett/jam/releases/download/vm-2026.10.07-a7ebfc52/jam-graalvm-vm-2026.10.07-a7ebfc52-windows-x86_64.tar.gz",
         "tarSha256": "84d0538629d37d6760a5b519e1bdff7f9f27eede42fd5689c0c084b73145237f"
       },
-      "qualification": "pending",
+      "qualification": "partial",
+      "qualificationScope": "10 selected JVM weak-bootstrap cases, zero failures/skips, both handoff modes: completed-thunk aliases and cooperative pending handoff on AST/bytecode, explicit opaque-state finalization, automatic capture release on platform/Loom hosting, and actual context-close invalidation. Functional fastdebug evidence only; compiled execution, native GHC fixtures, general weak support, replacement-failure policy, native registration lifetime and Native Image execution remain unqualified.",
       "runtime": {
         "implementor": "Jam VM",
         "graalVersion": "25.3.4.1-dev",

@@ -12,8 +12,9 @@ fixtures with **GHC 9.14.1**, **cabal-install 3.16.0.0**, and
 Select the separately acquired pinned Windows JAM package before bootstrap.
 Bootstrap preserves `JAVA_HOME`, checks its release identity, and installs the
 x64 Windows GHC bindist and Cabal. Runtime builds verify the complete JAM package;
-stock GraalVM fails these checks. Full JAM runtime execution remains unqualified
-on Windows. Package identities and remaining distribution
+stock GraalVM fails these checks. Current Windows JAM qualification is limited
+to the five weak-bootstrap models below; other Windows checks need qualification
+on this provider. Package identities and remaining distribution
 requirements are documented in [JAM runtime integration](jam-runtime.md).
 Python 3.12+ is still needed by existing generators and strict Core audits.
 
@@ -26,9 +27,9 @@ It does not install services, change execution policy, or modify the machine PAT
 It selects its own `CABAL_CONFIG` under the prefix and uses HTTPS Hackage with
 signed repository metadata and Cabal's standard Hackage trust keys. Existing
 default HTTP configurations are upgraded without replacing other repositories
-or explicit trust keys; disabled Hackage verification is rejected. A fresh CI
-runner still needs immutable JAM package acquisition before the CI migration can
-use this setup; the currently retained producer artifacts are qualification inputs.
+or explicit trust keys; disabled Hackage verification is rejected. The shared
+`.github/actions/jam` installer acquires the exact retained release asset and
+checks its archive hash; ordinary Gradle builds check the unpacked identity.
 Install a real Python interpreter first; the Microsoft Store alias does not work.
 Bootstrap selects the first interpreter on PATH outside the user App Execution
 Alias directory; `THC_PYTHON` overrides discovery. It checks Python 3.12+ afterward.
@@ -122,21 +123,18 @@ the existing bytecode-yield initializer and publishes its completed value once
 without replaying effects. Both methods run in both handoff modes; these checks
 do not qualify compiled execution, exported Core or Native Image execution.
 
-Fixture-free weak checks cover identity-only registrations and actionless raw
-`MutVar#` and `MVar#` keys with distinct values. The cycle check requires actual collection
-of value-to-key cycles while live keys retain their original values, including
-first compiled make and dead dereference calls on AST and bytecode.
-Shared controls retain dropped registrations under live keys until detach and
-check actual context close detaches values and invalidates handles without
-running Haskell actions. Callback attachment promotes collectible registrations
-to explicit lifetime; ordinary distinct-key values and all actions remain
-strongly retained until explicit finalization or context close. Callbacks run
-newest-first once. A retained MVar request, including a cancelled request, keeps
-its key and conditional value alive until the request is dropped; the
-[raw MVar ownership controls](https://github.com/ekmett/thc/pull/1139) also retain
-the cell's transfer, cancellation and no-replay checks. Selected checks run in
-both handoff modes. General ephemerons, automatic Haskell/package finalizers
-and the native weak corpus remain outside this qualification.
+Five fixture-free `ManagedWeakTest` methods pass on the ordinary pinned Jam
+Windows package from producer `a7ebfc52`: 10 actual cases, zero failures or skips,
+in default and dense handoff modes. Completed-thunk aliases and cooperative
+pending handoff exercise AST and bytecode. Explicit finalization preserves the
+original action without forcing opaque states; automatic bootstrap death releases
+obsolete captures before a real finalizer blocks under platform/Loom hosting.
+Actual context close invalidates handles and releases conditional values. These
+are Java models, with no native GHC fixture acquisition or compiled-execution
+claim. Complete `verifyJamToolchain` verification stays enabled. The package is
+fastdebug, so this establishes functional behavior, not performance or release
+qualification. General weak support, replacement-failure policy, native
+registration lifetime, exported Core and Native Image remain unqualified.
 
 The [canonical owned-malloc retirement path](c-finalizers.md) is checked on
 native Windows. After actual JVM key collection, storage retires without a

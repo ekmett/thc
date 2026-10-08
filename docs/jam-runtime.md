@@ -45,8 +45,9 @@ remain part of the shared-host contract. The API loads from the host classloader
 with the matching native directory selected from the running package.
 
 The pinned Linux package requires glibc 2.38. Matching macOS and Windows
-packages have separate recorded identities; their THC runtime qualification
-is pending. The macOS package requires macOS 26 and cannot run on macOS 15.
+packages have separate recorded identities. Windows has the bounded JVM
+weak-bootstrap evidence below; macOS THC execution remains unqualified.
+The macOS package requires macOS 26 and cannot run on macOS 15.
 Consumer CI uses the retained release assets and the matching platform floors.
 
 Native Image builds select `--gc=jam`. Both image recipes also reuse the
@@ -165,9 +166,18 @@ completed-thunk aliases, cooperative pending handoff, capture release, callback
 arbitration and context shutdown. The existing declared fixture producers and
 native oracle were reused with unchanged inputs and outputs.
 
+On native Windows, five fixture-free `ManagedWeakTest` methods pass in each
+handoff mode: 10 actual cases, zero failures or skips. They cover completed-thunk
+aliases and cooperative pending handoff on AST/bytecode, explicit finalization
+without forcing opaque states, obsolete capture release before a real finalizer
+blocks on platform/Loom hosting, and actual context-close invalidation. The
+ordinary pinned package passes complete `verifyJamToolchain` verification.
+These Java models do not qualify compiled execution or native GHC fixtures.
+
 This establishes those JVM behaviors. Replacement-failure policy and native
-registration metadata lifetime remain open. Native Image application execution
-and macOS/Windows THC execution are unqualified. The current supplier package is
+registration metadata lifetime remain open. General weak support, Native Image
+application execution and macOS THC execution are unqualified. The current
+supplier package is
 an explicitly labelled `fastdebug` preview; production release-flavor
 qualification is separate from this functional evidence.
 
