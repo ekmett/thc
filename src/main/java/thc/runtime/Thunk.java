@@ -13,6 +13,7 @@ public final class Thunk {
     private volatile int state;
     private Object value;
     private Thread owner;
+    private boolean hasWaited;
 
     public Thunk(RootCallTarget target, CapturedFrame environment) {
         this.target = target;
@@ -31,6 +32,10 @@ public final class Thunk {
     public void setValue(Object value) { this.value = value; }
     public Thread getOwner() { return owner; }
     public void setOwner(Thread owner) { this.owner = owner; }
+    /** Caller holds this thunk's monitor. Registration precedes the atomic wait release. */
+    void awaitUpdate() throws InterruptedException { hasWaited = true; wait(); }
+    /** Caller holds this thunk's monitor. Once contended, retain every later wakeup. */
+    void notifyUpdate() { if (hasWaited) notifyAll(); }
     // One stable monitor per thunk, with no additional lock allocation.
     public Object getMonitor() { return this; }
 }

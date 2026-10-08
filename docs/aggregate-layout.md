@@ -147,3 +147,9 @@ empty tuples, including sums nested inside sum payloads. The genuine
 `VirtualRegWithFormat` worker has two logical fields but three JVM fields:
 Long tag, shared Long payload, then the Format reference at offset 2. See the
 [aggregate constructor contract](aggregate-heap-fields.md).
+
+Public synthetic CBD controls qualify cold malformed-aggregate demand, the first
+installed good call and diagnostic validation of unused logical host formals.
+Fixture-free controls retain proof ownership, logical shape distinctions and result
+loan cleanup. Genuine pre/post GHC multiple-outstanding tuple/forwarding and
+compiled tuple/sum transport conjunctions remain unqualified by these controls.

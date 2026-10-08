@@ -187,23 +187,36 @@ class Recorder:
         require(phase["exitCode"] in allowed, f"{name} failed: exit {phase['exitCode']}; see {logfile}")
         return phase["exitCode"], "".join(output)
 
-    def parallel(self, commands):
-        """Join independent setup processes; terminate their groups on failure."""
+    def parallel(self, commands, *, dependencies=None, environments=None, workers=4):
+        """Run ready setup processes; terminate their groups on failure."""
+        dependencies, environments = dependencies or {}, environments or {}
+        queued, completed = dict(commands), set()
+        require(len(queued) == len(commands), "Duplicate setup command")
+        require(all(set(needs) <= queued.keys() for needs in dependencies.values()),
+                "Unknown setup dependency")
         self.directory.mkdir(parents=True, exist_ok=True)
         children = []
         try:
             with ExitStack() as stack:
-                for name, argv in commands:
-                    logfile = self.directory / (name + ".log")
-                    log = stack.enter_context(logfile.open("w"))
-                    phase = {"name": name, "command": argv, "started": utc(),
-                             "log": str(logfile.relative_to(self.root))}
-                    print("Starting " + name + ": " + str(logfile), flush=True)
-                    child = subprocess.Popen(argv, cwd=self.root, stdout=log, stderr=subprocess.STDOUT,
-                                             start_new_session=True)
-                    children.append((child, phase, time.monotonic(), logfile))
-                pending = list(children)
-                while pending:
+                pending = []
+                while queued or pending:
+                    for name, argv in list(queued.items()):
+                        if len(pending) == workers:
+                            break
+                        if not set(dependencies.get(name, ())) <= completed:
+                            continue
+                        del queued[name]
+                        logfile = self.directory / (name + ".log")
+                        log = stack.enter_context(logfile.open("w"))
+                        phase = {"name": name, "command": argv, "started": utc(),
+                                 "startedEpoch": time.time(), "log": str(logfile.relative_to(self.root))}
+                        print("Starting " + name + ": " + str(logfile), flush=True)
+                        child = subprocess.Popen(argv, cwd=self.root, stdout=log, stderr=subprocess.STDOUT,
+                                                 env=environments.get(name), start_new_session=True)
+                        item = (child, phase, time.monotonic(), logfile)
+                        children.append(item)
+                        pending.append(item)
+                    require(bool(pending), "Cyclic setup dependencies")
                     for item in list(pending):
                         child, phase, begin, logfile = item
                         code = child.poll()
@@ -217,6 +230,7 @@ class Recorder:
                         print(logfile.read_text(), end="", flush=True)
                         print("::endgroup::", flush=True)
                         require(code == 0, f"{phase['name']} failed: exit {code}; see {logfile}")
+                        completed.add(phase["name"])
                     if pending:
                         time.sleep(0.1)
         finally:
@@ -236,10 +250,65 @@ class Recorder:
                     phase.update(exitCode=child.returncode, seconds=round(time.monotonic() - begin, 6), finished=utc())
                     self.data["phases"].append(phase)
             self.save()
+            events = [{"name": phase["name"], "cat": "Setup", "ph": "X", "pid": 1,
+                       "ts": round(phase["startedEpoch"] * 1000000),
+                       "dur": round(phase["seconds"] * 1000000),
+                       "args": {"exitCode": phase["exitCode"]}}
+                      for _, phase, _, _ in children]
+            write_trace(self.trace_directory / f"setup-{time.time_ns()}.events.json", events)
+
+
+def action_outputs(path):
+    """Read the runner's single-line and multiline output command format."""
+    lines = iter(path.read_text().splitlines())
+    values = {}
+    for line in lines:
+        if "<<" in line:
+            name, delimiter = line.split("<<", 1)
+            value = []
+            for part in lines:
+                if part == delimiter:
+                    break
+                value.append(part)
+            else:
+                raise RuntimeError(f"Unterminated action output: {name}")
+            values[name] = "\n".join(value)
+        elif "=" in line:
+            name, value = line.split("=", 1)
+            values[name] = value
+    return values
+
+
+def cache_restores(recorder, layers):
+    """Invoke the runner-downloaded official action, with isolated output files.
+
+    setup/action.yml declares actions/cache@v4 as a dependency. The runner
+    downloads it before executing the composite; github-script supplies the
+    same Node runtime and cache-service credentials as a normal cache action.
+    """
+    action = Path(os.environ["THC_CACHE_ACTION"]) / "dist/restore-only/index.js"
+    require(action.is_file(), f"Declared actions/cache@v4 restore entry point missing: {action}")
+    commands, environments, outputs = [], {}, {}
+    recorder.directory.mkdir(parents=True, exist_ok=True)
+    for name, layer in layers.items():
+        if not layer.get("enabled", True):
+            continue
+        output = recorder.directory / ("cache-" + name + ".outputs")
+        output.write_text("")
+        env = {key: value for key, value in os.environ.items() if not key.startswith("INPUT_")}
+        env.update({"INPUT_PATH": layer["path"], "INPUT_KEY": layer["key"],
+                    "INPUT_RESTORE-KEYS": layer.get("restore-keys", ""),
+                    "INPUT_ENABLECROSSOSARCHIVE": "false", "INPUT_LOOKUP-ONLY": "false",
+                    "INPUT_FAIL-ON-CACHE-MISS": "false", "GITHUB_OUTPUT": str(output)})
+        job = "restore-" + name
+        commands.append((job, [os.environ["THC_NODE"], str(action)]))
+        environments[job] = env
+        outputs[name] = output
+    return commands, environments, outputs
 
 
 def setup_toolchain(recorder):
-    """Install only missing pinned tools, concurrently with submodule checkout."""
+    """Restore independent caches and check out sources, then install misses."""
     host = (platform.system(), platform.machine())
     releases = {
         ("Darwin", "arm64"): ("aarch64-apple-darwin", "4e521e008fe0813db6db4b91cfeebd0c44c80c68afb458ea32a1c94cf5c7cc1d",
@@ -312,12 +381,27 @@ fi
 '''
         java_home = Path(os.environ["THC_TOOLS"]) / "graalvm-community-25.3.4.1+1.1"
         llvm_bin = "/usr/lib/llvm-18/bin"
-    recorder.parallel([
+    commands = [
         ("source-submodules", ["git", "-c", "core.autocrlf=false", "submodule", "update", "--init", "--depth", "1", "--jobs", "4"]),
         ("haskell-toolchain", ["bash", "-c", haskell]),
         ("graalvm-toolchain", ["bash", "-c", java]),
         ("native-toolchain", ["bash", "-c", native]),
-    ])
+    ]
+    layers = json.loads(os.environ.get("THC_CACHE_LAYERS", "{}"))
+    if layers:
+        restores, environments, outputs = cache_restores(recorder, layers)
+        dependencies = {"haskell-toolchain": ["restore-cabal"],
+                        "graalvm-toolchain": ["restore-graalvm"]}
+        if host[0] == "Darwin":
+            dependencies["haskell-toolchain"].append("restore-ghc")
+            dependencies["native-toolchain"] = ["restore-llvm"]
+        recorder.parallel(commands + restores, dependencies=dependencies, environments=environments)
+        with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+            for name, output in outputs.items():
+                hit = action_outputs(output).get("cache-hit", "")
+                stream.write(f"{name}-cache-hit={hit}\n")
+    else:
+        recorder.parallel(commands)
     release = dict(line.split("=", 1) for line in (java_home / "release").read_text().splitlines() if "=" in line)
     require(release["GRAALVM_VERSION"].strip('"') == "25.3.4.1"
             and release["JAVA_VERSION"].strip('"').split(".")[0] == "25", "Unexpected cached GraalVM")
@@ -334,7 +418,7 @@ fi
     recorder.save()
 
 
-def validate_xml(directory, expected):
+def validate_xml(directory, expected, patterns=None):
     """Require fresh suites; only the Windows-only suite may be disabled on Linux."""
     files = sorted(directory.glob("TEST-*.xml"))
     require(bool(files), "No fresh JUnit XML")
@@ -376,8 +460,20 @@ def validate_xml(directory, expected):
             and totals["skipped"] == len(platform_skips),
             "JUnit reports failures/errors/skips: " + repr(totals))
     require(bool(cases), "No executed JUnit testcases")
+    if patterns is not None:
+        validate_methods(cases + platform_skips, expected, patterns)
     return {**totals, "classes": sorted(classes), "cases": sorted(cases),
             "platformSkippedCases": sorted(platform_skips), "xmlFiles": len(files)}
+
+
+def validate_methods(cases, classes, patterns):
+    for name in classes:
+        if name in patterns:
+            continue
+        methods = {p[len(name) + 1:] for p in patterns if p.startswith(name + ".")}
+        observed = {case.split("(", 1)[0] for owner, case in cases if owner == name}
+        require(methods and observed == methods,
+                f"Partial JUnit method mismatch in {name}: expected={sorted(methods)}, actual={sorted(observed)}")
 
 
 def gradle_command(selection, *, install_dist=False, fail_fast=True, reuse_daemon=False):
@@ -394,9 +490,15 @@ def gradle_command(selection, *, install_dist=False, fail_fast=True, reuse_daemo
         argv.append("installDist")
     if selection["mode"] == "narrow":
         patterns = selection["junit"]["patterns"]
-        proof = "thc.runtime.HandoffTest.requestedModeReachesTestProcessAndContext"
-        require(["thc.runtime.HandoffTest" if name == proof else name for name in patterns] == classes,
-                "Narrow patterns must name entire selected classes or the handoff mode proof")
+        require(isinstance(patterns, list) and patterns and all(isinstance(p, str) for p in patterns)
+                and len(patterns) == len(set(patterns)), "Empty/duplicate narrow patterns")
+        require(all(p in classes or p.rsplit(".", 1)[0] in classes
+                    and re.fullmatch(r"[A-Za-z_$][\w$]*", p.rsplit(".", 1)[-1]) for p in patterns),
+                "Narrow patterns must name selected classes or exact test methods")
+        require({p if p in classes else p.rsplit(".", 1)[0] for p in patterns} == set(classes),
+                "Narrow patterns must cover every selected class")
+        require(not any(p.rsplit(".", 1)[0] in patterns for p in patterns if p not in classes),
+                "A full class must not hide a partial method selection")
     else:
         require(selection["junit"]["patterns"] == ["*"], "Full mode must run every test")
     for task in HANDOFF_TASKS.values():
@@ -486,7 +588,8 @@ def run_modes(recorder, selection, *, install_dist=False):
     for mode in HANDOFF_TASKS:
         try:
             xml = directory / mode / "xml"
-            summary = validate_xml(xml, selection["junit"]["classes"])
+            summary = validate_xml(xml, selection["junit"]["classes"],
+                                   selection["junit"]["patterns"] if selection["mode"] == "narrow" else None)
             # HandoffTest belongs to every smoke/full selection. This marker is
             # printed only after checking the actual fork property and runtime
             # context, without changing either to manufacture the expected mode.
@@ -727,12 +830,13 @@ def restore_common(root, archive):
         bundle.extractall(root, members=members, filter="data")
 
 
-def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=False):
+def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=False, exact_class=None):
     import fast_select
-    selection = fast_select.group_selection(recorder.root, name, cadence=cadence)
+    selection = fast_select.group_selection(recorder.root, name, cadence=cadence, exact_class=exact_class)
     manifest, owners = fixtures._manifest(recorder.root)
     require(all(c in owners for c in selection["junit"]["classes"]), "Unowned selected class")
-    recorder.data["selection"] = {"mode": "group", "group": name, "cadence": cadence, "reasons": []}
+    recorder.data["selection"] = {"mode": "group", "group": name, "cadence": cadence,
+                                  "junit": selection["junit"], "exactClass": exact_class, "reasons": []}
     # Unknown ownership fails above; a group job must never widen to all fixtures.
     recorder.data["nativeInputs"] = ({"mode": "cmake-graph"} if prepared else
                                     fixtures.prepare_cmake(recorder.root, selection, recorder.command))
@@ -753,6 +857,12 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=Fals
         suites = [ET.parse(path).getroot() for path in sorted(xml.glob("TEST-*.xml"))]
         require(suites and not any(suite.findall(".//failure") or suite.findall(".//error") for suite in suites),
                 "Missing or failed fresh grouped JUnit results")
+        observed = {suite.attrib.get("name") for suite in suites}
+        expected = set(selection["junit"]["classes"])
+        require(observed == expected,
+                f"Grouped JUnit class mismatch: missing={sorted(expected-observed)}, extra={sorted(observed-expected)}")
+        require(all(int(suite.attrib.get("tests", "-1")) == len(suite.findall("testcase")) > 0
+                    for suite in suites), "Empty/inconsistent grouped JUnit suite")
         proof = ET.parse(xml / "TEST-thc.runtime.HandoffTest.xml").getroot()
         markers = [line for out in proof.findall("system-out") for line in (out.text or "").splitlines()
                    if line.startswith("THC_HANDOFF_MODE=")]
@@ -761,6 +871,7 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=Fals
         # Keep original JUnit platform/tag exclusions and assumption semantics.
         cases.append(sorted((case.attrib["classname"], case.attrib["name"])
                             for suite in suites for case in suite.findall("testcase")))
+        validate_methods(cases[-1], selection["junit"]["classes"], selection["junit"]["patterns"])
     require(cases[0] == cases[1], "Grouped handoff modes ran different testcase sets")
     recorder.data.update(passed=True, testCasesPerMode=len(cases[0]))
     recorder.save()
@@ -833,6 +944,7 @@ def main(argv=None):
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
+    parser.add_argument("--exact-class", help="One exact admitted class within the selected group")
     parser.add_argument("--cadence", choices=("commit", "hourly", "nightly"))
     parser.add_argument("--reuse-daemon", action="store_true",
                         help="Reuse the CI job's worker daemon for builds and grouped tests")
@@ -867,9 +979,9 @@ def main(argv=None):
             recorder.data["passed"] = True
             recorder.save()
         elif args.command == "jvm-group":
-            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence, prepared=True)
+            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence, prepared=True, exact_class=args.exact_class)
         elif args.command == "group":
-            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence)
+            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence, exact_class=args.exact_class)
         elif args.command == "pack-common":
             pack_common(ROOT, args.archive)
         elif args.command == "restore-common":
@@ -894,7 +1006,7 @@ def main(argv=None):
     finally:
         # Nested check-command/jvm-group processes own fragments only. Their
         # coordinator merges after all children exit, including failed builds.
-        if args.command in ("commit-checks", "run", "group", "compile-common", "compile-test-support"):
+        if args.command in ("setup-toolchain", "commit-checks", "run", "group", "compile-common", "compile-test-support"):
             merge_traces(recorder.trace_directory, recorder.directory / "build-trace.json")
     return 0
 

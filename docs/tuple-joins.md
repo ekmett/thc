@@ -14,15 +14,25 @@ no function-call packet or tuple result carrier and borrow no handoff slab.
 Actual logical shape, arity, levity and carrier checks remain in place; matching
 register counts alone do not establish matching tuples.
 
+Fixture-free controls in `TupleJoinLoweringTest` and `EmptyArgumentRuntimeTest`
+cover result scratch cleanup, an aliased destination, evaluated nonempty tuple
+capture through a zero-arity join, and recursive lexical shadowing. They preserve
+lazy lifted leaves through the first installed call in both backends. Genuine
+GHC-exported tuple-result join capture remains unqualified; the existing
+`RealCoreJoinTest` source controls return scalars.
+
 An empty tuple `case` still evaluates its scrutinee. Original Tasty code contains
 `case retry# state of {}` and equivalent bottoming tuple calls. Exceptions and
 STM retry propagate normally. If malformed Core returns from that scrutinee,
 the case raises the ordinary non-exhaustive-case fault. No bottom proof or
 fabricated successful result is required.
 
-This contract covers the original GHC 9.14.1 `GHC.Internal.Float.$wroundTo` local
-join whose third argument is `(# Int, [Int] #)`. [Binary sum arguments and PAPs](sum-inputs.md)
-and [owned tuple closure/thunk captures](tuple-captures.md) use the existing typed
+Genuine GHC pre/post rich tuple-join input export, original installed
+`GHC.Internal.Float.$wroundTo` hosting, and exported empty-case retry/raise
+combinations remain unqualified. Fixture-free owners cover the runtime contracts.
+
+[Binary sum arguments and PAPs](sum-inputs.md) and
+[owned tuple closure/thunk captures](tuple-captures.md) use the existing typed
 transport alongside joins. Both backends also support nonrecursive unlifted
 aggregate lets and public host aggregate arguments/results. The host ABI preserves
 logical tuple arrays, tagged sums, exact vector species and null State#/Void#

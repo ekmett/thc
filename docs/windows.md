@@ -67,6 +67,180 @@ checks tuple arithmetic, bit primops, signed-narrow arithmetic, arrays, allocati
 and the native ABI. Signed-narrow uses its existing native/model suite in both
 backends and handoff modes without pinned-Core acquisition. A shared Gradle
 invocation retains the focused test reports for both handoff modes.
+Runtime also selects two typed scalar-bitcast methods: raw Float/Double
+bits survive the first installed call in both backends, wrong carriers are
+rejected, and handoff storage is released. This model check needs no generated
+fixture and excludes the exhaustive NaN loop. A direct node check additionally
+rejects boxed operand execution while preserving signed NaN payload bits.
+The native-GHC bitcast corpus
+remains outside this selection; the CMake fixture graph does not support Windows.
+
+Two fixture-free thunk checks cover opted-in speculative work starting before
+demand, demand sharing the original thunk, and one evaluation with the same
+published result after interpreted and first compiled hints in both backends.
+The disabled queue (the default zero capacity) leaves work unforced without
+admitting guest concurrency. These bounded checks do not qualify the whole
+concurrency suite or GHC-derived programs.
+
+Three additional spark lifecycle checks defer guest failure until demand while
+unrelated work continues, resume the same thunk after worker cancellation without
+replaying its effect, and stop claimed work and discard queued hints on context
+disposal. Each checks AST and bytecode in both handoff modes. These lifecycle
+checks do not establish compiled execution.
+
+A fixture-free async check delivers the first external request to a concurrent
+loop that has executed installed code before request publication. AST and bytecode
+parents retain saved operands through delivery and resumption, accept a later
+request, and leave another context's compiled target valid on the shared engine.
+The exact method runs in both handoff modes. This synthetic check does not
+qualify the whole async suite, native GHC exports or polling performance.
+
+A fixture-free context lifecycle check uses pinned Truffle's actual JVM
+preinitialization in an isolated process. It retains the same language and context
+holder while replacing preparation authority with the runtime Env, checks neutral
+carrier cells and second-carrier invalidation, and rejects failed startup without
+restoring preparation authority. The runtime and rejection cases run in both
+handoff modes. This check does not qualify Native Image heap capture, executable
+generation, hosted Core preparation or native library bundling.
+
+Two fixture-free reusable AST checks run after the preparation context closes.
+Cold AOT-compiled `myThreadId#` targets observe each fresh runtime context's
+identity under platform and Loom hosting. Narrow 8/16-bit address indexing checks
+signed values, element offsets and runtime allocations, then rejects reads after
+free without compilation. Both methods run in both handoff modes. These checks
+do not qualify bytecode, Windows Text, GHC export or Native Image execution.
+
+Two fixture-free global-initializer checks retain execution outside the lowering
+lock and the first evaluator's masking state. A suspended AST global read resumes
+the existing bytecode-yield initializer and publishes its completed value once
+without replaying effects. Both methods run in both handoff modes; these checks
+do not qualify compiled execution, exported Core or Native Image execution.
+
+Fixture-free weak checks cover identity-only registrations and actionless raw
+`MutVar#` and `MVar#` keys with distinct values. The cycle check requires actual collection
+of value-to-key cycles while live keys retain their original values, including
+first compiled make and dead dereference calls on AST and bytecode.
+Shared controls retain dropped registrations under live keys until detach and
+check actual context close detaches values and invalidates handles without
+running Haskell actions. Callback attachment promotes collectible registrations
+to explicit lifetime; ordinary distinct-key values and all actions remain
+strongly retained until explicit finalization or context close. Callbacks run
+newest-first once. A retained MVar request, including a cancelled request, keeps
+its key and conditional value alive until the request is dropped; the
+[raw MVar ownership controls](https://github.com/ekmett/thc/pull/1139) also retain
+the cell's transfer, cancellation and no-replay checks. Selected checks run in
+both handoff modes. General ephemerons, automatic Haskell/package finalizers
+and the native weak corpus remain outside this qualification.
+
+The [canonical owned-malloc retirement path](c-finalizers.md) is checked on
+native Windows. After actual JVM key collection, storage retires without a
+managed guest GC request or weak operation; borrowed storage remains valid until
+borrow completion. Companion controls retain first compiled make/GC execution
+on AST and bytecode, identity/raw `MutVar#`/`MVar#` lifetimes, pending/cancelled MVar
+requests, promotion/newest-first callbacks, one-HEC Loom progress, free/realloc
+aliases, borrow cleanup failures and context ownership/cancellation in both
+handoff modes. Qualification covers only canonical owned MALLOC retirement;
+Windows LocalFree, arbitrary Haskell/package callbacks, general ephemerons and
+abandoned-context reclamation remain outside it. GHC/exporter parity is not
+established.
+
+Three fixture-free empty-join controls check ordered zero-width effects, no
+destination writes on failure, logical arity and state-contract rejection.
+The typed-host/raw-entry route covers local joins, same-frame empty capture,
+lazy tuple leaves and loan recovery on AST and bytecode, including the existing
+first compiled entry check. Public `EntryValue.compile` and native GHC empty-join
+fixtures are not qualified by these checks.
+
+An ignored scalar `State#` tuple-field check preserves producer order on AST and
+bytecode, including the first installed wide call, guest-throw suppression,
+recovery, loan release and rejection of a proofless non-`Unit` carrier.
+This synthetic check does not qualify GHC export.
+
+A direct AST local-join check clears private tuple-result scratch references
+after copying and preserves an aliased destination in both handoff modes.
+It does not qualify bytecode or compiled execution.
+
+A fixture-free sum check with unknown levity preserves an unforced pointer's
+identity through results, arguments, PAPs, captures, case and constructor fields
+on AST and bytecode in both handoff modes, including first installed calls and
+released loans. It does not qualify genuine GHC Core or export.
+
+Five fixture-free tuple representation checks cover parsed metadata ownership
+and refinement, logical shape identity with context-isolated layouts, loan
+release after mismatched results, scalar singleton-reference rejection and
+unknown metadata without inferred aggregate shapes. The whole class runs in
+both handoff modes; these shared model checks do not qualify backend execution,
+compiled calls or GHC export.
+
+Two public CBD diagnostic controls use the selected Haskell model encoder.
+Strict and diagnostic loading leave an unsupported cold definition lazy until
+demand; diagnostic mode preserves the first installed call before the cold trap
+and rejects invalid host shapes, including unused formals. The whole class runs
+on AST and bytecode in both handoff modes. These synthetic models do not qualify
+original GHC exports or installed-Core acquisition.
+
+One managed-stack rejection check leaves destination bytes and pointer identity
+unchanged for raw/native-exposed, short, wrong-width, partial-pointer and
+nonwritable storage; an unknown key returns zero. Its synthetic layout uses the
+host's platform and GHC way, including Windows vanilla. Only this method runs
+in both handoff modes with live AST frames. It does not qualify bytecode guest
+execution, compiled calls or native GHC frame equivalence.
+
+A separate managed-stack layout check rejects changed ABI identity and malformed
+tables-next-to-code, descriptor width and overlapping IPE fields before writing
+destination bytes. It uses the same synthetic boundary and runs as one exact
+method in both handoff modes.
+
+Two public-manifest loader checks use model CBDs from the selected Haskell
+encoder. Cold references leave other units unopened; first demand decodes the
+binding once and subsequent calls reuse it. A bad demanded unit fails without
+touching the missing third unit. Runtime passes its matching encoder through
+`THC_FIXTURES` and selects only these two methods on AST and bytecode in both
+handoff modes. They require no GHC Core acquisition or package native-library
+producer and do not qualify the Linux native-label tests.
+
+One public-entry PAP model checks the remaining Word32 input proof after a wide
+argument has been supplied. Invalid unsigned bounds fail before forcing the
+entry; zero and the maximum Word32 value retain their unsigned results. The
+exact method runs on AST and bytecode through loose CBD and indexed manifests
+in both handoff modes. This check does not qualify explicit compilation or the
+retained-GHC interface provider, which is currently Linux/macOS only.
+
+Two native-byte-array checks cover native-access permission at context
+initialization and an AST allocation retained after context close. Retained
+storage stays readable; the closed address registry rejects recovery and
+pointer-bearing storage rejects raw-segment exposure. Both handoff modes run
+without generated fixtures. This ownership check does not cover bytecode or
+explicit compilation.
+
+The launcher-policy check covers native backing by default, an explicit heap
+override and unchanged embedding defaults on AST and bytecode in both handoff
+modes.
+
+The creation-policy check covers allocation, pinning, resize, aliases and compact
+copying under heap/native policy on both backends and handoff modes, including
+first AST compiled-call evidence without qualifying bytecode compiled-body
+execution.
+
+One shared memory-model check covers ordering within an allocation, aliases and
+checked offsets, rejecting comparisons across owners; it does not qualify
+backend or compiled execution.
+
+One bytecode continuation check resumes a caller after two child suspensions,
+memoizes the child's guest failure and preserves its payload on later demand
+without replaying either prefix. It does not qualify compiled execution.
+
+A fixture-free [GHC BCO](ghc-bco.md) spark check shares the original updating AP
+and resumes cancelled workers without replaying completed effects on AST and
+bytecode, with explicit platform and Loom hosting in both handoff modes.
+Related continuation controls retain captured application cuts, updates, pending
+apply and overapplication arguments. These checks do not qualify BCO JIT
+execution, the whole BCO suite or GHC/exporter parity.
+
+One fixture-free literal check preserves Int8/Word8 values with absent or unknown
+proofs on AST and bytecode, rejects malformed metadata and out-of-range values,
+and keeps ordinary machine literals nonnarrow. It does not qualify compiled
+execution or exported Core.
 
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
@@ -82,6 +256,49 @@ identity through Cabal support acquisition and Core export.
 PowerShell helpers treat native exit codes as authoritative. An ordinary
 compiler message on stderr is not a failed native command. Failed commands
 still stop the workflow.
+
+## Spark hosting checks
+
+The four sharing and lifecycle methods above also run under Loom on native
+Windows in both handoff modes, retaining their AST and bytecode cases. Only the
+sharing method establishes first compiled hint execution. Cancellation checks
+managed admission, the worker's hosting policy, acknowledgement, termination and
+resumption without replaying its effect; it also runs under explicit platform
+hosting. This does not qualify the whole concurrency suite or a parallel speedup.
+
+With the pinned tools selected, run these fixture-free checks sequentially in
+an owned checkout with no other build running. Preserve each hosting's XML before
+the next invocation replaces the ordinary task reports:
+
+~~~powershell
+. ./bin/windows-common.ps1
+$sparkChecks = @(
+    'thc.ThreadedThunkTest.sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk',
+    'thc.ThreadedThunkTest.sparkedGuestFailureIsDeferredAndDoesNotStopUnrelatedWork',
+    'thc.ThreadedThunkTest.cancellingSparkWorkerLeavesTheSameThunkResumableWithoutReplayingItsEffect',
+    'thc.ThreadedThunkTest.disposingSparkContextStopsClaimedWorkAndDiscardsUnstartedHints'
+)
+$savedToolOptions = $env:JAVA_TOOL_OPTIONS
+try {
+    foreach ($hosting in @('loom', 'platform')) {
+        $env:JAVA_TOOL_OPTIONS = "$savedToolOptions -Dpolyglot.thc.ThreadHosting=$hosting".Trim()
+        $selection = if ($hosting -eq 'loom') { $sparkChecks } else { @($sparkChecks[2]) }
+        $arguments = @('--no-daemon', '--max-workers=4', '--continue')
+        foreach ($mode in @('testDefault', 'testDense')) {
+            $arguments += @($mode, '--rerun')
+            foreach ($test in $selection) { $arguments += @('--tests', $test) }
+        }
+        Invoke-ThcTool "$PWD/gradlew.bat" $arguments
+        foreach ($mode in @('testDefault', 'testDense')) {
+            $reportPath = "build/test-results/$mode/TEST-thc.ThreadedThunkTest.xml"
+            Copy-Item -LiteralPath $reportPath -Destination "build/test-results/$hosting-$mode.xml"
+        }
+    }
+} finally {
+    if ($null -eq $savedToolOptions) { Remove-Item Env:JAVA_TOOL_OPTIONS -ErrorAction SilentlyContinue }
+    else { $env:JAVA_TOOL_OPTIONS = $savedToolOptions }
+}
+~~~
 
 ## Native export and launch
 

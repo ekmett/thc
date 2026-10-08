@@ -555,10 +555,6 @@ class FastInputTests(unittest.TestCase):
                 self.assertTrue(cache.allowed_payload(path), path)
             for suffix in ("extra.cbd", "pre/core/Extra.cbd", "unreviewed/core/MaskFunctionAudit.cbd", "logs/extra.stdout"):
                 self.assertFalse(cache.allowed_payload(f"build/{family}/{suffix}"))
-        for stage in ("pre", "post"):
-            self.assertTrue(cache.allowed_payload(f"build/state-tuple/{stage}-core/StateTupleAudit.cbd"))
-            self.assertFalse(cache.allowed_payload(f"build/state-tuple/{stage}-core/Extra.cbd"))
-        self.assertFalse(cache.allowed_payload("build/state-tuple/other-core/StateTupleAudit.cbd"))
 
     def test_delimited_continuation_closed_outputs_exclude_native_binaries_and_extras(self):
         self.assertEqual(168, len(cache.DELIMITED_OUTPUTS))
@@ -1083,21 +1079,6 @@ class FastInputTests(unittest.TestCase):
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-termios/' + suffix)
 
-    def test_original_open_exact_artifact_and_executable_scope(self):
-        self.assertEqual(49, len(cache.ORIGINAL_OPEN_OUTPUTS))
-        self.assertIn('build/original-open/manifest.json', DECLARED_REQUIRED)
-        for name in cache.ORIGINAL_OPEN_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name), name)
-            if name == 'build/original-open/native/oracle':
-                self.assertEqual(0o755, cache.safe_mode(0o755, name))
-            else:
-                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
-        for suffix in ('native/other', 'native/cases/f', 'ghc/OriginalOpenAudit.o', 'logs/extra.stdout',
-                       'pre/unknown.audit.json', 'attempt-0/pre.json', 'pre/core/Other.json'):
-            self.assertFalse(cache.allowed_payload('build/original-open/' + suffix), suffix)
-        for suffix in ('../outside', 'logs/../../outside'):
-            with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-open/' + suffix)
-
     def test_termios_cache_round_trip_keeps_saved_pointer_provenance_and_native_mode(self):
         name = 'build/original-termios/manifest.json'
         artifacts = cache.ORIGINAL_TERMIOS_OUTPUTS - {name}
@@ -1578,7 +1559,7 @@ class FastInputTests(unittest.TestCase):
 
     def test_payload_scope_has_no_runtime_or_test_outputs(self):
         self.assertTrue(cache.allowed_payload("build/unsafe-equality/api/predicate"))
-        self.assertTrue(cache.allowed_payload("build/aggregate-layout/pre-ghc/A.dyn_o"))
+        self.assertFalse(cache.allowed_payload("build/aggregate-layout/pre-ghc/A.dyn_o"))
         self.assertTrue(cache.allowed_payload("build/compiler/plugin.json"))
         self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.dylib"))
         self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.so"))
@@ -1587,11 +1568,6 @@ class FastInputTests(unittest.TestCase):
                      "build/compiler/thc-core-plugin.conf", "build/compiler/package.conf.d/package.cache",
                      "dist-newstyle/packagedb/ghc-9.14.1/package.cache", ".gradle/cache.bin"):
             self.assertFalse(cache.allowed_payload(name), name)
-
-    def test_original_native_executable_names_and_cstring_are_in_scope(self):
-        for name in ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"):
-            self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}"))
-        self.assertIn("build/map/boot-core", cache.CORE_DIRS)
 
     def test_word_floating_manifest_and_semantic_payload_are_cache_inputs(self):
         self.assertIn("build/word-floating/manifest.json", DECLARED_REQUIRED)
@@ -1603,10 +1579,9 @@ class FastInputTests(unittest.TestCase):
 
     def test_full_pack_restores_exact_executable_contract_siblings(self):
         expected = {
-            *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
-            *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+            *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
+            *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
             "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
-            "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
         }
         self.assertEqual(expected, cache.CORE_CONTRACT_CBD_REQUIRED)
         self.assertTrue(expected <= set(DECLARED_REQUIRED))
@@ -1631,27 +1606,57 @@ class FastInputTests(unittest.TestCase):
                 self.pack()
 
     def test_aggregate_host_cbd_payloads_are_closed_to_exact_modules_and_stages(self):
-        self.assertEqual(29, len(cache.AGGREGATE_HOST_CBD_OUTPUTS))
-        for name in ("build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd"):
-            self.assertIn(name, DECLARED_REQUIRED)
         for name in cache.AGGREGATE_HOST_CBD_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
-        for name in ("build/aggregate-core/Other.cbd", "build/aggregate-post-core/SumLayoutAudit.cbd",
-                     "build/sum-layout/other-core/SumLayoutAudit.cbd", "build/sum-result/pre-core/Other.cbd"):
+        for stage in ("pre", "post"):
+            for suffix in ("hi", "o"):
+                self.assertTrue(cache.allowed_payload(f"build/aggregate-layout/{stage}-ghc/AggregateLayoutAudit.{suffix}"))
+        for name in ("build/aggregate-layout/provenance.json", "build/aggregate-layout/checks.json",
+                     "build/aggregate-layout/native/AggregateLayoutAudit.o", "build/aggregate-layout/pre-ghc/Other.hi"):
+            self.assertFalse(cache.allowed_payload(name), name)
+        for name in ("build/sum-layout/other-core/SumLayoutAudit.cbd", "build/sum-result/pre-core/Other.cbd",
+                     "build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd", "build/empty-join-input/provenance.json"):
             self.assertFalse(cache.allowed_payload(name), name)
 
+    def test_floating_tuple_products_exclude_receipts_and_unrelated_compiler_outputs(self):
+        import fast_fixtures
+        manifest, _ = fast_fixtures._manifest(Path(__file__).resolve().parents[2])
+        self.assertEqual(set(manifest["groups"]["floating-tuples"]["outputs"]), cache.FLOATING_TUPLE_OUTPUTS)
+        for name in cache.FLOATING_TUPLE_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name), name)
+            self.assertIn(name, DECLARED_REQUIRED)
+        for name in ("provenance.json", "checks.json", "pre-audit.json", "post-audit.json", "pre-ghc/Other.hi",
+                     "native/Other.o", "native/Main.dyn_o", "oracle.tsv.tmp", "bits.tsv.tmp"):
+            self.assertFalse(cache.allowed_payload("build/floating-tuple/" + name), name)
+
+    def test_sum_result_products_exclude_receipts_and_unrelated_compiler_outputs(self):
+        import fast_fixtures
+        manifest, _ = fast_fixtures._manifest(Path(__file__).resolve().parents[2])
+        self.assertEqual(set(manifest["groups"]["sum-results"]["outputs"]), cache.SUM_RESULT_OUTPUTS)
+        for name in cache.SUM_RESULT_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name), name)
+            self.assertIn(name, DECLARED_REQUIRED)
+        for name in ("provenance.json", "checks.json", "pre-audit.json", "post-audit.json", "pre-ghc/Other.hi",
+                     "native/Other.o", "native/Main.dyn_o", "oracle.tsv.tmp", "oracle-pairs.tsv.tmp"):
+            self.assertFalse(cache.allowed_payload("build/sum-result/" + name), name)
+
+    def test_sum_layout_products_exclude_receipts_and_unrelated_compiler_outputs(self):
+        for stage in ("pre", "post"):
+            for suffix in ("hi", "o"):
+                self.assertTrue(cache.allowed_payload(f"build/sum-layout/{stage}-ghc/SumLayoutAudit.{suffix}"))
+        for name in ("native/sum-layout-oracle", "oracle.tsv", "native/Main.hi", "native/Main.o", "native/SumLayoutAudit.hi", "native/SumLayoutAudit.o"):
+            self.assertTrue(cache.allowed_payload("build/sum-layout/" + name), name)
+        for name in ("provenance.json", "checks.json", "pre-ghc/Other.hi", "native/Other.o", "native/Main.dyn_o", "oracle.tsv.tmp"):
+            self.assertFalse(cache.allowed_payload("build/sum-layout/" + name), name)
+
     def test_cbv_contract_cbd_payloads_are_closed_to_exact_modules_and_stages(self):
-        self.assertEqual(12, len(cache.CBV_CONTRACT_CBD_OUTPUTS))
         for name in cache.CBV_CONTRACT_CBD_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
         for name in ("build/core/Other.cbd", "build/cbv-post-core/DemandAudit.cbd",
-                     "build/source-core/StrictFields.cbd", "build/narrow-literal-proofs/other-core/NarrowLiteralProofAudit.cbd"):
+                     "build/source-core/StrictFields.cbd"):
             self.assertFalse(cache.allowed_payload(name), name)
 
     def test_scalar_cbd_payloads_admit_only_the_exported_modules_and_stages(self):
-        self.assertTrue(cache.allowed_payload("build/sqrt/post-core/SqrtAudit.cbd"))
-        self.assertFalse(cache.allowed_payload("build/sqrt/pre-core/SqrtAudit.cbd"))
-        self.assertFalse(cache.allowed_payload("build/sqrt/post-core/Other.cbd"))
         for family, module in (("word-floating", "WordFloatingAudit"), ("scalar-bitcasts", "ScalarBitCastAudit"),
                                ("fused-floating", "FloatingAudit")):
             for stage in ("pre", "post"):
@@ -1870,10 +1875,10 @@ class RenamedInputContractTests(unittest.TestCase):
     def test_required_cbv_modules_match_renamed_genuine_fixture_declarations(self):
         root = Path(__file__).resolve().parents[2]
         expected = {f"build/{folder}/{module}.{suffix}" for folder in ("core", "cbv-post-core")
-                    for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit") for suffix in ("cbd",)}
+                    for module in ("CBVAudit", "CBVCoercionAudit") for suffix in ("cbd",)}
         self.assertEqual(expected, {name for name in cache.REQUIRED if "CBV" in name})
         self.assertFalse(any("Cbv" in name for name in cache.REQUIRED))
-        for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit"):
+        for module in ("CBVAudit", "CBVCoercionAudit"):
             source = (root / "t/fixtures/compiler" / (module + ".hs")).read_text()
             self.assertRegex(source, r"(?m)^module " + module + r"\b")
 

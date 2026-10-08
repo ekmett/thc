@@ -9,6 +9,8 @@ import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import thc.runtime.CoreKind;
+import thc.runtime.CoreRepresentations;
 import static thc.CoreExecutionTestSupport.*;
 
 /** Native aggregate metadata preserves logical shape separately from storage. */
@@ -21,17 +23,25 @@ class AggregateLayoutTest {
         "abstractFixedTupleIdentity", "unboxed-tuple", "abstractEmptyIdentity", "unboxed-tuple",
         "abstractSumIdentity", "unboxed-sum", "familyTupleIdentity", "unboxed-tuple",
         "abstractSumRep", "unboxed-sum", "abstractComponentIdentity", "unboxed-tuple");
-    private Object module(String stage) throws Exception { return CoreCbdFixtures.read(root.resolve("build/aggregate-layout/" + stage + "-core/AggregateLayoutAudit.cbd")); }
+    private Map<String, Object> module(String stage) throws Exception {
+        var module = CoreCbdFixtures.read(root.resolve("build/aggregate-layout/" + stage + "-core/AggregateLayoutAudit.cbd"));
+        assertEquals("9.14.1", module.get("ghc"));
+        assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", module.get("boundary"));
+        return module;
+    }
     private String request(String stage, String entry, String backend) {
         return CoreModules.request(list(root.resolve("build/aggregate-layout/" + stage + "-core/AggregateLayoutAudit.cbd").toString()), "main:AggregateLayoutAudit." + entry, true, false, backend);
     }
+    private List<?> expression(Map<?, ?> module, String name) {
+        return (List<?>) ((List<?>) module.get("bindings")).stream().map(value -> (Map<?, ?>) value)
+            .filter(value -> ("main:AggregateLayoutAudit." + name).equals(value.get("id")))
+            .findFirst().orElseThrow().get("expr");
+    }
     @Test void unknownBoxedLevityKeepsItsPhysicalPointerInsideTuples() throws Exception {
         for (String stage : list("pre", "post")) {
-            var module = (Map<?, ?>) module(stage);
+            var module = module(stage);
             for (String name : list("levityPolymorphic", "boxedTupleThrough", "boxedThrough")) {
-                var binding = ((List<?>) module.get("bindings")).stream().map(value -> (Map<?, ?>) value)
-                    .filter(value -> ("main:AggregateLayoutAudit." + name).equals(value.get("id"))).findFirst().orElseThrow();
-                var expression = (List<?>) binding.get("expr");
+                var expression = expression(module, name);
                 var proof = (Map<?, ?>) ((Map<?, ?>) expression.get(3)).get("resultRep");
                 assertEquals(name.equals("boxedThrough") ? list("BoxedRep Nothing") : list("BoxedRep Nothing", "IntRep"), proof.get("primReps"));
                 var pointer = name.equals("boxedThrough") ? proof : (Map<?, ?>) ((List<?>) proof.get("components")).getFirst();
@@ -43,6 +53,19 @@ class AggregateLayoutTest {
     @Test void strictLoadingRejectsUnresolvedRuntimeRepsAndAbstractLogicalComponents() throws Exception {
         for (String stage : list("pre", "post")) {
             var module = module(stage);
+            // Zero-width primitive aliases are scalar State/Proxy, not empty tuples.
+            // Recursive newtypes retain a scalar pointer without inventing a layout.
+            for (String name : list("stateAliasIdentity", "proxyIdentity", "recursiveNewtypeIdentity")) {
+                var expression = expression(module, name);
+                for (var proof : list(object(((List<?>) expression.get(1)).getFirst()).get("rep"), object(expression.get(3)).get("resultRep"))) {
+                    var parsed = CoreRepresentations.parse(object(proof));
+                    boolean recursive = name.equals("recursiveNewtypeIdentity");
+                    assertEquals(recursive ? CoreKind.OBJECT : CoreKind.VOID, parsed.getKind(), stage + "/" + name);
+                    assertEquals(recursive ? list("BoxedRep (Just Lifted)") : list(), parsed.getPrimReps());
+                    assertEquals(!recursive, parsed.getEvaluated());
+                    assertFalse(parsed.isTuple() || parsed.isSum());
+                }
+            }
             for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
                 for (var boundary : boundaries.entrySet()) {
                     var error = assertThrows(PolyglotException.class, () -> context.eval("thc", request(stage, boundary.getKey(), backend)));
@@ -99,6 +122,17 @@ class AggregateLayoutTest {
     @Test void boxedTuplesAndUnliftedBoxedProductsRemainObjectsWithLazyPayloads() throws Exception {
         for (String stage : list("pre", "post")) {
             var module = module(stage);
+            // Boxed tuple spelling and unlifted boxed products still denote one object.
+            for (String name : list("boxedPairIdentity", "boxedUnitIdentity", "boxedSoloIdentity", "unliftedProductIdentity")) {
+                var expression = expression(module, name);
+                for (var proof : list(object(((List<?>) expression.get(1)).getFirst()).get("rep"), object(expression.get(3)).get("resultRep"))) {
+                    var parsed = CoreRepresentations.parse(object(proof));
+                    assertEquals(CoreKind.DATA, parsed.getKind(), stage + "/" + name);
+                    assertEquals(list(name.equals("unliftedProductIdentity") ? "BoxedRep (Just Unlifted)" : "BoxedRep (Just Lifted)"), parsed.getPrimReps());
+                    assertEquals(name.equals("unliftedProductIdentity"), parsed.getEvaluated());
+                    assertFalse(parsed.isTuple() || parsed.isSum());
+                }
+            }
             for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
                 for (String entry : list("boxedPairIdentity", "boxedUnitIdentity", "boxedSoloIdentity", "unliftedProductIdentity"))
                     context.eval("thc", request(stage, entry, backend));

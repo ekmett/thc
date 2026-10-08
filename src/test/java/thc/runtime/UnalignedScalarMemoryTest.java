@@ -437,6 +437,21 @@ public class UnalignedScalarMemoryTest {
                     // including unaligned cells; managed references cannot escape.
                     nativeAddress.writeAddressElementIndex(1, nativeAddress.plus(8), true);
                     assertTrue(nativeAddress.plus(8).sameLocation(nativeAddress.readAddressElementIndex(1, true)));
+                    var stablePointers = state.getStablePointers();
+                    var handle = stablePointers.make(37L);
+                    ManagedAddress recovered;
+                    try {
+                        nativeAddress.writeAddressElementIndex(1, handle);
+                        recovered = nativeAddress.readAddressElementIndex(1);
+                        assertTrue(stablePointers.equal(handle, recovered));
+                        assertEquals(37L, stablePointers.dereference(recovered));
+                        assertThrows(RuntimeFault.class, () -> nativeAddress.writeAddressElementIndex(2, handle));
+                        assertThrows(RuntimeFault.class, () -> nativeAddress.readAddressElementIndex(2));
+                    } finally {
+                        stablePointers.free(handle);
+                    }
+                    assertThrows(RuntimeFault.class, () -> stablePointers.dereference(recovered));
+                    nativeAddress.writeAddressElementIndex(1, nativeAddress.plus(8), true);
                     var managed = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8));
                     assertThrows(RuntimeFault.class, () -> nativeAddress.writeAddressElementIndex(1, managed, true));
                     assertTrue(nativeAddress.plus(8).sameLocation(nativeAddress.readAddressElementIndex(1, true)));

@@ -15,16 +15,32 @@ import thc.HostReference;
 import java.nio.ByteOrder;
 /** Cached interop messages can specialize on the foreign language's actual objects. */
 public final class PolyglotAccess extends Node {
+    private final int programSlot;
+    public PolyglotAccess() { this(-1); }
+    public PolyglotAccess(int programSlot) {
+        this.programSlot = programSlot;
+        members = library(); functions = library(); numbers = library(); storage = library();
+    }
+    private InteropLibrary library() {
+        return programSlot < 0 ? InteropLibrary.getFactory().createDispatched(3) : InteropLibrary.getUncached();
+    }
+    private RuntimeException raise(VirtualFrame frame, AbstractTruffleException error) {
+        return programSlot < 0 ? foreignExceptions.raise(error)
+            : foreignExceptions.raise(error, Program.instance(frame, programSlot).foreignExceptionBridge());
+    }
     @Child private IndirectCallNode evalCall = IndirectCallNode.create();
-    @Child private InteropLibrary members = InteropLibrary.getFactory().createDispatched(3);
-    @Child private InteropLibrary functions = InteropLibrary.getFactory().createDispatched(3);
-    @Child private InteropLibrary numbers = InteropLibrary.getFactory().createDispatched(3);
-    @Child private InteropLibrary storage = InteropLibrary.getFactory().createDispatched(3);
+    @Child private InteropLibrary members;
+    @Child private InteropLibrary functions;
+    @Child private InteropLibrary numbers;
+    @Child private InteropLibrary storage;
     @Child private ForeignExceptionAccess foreignExceptions = new ForeignExceptionAccess();
     @TruffleBoundary private CallTarget parse(ManagedAddress language, ManagedAddress source, ManagedAddress name) {
         return Language.currentState(this).getEnv().parsePublic(Source.newBuilder(language.utf8(), source.utf8(), name.utf8()).build());
     }
     public ForeignValue eval(ManagedAddress language, ManagedAddress source, ManagedAddress name, Object state) {
+        return eval(null, language, source, name, state);
+    }
+    public ForeignValue eval(VirtualFrame frame, ManagedAddress language, ManagedAddress source, ManagedAddress name, Object state) {
         TupleResults.requireVoidCarrier(state);
         var owner = Language.currentState(this);
         var threads = Language.currentState(this).getThreads();
@@ -35,7 +51,7 @@ public final class PolyglotAccess extends Node {
                 if (value == null) throw RuntimeFault.fault("Foreign evaluation returned a host null");
                 return new ForeignValue(owner, value);
             } finally { threads.leaveForeign(previous); }
-        } catch (AbstractTruffleException error) { throw foreignExceptions.raise(error); }
+        } catch (AbstractTruffleException error) { throw raise(frame, error); }
     }
     private Object receiver(VirtualFrame frame, Object value) {
         // Lowering owns resumable handle demand; this opaque boundary never forces.
@@ -53,7 +69,7 @@ public final class PolyglotAccess extends Node {
                 try { return new ForeignValue(Language.currentState(this), members.readMember(receiver, name.utf8())); }
                 catch (InteropException error) { throw interopFailure("readMember", error); }
             } finally { threads.leaveForeign(previous); }
-        } catch (AbstractTruffleException error) { throw foreignExceptions.raise(error); }
+        } catch (AbstractTruffleException error) { throw raise(frame, error); }
     }
     public long executeInt(VirtualFrame frame, Object value, long argument, Object state) {
         TupleResults.requireVoidCarrier(state);
@@ -71,7 +87,7 @@ public final class PolyglotAccess extends Node {
                     return numbers.asLong(answer);
                 } catch (InteropException error) { throw interopFailure("executeInt", error); }
             } finally { threads.leaveForeign(previous); }
-        } catch (AbstractTruffleException error) { throw foreignExceptions.raise(error); }
+        } catch (AbstractTruffleException error) { throw raise(frame, error); }
     }
     /** Arrays here are boundary operands, never guest primop storage wrappers. */
     public Object storage(VirtualFrame frame, PolyglotOp operation, Object[] arguments) {
@@ -103,7 +119,7 @@ public final class PolyglotAccess extends Node {
                     return accessStorage(owner, operation, value, argument, arguments);
                 } catch (InteropException error) { throw interopFailure(operation.getSymbol(), error); }
             } finally { threads.leaveForeign(previous); }
-        } catch (AbstractTruffleException error) { throw foreignExceptions.raise(error); }
+        } catch (AbstractTruffleException error) { throw raise(frame, error); }
     }
     /** Receiver-dependent library specialization must not retire a cold guest target.
      * Guest demand, SAFE transitions and the completed-result poll remain outside this frame-free boundary. */

@@ -174,6 +174,44 @@ class PackageScalarLinksTest {
             assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule, "packageNativeLink",
                 with(link, "nativeLibrary", with(letters, "hex", hex)))));
     }
+    @Test void bundledNativeProvidersValidateNamesBytesAndIdentity() throws Exception {
+        var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");
+        var provider = map("name", "libfixture.so.1", "sha256", hash(new byte[]{3, 4}), "hex", "0304");
+        var nativeLibrary = map("sha256", hash(new byte[]{1, 2}), "hex", "0102", "bundledLibraries", list(provider));
+        var link = with(scalar, "profile", "thc-package-c-ffi-v1", "nativeLibrary", nativeLibrary,
+            "abi", list(with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
+        var module = with(without(base, "packageScalarLink"), "packageNativeLink", link);
+        if (!System.getProperty("os.name").equals("Linux")) {
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(module));
+            return;
+        }
+        var first = Objects.requireNonNull(PackageScalarLinks.read(module)).getLink();
+        var bundled = first.getComponent().bundledLibraries().getFirst();
+        assertEquals("libfixture.so.1", bundled.name());
+        var copy = bundled.bytes(); copy[0] = 99;
+        assertArrayEquals(new byte[]{3, 4}, bundled.bytes(), "provider bytes are immutable");
+        var sourceBytes = new byte[]{3, 4};
+        var retained = new PackageNativeComponent.BundledLibrary(bundled.name(), bundled.sha256(), sourceBytes);
+        sourceBytes[0] = 99; assertTrue(bundled.same(retained), "provider retains its own immutable bytes");
+        var nested = map("schema", 1L, "profile", "thc-package-native-component-v1", "unit", "native-provider",
+            "target", scalar.get("target"), "componentSha256", "b".repeat(64), "bitcodeSha256", hash(new byte[]{5, 6}),
+            "bitcodeHex", "0506", "format", "llvm-bitcode", "exports", List.of(), "dependencies", List.of(), "nativeLibrary", nativeLibrary);
+        var withDependency = with(module, "packageNativeLink", with(link, "exports", List.of(), "dependencies", list(nested)));
+        assertTrue(bundled.same(Objects.requireNonNull(PackageScalarLinks.read(withDependency)).getLink()
+            .getComponent().dependencies().getFirst().bundledLibraries().getFirst()));
+        var changed = with(provider, "sha256", hash(new byte[]{3, 5}), "hex", "0305");
+        assertFalse(first.same(Objects.requireNonNull(PackageScalarLinks.read(with(module, "packageNativeLink",
+            with(link, "nativeLibrary", with(nativeLibrary, "bundledLibraries", list(changed)))))).getLink()));
+        for (String name : List.of("../libfixture.so", "/libfixture.so", "lib/fixture.so", "lib\\fixture.so", ".", "..", "-libfixture.so", "libfixture.so\n"))
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(module, "packageNativeLink",
+                with(link, "nativeLibrary", with(nativeLibrary, "bundledLibraries", list(with(provider, "name", name)))))));
+        for (var invalid : list(with(provider, "hex", "0305"), with(provider, "hex", ""),
+                with(provider, "hex", "030A"), with(provider, "sha256", "invalid")))
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(module, "packageNativeLink",
+                with(link, "nativeLibrary", with(nativeLibrary, "bundledLibraries", list(invalid))))));
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(module, "packageNativeLink",
+            with(link, "nativeLibrary", with(nativeLibrary, "bundledLibraries", list(provider, provider))))));
+    }
     @Test void windowsAdmissionRejectsMinGwAndForeignCpuTargets() throws Exception {
         if (!System.getProperty("os.name").startsWith("Windows")) return;
         var base = module(); var link = object(base, "packageScalarLink");

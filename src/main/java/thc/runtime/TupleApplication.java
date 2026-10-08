@@ -20,7 +20,6 @@ public final class TupleApplication extends Expr {
     @CompilationFinal(dimensions = 1) private final int[] vectorSlots;
     private final ArgumentLayout inputLayout;
     @Child private volatile TupleDispatch dispatch;
-    @Child private InputDispatch prepared;
     @CompilationFinal(dimensions = 1) private int[] destinationSlots;
     @CompilationFinal private int destinationOffset = -1;
     private final VectorLayout vector;
@@ -46,13 +45,12 @@ public final class TupleApplication extends Expr {
     @Override public void prepareTuple(int[] slots, int offset) {
         if (metrics != null) return;
         if (vector != null) { slots = vectorSlots; offset = 0; }
-        if (prepared != null) {
+        if (dispatch != null) {
             if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
             return;
         }
         destinationSlots = slots; destinationOffset = offset;
-        prepared = new InputDispatch(new ScalarArrayInputSource(inputLayout), arguments.length, tail, null,
-            new AstTupleDestination(shape, slots, offset));
+        dispatch = new TupleDispatch(new AstTupleDestination(shape, slots, offset), null, arguments.length, tail, inputLayout);
     }
     @Override public Object execute(VirtualFrame frame) {
         VectorLayout layout = vector;
@@ -110,10 +108,6 @@ public final class TupleApplication extends Expr {
                 int savedIndex = index;
                 throw cut.append(frame, (saved, input, ambient, outer) -> resumeArgument(saved, slots, offset, closure, values, savedIndex, input.get()));
             }
-        }
-        if (prepared != null) {
-            if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
-            prepared.execute(frame, closure, values); return null;
         }
         TupleDispatch child = dispatch;
         if (child == null) {

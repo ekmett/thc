@@ -11,12 +11,15 @@
 -- Stability   : experimental
 -- Portability : GHC FFI; declared foreign symbols required at link/run time
 --
--- Native GHC observer for the original open request fixture.
+-- Standalone controls for THC-owned native open requests. CMake compiles this
+-- module with native-open-request.c and THC_OPEN_REQUEST_TEST; the owning Java
+-- test executes it in a fresh process to contain signal disposition changes.
+-- Only installed GHC packages are needed; this does not qualify a Core wrapper.
 module OriginalOpenRequestNative (checkOpenRequests, main) where
 
 import Control.Concurrent (threadDelay)
 import Control.Exception (bracket, finally, mask_, try, IOException)
-import Control.Monad (unless, void, replicateM_)
+import Control.Monad (unless, void)
 import Data.IORef
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (isPrefixOf)
@@ -27,7 +30,7 @@ import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek, poke)
 import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.Environment (getArgs)
-import System.Posix.Files (createNamedPipe)
+import System.Posix.Files (createNamedPipe, removeLink)
 import System.Posix.Signals (getSignalMask, inSignalSet)
 import System.Timeout (timeout)
 import qualified GHC.Internal.System.Posix.Internals as P
@@ -137,18 +140,20 @@ checkOpenRequests directory = do
     assert (errorCode == 0 && fd >= 0) "cancellation discarded a successfully acquired fd"
     void (P.c_close fd)
   let fifo = directory ++ "/request-fifo"
-  createNamedPipe fifo 0o600
-  -- Observe the real owned worker inside openat, then interrupt it. No peer is
-  -- opened to release the FIFO: cancellation must actually unblock the call.
-  request fifo $ \pointer consumed -> do
-    untilReady blockedWorker
-    cancelError <- cancel pointer
-    assert (cancelError == 0) "blocked FIFO cancellation failed"
-    untilReady ((== 1) <$> done pointer)
-    errorCode <- consume pointer consumed nullPtr
-    assert (errorCode == 4) "blocked FIFO cancellation did not return EINTR"
-  -- Completed success wins, and aborted successful requests close their fd.
-  replicateM_ 32 $ request "/dev/null" $ \pointer consumed -> do
+  -- Own only this FIFO, so the standalone child can rerun in its private
+  -- scratch directory. Join/cancel cleanup runs before unlinking on failure.
+  bracket (createNamedPipe fifo 0o600) (\() -> removeLink fifo) $ \() ->
+    -- Observe the worker inside openat. No peer releases the FIFO:
+    -- cancellation must actually unblock the call.
+    request fifo $ \pointer consumed -> do
+      untilReady blockedWorker
+      cancelError <- cancel pointer
+      assert (cancelError == 0) "blocked FIFO cancellation failed"
+      untilReady ((== 1) <$> done pointer)
+      errorCode <- consume pointer consumed nullPtr
+      assert (errorCode == 4) "blocked FIFO cancellation did not return EINTR"
+  -- Observed completion wins once; aborting that success must close its fd.
+  request "/dev/null" $ \pointer consumed -> do
     untilReady ((== 1) <$> done pointer)
     void (cancel pointer)
     errorCode <- consume pointer consumed nullPtr

@@ -4,7 +4,7 @@
 -- Fixture rationale (092 floating-address)
 -- Purpose: Check Float/Double address loads and stores retain numeric/bit results.
 -- Produces/consumed result: CBDs and oracle.tsv.
--- Cost and overlap: Keep the address boundary; combine cases with aligned scalar memory.
+-- Cost and overlap: Keep the address boundary; shared widths are covered by general memory suites.
 --   Another full acquisition pipeline is not warranted.
 -- Build status: Value review only; admission still requires explicit inputs and single-
 --   owner outputs.

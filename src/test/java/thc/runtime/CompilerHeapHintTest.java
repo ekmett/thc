@@ -13,11 +13,12 @@ import thc.ContextProfile;
 import thc.Language;
 import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
-/** Small ABI models; retained original parseDynamicFlagsFull is checked separately. */
+/** Small shared GC/heap-hint ABI models; installed-original acquisition is separate. */
 public class CompilerHeapHintTest {
     private Map<String, Object> scalar(String rep, boolean evaluated) {
-        return Map.of("kind", rep == null ? "void" : rep.startsWith("BoxedRep") ? "closure" : "long",
+        return Map.of("kind", rep == null ? "void" : rep.equals("AddrRep") ? "address" : rep.startsWith("BoxedRep") ? "closure" : "long",
             "primReps", rep == null ? List.of() : List.of(rep), "evaluated", evaluated);
     }
     private final Map<String, Object> integer = scalar("IntRep", true), state = scalar(null, true), closure = scalar("BoxedRep (Just Lifted)", true);
@@ -112,6 +113,100 @@ public class CompilerHeapHintTest {
                 var target = program.entryTarget("hint");
                 assertThrows(ArithmeticException.class, () -> Calls.target(target, new Object[]{0L, 42L, thc.runtime.Unit.INSTANCE}));
             } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
+    // Independent GHC 9.14.1 signatures; no installed-Core fixture is needed for
+    // the JVM boundary's buffer safety, return values or malformed ABI controls.
+    private final String[][] gcCalls = {
+        {"getRTSStatsEnabled", "IntRep", "safe"}, {"getRTSStats", "", "safe"},
+        {"performGC", "", "safe"}, {"performMajorGC", "", "safe"},
+        {"performBlockingMajorGC", "", "safe"}
+    };
+    private Map<String, Object> gcTuple(String rep, boolean evaluated) {
+        return rep.isEmpty() ? tuple(evaluated) : Map.of("kind", "unknown", "aggregate", "unboxed-tuple",
+            "primReps", List.of(rep), "evaluated", evaluated, "components", List.of(state, scalar(rep, true)));
+    }
+    private Map<String, Object> gcDeclaration(String[] call) {
+        var arguments = call[0].equals("getRTSStats") ? List.of(scalar("AddrRep", false), scalar(null, false)) : List.of(scalar(null, false));
+        return Map.of("schema", 1, "target", Map.of("kind", "static", "symbol", call[0], "unit", "ghc-internal", "isFunction", true),
+            "convention", "ccall", "safety", call[2], "arity", arguments.size(), "suppliedArity", arguments.size(),
+            "argumentReps", arguments, "resultRep", gcTuple(call[1], false));
+    }
+    @Test public void gcCallsRequireTheOriginalUnitSafetyAndStateResultAbi() {
+        for (var call : gcCalls) {
+            var declaration = gcDeclaration(call); var result = gcTuple(call[1], true);
+            var arguments = call[0].equals("getRTSStats") ? List.of(scalar("AddrRep", true), state) : List.of(state);
+            var flags = java.util.Collections.nCopies(arguments.size(), false);
+            assertEquals(call[0], validate(declaration, arguments, flags, result).getSymbol());
+            @SuppressWarnings("unchecked") var target = (Map<String, Object>) declaration.get("target");
+            for (var wrong : List.of(plus(declaration, "target", plus(target, "unit", "main")),
+                    plus(declaration, "target", plus(target, "isFunction", false)),
+                    plus(declaration, "safety", call[2].equals("safe") ? "unsafe" : "safe"),
+                    plus(declaration, "arity", 99), plus(declaration, "suppliedArity", 0), plus(declaration, "resultRep", integer)))
+                assertThrows(RuntimeFault.class, () -> validate(wrong, arguments, flags, result), call[0]);
+            assertThrows(RuntimeFault.class, () -> validate(declaration, arguments.subList(0, arguments.size() - 1), flags, result));
+        }
+    }
+    Map<String, Object> gcModule(String[] call) {
+        boolean stats = call[0].equals("getRTSStats"), query = !call[1].isEmpty();
+        var proof = gcTuple(call[1], true); var result = query ? scalar(call[1], true) : integer;
+        var operands = stats ? List.of(List.of("var", "buffer", Map.of("rep", scalar("AddrRep", true))),
+            List.of("var", "state", Map.of("rep", state))) : List.of(List.of("var", "state", Map.of("rep", state)));
+        var application = List.of("app", head, operands, java.util.Collections.nCopies(operands.size(), false),
+            false, false, Map.of("foreignCall", gcDeclaration(call), "rep", proof));
+        var fields = query ? List.of(Map.of("id", "next", "lifted", false, "rep", state),
+            Map.of("id", "answer", "lifted", false, "rep", result)) : List.of(Map.of("id", "next", "lifted", false, "rep", state));
+        var body = List.of("case", application, "tuple", List.of(List.of("data", query ? "tuple2" : "tuple1",
+            query ? List.of("next", "answer") : List.of("next"), stats ? List.of("lit", "int", "42", Map.of("rep", integer))
+                : List.of("var", query ? "answer" : "bytes", Map.of("rep", result)),
+            Map.of("binders", fields))), Map.of("rep", result, "binder", Map.of("id", "tuple", "lifted", false, "rep", proof)));
+        var parameter = Map.of("id", stats ? "buffer" : "bytes", "lifted", false, "rep", stats ? scalar("AddrRep", true) : integer);
+        return Map.of("instrument", true, "constructors", List.of(
+            Map.of("id", "tuple1", "kind", "unboxed-tuple", "arity", 1, "tag", 1),
+            Map.of("id", "tuple2", "kind", "unboxed-tuple", "arity", 2, "tag", 1)),
+            "bindings", List.of(Map.of("id", "gc", "name", "gc", "arity", 2, "lifted", true, "rep", closure,
+                "expr", List.of("lam", List.of(parameter, Map.of("id", "state", "lifted", false, "rep", state)),
+                    body, Map.of("rep", closure, "resultRep", result)))));
+    }
+    @Test public void gcCallsReturnHonestResultsFromTheFirstCompiledCall() throws ReflectiveOperationException {
+        for (var backend : List.of("ast", "bytecode")) for (var call : gcCalls) {
+            if (call[0].equals("getRTSStats")) continue;
+            try (var context = context()) {
+                context.initialize("thc"); context.enter(); var threads = Language.currentState().getThreads(); threads.enterCurrent(null, false, true, null);
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, gcModule(call), true) : new BytecodeProgram(language, gcModule(call));
+                    var target = program.entryTarget("gc");
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    long compiledBefore = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                    long answer = ((Number) Calls.target(target, new Object[]{0L, 42L, Unit.INSTANCE})).longValue();
+                    assertEquals(call[0].equals("getRTSStatsEnabled") ? 0L : 42L, answer, backend + "/" + call[0]);
+                    assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore, "First call executed compiled code");
+                    assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                    assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                } finally { threads.leaveCurrent(); context.leave(); }
+            }
+        }
+    }
+    @Test public void unavailableStatsDoesNotReadOrWriteItsBufferOnEitherBackend() {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, gcModule(gcCalls[1])) : new BytecodeProgram(language, gcModule(gcCalls[1]));
+                var target = program.entryTarget("gc"); var bytes = new byte[]{11, 22, 33, 44};
+                // Null is independently useful: rejection must precede any buffer access.
+                for (var buffer : List.of(ManagedAddress.fromByteArray(bytes), ManagedAddress.nullAddress())) {
+                    var failure = assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, buffer, Unit.INSTANCE}));
+                    assertEquals("GHC RTS statistics are unavailable on the JVM; getRTSStatsEnabled is false", failure.getMessage());
+                    assertArrayEquals(new byte[]{11, 22, 33, 44}, bytes);
+                }
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, ManagedAddress.fromByteArray(bytes), "not-state"}));
+                assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+            } finally { context.leave(); }
         }
     }
 }

@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.ThreadLocalAction;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.IOAccess;
@@ -20,6 +24,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import static thc.Main.executionContext;
 import static thc.runtime.ManagedFileFixtures.*;
@@ -33,6 +38,25 @@ class NativeFileProviderTest {
             Set.of("amd64", "x86_64", "aarch64", "arm64").contains(System.getProperty("os.arch"));
     }
     @TempDir Path directory;
+    @Test void nativeRequestControlsRunInFreshProcess() throws Exception {
+        var oracle = Path.of(System.getProperty("thc.projectRoot"), "build/native-open-request/native/oracle");
+        var scratch = Files.createDirectory(directory.resolve("native-request"));
+        var stdout = directory.resolve("native-request.stdout"); var stderr = directory.resolve("native-request.stderr");
+        // The child owns test-only signal mutations; no oracle handler enters the JVM.
+        var process = new ProcessBuilder(oracle.toString(), scratch.toString())
+            .redirectOutput(stdout.toFile()).redirectError(stderr.toFile()).start();
+        try {
+            boolean completed = process.waitFor(30, TimeUnit.SECONDS);
+            if (!completed) { process.destroyForcibly(); assertTrue(process.waitFor(5, TimeUnit.SECONDS), "Oracle was not reaped"); }
+            var output = Files.readString(stdout); var errors = Files.readString(stderr);
+            var evidence = "Native request oracle: " + oracle + " " + scratch + "\nstdout:\n" + output + "stderr:\n" + errors;
+            assertTrue(completed, "Native request oracle timed out\n" + evidence);
+            assertEquals(0, process.exitValue(), evidence);
+            assertFalse(Files.exists(scratch.resolve("request-fifo")), "Child must release its owned FIFO");
+        } finally {
+            if (process.isAlive()) { process.destroyForcibly(); assertTrue(process.waitFor(5, TimeUnit.SECONDS), "Oracle was not reaped"); }
+        }
+    }
     private Context nativeContext() { return nativeContext(Set.of()); }
     private Context nativeContext(Set<StandardEndpoint> endpoints) { return NativeIO.createContext(endpoints); }
     private <T> T entered(Context context, Callable<T> body) throws Exception {
@@ -50,12 +74,206 @@ class NativeFileProviderTest {
     }
     // Test-only kernel observation; no fd integer enters production or Core.
     private long nativeDescriptors(Path path) throws IOException {
+        if ("Mac OS X".equals(System.getProperty("os.name"))) return NativeOpenOperation.observe(2, path.toString());
         long count = 0;
         try (var entries = Files.newDirectoryStream(Path.of("/proc/self/fd"))) {
             for (var entry : entries) try { if (Files.readSymbolicLink(entry).equals(path.toAbsolutePath())) count++; }
             catch (NoSuchFileException ignored) { }
         }
         return count;
+    }
+    // A joined pthread can remain visible in /proc until kernel exit cleanup.
+    // Enumerate workers only to observe a live blocked acquisition, not to prove a join.
+    private List<Path> nativeOpenWorkers() throws IOException {
+        var workers = new ArrayList<Path>();
+        try (var tasks = Files.newDirectoryStream(Path.of("/proc/self/task"))) {
+            for (var task : tasks) try {
+                if (Files.readString(task.resolve("comm")).equals("thc-open\n")) workers.add(task);
+            } catch (IOException ignored) { }
+        }
+        return workers;
+    }
+    private void awaitNativeOpen() throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if ("Mac OS X".equals(System.getProperty("os.name"))) {
+                if (NativeOpenOperation.observe(1, null) > 0) return;
+            } else for (var worker : nativeOpenWorkers()) try {
+                if (Files.readString(worker.resolve("syscall")).startsWith("257 ")) return;
+            } catch (IOException ignored) { }
+            Thread.sleep(1);
+        }
+        fail("Owned native worker did not enter blocking openat");
+    }
+    @Test void hardContextCancellationJoinsSafeOpenBeforeLeaseDisposal() throws Exception {
+        var fifo = directory.resolve("shutdown"); var create = new ProcessBuilder("mkfifo", fifo.toString()).start();
+        assertTrue(create.waitFor(10, TimeUnit.SECONDS)); assertEquals(0, create.exitValue());
+        var context = nativeContext(); var pool = Executors.newSingleThreadExecutor();
+        try {
+            var target = entered(context, () -> {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                return new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        var threads = Language.currentState(this).getThreads(); threads.enterCurrent();
+                        try { return provider().openRaw((fifo + "\0").getBytes(StandardCharsets.UTF_8), 0, 0, OriginalStdioOp.OPEN_SAFE, this); }
+                        finally { threads.leaveCurrent(); }
+                    }
+                }.getCallTarget();
+            });
+            var future = pool.submit(() -> entered(context, target::call));
+            try {
+                // Observe the kernel acquisition before cancellation, rather than a submitted task.
+                awaitNativeOpen(); assertFalse(future.isDone()); context.close(true);
+                assertThrows(ExecutionException.class, () -> future.get(10, TimeUnit.SECONDS));
+                assertEquals(0L, nativeDescriptors(fifo), "No untransferred descriptor may survive lease disposal");
+            } finally {
+                // Release a failed test's FIFO before waiting for its host executor.
+                if (!future.isDone()) try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                    try { future.get(10, TimeUnit.SECONDS); } catch (ExecutionException ignored) { }
+                }
+            }
+        } finally {
+            try { context.close(true); }
+            finally { pool.shutdownNow(); assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS)); }
+        }
+    }
+    @Test void guestCancellationDefersSafeOpenAndHonorsInterruptibleMasks() throws Exception {
+        record Case(OriginalStdioOp operation, MaskingState mask, boolean cancels) {}
+        for (var test : List.of(new Case(OriginalStdioOp.OPEN_SAFE, MaskingState.UNMASKED, false),
+                new Case(OriginalStdioOp.OPEN_INTERRUPTIBLE, MaskingState.MASKED_INTERRUPTIBLE, true),
+                new Case(OriginalStdioOp.OPEN_INTERRUPTIBLE, MaskingState.MASKED_UNINTERRUPTIBLE, false))) {
+            var fifo = directory.resolve(test.operation() + "-" + test.mask());
+            var create = new ProcessBuilder("mkfifo", fifo.toString()).start();
+            assertTrue(create.waitFor(10, TimeUnit.SECONDS)); assertEquals(0, create.exitValue());
+            var pool = Executors.newSingleThreadExecutor();
+            try (var context = nativeContext()) {
+                var state = entered(context, () -> Language.currentState(null)); var id = new AtomicLong(-1);
+                var target = entered(context, () -> {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    return new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            var threads = state.getThreads(); id.set(threads.enterCurrent(test.mask()));
+                            try {
+                                // ManagedStdio/ManagedFiles owns the foreign activation; openRaw alone bypasses it.
+                                var stdio = state.getStdio(); long result = stdio.open(path(fifo), 0, 0, test.operation(), this);
+                                assertEquals(test.mask(), state.getMaskingState().get(), "Foreign extent must preserve the guest mask");
+                                if (result < 0) assertEquals(4L, stdio.errno(), "Cancelled native open must return EINTR");
+                                else assertEquals(0L, stdio.close(result));
+                                if (test.mask() != MaskingState.UNMASKED)
+                                    assertNull(threads.poll(this, false), "Ordinary delivery must respect the restored mask");
+                                state.getMaskingState().set(MaskingState.UNMASKED);
+                                var pending = threads.poll(this, false);
+                                assertNotNull(pending, "Native cancellation must leave the guest exception for the next guest cut");
+                                assertEquals("cancel open", pending.getPayload()); pending.acknowledge();
+                                return result < 0;
+                            } finally { threads.leaveCurrent(); }
+                        }
+                    }.getCallTarget();
+                });
+                var future = pool.submit(() -> entered(context, target::call));
+                try {
+                    awaitNativeOpen(); assertFalse(future.isDone());
+                    var request = entered(context, () -> state.getThreads().send(id.get(), "cancel open"));
+                    if (test.cancels()) assertEquals(true, future.get(10, TimeUnit.SECONDS));
+                    else {
+                        // Observe the live mailbox on the target's foreign safepoint before releasing the FIFO.
+                        entered(context, () -> state.getEnv().submitThreadLocal(new Thread[] {request.getTarget()},
+                            new ThreadLocalAction(true, false) {
+                                @Override protected void perform(Access access) {
+                                    assertEquals(test.mask(), state.getMaskingState().get());
+                                    assertEquals(AsyncRequestState.PENDING, request.getState());
+                                    assertNull(state.getThreads().poll(null, true), "Foreign execution must not claim guest delivery");
+                                }
+                            })).get(10, TimeUnit.SECONDS);
+                        awaitNativeOpen(); assertEquals(AsyncRequestState.PENDING, request.getState());
+                        assertFalse(future.isDone(), "Safe and uninterruptibly masked opens must defer delivery");
+                        try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                            assertEquals(false, future.get(10, TimeUnit.SECONDS));
+                        }
+                    }
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                    assertEquals(0L, nativeDescriptors(fifo), "Cancellation and successful release must close acquired descriptors");
+                } finally {
+                    // Release a failed test's FIFO before waiting for its host executor.
+                    if (!future.isDone()) try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                        try { future.get(10, TimeUnit.SECONDS); } catch (ExecutionException ignored) { }
+                    }
+                }
+            } finally { pool.shutdownNow(); assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS)); }
+        }
+    }
+    @Test void rawOpenReservationPreventsStealingAndCreationUntilDisposalRollsBack() throws Exception {
+        record OpenResult(long descriptor, long error) {}
+        var fifo = directory.resolve("raw-registry"); var absent = directory.resolve("namespace-exhausted");
+        var create = new ProcessBuilder("mkfifo", fifo.toString()).start();
+        assertTrue(create.waitFor(10, TimeUnit.SECONDS)); assertEquals(0, create.exitValue());
+        try (var context = nativeContext()) {
+            int capacity = 8;
+            var files = entered(context, () -> {
+                var state = Language.currentState(null); var registry = new ManagedFiles(state.getEnv(), state.getThreads(), capacity);
+                registry.installNative(Objects.requireNonNull(state.getNativeFiles()), Set.of()); return registry;
+            });
+            var workers = Executors.newFixedThreadPool(2); Future<Object> opening = null;
+            try {
+                entered(context, () -> {
+                    var same = directory.resolve("raw-private"); var abi = StdioHostAbi.load();
+                    long flags = abi.flagConstant(OriginalStdioOp.O_RDWR) | abi.flagConstant(OriginalStdioOp.O_CREAT);
+                    long raw = files.openOriginal(path(same), flags, 384); assertTrue(raw >= 0);
+                    try {
+                        // Raw ownership must leave private same-file admission available.
+                        long admitted = files.open(path(same), 3, ForeignSafety.UNSAFE); assertTrue(admitted >= 0);
+                        try { assertNotEquals(raw, admitted); }
+                        finally { assertEquals(0L, files.close(admitted)); }
+                    } finally { assertEquals(0L, files.close(raw)); }
+                    return null;
+                });
+                // Learn a free hole through the public namespace instead of fixing a descriptor number.
+                long hole = entered(context, () -> {
+                    var aliases = new ArrayList<Long>();
+                    for (int i = 0; i < capacity; i++) { long fd = files.duplicate(1); if (fd < 0) break; aliases.add(fd); }
+                    assertEquals(10L, files.errorKind()); assertFalse(aliases.isEmpty());
+                    long freed = aliases.getFirst(); assertEquals(0L, files.close(freed)); return freed;
+                });
+                var target = entered(context, () -> {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    return new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            long fd = files.openOriginal(path(fifo), 0, 0, OriginalStdioOp.OPEN_SAFE, this);
+                            return new OpenResult(fd, files.errorKind());
+                        }
+                    }.getCallTarget();
+                });
+                opening = workers.submit(() -> entered(context, target::call));
+                awaitNativeOpen(); assertFalse(opening.isDone());
+                entered(context, () -> {
+                    assertEquals(-1L, files.duplicateTo(1, hole)); assertEquals(8L, files.errorKind(), "The acquisition owns the reserved hole");
+                    var abi = StdioHostAbi.load(); long flags = abi.flagConstant(OriginalStdioOp.O_WRONLY) | abi.flagConstant(OriginalStdioOp.O_CREAT);
+                    assertEquals(-1L, files.openOriginal(path(absent), flags, 384));
+                    assertEquals(10L, files.errorKind(), "Reservation consumes the final namespace slot before another acquisition");
+                    assertFalse(Files.exists(absent), "Namespace exhaustion must precede native creation"); return null;
+                });
+                var disposal = workers.submit(() -> entered(context, () -> { files.dispose(); return null; }));
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (entered(context, () -> { assertEquals(-1L, files.duplicate(1)); return files.errorKind(); }) != 4L
+                        && System.nanoTime() < deadline) Thread.sleep(1);
+                assertEquals(4L, entered(context, files::errorKind), "Disposal must close the registry before acquisition completes");
+                assertFalse(disposal.isDone(), "Disposal must wait for the pending acquisition's cleanup");
+                try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                    assertEquals(new OpenResult(-1, 4), opening.get(10, TimeUnit.SECONDS)); disposal.get(10, TimeUnit.SECONDS);
+                }
+                assertEquals(0L, nativeDescriptors(fifo), "Rollback must physically close the acquired descriptor");
+            } finally {
+                // Release failed acquisition before disposal or executor shutdown can wait for it.
+                try {
+                    if (opening != null && !opening.isDone()) try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                        try { opening.get(10, TimeUnit.SECONDS); } catch (ExecutionException ignored) { }
+                    }
+                } finally {
+                    try { files.dispose(); }
+                    finally { workers.shutdownNow(); assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS)); }
+                }
+            }
+        }
     }
     @Test void nativeAndCommandLineContextsPermitGuestThreads() throws Exception {
         for (var factory : List.<Supplier<Context>>of(this::nativeContext, () -> executionContext(true))) try (var context = factory.get()) { entered(context, () -> {

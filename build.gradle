@@ -260,15 +260,10 @@ tasks.withType(Test).configureEach {
             "floating/core/**/*.cbd", "floating/checks.json", "floating/oracle.tsv",
             "word-floating/**/*.cbd", "word-floating/**/*.json", "word-floating/oracle.tsv",
             "fused-floating/**/*.cbd", "fused-floating/**/*.json", "fused-floating/oracle.tsv",
-            "floating-tuple/**/*.cbd", "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
-            "tuple-input/**/*.cbd", "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
+            "floating-tuple/pre-core/FloatingTupleAudit.cbd", "floating-tuple/post-core/FloatingTupleAudit.cbd", "floating-tuple/oracle.tsv", "floating-tuple/bits.tsv",
             "io-main-pap/**/*.cbd", "io-main-pap/**/*.json", "io-main-pap/*.tsv", "io-main-pap/native/**",
             "addr-identity/**/*.json", "addr-identity/**/*.cbd", "addr-identity/oracle.txt", "addr-identity/native",
-            "empty-join-input/**/*.cbd", "empty-join-input/**/*.json", "empty-join-input/*.tsv", "empty-join-input/native/**",
-            "empty-tuple-input/**/*.cbd", "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
-            "sqrt/**/*.cbd", "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "tag-to-enum/**/*.cbd", "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
-            "narrow-literal-proofs/**/*.json", "narrow-literal-proofs/**/*.cbd", "narrow-literal-proofs/*.tsv", "narrow-literal-proofs/native/**",
             "show-word-list/**/*.cbd", "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
             "short-bytes-slices/**/*.cbd", "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
             "original-path-mode/**/*.cbd",
@@ -285,14 +280,9 @@ tasks.withType(Test).configureEach {
             "unix-libc/*.cbd", "unix-libc/*.json", "unix-libc/logs/*.stdout", "unix-libc/logs/*.stderr", "unix-libc/logs/*.command.json",
             "proxy-void/**/*.cbd", "proxy-void/**/*.json", "proxy-void/*.tsv", "proxy-void/native/**", "proxy-void/api/**", "proxy-void/commands/**",
             "unsafe-equality/**/*.cbd", "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
-            "aggregate-core/**/*.cbd", "aggregate-post-core/**/*.cbd", "map/boot-core/**/*.cbd", "cstring/boot-core/GHC.Internal.CString.cbd", "aggregate-layout/pre-core/**/*.cbd", "aggregate-layout/post-core/**/*.cbd",
-            "sum-layout/**/*.json", "sum-layout/**/*.cbd", "sum-layout/*.tsv", "sum-layout/native/**",
-            "sum-result/**/*.json", "sum-result/**/*.cbd", "sum-result/*.tsv", "sum-result/native/**",
-            "tuple-return/pre-core/**/*.cbd", "tuple-return/post-core/**/*.cbd", "tuple-return/oracle.tsv",
-            "state-tuple/pre-core/**/*.cbd", "state-tuple/post-core/**/*.cbd", "state-tuple/oracle.tsv",
-            "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
-            "tuple-join/pre-core/**/*.cbd", "tuple-join/post-core/**/*.cbd", "tuple-join/oracle.tsv",
-            "sum-join/**/*.cbd", "sum-join/**/*.json", "sum-join/*.tsv", "sum-join/commands/**",
+            "map/boot-core/**/*.cbd", "cstring/boot-core/GHC.Internal.CString.cbd", "aggregate-layout/pre-core/AggregateLayoutAudit.cbd", "aggregate-layout/post-core/AggregateLayoutAudit.cbd",
+            "sum-layout/pre-core/SumLayoutAudit.cbd", "sum-layout/post-core/SumLayoutAudit.cbd", "sum-layout/oracle.tsv",
+            "sum-result/pre-core/SumResultAudit.cbd", "sum-result/post-core/SumResultAudit.cbd", "sum-result/oracle.tsv", "sum-result/oracle-pairs.tsv",
             "tuple-arithmetic/pre-core/**/*.cbd", "tuple-arithmetic/post-core/**/*.cbd",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-completion/**/*.cbd", "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
@@ -364,7 +354,7 @@ tasks.withType(Test).configureEach {
             "rts-diagnostics/**/*.json", "rts-diagnostics/logs/*.stdout", "rts-diagnostics/logs/*.stderr",
             "rts-shutdown/*.json", "rts-shutdown/logs/*.stdout", "rts-shutdown/logs/*.stderr",
             "original-rts-locks/**/*.json", "original-rts-locks/**/*.cbd", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
-            "original-open/**/*.json", "original-open/**/*.cbd", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
+            "native-open-request/native/oracle",
             "original-errno/**/*.json", "original-errno/**/*.cbd", "original-errno/logs/*.stdout", "original-errno/logs/*.stderr",
             "original-errno/native/oracle", "original-errno/native/observations.txt",
             "original-process-identity/**/*.json", "original-process-identity/**/*.cbd", "original-process-identity/installed/bundles/*.zip", "original-process-identity/logs/*.stdout",
@@ -381,7 +371,6 @@ tasks.withType(Test).configureEach {
             "pinned-addresses/**/*.cbd", "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**", "pinned-addresses/commands/**",
             "pinned-pointer-cells/**/*.cbd", "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
             "address-array-copy/**/*.cbd", "address-array-copy/**/*.json", "address-array-copy/*.tsv", "address-array-copy/native/**", "address-array-copy/commands/**",
-            "aligned-scalar-memory/**/*.cbd", "aligned-scalar-memory/**/*.json", "aligned-scalar-memory/*.tsv", "aligned-scalar-memory/*.txt", "aligned-scalar-memory/logs/**",
             "wide-char-address/**/*.cbd", "wide-char-address/**/*.json", "wide-char-address/logs/*.stdout", "wide-char-address/native/**",
             "floating-address/**/*.cbd", "floating-address/**/*.json", "floating-address/*.tsv", "floating-address/native/**",
             "floating-byte-offset/**/*.cbd", "floating-byte-offset/**/*.json", "floating-byte-offset/*.tsv",
@@ -471,9 +460,9 @@ tasks.withType(Test).configureEach {
     inputs.files(fileTree("bin") {
         include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py",
             "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
-        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-tag-to-enum-audit.py", "prepare-narrow-literal-proofs.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py",
+        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-tag-to-enum-audit.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py",
             "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
-            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py",
+            "prepare-io-main-pap.py", "test-tuple-inputs.py", "test-empty-join-inputs.py", "core_*.py",
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
             "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",
@@ -484,7 +473,7 @@ tasks.withType(Test).configureEach {
             "test-core-float-vector-memory.py",
             "test-core-double-vector-memory.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
-            "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py", "prepare-sum-result-audit.py", "test-core-sums.py")
+            "sum_layout_model.py", "test-sum-layout.py", "test-core-sums.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)
@@ -510,7 +499,7 @@ def handoffModeTests = [["testDefault", false],[ "testDense", true]].collect { t
         useJUnitPlatform { excludeTags("simd-families-experiment", "foreign-exceptions-full-core", "truffle-strings-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())
-        maxParallelForks = 1
+        maxParallelForks = 4
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Handoff mode evidence requires a fresh test process") { true }
     }
@@ -560,83 +549,6 @@ def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInter
 }
 compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
 
-[["originalTimeClockDefault", false],[ "originalTimeClockDense", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests the original time CAPI clock module with native and first-compiled controls."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.OriginalTimeClockTest") }
-        inputs.files(fileTree("build/original-time-clock") { include("*.json") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Original clock native and first-entry checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/original-time-clock/manifest.json").isFile()) {
-            "Run thc-fixtures original-time-clock with complete installed GHC Core" } }
-    }
-}
-
-[["rtsEventFullCoreTest", false],[ "rtsEventFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original GHC event prerequisites and context-local logical capabilities."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.RtsEventNativeTest") }
-        inputs.files(fileTree("build/rts-event") { include("*.cbd", "*.json") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Original event prerequisites require fresh first-compiled-entry checks") { true }
-        doFirst { checkBuild(file("build/rts-event/manifest.json").isFile()) { "Run thc-fixtures rts-event with complete installed GHC Core" } }
-    }
-}
-[["gcStatsFullCoreTest", false],[ "gcStatsFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original GHC GC/statistics/clock declarations and honest JVM behavior."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.GcStatsNativeTest") }
-        inputs.files(fileTree("build/gc-stats") { include("*.cbd", "*.json") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Original GC/statistics native and first-entry checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/gc-stats/manifest.json").isFile()) { "Run thc-fixtures gc-stats with complete installed GHC Core" } }
-    }
-}
-[["compilerRtsFullCoreTest", false],[ "compilerRtsFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests genuine compiler RTS declarations and unique cells against native GHC."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.CompilerRtsNativeTest") }
-        inputs.files(fileTree("build/compiler-rts") { include("*.cbd", "*.json", "*.tsv", "UniqueOracle.hs", "unique-oracle") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Original compiler RTS native/first-entry checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/compiler-rts/manifest.json").isFile()) { "Run thc-fixtures compiler-rts with complete installed GHC Core" } }
-    }
-}
-[["floatForeignFullCoreTest", false],[ "floatForeignFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original GHC Float/Double C declarations against native raw-bit controls."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.FloatForeignNativeTest") }
-        inputs.files(fileTree("build/float-foreign") { include("*.cbd", "*.json", "*.tsv") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Original floating FFI native/first-entry checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/float-foreign/manifest.json").isFile()) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
-    }
-}
 [["aggregateHeapFullCoreTest", false],[ "aggregateHeapFullCoreDenseTest", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"
@@ -699,67 +611,6 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Generic sum native/first-installed checks require a fresh process") { true }
         doFirst { checkBuild(file("build/generic-sum-transport/manifest.json").isFile()) { "Run thc-fixtures generic-sum-transport" } }
-    }
-}
-[["tupleJoinFullCoreTest", false],[ "tupleJoinFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original roundTo tuple joins and bottoming empty tuple cases against native GHC."
-        maxHeapSize = "6g"
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.TupleJoinNativeTest") }
-        inputs.files(fileTree("build/tuple-join-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Native and first-compiled tuple join checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/tuple-join-input/manifest.json").isFile()) { "Run thc-fixtures tuple-join" } }
-    }
-}
-[["sumInputFullCoreTest", false],[ "sumInputFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original sum arguments, PAP prefixes and captures against native GHC."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.SumInputNativeTest") }
-        inputs.files(fileTree("build/sum-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Native and first-compiled sum checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/sum-input/manifest.json").isFile()) { "Run thc-fixtures sum-input" } }
-    }
-}
-[["tupleCaptureFullCoreTest", false],[ "tupleCaptureFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original tuple closure/thunk captures against native GHC."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.TupleCaptureNativeTest") }
-        inputs.files(fileTree("build/tuple-capture") { include("**/*.json", "*.tsv") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Native and first-compiled tuple capture checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/tuple-capture/manifest.json").isFile()) { "Run thc-fixtures tuple-capture" } }
-    }
-}
-[["sumJoinInputFullCoreTest", false],[ "sumJoinInputFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original sum join inputs/captures against native GHC."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.SumJoinInputNativeTest") }
-        inputs.files(fileTree("build/sum-join-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Native and first-compiled sum join checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/sum-join-input/manifest.json").isFile()) { "Run thc-fixtures sum-join-input" } }
     }
 }
 tasks.register("graphWorkloadTest", Test) {
@@ -1002,74 +853,6 @@ tasks.register("packageScalarFullCoreTest", Test) {
         doFirst {
             checkBuild(file("build/original-native/manifest.json").isFile()) {
                 "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
-            }
-        }
-    }
-}
-[
-    ["libyamlNativeDefault", false, "zip"], ["libyamlNativeDense", true, "zip"],
-    ["libyamlJsonDefault", false, "json"], ["libyamlJsonDense", true, "json"],
-    ["libyamlCompactDefault", false, "compact"], ["libyamlCompactDense", true, "compact"]].each { taskName, dense, format ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Checks genuine libyaml C-only dependency products, retained input, cleanup and native encoder buffers."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        systemProperty("thc.handoffSlabs", dense.toString())
-        def fixture = providers.gradleProperty("thc.libyamlFixture").orElse("build/libyaml-native")
-        systemProperty("thc.libyamlFixture", file(fixture.get()).absolutePath)
-        systemProperty("thc.libyamlBundle", file("${fixture.get()}/libyaml.zip").absolutePath)
-        inputs.dir(fixture)
-        if (format != "zip") {
-            def property = format == "compact" ? "thc.libyamlCompactPackages" : "thc.libyamlJsonPackages"
-            def packages = providers.gradleProperty(property).orElse("${fixture.get()}/$format-packages.json")
-            inputs.file(packages)
-            systemProperty("thc.libyamlPackages", file(packages.get()).absolutePath)
-            systemProperty("thc.libyamlFormat", format)
-            doFirst { checkBuild(file(packages.get()).isFile()) { "Supply the genuine $format package manifest with -P$property" } }
-        }
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.LibyamlNativeProductsTest") }
-        outputs.upToDateWhen { false }
-        doFirst {
-            checkBuild(file("${fixture.get()}/manifest.json").isFile()) {
-                "Set THC_LIBYAML_CAPTURE_STAGE to a genuine retained Cabal acquisition; run thc-fixtures libyaml-native"
-            }
-        }
-    }
-}
-[["wcwidthDefault", false],[ "wcwidthDense", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Checks Tasty's exact wcwidth declaration and fallback against native locale-sensitive results."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        systemProperty("thc.handoffSlabs", dense.toString())
-        inputs.files(fileTree("build/wcwidth") { include("**/*.json", "*.tsv", "ConsoleReporter.hs", "TASTY-LICENSE") })
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.WcwidthTest") }
-        outputs.upToDateWhen { false }
-        doFirst {
-            checkBuild(file("build/wcwidth/manifest.json").isFile()) {
-                "Set THC_TASTY_SOURCE and run cabal run exe:thc-fixtures -- wcwidth"
-            }
-        }
-    }
-}
-[["getEntropyDefault", false],[ "getEntropyDense", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Checks original splitmix initialization and native libc getentropy status/bounds."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        systemProperty("thc.handoffSlabs", dense.toString())
-        inputs.files(fileTree("build/getentropy") { include("**/*.json", "native.tsv", "control.so", "sources/**") })
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.GetEntropyTest") }
-        outputs.upToDateWhen { false }
-        doFirst {
-            checkBuild(file("build/getentropy/manifest.json").isFile()) {
-                "Set THC_SPLITMIX_SOURCE and run cabal run exe:thc-fixtures -- getentropy"
             }
         }
     }

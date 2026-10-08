@@ -47,6 +47,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/hourly_health.py
       - uses: ./.github/actions/setup
+        with:
+          cache-cabal-project: 'true'
       - name: Verify source and complete fixture ownership
         id: inventory
         env:
@@ -72,14 +74,6 @@ jobs:
           assert release['JAVA_VERSION'].strip('"').split('.')[0] == '25', release.get('JAVA_VERSION')
           PY
           java --version
-      - name: Reuse Cabal's incremental project outputs
-        uses: actions/cache@v4
-        with:
-          path: dist-newstyle
-          key: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
-          restore-keys: |
-            cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
-            cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-
       - name: Compile and package the application
         if: inputs.cadence != 'commit'
         run: |
@@ -114,10 +108,6 @@ jobs:
             build/reports/profile/
             build/test-results/testDefault/
             build/test-results/testDense/
-            build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd
-            build/empty-join-input/post-core/EmptyJoinInputAudit.cbd
-            build/empty-join-input/provenance.json
-            build/empty-join-input/oracle.tsv
             build/reports/tests/testDefault/
             build/reports/tests/testDense/
           retention-days: 7

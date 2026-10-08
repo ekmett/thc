@@ -20,6 +20,13 @@ share that stack until they return. The immutable decoded code/literals and
 lazy pointer table are retained by the BCO, without inventing numeric addresses
 for guest references. Calls and wrappers reject a foreign context.
 
+The existing opt-in `thc.SparkQueueCapacity` pool also admits unevaluated updating
+BCO/AP thunks owned by the current context. Its one worker evaluates the original
+shared thunk; demand observes that same update. Cooperative worker cancellation
+retains the BCO continuation and captured application payload so later demand
+resumes unfinished work without repeating completed effects. The pool remains
+disabled by default, and this adds no BCO JIT or parallel speedup claim.
+
 ## Format and scope
 
 The implementation follows pinned GHC `rts/include/rts/Bytecodes.h`,

@@ -657,7 +657,8 @@ def select(repo, base_ref, head_ref, *, cadence=None):
         if not policy["smoke"]["junit"] or not policy["smoke"]["python"]:
             raise SelectionError("empty smoke")
         scheduled = policy["cadence"]
-        if not isinstance(scheduled, dict) or set(scheduled) != {"hourlyJunit", "nightlyFixtures"}:
+        if not isinstance(scheduled, dict) or set(scheduled) not in (
+                {"hourlyJunit", "nightlyFixtures"}, {"hourlyJunit", "nightlyFixtures", "partialJunit"}):
             raise SelectionError("invalid cadence policy")
         hourly, nightly = scheduled["hourlyJunit"], scheduled["nightlyFixtures"]
         if (not isinstance(hourly, list) or any(not isinstance(c, str) or c not in classes for c in hourly)
@@ -665,6 +666,18 @@ def select(repo, base_ref, head_ref, *, cadence=None):
                 or not isinstance(nightly, list) or any(not isinstance(n, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", n) for n in nightly)
                 or len(nightly) != len(set(nightly))):
             raise SelectionError("invalid scheduled tests")
+        partial = scheduled.get("partialJunit", {})
+        if not isinstance(partial, dict):
+            raise SelectionError("invalid partial tests")
+        for name, methods in partial.items():
+            if (name not in classes or name in hourly or not isinstance(methods, list) or not methods
+                    or any(not isinstance(m, str) or not re.fullmatch(r"[A-Za-z_$][\w$]*", m) for m in methods)
+                    or len(methods) != len(set(methods))):
+                raise SelectionError("invalid partial tests")
+            source = code_only(text(classes[name]))
+            if any(not re.search(r"@Test\s+(?:public\s+)?void\s+" + re.escape(m) + r"\s*\(\s*\)", source)
+                   for m in methods):
+                raise SelectionError("partial selection must name existing ordinary test methods")
         if any(path not in files or not path.startswith("src/main/") for path in policy["leafSources"]):
             raise SelectionError("nonexistent or nonproduction leaf source")
         if any(not isinstance(path, str) or not path or path.startswith("/") or ".." in PurePosixPath(path).parts
@@ -863,16 +876,18 @@ def select(repo, base_ref, head_ref, *, cadence=None):
     if set(owners) != set(classes):
         raise SelectionError("Incomplete fixture ownership for cadence selection")
     assigned = cadence_assignments(manifest, owners, policy)
-    deferred = {scope: {"junit": sorted(c for c in selected_junit if assigned[c] == scope)}
+    partial = policy["cadence"].get("partialJunit", {})
+    deferred = {scope: {"junit": sorted(c for c in selected_junit
+                                      if assigned[c] == scope or scope == "nightly" and c in partial)}
                 for scope in ("commit", "hourly", "nightly") if scope != cadence}
     if polyglot_required and cadence != "nightly":
         deferred["nightly"]["polyglot"] = sorted(polyglot_classes)
         result["polyglot"] = dict(required=False, classes=[])
-    actual = sorted(c for c in selected_junit if assigned[c] == cadence)
+    actual = sorted(c for c in selected_junit if assigned[c] == cadence or cadence == "nightly" and c in partial)
     if not actual:
         raise SelectionError("Empty cadence selection")
     result.update(mode="narrow", requestedMode=mode, cadence=cadence, deferred=deferred,
-                  junit=dict(patterns=actual, classes=actual,
+                  junit=dict(patterns=cadence_patterns(actual, policy, cadence), classes=actual,
                              sourceFiles=sorted({classes[c] for c in actual}), count=len(actual)))
     return result
 
@@ -903,7 +918,15 @@ def cadence_assignments(manifest, owners, policy):
                 for name, owner in owners.items()}
     if any(assigned.get(name) != "commit" for name in policy["smoke"]["junit"]):
         raise SelectionError("Committed smoke must remain per-commit")
+    if any(assigned.get(name) != "commit" for name in scheduled.get("partialJunit", {})):
+        raise SelectionError("Partial suites must have per-commit fixture dependencies")
     return assigned
+
+
+def cadence_patterns(classes, policy, cadence):
+    partial = policy["cadence"].get("partialJunit", {}) if cadence == "commit" else {}
+    return [pattern for name in classes
+            for pattern in ([name + "." + method for method in partial[name]] if name in partial else [name])]
 
 
 def groups(repo, *, system=None, cadence=None):
@@ -927,7 +950,8 @@ def groups(repo, *, system=None, cadence=None):
         raise SelectionError("Unknown cadence: " + cadence)
     policy = json.loads((Path(repo) / POLICY).read_text())
     assigned = cadence_assignments(manifest, owners, policy)
-    included = {c for c in classes if cadence is None or assigned[c] == cadence}
+    included = {c for c in classes if cadence is None or assigned[c] == cadence
+                or cadence == "nightly" and c in policy["cadence"].get("partialJunit", {})}
     result = {min(component): sorted({c for name in component for c in manifest["groups"][name]["junit"] if c in included})
               for component in components.values()
               if system is None or any(system in manifest["groups"][name].get("ciPlatforms", [system])
@@ -952,16 +976,29 @@ def group_matrix(repo, *, cadence=None):
                         for index in range(count)]}
 
 
-def group_selection(repo, name, *, cadence=None):
-    selected = groups(repo, system=platform.system() if cadence == "commit" else None, cadence=cadence)
+def group_selection(repo, name, *, cadence=None, exact_class=None):
+    system = platform.system()
+    selected = groups(repo, system=system if cadence == "commit" or exact_class is not None else None, cadence=cadence)
     if name not in selected:
         raise SelectionError("Unknown CI group: " + name)
+    if exact_class is not None:
+        if exact_class not in selected[name]:
+            raise SelectionError("Select one exact class admitted in the chosen group/cadence/platform")
+        import fast_fixtures
+        manifest, owners = fast_fixtures._manifest(Path(repo))
+        owner = owners[exact_class]
+        if owner and system not in manifest["groups"][owner].get("ciPlatforms", [system]):
+            raise SelectionError("Selected class is not admitted on this platform")
+        selected[name] = [exact_class]
     # Repeat the process-mode proof, but run the full transport suite only in
     # its owning group.
     handoff = "thc.runtime.HandoffTest"
     classes = sorted(set(selected[name]) | {handoff})
-    patterns = [c + ".requestedModeReachesTestProcessAndContext"
-                if c == handoff and c not in selected[name] else c for c in classes]
+    policy = json.loads((Path(repo) / POLICY).read_text())
+    patterns = cadence_patterns(classes, policy, cadence)
+    if handoff not in selected[name]:
+        patterns = [p for p in patterns if p != handoff and not p.startswith(handoff + ".")]
+        patterns.append(handoff + ".requestedModeReachesTestProcessAndContext")
     return dict(mode="narrow", runnable=True, junit=dict(classes=classes, patterns=patterns))
 
 

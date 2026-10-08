@@ -259,9 +259,5 @@ jobs:
             ${{ env.FAST_REPORT_DIR }}
             build/test-results/testDefault/
             build/test-results/testDense/
-            build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd
-            build/empty-join-input/post-core/EmptyJoinInputAudit.cbd
-            build/empty-join-input/provenance.json
-            build/empty-join-input/oracle.tsv
           if-no-files-found: warn
           retention-days: 14

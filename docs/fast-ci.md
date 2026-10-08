@@ -8,6 +8,19 @@ select the full inventory before the explicit cadence policy is applied.
 `Build` runs per-commit coverage. `Hourly` runs established passing coverage at
 minute 31; an hourly failure blocks further development until fixed. `Intensive`
 runs daily at 07:17 UTC for expensive fixtures and public package integration.
+
+For a bounded manual qualification, dispatch **Hourly qualification** with an
+exact existing Hourly `group` and `platform=ubuntu-latest` or `macos-latest`.
+The defaults select `scalar-memory-utilities` on Ubuntu. This runs setup, shared
+compilation, the selected fixture prerequisites and both handoff modes in one
+job with a ten-minute total limit. Compilation and execution have a seven-minute
+step limit to leave time for cleanup and evidence upload. A timeout is failed
+qualification evidence; it does not increase the preparation budget. Selection
+and platform validation happen before setup. Normal command failures retain
+logs/traces; hard job cancellation can interrupt artifact collection. This manual-only
+workflow does not clear the full Hourly failure gate or qualify other groups.
+Scheduled coverage is unchanged.
+
 These scheduled workflows use the same CMake fixture graph and test runner as Build.
 Build compiles and runs its tests in one job per platform. Hourly and Intensive
 compile once per platform, then share those outputs with their test groups.
@@ -26,11 +39,21 @@ each handoff mode. Cached compilation and verified fixture inputs avoid repeated
 setup; selected tests still execute on every run. The generated primop checklist
 is checked against the pinned GHC API.
 
-Hosted Build and scheduled jobs restore installed tools independently of source
-changes. Missing GHC/Cabal, GraalVM and LLVM installations run concurrently with
-submodule checkout on the same runner. Setup joins every process before building
-and terminates the other processes on failure; timings and logs are retained in
-`build/ci/setup-results`. Verified tools are saved before compilation starts.
+Hosted Build and scheduled jobs restore independent cache layers alongside
+submodule checkout, with up to four setup processes on the same runner. Each
+tool installer waits only for its own caches. GHC and LLVM installations remain
+independent of project changes; Cabal project outputs participate in the same
+restore queue for compilation jobs. Setup terminates the other processes on
+failure. Timings, logs and a Perfetto trace are retained in
+`build/ci/setup-results`. Verified tools are saved before compilation starts;
+mutable dependency caches are saved at job completion.
+
+The coordinator invokes the official `actions/cache@v4` restore entry point
+from the runner's action directory. The composite declares that action so the
+runner downloads it first; `actions/github-script` supplies its Node runtime
+and cache-service environment. Cache keys, paths and fallback prefixes are
+declared once in the composite. Lookup-only cache steps register post-job saves
+without downloading the archives again.
 
 Commit builds run `ci-commit` in the CMake/Ninja graph with four workers.
 Linux, macOS and automation jobs start independently. Each platform checks
@@ -42,7 +65,31 @@ tests depend on their executables; JVM tests depend on Java compilation and thei
 selected fixture targets. Checks produce fresh results on every invocation.
 Cabal has one producer for its shared plan and package database. A Ninja job pool
 allows one Gradle invocation to mutate its project state at a time; it does not
-block unrelated work. Gradle and Cabal also use four build workers.
+block unrelated work. Gradle and Cabal also use four build workers. Ordinary JVM
+tests distribute classes across four isolated JVMs within each handoff mode;
+the modes run sequentially to keep the total at four test workers. Methods remain
+serial within a class because some tests change process-wide runtime settings.
+
+Scalar fixtures use small native-GHC boundary sets with representative compiled
+entries in both backends. General arithmetic, memory and loader suites own their
+negative controls; scalar fixtures do not repeat pre/post/inlining matrices or
+assert compiler-internal target counts. Mixed-backend continuation coverage uses
+five cases for strict inputs, typed PAPs, tuple transport, masking and async delivery.
+Tuple arithmetic checks native results and a BigInteger model at signed
+endpoints, multiply overflow and representative carry boundaries. It uses one
+Core stage and checks first compiled calls in both backends. Cross-call carry
+transport stays in WordCarryTest; annotation and malformed-shape checks use
+representative two-field and three-field operations.
+
+`HandoffTest`, `AstStackTest`, `CoreUnitLoadTest` and `ManagedStackSnapshotTest`
+run five of their 46 behavioral test methods on commits, plus the handoff-mode
+proof. The fixed sample covers lazy argument ownership, sharing/masking through
+stack spills, the first compiled bytecode spill, lazy Core demand and snapshots
+surviving unwind. `cadence.partialJunit` in `fast-tests.json` names these methods.
+The nightly Intensive workflow runs all 47 methods, including the partial set,
+in both handoff modes. Ordinary local class selectors also run the full classes.
+Selection and result validation reject missing methods; no random sampling or
+ordering-dependent rotation is used.
 
 The existing source ownership selector chooses affected Python and Haskell checks
 and patch controls. Unknown changes or an unavailable comparison base retain the
@@ -62,7 +109,8 @@ only; a failed command retains its outer span and log. Multi-output edges appear
 once, and an incremental run excludes old Ninja log entries. Lanes display
 overlap, not operating-system thread identities. Ninja timestamps are aligned
 to the launching CMake command, so they include a small process-start offset.
-Setup downloads are recorded separately in `setup-results/timings.json`.
+Setup cache restores, checkout and installers are recorded separately in
+`setup-results/timings.json` and `setup-results/build-trace.json`.
 
 For a direct Gradle build, use
 `./gradlew -Pthc.buildTrace=/absolute/path/build-trace.json installDist`.

@@ -199,6 +199,30 @@ public final class InitializationArgumentsTest {
             "--initialize-at-build-time=thc.fixture.Plain,thc.fixture.Plain,thc.fixture.Marker,thc.fixture.Tag,thc.fixture.Tag\n"),
             "named generated categories must preserve order and duplicates");
 
+        // One installed runtime can feed multiple targets. Preparation must own
+        // only its selected output tree and accept already-populated directories.
+        Path isolated = fixture("separate-output", true, "# pure\nthc.fixture.Plain\n",
+            "# extra\nthc.fixture.Tag\n");
+        Path selected = output.resolve("-target output");
+        Files.createDirectories(selected);
+        Files.writeString(selected.resolve("keep.txt"), "caller-owned content");
+        for (int pass = 0; pass < 2; pass++) {
+            var command = new ProcessBuilder("bash", isolated.resolve("recipe/prepared-image.sh").toString(),
+                isolated.toString(), "prepare-only", "-target output");
+            command.directory(output.toFile());
+            command.environment().put("JAVA_HOME", javaHome.toString());
+            command.environment().keySet().removeIf(key -> key.startsWith("THC_NATIVE_IMAGE_"));
+            command.redirectErrorStream(true).redirectOutput(selected.resolve("prepare.log").toFile());
+            check(command.start().waitFor() == 0, "prepare in an explicit build directory");
+            check(Files.readString(selected.resolve("reproduction-inventory/prepared-initialization.args"))
+                .equals(inventory(mixed, "prepared-initialization.args")), "output location must not change initialization");
+            check(Files.exists(selected.resolve("reproduction-probe/ClassInitializationInventory.class")),
+                "compiled inventory tool belongs to the selected build directory");
+            check(!Files.exists(isolated.resolve("build/native-image")), "no shared default-directory outputs");
+            check(Files.readString(selected.resolve("keep.txt")).equals("caller-owned content"),
+                "preparation preserves unrelated output files");
+        }
+
         Path empty = fixture("empty-generated", false, "thc.fixture.Plain\n", "thc.fixture.Tag\n");
         check(prepare(empty) == 0, "empty-generated prepare failed");
         check(inventory(empty, "prepared-initialization.args").equals(

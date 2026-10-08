@@ -37,6 +37,9 @@ import GHC.Driver.Env.KnotVars (KnotVars(..), lookupKnotVars)
 import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
 import GHC.Iface.Recomp.Binary (fingerprintBinMem, putNameLiterally)
 import GHC.Iface.Type (putIfaceType)
+import qualified GHC.Iface.Syntax as Iface
+import GHC.Types.Literal (Literal(..))
+import qualified GHC.Unit.Module.WholeCoreBindings as Foreign
 import qualified GHC.Data.Strict as Strict
 import GHC.IfaceToCore (typecheckIface, typecheckWholeCoreBindings)
 import GHC.Tc.Utils.Monad (initIfaceCheck)
@@ -50,6 +53,9 @@ import GHC.Utils.Binary (openBinMem, putFullBinData, put_, putFS, setWriterUserD
                         mkWriterUserData, mkSomeBinaryWriter, mkWriter, simpleBindingNameWriter)
 import GHC.Utils.Fingerprint (Fingerprint)
 import System.FilePath (replaceExtension)
+import qualified THC.ForeignExports as Exports
+import qualified THC.ForeignExportProvenance as ExportProvenance
+import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Plugin (serializePostTidyCoreWithAnnotations, serializePostTidyCoreWithAnnotationsBytes,
   serializePostTidyCoreWithAnnotationsCBD)
 
@@ -92,8 +98,9 @@ checkInterfaceIdentity environment expected path = do
 -- tables, complete Core, annotations, foreign products and extensible fields.
 -- 'mi_iface_hash' is insufficient: GHC excludes complete Core/foreign payloads
 -- from that recompilation hash. No Core hydration or JSON rendering occurs.
--- The caller must also account for dependency interfaces and source-note text.
-probeInterface :: HscEnv -> Set.Set String -> Set.Set (String, String) -> Module -> FilePath -> IO (Fingerprint, Bool)
+-- Return the complete-byte fingerprint, payload availability and conservative
+-- demand eligibility. The caller also accounts for dependencies/source-note text.
+probeInterface :: HscEnv -> Set.Set String -> Set.Set (String, String) -> Module -> FilePath -> IO (Fingerprint, Bool, Bool)
 probeInterface environment units modules expected path = do
   iface <- readBinIface (targetProfile (hsc_dflags environment))
     (hsc_NC environment) CheckHiWay QuietBinIFace path
@@ -126,7 +133,86 @@ probeInterface environment units modules expected path = do
       putFullBinData buffer bytes
       fingerprintBinMem buffer
     FullIfaceBinHandle Strict.Nothing -> fail "Interface reader did not retain its complete bytes"
-  pure (digest, expected == gHC_PRIM || maybe False (const True) (mi_simplified_core iface))
+  pure (digest, expected == gHC_PRIM || maybe False (const True) (mi_simplified_core iface),
+    demandEligible iface)
+
+-- Demand is restricted to whole units with no native or startup obligations.
+-- Inspect GHC's decoded retained syntax, including cold RHSs and unfoldings;
+-- neither hydration nor THC serialization is needed to prove these false facts.
+-- Acquisition attaches foreign provenance even when the products are empty.
+-- Validate those proofs; unknown annotations and runtime profiles stay eager.
+demandEligible :: ModIface -> Bool
+demandEligible iface =
+  moduleNameString (moduleName (mi_module iface)) `notElem` ["THC.Exception", "THC.Internal.Exception"] &&
+  unitString (moduleUnit (mi_module iface)) /= "main" &&
+  all (safeDeclaration . snd) (mi_decls iface) && case mi_simplified_core iface of
+    Nothing -> False
+    Just simplified -> emptyForeign (mi_sc_foreign simplified) &&
+      emptyAnnotations (mi_sc_foreign simplified) &&
+      all (safeBinding safeTop safeRhs) (mi_sc_extra_decls simplified)
+  where
+    emptyAnnotations original = case
+      ( Exports.readStaticExports owner annotations []
+      , ExportProvenance.inspectProvenance owner annotations (Just []) original
+      , ImportProvenance.inspectImports owner annotations original
+      ) of
+        (Right exports, Right registration, Right imports) ->
+          -- Each reader accepts at most one payload of its distinct GHC type.
+          -- Count against ALL annotations so named, wrong-owner and unknown
+          -- payloads cannot disappear through a reader's filtering.
+          length (mi_anns iface) == length (filter id
+            [ case exports of Just (Exports.StaticExports _ _ _ []) -> True; _ -> False
+            , case registration of ExportProvenance.VerifiedRetainedRegistration _ [] -> True; _ -> False
+            , case imports of Just (ImportProvenance.Verified [] []) -> True; _ -> False
+            ])
+        _ -> False
+    owner = mi_module iface
+    annotations = [Annotation (ModuleTarget target) payload |
+      Iface.IfaceAnnotation (ModuleTarget target) payload <- mi_anns iface]
+    emptyForeign (Foreign.IfaceForeign Nothing []) = True
+    emptyForeign (Foreign.IfaceForeign (Just (Foreign.IfaceCStubs "" "" [] [])) []) = True
+    emptyForeign _ = False
+    safeDeclaration Iface.IfaceId{Iface.ifIdInfo = info} = safeInfo info
+    -- GHC constructs boxed-data wrappers from declarations, not retained
+    -- arbitrary RHSs. Existing synthesis admits only this module's wrappers;
+    -- emitted CBD summaries are checked again at the demand boundary.
+    safeDeclaration _ = True
+    safeInfo = all $ \item -> case item of
+      Iface.HsUnfold _ (Iface.IfCoreUnfold _ _ _ expression) -> safeExpr expression
+      Iface.HsUnfold _ (Iface.IfDFunUnfold _ expressions) -> all safeExpr expressions
+      _ -> True
+    safeTop (Iface.IfLclTopBndr _ _ info _) = safeInfo info
+    safeTop (Iface.IfGblTopBndr name) = nameModule_maybe name == Just (mi_module iface)
+      -- The corresponding ordinary declaration was checked above. A foreign
+      -- top-binder owner could introduce the CLI main alias before demand.
+    safeRhs Iface.IfUseUnfoldingRhs = True
+    safeRhs (Iface.IfRhs expression) = safeExpr expression
+    safeLocal (Iface.IfLetBndr _ _ info _) = safeInfo info
+    safeBinding binder rhs (Iface.IfaceNonRec name body) = binder name && rhs body
+    safeBinding binder rhs (Iface.IfaceRec pairs) = all (\(name,body) -> binder name && rhs body) pairs
+    safeLiteral LitLabel{} = False
+    safeLiteral _ = True
+    safeExpr expression = case expression of
+      Iface.IfaceLcl{} -> True
+      Iface.IfaceExt name -> occNameString (nameOccName name) `notElem` ["prompt#", "control0#"]
+      Iface.IfaceType{} -> True
+      Iface.IfaceCo{} -> True
+      Iface.IfaceTuple _ expressions -> all safeExpr expressions
+      Iface.IfaceLam _ body -> safeExpr body
+      Iface.IfaceApp function argument -> safeExpr function && safeExpr argument
+      Iface.IfaceCase scrutinee _ alternatives -> safeExpr scrutinee && all safeAlt alternatives
+      Iface.IfaceECase scrutinee _ -> safeExpr scrutinee
+      Iface.IfaceLet binding body -> safeBinding safeLocal safeExpr binding && safeExpr body
+      Iface.IfaceCast body _ -> safeExpr body
+      Iface.IfaceLit literal -> safeLiteral literal
+      Iface.IfaceLitRubbish{} -> True
+      Iface.IfaceFCall{} -> False
+      Iface.IfaceTick tick body -> safeExpr body && case tick of
+        Iface.IfaceBreakpoint _ expressions -> all safeExpr expressions
+        _ -> True
+    safeAlt (Iface.IfaceAlt alternative _ body) = safeExpr body && case alternative of
+      Iface.IfaceLitAlt literal -> safeLiteral literal
+      _ -> True
 
 -- Recompilation usages can omit wired-in or later-introduced Names. GHC's own
 -- Binary writer enumerates the retained Names without hydration or a THC

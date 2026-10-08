@@ -19,8 +19,8 @@ WORKFLOW = Path(__file__).resolve().parents[1] / "workflows/fast.yml"
 REPO = "ekmett/thc"
 
 
-def embedded_python(delimiter):
-    text = WORKFLOW.read_text()
+def embedded_python(delimiter, workflow=WORKFLOW):
+    text = workflow.read_text()
     match = re.search(r"python3 - <<'" + delimiter + r"'\n(.*?)\n          " + delimiter,
                       text, re.DOTALL)
     if match is None:
@@ -29,6 +29,103 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
+    def test_qualification_is_one_manual_job_and_does_not_change_hourly_health(self):
+        workflow = (WORKFLOW.parent / 'hourly-qualification.yml').read_text()
+        self.assertIn('name: Hourly qualification\n', workflow)
+        self.assertIn('  workflow_dispatch:\n', workflow)
+        self.assertNotIn('  schedule:', workflow)
+        self.assertNotIn('    uses: ./.github/workflows/', workflow)
+        self.assertEqual(['bounded'], re.findall(r'^  ([\w-]+):\n    name:', workflow, re.M))
+        self.assertIn('    timeout-minutes: 10\n', workflow)
+        self.assertNotIn('    strategy:', workflow)
+        self.assertIn("inputs.platform == 'macos-latest' && 'macos-latest' || 'ubuntu-latest'", workflow)
+        self.assertIn('default: scalar-memory-utilities', workflow)
+        self.assertIn('default: ubuntu-latest', workflow)
+        self.assertIn('ref: ${{ github.sha }}', workflow)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"', workflow)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"', workflow)
+        self.assertLess(workflow.index('name: Validate bounded revision'), workflow.index('uses: ./.github/actions/setup'))
+        self.assertIn("cache-cabal-project: 'true'", workflow)
+        for command in ('start', 'compile-common', 'compile-test-support', 'group'):
+            self.assertIn('fast_ci.py ' + command + ' ', workflow)
+        self.assertNotIn('--matrix', workflow)
+        run = workflow.split('name: Compile existing shared tools', 1)[1].split('\n      - ', 1)[0]
+        self.assertNotIn('${{', run)
+        self.assertIn('timeout-minutes: 7', run)
+        script = textwrap.dedent(run.split('        run: |\n', 1)[1])
+        for exact_class in ('', 'example.Test', 'example.Test; touch injected'):
+            with self.subTest(exact_class=exact_class), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                launcher = root / 'python3'
+                launcher.write_text('#!' + sys.executable + '\nimport json,sys\n'
+                    'from pathlib import Path\n'
+                    'with Path("argv.jsonl").open("a") as out: out.write(json.dumps(sys.argv[1:]) + "\\n")\n')
+                launcher.chmod(0o755)
+                result = subprocess.run(['bash', '-e', '-c', script], cwd=root,
+                    env=dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
+                             CI_GROUP='selected', CI_EXACT_CLASS=exact_class), capture_output=True, text=True)
+                self.assertEqual(0, result.returncode, result.stderr)
+                commands = [json.loads(line) for line in (root / 'argv.jsonl').read_text().splitlines()]
+                self.assertEqual(['start', 'compile-common', 'compile-test-support', 'group'],
+                                 [command[1] for command in commands])
+                self.assertEqual(['.github/scripts/fast_ci.py', 'group']
+                    + (['--exact-class', exact_class] if exact_class else [])
+                    + ['--group', 'selected', '--cadence', 'hourly', '--reuse-daemon',
+                       '--report-dir', 'build/ci/group-results/bounded'], commands[-1])
+                self.assertFalse((root / 'injected').exists())
+
+        for name in ('Stop the qualification', 'Preserve bounded selection'):
+            self.assertIn('if: always()', workflow.split('name: ' + name, 1)[1].split('\n      - ', 1)[0])
+        for directory in ('setup-results', 'common-results', 'group-results'):
+            self.assertIn('build/ci/' + directory + '/', workflow)
+        health = (WORKFLOW.parent.parent / 'scripts/hourly_health.py').read_text()
+        self.assertIn('item["path"] == ".github/workflows/hourly.yml"', health)
+        self.assertNotIn('hourly-qualification.yml', health)
+
+    def test_qualification_validates_exact_nonempty_group_on_selected_platform(self):
+        import fast_select
+        script = embedded_python('BOUNDED', WORKFLOW.parent / 'hourly-qualification.yml')
+        for system, requested, group, exact_class, valid in (
+                ('Linux', 'ubuntu-latest', 'selected', '', True),
+                ('Darwin', 'macos-latest', 'selected', '', True),
+                ('Linux', 'macos-latest', 'selected', '', False),
+                ('Linux', 'self-hosted', 'selected', '', False),
+                ('Linux', '', 'selected', '', False),
+                ('Linux', 'ubuntu-latest', '', '', False),
+                ('Linux', 'ubuntu-latest', 'empty', '', False),
+                ('Linux', 'ubuntu-latest', 'nightly-only', '', False),
+                ('Linux', 'ubuntu-latest', 'selected; touch injected', '', False),
+                ('Linux', 'ubuntu-latest', 'selected', 'example.Test', True),
+                ('Darwin', 'macos-latest', 'selected', 'example.Test', True),
+                ('Linux', 'ubuntu-latest', 'selected', 'example.MissingTest', False)):
+            with self.subTest(system=system, requested=requested, group=group, exact_class=exact_class), \
+                 tempfile.TemporaryDirectory() as directory, \
+                 patch('platform.system', return_value=system), \
+                 patch.dict(os.environ, CI_PLATFORM=requested, CI_GROUP=group, CI_EXACT_CLASS=exact_class), \
+                 patch.object(fast_select, 'groups', return_value={'selected': ['example.Test'], 'empty': []}) as groups, \
+                 patch.object(fast_select, 'group_selection', return_value={'junit': {'classes': ['example.Test']}}) as select:
+                if exact_class == 'example.MissingTest':
+                    select.side_effect = fast_select.SelectionError('Class not admitted')
+                previous = Path.cwd()
+                try:
+                    os.chdir(directory)
+                    if valid:
+                        exec(script, {})
+                        groups.assert_called_once_with(Path.cwd(), system=system, cadence='hourly')
+                        select.assert_called_once_with(Path.cwd(), group, cadence='hourly', exact_class=exact_class or None)
+                        self.assertTrue(Path('build/ci/bounded-selection.json').is_file())
+                    else:
+                        with self.assertRaises(fast_select.SelectionError if exact_class else SystemExit):
+                            exec(script, {})
+                        if exact_class:
+                            select.assert_called_once_with(Path.cwd(), group, cadence='hourly', exact_class=exact_class)
+                        else:
+                            select.assert_not_called()
+                        self.assertFalse(Path('build').exists())
+                    self.assertFalse(Path('injected').exists())
+                finally:
+                    os.chdir(previous)
+
     def test_persistent_index_refreshes_only_for_missing_or_changed_snapshot(self):
         script = embedded_python("HACKAGE")
         with tempfile.TemporaryDirectory() as directory:
@@ -160,8 +257,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 for filename in ("build.yml", "hourly.yml", "checks.yml", "test-common.yml", "test-groups.yml"):
                     self.assertNotIn("name: " + name, (WORKFLOW.parent / filename).read_text())
         for producer in ("aggregate-heap", "fourway-aggregate", "generic-sum-transport",
-                         "narrow-integer-transport", "tuple-join", "sum-input",
-                         "sum-join-input", "tuple-capture"):
+                         "narrow-integer-transport"):
             self.assertNotIn("--offline -- " + producer, workflow)
         self.assertNotIn("  foreign-exceptions:", workflow)
         self.assertNotIn("inputs.cadence", workflow)
@@ -232,15 +328,26 @@ class FastWorkflowGuardsTest(unittest.TestCase):
 
     def test_tool_and_index_caches_survive_project_changes(self):
         setup = (WORKFLOW.parents[1] / "actions/setup/action.yml").read_text()
-        immutable = setup.split("    - name: Reuse independent native GHC oracles", 1)[0]
+        plan = setup.split('        THC_CACHE_LAYERS: |\n', 1)[1].split('      with:\n', 1)[0]
+        # Replace expression booleans so the declared cache plan is valid JSON.
+        plan = re.sub(r'("enabled": )\$\{\{.*?\}\}', r'\1true', plan)
+        layers = json.loads(textwrap.dedent(plan))
+        immutable = json.dumps({name: layers[name] for name in ('ghc', 'cabal', 'graalvm', 'llvm', 'index')})
         self.assertNotIn("hashFiles", immutable)
         self.assertNotIn("github.sha", immutable)
         self.assertIn("steps.identity.outputs.index", immutable)
-        self.assertIn("if: steps.index.outputs.cache-hit != 'true'", immutable)
+        self.assertIn("if: steps.setup.outputs.index-cache-hit != 'true'", setup)
         self.assertEqual(1, setup.count("run: cabal update"))
         self.assertIn('run: cabal update "hackage.haskell.org,$INDEX_STATE"', setup)
-        self.assertIn("cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-\n", setup)
-        self.assertIn("gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-\n", setup)
+        self.assertIn("cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-", layers['store']['restore-keys'].splitlines())
+        self.assertIn("gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-", layers['gradle']['restore-keys'].splitlines())
+        self.assertEqual(4, setup.count('lookup-only: true'))
+        self.assertIn('process.env.THC_NODE = process.execPath', setup)
+        self.assertIn("'_actions/actions/cache/v4'", setup)
+        self.assertIn('uses: actions/cache@v4', setup)
+        common = (WORKFLOW.parent / 'test-common.yml').read_text()
+        self.assertIn("cache-cabal-project: 'true'", common)
+        self.assertNotIn('uses: actions/cache@', common)
         for filename in ("test-common.yml", "test-groups.yml", "intensive.yml"):
             workflow = (WORKFLOW.parent / filename).read_text()
             self.assertIn("uses: ./.github/actions/setup", workflow)

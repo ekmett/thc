@@ -30,5 +30,9 @@ public final class CFinalizerFunction {
                 throw fault("C finalizer is not its component's canonical label");
         }
     }
-    public void invoke(ManagedAddress address) { owner.invokeFinalizer(this, address); }
+    public void requireArity(int arity) {
+        int expected = packageFunction == null ? 1 : packageFunction.getSignature().getArguments().size();
+        if (arity != expected) throw fault("C finalizer argument count differs from its declared ABI");
+    }
+    public void invoke(ManagedAddress... arguments) { owner.invokeFinalizer(this, arguments); }
 }

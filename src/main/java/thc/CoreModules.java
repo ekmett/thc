@@ -335,7 +335,7 @@ public final class CoreModules {
     private static String sha256(byte[] bytes) { return HexFormat.of().formatHex(digest().digest(bytes)); }
     public static CoreUnitDirectory unitDirectory(Map<String,Object> input) {
         require(Collections.disjoint(input.keySet(), Set.of("modules", "consumerModules", "detachedBindings", "targetLayout")),
-                "Core runtime inputs must be CBD artifacts, not inline Core");
+                "Core runtime inputs must be declared CBD artifacts or a package manifest");
         require(input.get("verifyArtifacts") == null || input.get("verifyArtifacts") instanceof Boolean, "verifyArtifacts must be a Boolean");
         if (!input.containsKey("packageManifest")) {
             require(input.get("packageManifestSha256") == null && input.get("packageCapability") == null,
@@ -348,9 +348,11 @@ public final class CoreModules {
         String expected = text(input.get("packageManifestSha256"), "Missing package manifest identity"), supplied = text(input.get("packageCapability"), "Missing package request capability");
         require(sameCapability(supplied, packageCapability(manifest, expected, verify)), "Invalid package request capability");
         try {
-            byte[] bytes = Files.readAllBytes(Path.of(manifest)); if (verify) require(sha256(bytes).equals(expected), "Core package manifest changed after request: " + manifest);
+            byte[] bytes = Files.readAllBytes(Path.of(manifest)); if (verify || !expected.isEmpty()) require(sha256(bytes).equals(expected), "Core package manifest changed after request: " + manifest);
             if (!(Json.parse(new String(bytes, StandardCharsets.UTF_8)) instanceof Map<?,?> document)) throw new IllegalStateException("Invalid Core package manifest");
             var directory = CoreUnitDirectory.read(document);
+            require(!expected.isEmpty() || directory.getModules().stream().noneMatch(module -> module.interfaceSource() != null),
+                    "Interface source requires a content-bound host request");
             require(Objects.equals(input.get("foreignExceptionBridgeUnit"), directory.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request"); return directory;
         } catch (Exception failure) { throw rethrow(failure); }
     }
@@ -448,7 +450,9 @@ public final class CoreModules {
                 // Retain original complete-module provenance of interface fragments,
                 // without selecting any unrelated binding body.
                 if (module.get("providedModules") instanceof List<?> provided) for (var original : directory.getModules())
-                    if (provided.contains(original.unit() + ":" + original.name())) selection.admit(original);
+                    if (provided.contains(original.unit() + ":" + original.name())) {
+                        selection.admit(original);
+                    }
             }
             for (var module : directory.getModules()) if (module.registrationObligations()) selection.admit(module);
             var dependencies = new Dependencies(pending::add, selection::constructor,
@@ -490,12 +494,12 @@ public final class CoreModules {
                 // executable requests deliberately omit source-note resources.
                 if (!key.equals("compactOrigin")) result.put((String) key, detachedValue(field));
             });
-            return result;
+            return Collections.unmodifiableMap(result);
         }
         if (value instanceof List<?> values) {
             var result = new ArrayList<Object>(values.size());
             for (Object field : values) result.add(detachedValue(field));
-            return result;
+            return Collections.unmodifiableList(result);
         }
         return value;
     }
@@ -541,7 +545,7 @@ public final class CoreModules {
         if (manifest != null) {
             byte[] bytes = Files.readAllBytes(Path.of(manifest));
             var directory = CoreUnitDirectory.read((Map<?,?>) Json.parse(new String(bytes, StandardCharsets.UTF_8)));
-            String hash = verify ? sha256(bytes) : "";
+            String hash = verify || directory.getModules().stream().anyMatch(module -> module.interfaceSource() != null) ? sha256(bytes) : "";
             document.put("packageManifest", manifest); document.put("packageManifestSha256", hash);
             document.put("packageCapability", packageCapability(manifest, hash, verify));
             document.put("foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit());

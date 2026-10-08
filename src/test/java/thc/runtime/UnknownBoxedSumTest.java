@@ -171,6 +171,78 @@ class UnknownBoxedSumTest {
                 map("id", "Box", "name", "Box", "kind", "boxed", "arity", 1, "tag", 1, "strictFields", list(false),
                     "fieldLifted", list((Object) null), "fieldReps", list(list("BoxedRep Nothing")), "fieldTypes", list(UNKNOWN))));
     }
+    @Test void localSumResultsKeepLazyIdentityAndClearInactiveReferences() throws Exception {
+        for (var backend : list("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var proof = sum(list(L, INT), list("WordRep", LIFTED, "WordRep"), list(list(1), list(2)));
+                var shape = new TupleShape(CoreRepresentations.parse(proof), language);
+                var layout = new FrameLayout(); int[] slots = new int[shape.getWidth()];
+                for (int i = 0; i < slots.length; i++) slots[i] = layout.bind("sum result " + i);
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build());
+                var poison = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame ignored) { throw new AssertionError("Sum join forced its lazy result"); }
+                }.getCallTarget(), null);
+                for (boolean recursive : new boolean[]{false, true}) {
+                    var left = call(list("con", "Left", 1), proof, list(variable("payload", L)), true);
+                    var right = call(list("con", "Right", 1), proof, list(variable(recursive ? "answer" : "choice", INT)), false);
+                    var selected = list("case", call(list("prim", "<=#"), INT, list(variable("choice", INT), number()), false, false), "side", list(
+                        list("lit", list("int", "1"), list(), left, map("binders", list())),
+                        list("default", null, list(), right, map("binders", list()))), map("rep", proof, "binder", binder("side", INT)));
+                    var finish = with(binder("finish", proof), "expr", selected, "joinValueArity", 0, "joinResultRep", proof);
+                    var remaining = variable("remaining", INT);
+                    var step = call(list("prim", "-#"), INT, list(remaining, list("lit", "int", "1", map("rep", INT))), false, false);
+                    var loop = list("case", call(list("prim", "<=#"), INT, list(remaining, number()), false, false), "done", list(
+                        list("lit", list("int", "1"), list(), variable("finish", proof), map("binders", list())),
+                        list("default", null, list(), call(variable("go", CLOSURE), proof, list(step,
+                            call(list("prim", "+#"), INT, list(variable("answer", INT), list("lit", "int", "2", map("rep", INT))), false, false)), false, false), map("binders", list()))),
+                        map("rep", proof, "binder", binder("done", INT)));
+                    var go = with(binding("go", lambda(proof, list(binder("remaining", INT), binder("answer", INT)),
+                        list("let", false, list(finish), loop, map("rep", proof)))), "joinValueArity", 2, "joinResultRep", proof);
+                    var result = recursive ? list("let", true, list(go), call(variable("go", CLOSURE), proof,
+                        list(list("lit", "int", "3", map("rep", INT)), variable("choice", INT)), false, false), map("rep", proof))
+                        : list("let", false, list(finish), variable("finish", proof), map("rep", proof));
+                    var input = map("instrument", true, "bindings", list(binding("entry", lambda(proof,
+                        list(with(binder("payload", L), "lifted", true), binder("choice", INT)), result))), "constructors", list(
+                        map("id", "Left", "kind", "unboxed-sum", "arity", 1, "sumArity", 2, "tag", 1),
+                        map("id", "Right", "kind", "unboxed-sum", "arity", 1, "sumArity", 2, "tag", 2)));
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input);
+                    var target = program.entryTarget("entry");
+                    // Reusing the destination exposes a stale reference when the scalar arm follows the lazy arm.
+                    for (int phase = 0; phase < 2; phase++) {
+                        if (phase == 1) target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                        for (long choice : new long[]{-1, 3_000_000_000L, -2}) {
+                            long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                            shape.consume(frame, Calls.target(target, new Object[]{0L, poison, choice}), slots, 0);
+                            assertEquals(choice <= 0 ? 1L : 2L, frame.getLong(slots[0]));
+                            if (choice <= 0) assertSame(poison, frame.getObject(slots[1]));
+                            else { assertNull(frame.getObject(slots[1])); assertEquals(choice + (recursive ? 6L : 0L), frame.getLong(slots[2])); }
+                            assertEquals(0, poison.getState());
+                            if (phase == 1) {
+                                assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, "First installed sum-result join");
+                                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                            }
+                            var state = language.getHandoffState().get();
+                            assertNull(state.getPending()); assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getResults().getDepth());
+                            assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().retainedReferences());
+                        }
+                    }
+                    // Native projection evidence and logical join/lambda results must agree before execution.
+                    finish.put("joinResultRep", with(proof, "alternativeSlots", list(list(2), list(1))));
+                    assertThrows(RuntimeFault.class, () -> { if (backend.equals("ast")) new Program(language, input); else new BytecodeProgram(language, input); });
+                    finish.put("joinResultRep", proof);
+                    if (recursive) {
+                        object(expression(go.get("expr")).get(3)).put("resultRep",
+                            sum(list(INT, L), list("WordRep", LIFTED, "WordRep"), list(list(2), list(1))));
+                        assertThrows(RuntimeFault.class, () -> { if (backend.equals("ast")) new Program(language, input); else new BytecodeProgram(language, input); });
+                    }
+                }
+            } finally { context.leave(); }
+        }
+    }
     @Test void poisonPointerSurvivesResultsArgumentsPapCaptureCaseAndConstructor() throws Exception {
         for (var backend : list("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")

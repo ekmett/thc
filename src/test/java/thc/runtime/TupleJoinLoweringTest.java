@@ -17,12 +17,35 @@ import org.junit.jupiter.api.Test;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
+/** Fixture-free local-join operand tests: typed frame inputs, ordered effects and
+ * parallel moves; results and failures are observed directly, no generated files. */
 class TupleJoinLoweringTest {
     private final CoreRepresentation longProof = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
     private final CoreRepresentation reference = new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
     private CoreRepresentation tuple(CoreRepresentation... components) {
         var reps = new ArrayList<String>(); for (var component : components) reps.addAll(Objects.requireNonNull(component.getPrimReps()));
         return new CoreRepresentation(CoreKind.UNKNOWN, true, true, reps, Arrays.asList(components), null, null, null, null);
+    }
+    @Test void tupleResultScratchIsClearedAfterCopyingUnlessTheDestinationAliasesIt() {
+        try (var context = Context.newBuilder("thc").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var proof = tuple(reference); var shape = new TupleShape(proof, language);
+                var layout = new FrameLayout(); int source = layout.bind("private tuple result"), destination = layout.bind("caller result");
+                int selector = layout.bind("selector"), unused = layout.bind("scalar result");
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build());
+                var marker = new Object(); int[] slots = {source};
+                var value = new Expr() { @Override public Object execute(VirtualFrame frame) { return marker; } };
+                var region = new LocalJoinRegion(new Object(), selector, unused,
+                    new Expr[]{new TupleConstruct(shape, new Expr[]{value})}, proof, false, shape, slots);
+                region.executeTuple(frame, new int[]{destination}, 0);
+                assertSame(marker, frame.getObject(destination));
+                assertFalse(frame.isObject(source), "Private reference result slot must be cleared");
+                region.executeTuple(frame, slots, 0);
+                assertSame(marker, frame.getObject(source), "An aliased destination must survive cleanup");
+            } finally { context.leave(); }
+        }
     }
     @Test void tupleOperandsMoveInParallelAndReleaseScratchReferencesWithoutForcing() throws ReflectiveOperationException {
         try (var context = Context.newBuilder("thc").build()) {
@@ -48,6 +71,39 @@ class TupleJoinLoweringTest {
                 var field = frame.getClass().getDeclaredField("indexedLocals"); field.setAccessible(true); var references = (Object[]) field.get(frame);
                 for (int slot = 4; slot <= 7; slot++) { assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(slot)); assertNull(references[slot], "Completed join retains no scratch root"); }
                 assertEquals(1L, metrics.getLocalJoinTransfers()); assertEquals(0, language.getHandoffState().get().getArguments().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+            } finally { context.leave(); }
+        }
+    }
+    @Test void emptyOperandRunsInLogicalOrderBeforeParallelMovesAndFailureTransfersNothing() {
+        try (var context = thc.Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var layout = new FrameLayout(); int a = layout.bind("a"), b = layout.bind("b"), first = layout.bind("first"), last = layout.bind("last");
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build());
+                var zero = tuple(); int[][] typed = {null, new int[0], null};
+                var target = new LocalJoinTarget(new Object(), 1, new int[]{a, -1, b}, new CoreRepresentation[]{longProof, zero, longProof}, new boolean[3], CoreRepresentation.UNKNOWN, typed); var events = new ArrayList<String>(); var metrics = new Metrics(true);
+                class Read extends Expr {
+                    private final String label; private final int slot;
+                    Read(String label, int slot) { this.label = label; this.slot = slot; }
+                    @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                    @Override public long executeLong(VirtualFrame frame) { events.add(label); return frame.getLong(slot); }
+                }
+                for (boolean fails : new boolean[]{false, true}) {
+                    events.clear(); FrameAccess.writeLong(frame, a, 11); FrameAccess.writeLong(frame, b, 29);
+                    var zeroExpr = new Expr() {
+                        @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("Empty tuple must not use a scalar carrier"); }
+                        @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+                            assertEquals(0, slots.length); assertEquals(0, offset); events.add("empty"); assertEquals(11L, frame.getLong(a)); assertEquals(29L, frame.getLong(b));
+                            if (fails) throw new RuntimeFault("empty operand failure"); return null;
+                        }
+                    };
+                    var call = new LocalJoinCall(language, target, new Expr[]{new Read("first", b), zeroExpr, new Read("last", a)}, new int[]{first, -1, last}, metrics, typed);
+                    if (fails) {
+                        assertThrows(RuntimeFault.class, () -> call.execute(frame)); assertEquals(List.of("first", "empty"), events); assertEquals(11L, frame.getLong(a)); assertEquals(29L, frame.getLong(b));
+                    } else {
+                        assertSame(target.getJump(), assertThrows(LocalJoinJump.class, () -> call.execute(frame))); assertEquals(List.of("first", "empty", "last"), events); assertEquals(29L, frame.getLong(a)); assertEquals(11L, frame.getLong(b));
+                    }
+                }
             } finally { context.leave(); }
         }
     }

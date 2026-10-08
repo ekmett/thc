@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
 import static thc.runtime.ScalarValueTestSupport.*;
 
+/** Fixture-free typed Core tests for logical empty inputs and lazy tuple results.
+ * Inputs are constructed modules; outputs are values, effects and released loans. */
 class EmptyArgumentRuntimeTest {
     private final Map<String, Object> integer = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
     private final Map<String, Object> closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
@@ -129,20 +131,76 @@ class EmptyArgumentRuntimeTest {
             }
         });
     }
-    private Map<String, Object> tailWorker(String id, String next) {
-        return bind(id, lam(list(arg("u", empty), arg("n")), list("case", prim("<=#", v("n"), n(0)), "condition", list(
-            list("lit", list("int", "1"), list(), v("n")),
-            list("default", null, list(), call(next, list(v("u", empty), prim("-#", v("n"), n(1)))))), map("rep", integer, "binder", arg("condition")))));
+    private Map<String, Object> tailWorker(String id, String next, boolean middle, boolean nextMiddle, long increment) {
+        var parameters = middle ? list(arg("n"), arg("u", empty), arg("acc")) : list(arg("u", empty), arg("n"), arg("acc"));
+        var remaining = prim("-#", v("n"), n(1)); var accumulator = prim("+#", v("acc"), n(increment));
+        var arguments = nextMiddle ? list(remaining, v("u", empty), accumulator) : list(v("u", empty), remaining, accumulator);
+        return bind(id, lam(parameters, list("case", prim("<=#", v("n"), n(0)), "condition", list(
+            list("lit", list("int", "1"), list(), v("acc")),
+            list("default", null, list(), call(next, arguments))), map("rep", integer, "binder", arg("condition")))));
     }
     @Test void selfAndMutualTailCallsForwardUsedEmptyFormalsWithoutHostStackGrowth() throws Exception {
         withLanguage(language -> {
-            var data = module(tailWorker("self", "self"), tailWorker("a", "b"), tailWorker("b", "a"),
-                bind("entry", lam(list(arg("n")), prim("+#", call("self", list(zero(), v("n"))), call("a", list(zero(), v("n")))))));
+            // A and B move the empty logical argument while carrying two independent scalar payloads.
+            var data = module(tailWorker("self", "self", false, false, 3), tailWorker("a", "b", false, true, 2), tailWorker("b", "a", true, false, 5),
+                bind("entry", lam(list(arg("n"), arg("x")), prim("+#",
+                    call("self", list(zero(), v("n"), v("x"))), call("a", list(zero(), v("n"), v("x")))))));
             for (var backend : list("ast", "bytecode")) {
                 var p = program(language, backend, data);
-                for (long n : new long[]{0L, 1L, 32L, 20_000L}) assertEquals(0L, run(p, "entry", n), backend);
-                compile(p.entryTarget("entry")); assertEquals(0L, run(p, "entry", 20_000L)); valid(p.entryTarget("entry")); released(language);
+                for (long count : new long[]{0L, 1L, 32L, 20_000L}) {
+                    assertEquals(6_000_000_000L + 3 * count + 7 * (count / 2) + 2 * (count % 2), run(p, "entry", count, 3_000_000_000L), backend);
+                    released(language);
+                }
+                compile(p.entryTarget("entry")); long before = (Long) p.diagnostics().get("compiledEntries");
+                assertEquals(-6_000_000_000L + 3 * 20_001L + 7 * 10_000L + 2, run(p, "entry", 20_001L, -3_000_000_000L));
+                assertTrue((Long) p.diagnostics().get("compiledEntries") > before, "First installed call carries the independent accumulator");
+                valid(p.entryTarget("entry")); released(language);
                 assertTrue((Long) p.diagnostics().get("selfTailReentries") > 0);
+            }
+        });
+    }
+    @Test void ignoredScalarStateTupleFieldExecutesBeforeLaterWorkAndRejectsInvalidCarrier() throws Exception {
+        withLanguage(language -> {
+            var state = map("kind", "void", "primReps", list(), "evaluated", true);
+            var pair = with(empty, "components", list(state, integer), "primReps", list("IntRep"));
+            var parameters = list(arg("effect", closure), arg("later", closure), arg("x"));
+            // An ignored scalar State# field still executes its ordinary producer before later fields.
+            // This synthetic module does not qualify GHC export of arbitrary State# producers.
+            var produceState = bind("produceState", lam(list(arg("effect", closure), arg("x")), call("effect", list(v("x")), state), state));
+            var laterField = call("later", list(v("x")));
+            var producePair = bind("producePair", lam(parameters, app(list("con", "T", 2), list(
+                call("produceState", list(v("effect", closure), v("x")), state, list(true, false)), laterField), pair), pair));
+            var body = list("case", call("producePair", list(v("effect", closure), v("later", closure), v("x")), pair, list(true, true, false)),
+                "answer", list(list("data", "T", list("ignored", "value"), v("value"), map("binders", list(arg("ignored", state), arg("value"))))),
+                map("rep", integer, "binder", arg("answer", pair)));
+            var entry = bind("entry", lam(parameters, body));
+            for (var backend : list("ast", "bytecode")) {
+                var p = program(language, backend, module(produceState, producePair, entry)); var events = new ArrayList<Long>();
+                var effect = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false}, false); }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        long x = (Long) frame.getArguments()[1]; events.add(x);
+                        if (x < 0) throw new GuestException(x, this);
+                        return Unit.INSTANCE;
+                    }
+                }.getCallTarget());
+                var later = new Closure(null, 1, new EffectRoot(language, events, null).getCallTarget());
+                assertEquals(7L, run(p, "entry", effect, later, 7L)); assertEquals(list(7L, 107L), events); released(language);
+                compile(p.entryTarget("entry")); events.clear(); long before = (Long) p.diagnostics().get("compiledEntries");
+                assertEquals(3_000_000_000L, run(p, "entry", effect, later, 3_000_000_000L));
+                assertEquals(list(3_000_000_000L, 3_000_000_100L), events);
+                assertTrue((Long) p.diagnostics().get("compiledEntries") > before); valid(p.entryTarget("entry")); released(language);
+                events.clear(); var failure = assertThrows(GuestException.class, () -> run(p, "entry", effect, later, -7L));
+                assertEquals(-7L, failure.getPayload()); assertEquals(list(-7L), events); released(language);
+                events.clear(); assertEquals(19L, run(p, "entry", effect, later, 19L)); assertEquals(list(19L, 119L), events); released(language);
+                // A legacy operand without representation metadata still has to return the scalar Unit carrier.
+                // Malformed-carrier validation may follow operand materialization.
+                var invalid = bind("producePair", lam(parameters, app(list("con", "T", 2), list(list("lit", "int", "123"), laterField), pair), pair));
+                var bad = program(language, backend, module(invalid, entry)); events.clear();
+                var wrongCarrier = assertThrows(RuntimeFault.class, () -> run(bad, "entry", effect, later, 23L));
+                assertTrue(Objects.toString(wrongCarrier.getMessage(), "").contains("zero-width scalar carrier"), wrongCarrier.getMessage());
+                released(language);
             }
         });
     }
@@ -231,6 +289,14 @@ class EmptyArgumentRuntimeTest {
                     assertThrows(RuntimeFault.class, () -> program(language, backend, module(stateWorker, bind("entry", lam(list(), app(fn, args))))));
                 }
                 assertThrows(RuntimeFault.class, () -> program(language, backend, module(bind("entry", lam(list(), prim("+#", zero(), n(1)))))));
+                // A join keeps the empty logical slot even though it has no payload.
+                var join = with(bind("finish", lam(list(arg("u", empty), arg("n")), v("n"))),
+                    "joinValueArity", 2, "joinResultRep", integer);
+                for (var invalid : list(call("finish", list(n(3))),
+                        call("finish", list(list("void", map("rep", state)), n(3))))) {
+                    var region = list("let", false, list(join), invalid, map("rep", integer));
+                    assertThrows(RuntimeFault.class, () -> program(language, backend, module(bind("entry", lam(list(), region)))).entryValue("entry"));
+                }
                 var boxed = v("payload", reference);
                 var newResult = with(empty, "components", list(state, map("kind", "object", "evaluated", true, "primReps", list("BoxedRep (Just Unlifted)"))), "primReps", list("BoxedRep (Just Unlifted)"));
                 var invalidNew = app(list("prim", "newMutVar#"), list(boxed, zero()), newResult, list(true, false));
@@ -238,25 +304,83 @@ class EmptyArgumentRuntimeTest {
             }
         });
     }
-    @Test void emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow() throws Exception {
+    @Test void tupleResultJoinsCaptureEvaluatedAliasesAndRespectRecursiveShadowing() throws Exception {
         withLanguage(language -> {
             var pair = with(empty, "components", list(integer, reference), "primReps", list("IntRep", "BoxedRep (Just Lifted)"));
-            var producer = bind("producer", lam(list(arg("u", empty), arg("x"), arg("ref", reference)),
-                app(list("con", "T", 2), list(v("x"), v("ref", reference)), pair, list(false, true)), pair));
-            var result = call("producer", list(call("effect", list(v("x")), empty), v("x"), v("ref", reference)), pair, list(false, false, true));
-            List<Object> body = list("case", result, "tuple", list(list("data", "T", list("a", "b"), v("a"),
-                map("binders", list(arg("a"), arg("b", reference))))), map("rep", integer, "binder", arg("tuple", pair)));
-            var data = module(producer, bind("entry", lam(list(arg("effect", closure), arg("x"), arg("ref", reference)), body)));
-            for (var backend : list("ast", "bytecode")) {
-                var p = program(language, backend, data); var events = new ArrayList<Long>();
-                var effect = new Closure(null, 1, new EffectRoot(language, events, new TupleShape(CoreRepresentations.parse(empty), language)).getCallTarget());
-                var bottom = new Thunk(new EffectRoot(language, events, null).getCallTarget(), null);
-                assertEquals(17L, run(p, "entry", effect, 17L, bottom)); released(language);
-                assertTrue(language.getHandoffState().get().getResults().getAllocations() > 0);
-                assertEquals(0, bottom.getState(), "Copying a lifted tuple leaf must not force it");
-                assertThrows(GuestException.class, () -> run(p, "entry", effect, -7L, bottom)); released(language);
-                assertEquals(19L, run(p, "entry", effect, 19L, bottom)); released(language); assertEquals(0, bottom.getState());
+            var packed = app(list("con", "T", 2), list(prim("+#", v("x"), n(11)), v("ref", reference)), pair, list(false, true));
+            var poison = new Thunk(new com.oracle.truffle.api.nodes.RootNode(language) {
+                @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Tuple join forced its lazy leaf"); }
+            }.getCallTarget(), null);
+            for (var backend : list("ast", "bytecode")) for (boolean capture : new boolean[]{true, false}) {
+                var returned = app(list("con", "T", 2), list(v("value"), v("ref", reference)), pair, list(false, true));
+                var recursive = list("case", prim("<=#", v("remaining"), n(0)), "done", list(
+                    list("lit", list("int", "1"), list(), returned, map("binders", list())),
+                    list("default", null, list(), call("held", list(prim("-#", v("remaining"), n(1)),
+                        prim("+#", v("value"), n(3))), pair), map("binders", list()))), map("rep", pair, "binder", arg("done")));
+                var join = capture
+                    ? with(arg("finish", pair), "expr", v("held", pair), "joinValueArity", 0, "joinResultRep", pair)
+                    : with(bind("held", lam(list(arg("remaining"), arg("value")), recursive, pair)),
+                        "joinValueArity", 2, "joinResultRep", pair);
+                var region = list("let", !capture, list(join), capture ? v("finish", pair) : call("held", list(n(3), v("x")), pair), map("rep", pair));
+                // The zero-arity join reads the evaluated outer alias. The recursive
+                // join has the same source name as that alias and must resolve locally.
+                var result = list("case", packed, "held", list(list("default", null, list(), region, map("binders", list()))),
+                    map("rep", pair, "binder", arg("held", pair)));
+                var body = list("case", result, "answer", list(list("data", "T", list("number", "pointer"), v("number"),
+                    map("binders", list(arg("number"), arg("pointer", reference))))), map("rep", integer, "binder", arg("answer", pair)));
+                var data = module(bind("entry", lam(list(arg("x"), arg("ref", reference)), body)));
+                var p = program(language, backend, data);
+                assertEquals(capture ? 18L : 16L, run(p, "entry", 7L, poison)); released(language);
+                compile(p.entryTarget("entry")); long before = (Long) p.diagnostics().get("compiledEntries");
+                assertEquals(capture ? 3_000_000_011L : 3_000_000_009L, run(p, "entry", 3_000_000_000L, poison));
+                assertTrue((Long) p.diagnostics().get("compiledEntries") > before, backend + " first installed tuple-result join");
+                valid(p.entryTarget("entry")); released(language); assertEquals(0, poison.getState());
+                // Equal register width cannot replace one scalar component with a nested tuple.
+                join.put("joinResultRep", with(pair, "components", list(with(empty, "components", list(integer), "primReps", list("IntRep")), reference)));
+                assertThrows(RuntimeFault.class, () -> program(language, backend, data)); released(language);
             }
         });
     }
+    @Test void emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow() throws Exception {
+        withLanguage(language -> {
+            var pair = with(empty, "components", list(integer, reference), "primReps", list("IntRep", "BoxedRep (Just Lifted)"));
+            var packed = app(list("con", "T", 2), list(v("x"), v("ref", reference)), pair, list(false, true));
+            for (boolean local : new boolean[]{false, true}) {
+                // The local variant captures an empty value from the same activation.
+                var returned = local ? list("case", v("held", empty), "forced", list(list("default", null, list(), packed)),
+                    map("rep", pair, "binder", arg("forced", empty))) : packed;
+                var producer = bind("producer", lam(list(arg("u", empty), arg("x"), arg("ref", reference)), returned, pair));
+                var result = call("producer", list(call("effect", list(v("x")), empty), call("later", list(v("x"))), v("ref", reference)), pair, list(false, false, true));
+                if (local) {
+                    producer = with(producer, "joinValueArity", 3, "joinResultRep", pair);
+                    result = list("case", zero(), "held", list(list("default", null, list(),
+                        list("let", false, list(producer), result, map("rep", pair)))), map("rep", pair, "binder", arg("held", empty)));
+                }
+                var body = list("case", result, "tuple", list(list("data", "T", list("a", "b"), v("a"),
+                    map("binders", list(arg("a"), arg("b", reference))))), map("rep", integer, "binder", arg("tuple", pair)));
+                var entry = bind("entry", lam(list(arg("effect", closure), arg("later", closure), arg("x"), arg("ref", reference)), body));
+                var data = local ? module(entry) : module(producer, entry);
+                for (var backend : list("ast", "bytecode")) {
+                    var p = program(language, backend, data); var events = new ArrayList<Long>();
+                    var effect = new Closure(null, 1, new EffectRoot(language, events, new TupleShape(CoreRepresentations.parse(empty), language)).getCallTarget());
+                    var later = new Closure(null, 1, new EffectRoot(language, events, null).getCallTarget());
+                    var bottom = new Thunk(new EffectRoot(language, events, null).getCallTarget(), null);
+                    assertEquals(17L, run(p, "entry", effect, later, 17L, bottom)); assertEquals(list(17L, 117L), events); released(language);
+                    if (!local) assertTrue(language.getHandoffState().get().getResults().getAllocations() > 0);
+                    assertEquals(0, bottom.getState(), "Copying a lifted tuple leaf must not force it");
+                    compile(p.entryTarget("entry")); events.clear(); long before = (Long) p.diagnostics().get("compiledEntries");
+                    assertEquals(3_000_000_000L, run(p, "entry", effect, later, 3_000_000_000L, bottom));
+                    assertEquals(list(3_000_000_000L, 3_000_000_100L), events);
+                    assertTrue((Long) p.diagnostics().get("compiledEntries") > before); valid(p.entryTarget("entry")); released(language);
+                    long transfers = (Long) p.diagnostics().get("localJoinTransfers");
+                    if (local) assertTrue(transfers > 0, backend + " must execute the local join");
+                    events.clear(); assertThrows(GuestException.class, () -> run(p, "entry", effect, later, -7L, bottom));
+                    assertEquals(list(-7L), events); assertEquals(transfers, p.diagnostics().get("localJoinTransfers")); released(language);
+                    events.clear(); assertEquals(19L, run(p, "entry", effect, later, 19L, bottom));
+                    assertEquals(list(19L, 119L), events); released(language); assertEquals(0, bottom.getState());
+                }
+            }
+        });
+    }
+
 }

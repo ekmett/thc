@@ -40,6 +40,45 @@ add_custom_command(OUTPUT ${record_outputs} BYPRODUCTS ${record_objects}
   COMMENT "Generate record-field Core, native results and hydrated interfaces")
 add_custom_target(fixture-record-fields DEPENDS ${record_outputs})
 
+# Retained-interface demand uses the same small record sources with the ordinary
+# typed provenance annotations; the thin variant has no plugin.
+# The test consumes the registered full/thin interfaces, production source
+# manifest and native results. No installed library Core is acquired here.
+set(demand_out "${PROJECT_SOURCE_DIR}/build/record-fields-demand")
+set(demand_outputs "${demand_out}/manifest.json" "${demand_out}/packages.json"
+  "${demand_out}/native.tsv" "${demand_out}/tools.json" "${demand_out}/full/oracle")
+foreach(mode full thin)
+  foreach(module RecordFieldLibrary RecordFieldClient RecordFieldCold Main)
+    foreach(suffix hi o)
+      list(APPEND demand_outputs "${demand_out}/${mode}/${module}.${suffix}")
+    endforeach()
+  endforeach()
+  list(APPEND demand_outputs "${demand_out}/${mode}/thc-record-demand-0.1.conf"
+    "${demand_out}/${mode}/package.conf.d/package.cache"
+    "${demand_out}/${mode}/package.conf.d/thc-record-demand-0.1.conf")
+endforeach()
+# Database-init diagnostics exist only when creating the private database.
+# They are not consumed and are not freshness outputs of this file rule.
+foreach(label base-id full-compile full-register thin-compile thin-register native)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND demand_outputs "${demand_out}/logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+set(demand_cbd)
+foreach(module RecordFieldLibrary RecordFieldClient RecordFieldCold Main)
+  list(APPEND demand_cbd "${demand_out}/full/${module}.cbd")
+endforeach()
+add_custom_command(OUTPUT ${demand_outputs} BYPRODUCTS ${demand_cbd}
+  COMMAND ${fixture_env} "THC_INTERFACE=${interface_exe}" "${fixtures_exe}" record-fields-demand
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RecordFieldLibrary.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RecordFieldClient.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RecordFieldCold.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RecordFieldNative.hs"
+    ${tool_sources} ${cabal_inputs} ${plugin_outputs} ${toolchain_inputs} "${fixtures_exe}" "${interface_exe}"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate registered retained/thin record interfaces and native results")
+add_custom_target(fixture-record-fields-demand DEPENDS ${demand_outputs})
+
 # 072: adapt the selected GHC's private lock declarations, then compare THC's
 # context-owned table with real RTS calls compiled in the producer's GHC session.
 # The installed interfaces/libraries are toolchain inputs; there is no package

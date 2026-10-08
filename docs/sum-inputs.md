@@ -8,6 +8,10 @@ references, void and tuples of these. One sum is one logical argument,
 independently of its physical width. Exact
 alternatives and projections distinguish sums sharing the same physical fields.
 
+Genuine GHC pre/post export of ordinary and local-join sum inputs, PAPs, tail
+calls, overapplication and escaped captures remains unqualified. Fixture-free
+owners cover the runtime transport and lifetime contracts.
+
 The existing typed input packet carries the tag and concrete payload fields.
 Entry copies them into callee locals and releases the incoming loan before guest
 code continues. Durable PAP prefixes own separate fields; they never retain a

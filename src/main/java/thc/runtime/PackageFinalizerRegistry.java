@@ -77,23 +77,28 @@ public final class PackageFinalizerRegistry {
     }
 
     @TruffleBoundary
-    public static void invoke(PackageScalarFunction function, ManagedAddress address) throws InteropException {
+    public static void invoke(PackageScalarFunction function, ManagedAddress... arguments) throws InteropException {
         requireCurrent(function);
+        var addresses = java.util.List.of(arguments);
         var threads = function.getOwner().getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try {
-            PackagePointerCells.invoke(function, java.util.List.of(address), projection -> {
-                Object pointer = projection.contains(address) ? new PackageNativePointer(projection.address(address), null)
-                    : function.getOwner().getPackageCbits().transport(address);
+            PackagePointerCells.invoke(function, addresses, projection -> {
+                Object[] pointers = new Object[addresses.size()];
+                for (int i = 0; i < addresses.size(); i++) {
+                    var address = addresses.get(i);
+                    pointers[i] = projection.contains(address) ? new PackageNativePointer(projection.address(address), null)
+                        : function.getOwner().getPackageCbits().transport(address);
+                }
                 return () -> {
-                    try { return InteropLibrary.getUncached().execute(function.getReceiver(), pointer); }
+                    try { return InteropLibrary.getUncached().execute(function.getReceiver(), pointers); }
                     catch (InteropException failure) { throw rethrow(failure); }
-                    finally { Reference.reachabilityFence(pointer); }
+                    finally { Reference.reachabilityFence(pointers); }
                 };
             }, (projection, result) -> result);
         } finally {
             threads.leaveForeign(previous);
-            Reference.reachabilityFence(address);
+            Reference.reachabilityFence(addresses);
             Reference.reachabilityFence(function);
         }
     }

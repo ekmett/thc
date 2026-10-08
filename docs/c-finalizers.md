@@ -1,4 +1,4 @@
-# Function labels and explicit C finalizers
+# Function labels and C finalizers
 
 GHC 9.14.1 `LitLabel` contains an exact symbol and `FunctionOrData` tag.
 The exporter preserves these as `function-addr` and `data-addr` literals with
@@ -22,22 +22,42 @@ weak lock. Only after those effects does it return the original Haskell action
 and its validity flag. A weak with only C finalizers returns flag 0 after running
 them. The Haskell action is never executed by the primitive itself.
 
-Package-owned one-address finalizers use a separate typed admission path. The
+A single canonical current-context `free` on an actionless registration with
+identical key/value carriers, or a raw managed `MutVar#` or `MVar#` key, has a
+[automatic malloc retirement path](weak-explicit.md). Only a direct owned
+malloc base or null qualifies. The JDK Cleaner action holds only a weak Owner
+reference and an armed flag; it retains no address, function provider, context or
+guest payload. JVM collection can trigger the paired raw native free without a
+managed GC request. Busy borrows or existing free/realloc reservations latch
+pending work, retried at completion without blocking or another collection.
+Explicitly retired owners consume stale tokens without replay; explicit
+free/finalization preserve freed-alias errors. A second callback disarms cleanup
+and promotes the exact key/value to strong ownership with newest-first order.
+Context close disarms registrations and disposes remaining allocations. There
+is no abandoned-context reclamation guarantee. Arena-close/downcall failures
+are retained and terminal as described in the weak guide; Windows LocalFree and
+arbitrary Haskell/package callbacks remain outside automatic retirement.
+
+Package-owned C finalizers use a separate typed admission path. The
 exporter retains the actual stock `CLabel` declaration, its declared and
 normalized nominal types, and the unchanged foreign product. A normalized
-`FunPtr (Ptr a -> IO ())` proves a candidate ABI; it does not by itself make the
-label executable. Acquisition must retain the original C definition with an
-exact `void(pointer)` ABI and root its namespaced adapter in a completely linked
-component.
+`FunPtr (Ptr a -> IO ())` or `FunPtr (Ptr env -> Ptr a -> IO ())` proves the
+candidate argument list; it does not by itself make the label executable.
+Acquisition must retain the original C definition with the matching exact
+`void(pointer)` or `void(pointer, pointer)` ABI and root its namespaced adapter
+in a completely linked component. The environment flag must select that declared
+arity. Zero ignores the environment; every nonzero value passes it first.
 
 Runtime labels retain that component and owning context. Cross-context, closed
 component, ambiguous-label, malformed signature and disposed-allocation uses
-reject. Native allocation borrows cover callback execution, including known
+reject. Both arguments use the existing typed address transport, including opaque
+stable-pointer tokens. Native allocation borrows cover both arguments and their
+transitive pointer-cell graphs throughout callback execution, including known
 returned aliases. Registration and explicit finalization keep the existing
 DEAD-before-call, newest-first and no-replay rules. The reserved `free` label
 still uses checked allocation ownership; package labels do not acquire that
-special deallocation authority. Automatic GC finalization and arbitrary function
-pointer calls remain unsupported.
+special deallocation authority. Automatic Haskell/package finalization and
+arbitrary function pointer calls remain unsupported.
 
 The native zlib dependency profile currently supports Linux x86-64 LP64. It
 validates the original LLVM declarations before linking libz, preserving its
@@ -53,7 +73,7 @@ than an expired argument-view lease. Explicit typed address reads recover newly
 written pointer fields; the runtime does not scan scalar fields for pointers.
 Moving buffers and opaque guest objects cannot be embedded as native pointers,
 and raw byte exposure of a pointer-bearing allocation remains rejected. This
-does not add native-to-guest callback support or automatic GC finalization.
+does not add native-to-guest callback support or automatic package finalization.
 
 Primary implementations at the pinned GHC revision:
 

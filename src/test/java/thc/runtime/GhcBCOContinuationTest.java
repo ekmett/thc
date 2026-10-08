@@ -50,9 +50,13 @@ class GhcBCOContinuationTest {
             "bindings", list(map("id", "wait", "name", "wait", "lifted", true,
                 "expr", list("lam", list(arg("prefix", CELL), arg("cell", CELL)), body, map("resultRep", REF)))));
     }
-    private static Context context() {
-        return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.WarnInterpreterOnly", "false")
-            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").build();
+    private static Context context() { return context(0, null); }
+    private static Context context(int sparkCapacity, String hosting) {
+        var builder = Context.newBuilder("thc").allowCreateThread(sparkCapacity != 0).allowExperimentalOptions(true)
+            .option("thc.SparkQueueCapacity", Integer.toString(sparkCapacity)).option("engine.WarnInterpreterOnly", "false")
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false");
+        if (hosting != null) builder.option("thc.ThreadHosting", hosting);
+        return builder.build();
     }
     private static byte[] words(long... words) {
         byte[] result = new byte[words.length * 8];
@@ -99,6 +103,65 @@ class GhcBCOContinuationTest {
             owner.getThreads().send(Objects.requireNonNull(identity.get()), "cut");
             return result.get(10, TimeUnit.SECONDS);
         } finally { if (!result.isDone()) context.close(true); worker.join(5000); assertFalse(worker.isAlive()); }
+    }
+    private static Thunk updatingApplication(Language language, String backend, ManagedMVar prefix, ManagedMVar cell) {
+        ExecutableProgram program = backend.equals("ast") ? new Program(language, waitingModule(), false)
+            : new BytecodeProgram(language, waitingModule(), false);
+        var waiting = ((Closure) program.entryValue("wait")).pap(new Object[]{prefix});
+        // Native GHC ALLOC_AP/PUSH_G/MKAP/RETURN_P capture both the PAP and its argument.
+        var body = bco(language, 2, 0, new Object[0], 2,1,31,2,2,38,3,2,58);
+        var allocator = bco(language, 0, 0, new Object[]{waiting, cell, body},
+            39,2,11,1,11,0,11,2,42,3,2,60);
+        return (Thunk) allocator.target.call(0L);
+    }
+    private static void awaitSpeculativeWait(ManagedMVar cell) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (cell.pendingCounts().getTakers() != 1 && System.nanoTime() < deadline) Thread.sleep(1);
+        assertEquals(1, cell.pendingCounts().getTakers(), "Updating BCO starts its real work before demand");
+    }
+    private static <T> T admitted(GuestThreads threads, java.util.concurrent.Callable<T> action) throws Exception {
+        if (threads.needsHosting()) return threads.hostEntry(null, () -> admitted(threads, action));
+        threads.enterCurrent(null, false, true, null);
+        try { return action.call(); }
+        finally { threads.leaveCurrent(); }
+    }
+    @ParameterizedTest @CsvSource({"ast,platform", "bytecode,platform", "ast,loom", "bytecode,loom"})
+    void sparkedUpdatingApplicationsShareWorkAndResumeCancelledWorkersWithoutReplay(String backend, String hosting) throws Exception {
+        for (boolean cancel : new boolean[]{false, true}) try (var context = context(1, hosting)) {
+            context.initialize("thc"); context.enter();
+            var cell = new ManagedMVar(); var answer = new Object();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var owner = Language.currentState(); var threads = owner.getThreads();
+                var prefix = new ManagedMVar(); var once = new Object(); assertTrue(prefix.tryPut(once));
+                var thunk = updatingApplication(language, backend, prefix, cell);
+                var force = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) { return force.execute(frame, frame.getArguments()[0]); }
+                }.getCallTarget();
+                owner.getSparks().hint(new Node() {}, thunk);
+                awaitSpeculativeWait(cell); assertTrue(prefix.isEmpty(), "The prefix effect completed speculatively");
+                if (cancel) {
+                    var worker = thunk.getOwner(); assertNotNull(worker);
+                    assertEquals(threads.isLoom(), worker.isVirtual());
+                    assertEquals(hosting.equals("loom"), worker.isVirtual(), "BCO spark worker uses the requested hosting");
+                    var request = admitted(threads, () -> {
+                        for (var candidate : threads.snapshot())
+                            if (candidate instanceof GuestThreadId id && id.getCarrier().get() == worker)
+                                return threads.send(id, "stop speculative BCO worker");
+                        throw new AssertionError("BCO spark worker has no registered guest identity");
+                    });
+                    worker.join(5000); assertFalse(worker.isAlive(), "Cooperative BCO worker cancellation completes");
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                }
+                // A replay would consume this marker; resumption must retain it while consuming only cell.
+                var replayTrap = new Object(); assertTrue(prefix.tryPut(replayTrap)); assertTrue(cell.tryPut(answer));
+                assertSame(answer, admitted(threads, () -> force.call(thunk)));
+                assertSame(answer, admitted(threads, () -> force.call(thunk)), "Demand shares the original BCO update");
+                assertTrue(cell.isEmpty()); assertSame(replayTrap, prefix.tryTake().getValue(), "The prefix effect must not replay");
+                ThreadInventoryCoreEvidence.released(language);
+            } finally { cell.tryPut(answer); context.leave(); }
+        }
     }
     @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
     void capturedApplicationsKeepRepeatedCutsUpdatesAndPendingApply(String backend, boolean updating) throws Exception {

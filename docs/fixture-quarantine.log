@@ -41,11 +41,9 @@ Unrelated directory members change consumed inputs or make generation fail:
   data-to-tag (039), proxy-void (042): consume all CBDs found in the output tree.
   fetch-add-int-array (045), atomic-int-arrays (046), shrink-bytearrays (047),
     mutvar (081): exact output-directory inventories reject unrelated CBDs.
-  floating-tuples (086), sum-results (088), tuple-input (114),
-    empty-tuple-input (126), show-word-list (127), state-tuple (128),
-    short-bytes-slices (129), tuple-return (130), unsafe-equality (134),
+    show-word-list (127), short-bytes-slices (129), unsafe-equality (134),
     tag-to-enum (135): recursively discovered products enter receipts consumed
-    by tests. sum-results includes aggregate-layout, sum-layout and sum-result.
+    by tests.
   stable-pointers (084): both original and shared-CAF exports require exact
     output-directory inventories. Unrelated CBDs must not prevent regeneration;
     replace both listings with their declared pairs before readmission.
@@ -55,7 +53,6 @@ Unrelated directory members change consumed inputs or make generation fail:
   array-slices (123): consumes every stage CBD and also rewrites shared coverage.
 
 Published directories are cleared as part of the recipe:
-  sqrt (026): removes build/sqrt.
   address-identity (101): removes build/addr-identity.
   synchronous-exceptions (103): selection/default script removes its output tree;
     producer also enumerates stage CBDs.
@@ -93,25 +90,6 @@ Not quarantined merely for this reason:
     not fixture admission decisions. Their incrementality defects are recorded in
     fixture-inputs.log's shared appendix and still need repair at their owner.
 
-Compiler-structure assertions (also excluded):
-  aligned-scalar-memory (052): exact Core/root/primitive-use expectations.
-  original-open (069): exact internal root counts.
-  tuple-join (124), sum-join (137): exact join/state-lambda/case shapes; generated
-    receipt/audit files are not consumed by their behavioral tests.
-  original-time-clock (140, custom full-Core): expects exactly one/two executed
-    roots and retains a dedicated time/base CAPI fixture harness. Its consumer
-    is listed in quarantinedJunit and excluded by every Gradle Test task.
-
-  rts-event (141, custom full-Core): three recursive producer subprocesses rewrite
-    the parent's GHC/log paths; exact compiled-entry counts and a broad native
-    eventfd/pipe/poll harness. RtsEventNativeTest is excluded. Its independent
-    safe-completion masking test should move to fixture-free runtime coverage.
-
-  gc-stats (142, custom full-Core): requires native RTS stats disabled without
-    declaring/configuring the producer RTS environment; exact compiled-entry
-    counts and twelve audits for trivial reference observations. GcStatsNativeTest
-    is excluded. Preserve the useful no-write buffer guard in focused coverage.
-
   aggregate-heap (145, custom full-Core): both producer and consumer enumerate
     stage/Core output directories. AggregateHeapNativeTest is excluded until named
     module outputs replace the hidden input set. Preserve useful heap layout and
@@ -128,22 +106,6 @@ Compiler-structure assertions (also excluded):
   generic-sum-transport (148, custom full-Core): producer and consumer list stage
     CBDs. GenericSumTransportTest is excluded. Keep typed carrier/GC-lifetime
     boundaries and recover direct storage/rejection controls without native setup.
-
-  tuple-join-input (149): generation freezes minimum join/case counts and unconditionally requires an
-    original-library reference even with that mode disabled. TupleJoinNativeTest
-    excluded. Preserve first-compiled/empty-join semantic checks when consolidating.
-
-  sum-input (150): generation freezes sum-formal/capture/partial-application shapes and exact
-    worker arity. SumInputNativeTest excluded; retain values and handoff cleanup
-    observations in shared aggregate tests.
-
-  tuple-capture (151): requires >=8 exported capture occurrences and exact closure storage/image
-    size. TupleCaptureNativeTest excluded; preserve identity, laziness and thunk
-    sharing checks in aggregate runtime coverage.
-
-  sum-join-input (152): producer requires >=7 sum joins and consumer pins exact wrapper/loop let
-    shapes and join-transfer counts. SumJoinInputNativeTest excluded; retain
-    behavioral values and lifetime cleanup in the aggregate suite.
 
   graph-bfs (153): publishes wall-clock run directories and shares archive/tool acquisition.
     GraphWorkloadTest excluded. Retain useful package workload in intensive coverage
@@ -185,18 +147,6 @@ Compiler-structure assertions (also excluded):
     CBD staging enumerates outputs. PackageNativeOriginalsTest excluded. Replace
     standalone digest/erf/primitive scaffolding with public package integration.
 
-  libyaml-native (167): requires nonexistent output and a prebuilt capture/store, then symlinks to
-    that attempt's native pieces. LibyamlNativeProductsTest excluded; ordinary YAML
-    package smoke should replace this retained-Cabal-stage fixture.
-
-  wcwidth (168): requires an exact output-directory inventory and literal upstream source
-    lines. WcwidthTest excluded; ordinary package-level coverage should replace this
-    standalone locale/libc harness.
-
-  getentropy (169): fresh copied-source directory required after deletions and captured Core
-    inventory is exact. GetEntropyTest excluded; replace per-libc entropy machinery
-    with ordinary splitmix initialization coverage.
-
   hashable-ffi (170): runs a prebuilt THC runtime during fixture preparation without an owning
     build edge. HashableFfiFullCoreTest excluded; keep public hashing behavior in
     intensive package integration using shared acquisition.
@@ -217,12 +167,6 @@ Compiler-structure assertions (also excluded):
     outputs and publish timestamped trees. WindowsDistributionTest and automated
     smoke/driver preparation excluded; standalone timeout diagnostic remains usable.
 
-  narrow-literal-proofs (001): consumer fixes exactly24 direct writes and producer
-    projects exact literal metadata shape. Consolidate actual signed/high-bit behavior.
-  empty-join-input (002): producer fixes join-call and State-lambda shapes. Retain
-    semantic first-compiled checks and the unresolved Linux regression during repair.
-
-Current admission summary: 45 indexed groups and30 explicit classes excluded.
-  Total93 distinct classes; full-Core exception tag also withheld. Ordinary
-  selector: 409 selectable /66 withheld. These are selection counts, not
-  runtime pass/fail results. Quarantine does not resolve the underlying regressions.
+The current admission inventory is in .github/scripts/fast-fixtures.json.
+Full-Core exception tags are also withheld. Selection counts do not establish
+runtime pass/fail results; quarantine does not resolve the underlying regressions.

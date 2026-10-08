@@ -170,9 +170,16 @@ inspectProvenance owner annotations roots original = case proofs of
         StockProduct orderedRoots expected
           | roots /= Just orderedRoots -> RejectedProvenance "typed-export-roots-differ"
           | Product _ files <- productOf original, not (null files) -> RejectedProvenance "additional-foreign-files"
-          | productOf original /= expected -> RejectedProvenance "retained-foreign-product-differs"
+          | not (sameProduct (productOf original) expected) -> RejectedProvenance "retained-foreign-product-differs"
           | otherwise -> VerifiedRetainedRegistration version orderedRoots
   _ -> Left "duplicate foreign-export registration proofs"
   where
+    -- dsForeigns [] returns NoStubs, while the completed interface can retain
+    -- an empty CStubs record. Only these two obligation-free forms coincide;
+    -- source/header text, lifecycle labels and files still match exactly.
+    sameProduct actual expected = actual == expected || empty actual && empty expected
+    empty (Product Nothing []) = True
+    empty (Product (Just ("", "", [], [])) []) = True
+    empty _ = False
     proofs = [proof | Annotation (ModuleTarget target) serialized <- annotations, target == owner,
       Just proof <- [fromSerialized deserializeWithData serialized]]

@@ -52,7 +52,11 @@ public enum GcForeignOp {
             // The compiler's native heap suggestion cannot resize a context's share
             // of the JVM heap. Ignore the advisory; do not change global VM policy.
             case HEAP_HINT -> 0L;
-            default -> { System.gc(); yield 0L; } // Advisory; JVM flags/collector decide when and what to collect.
+            default -> {
+                System.gc(); // Advisory; JVM flags/collector decide when and what to collect.
+                ManagedWeaks.current(null).drainOwnedFrees();
+                yield 0L;
+            }
         };
     }
 }

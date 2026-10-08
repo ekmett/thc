@@ -37,7 +37,7 @@ class LoopSafepointTest {
         try {
             context.initialize("thc");
             var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
-            var state = entered(context, () -> TruffleLanguage.ContextReference.create(Language.class).get(null));
+            var state = entered(context, () -> Language.currentState());
             ExecutableProgram program = entered(context, () -> backend.equals("ast") ? new Program(language, module(), false, false) : new BytecodeProgram(language, module()));
             entered(context, () -> {
                 for (int i = 0; i < 8; i++) assertEquals(36L, invoke(program, 8L));

@@ -127,12 +127,20 @@ the child and releases the sender. At a public host entry, an uncaught delivery
 becomes a guest exception with the original payload. A completed target is a successful no-op.
 Only one request is claimed at a time; queued requests retain their order.
 
-After its optional assumption guard, an ordinary async poll reads a Truffle context-thread-local cell and the
-target's volatile pending flag. The cell follows nested guest entry and is
-cleared when the carrier leaves its final guest entry. Claiming remains a cold
-locked operation that rechecks ownership, foreign-call permission, masking and
-FIFO state. This keeps Java `ThreadLocal` initialization and map maintenance out
-of compiled guest loops without disabling asynchronous delivery.
+After its admission guard and existing scheduling checkpoint, a speculative
+ordinary poll can skip mailbox lookup while its context has never published an async request.
+This separate monotone assumption invalidates under the thread registry lock
+before an accepted send or resumed request is queued; it never resets after a
+queue drains. Explicit eager polling and prepared reusable AST roots keep their
+runtime polling policy and do not use this context assumption. Mandatory delivery
+cuts remain unconditional.
+
+Once a request has been published, ordinary polls read the Truffle
+context-thread-local cell and the target's volatile pending flag. The cell
+follows nested guest entry and is cleared when the carrier leaves its final
+guest entry. Claiming remains a cold locked operation that rechecks ownership,
+foreign-call permission, masking and FIFO state. Scheduling checkpoints and
+Truffle loop safepoints remain active before the first request.
 
 Masking and stack-annotation reads likewise use context-thread-local mutable
 cells. Boundary setters and the thread registry's legacy `ThreadLocal` interface
