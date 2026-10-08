@@ -11,6 +11,7 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import thc.runtime.*;
 import java.nio.ByteOrder;
+import java.math.BigInteger;
 import java.util.List;
 import com.oracle.truffle.api.utilities.TriState;
 
@@ -25,6 +26,7 @@ public final class HostReference implements TruffleObject {
     private volatile RootCallTarget callTarget;
     private CbitsBuffer buffer;
     private RootCallTarget forceTarget;
+    private volatile Object numericValue;
     private final boolean writable;
     private static final CoreRepresentation ELEMENT = new CoreRepresentation(CoreKind.OBJECT, false, true,
         List.of("BoxedRep (Just Lifted)"));
@@ -122,14 +124,46 @@ public final class HostReference implements TruffleObject {
     @ExportMessage public double readBufferDouble(ByteOrder order, long offset) throws UnsupportedMessageException, InvalidBufferOffsetException { return buffer().readBufferDouble(order, offset); }
     @ExportMessage public void writeBufferDouble(ByteOrder order, long offset, double value) throws UnsupportedMessageException, InvalidBufferOffsetException { buffer().writeBufferDouble(order, offset, value); }
     @ExportMessage public boolean isNull() { return value == null || value == ManagedAddress.nullAddress(); }
-    @ExportMessage public boolean isExecutable() { return proof.getHostCarrier() == null && (value instanceof Closure || proof.getKind() == CoreKind.CLOSURE); }
+    @ExportMessage public boolean isExecutable() { return proof.getHostCarrier() == null && (value instanceof Closure || value instanceof Thunk || proof.getKind() == CoreKind.CLOSURE); }
+    private Object availableNumber() {
+        requireOwner();
+        if (proof.getHostCarrier() != null) return null;
+        Object number = numericValue;
+        if (number != null) return number;
+        Object published = LiftedValues.resolveBoxed(value);
+        if (published instanceof Thunk) return null;
+        number = published instanceof DataValue data ? ManagedExportScalar.toInteropNumber(data)
+            : InteropLibrary.isValidValue(published) && InteropLibrary.getUncached().isNumber(published) ? published : null;
+        if (number != null) numericValue = number;
+        return number;
+    }
+    private Object requiredNumber() throws UnsupportedMessageException {
+        Object number = availableNumber();
+        if (number == null) throw UnsupportedMessageException.create();
+        return number;
+    }
+    @ExportMessage public boolean isNumber() { return availableNumber() != null; }
+    @ExportMessage public boolean fitsInByte() { Object number = availableNumber(); return number != null && InteropLibrary.getUncached().fitsInByte(number); }
+    @ExportMessage public boolean fitsInShort() { Object number = availableNumber(); return number != null && InteropLibrary.getUncached().fitsInShort(number); }
+    @ExportMessage public boolean fitsInInt() { Object number = availableNumber(); return number != null && InteropLibrary.getUncached().fitsInInt(number); }
+    @ExportMessage public boolean fitsInLong() { Object number = availableNumber(); return number != null && InteropLibrary.getUncached().fitsInLong(number); }
+    @ExportMessage public boolean fitsInBigInteger() { Object number = availableNumber(); return number != null && InteropLibrary.getUncached().fitsInBigInteger(number); }
+    @ExportMessage public boolean fitsInFloat() { Object number = availableNumber(); return number != null && InteropLibrary.getUncached().fitsInFloat(number); }
+    @ExportMessage public boolean fitsInDouble() { Object number = availableNumber(); return number != null && InteropLibrary.getUncached().fitsInDouble(number); }
+    @ExportMessage public byte asByte() throws UnsupportedMessageException { return InteropLibrary.getUncached().asByte(requiredNumber()); }
+    @ExportMessage public short asShort() throws UnsupportedMessageException { return InteropLibrary.getUncached().asShort(requiredNumber()); }
+    @ExportMessage public int asInt() throws UnsupportedMessageException { return InteropLibrary.getUncached().asInt(requiredNumber()); }
+    @ExportMessage public long asLong() throws UnsupportedMessageException { return InteropLibrary.getUncached().asLong(requiredNumber()); }
+    @ExportMessage public BigInteger asBigInteger() throws UnsupportedMessageException { return InteropLibrary.getUncached().asBigInteger(requiredNumber()); }
+    @ExportMessage public float asFloat() throws UnsupportedMessageException { return InteropLibrary.getUncached().asFloat(requiredNumber()); }
+    @ExportMessage public double asDouble() throws UnsupportedMessageException { return InteropLibrary.getUncached().asDouble(requiredNumber()); }
     @ExportMessage public int identityHashCode() { return System.identityHashCode(value); }
     @ExportMessage public TriState isIdenticalOrUndefined(Object other) {
         return other instanceof HostReference reference ? TriState.valueOf(owner == reference.owner && value == reference.value) : TriState.UNDEFINED;
     }
     private static boolean asynchronous(Object value) {
-        if (value instanceof Thunk thunk)
-            return thunk.getState() == 2 ? asynchronous(thunk.getValue()) : thunk.getAsynchronousExceptions();
+        value = LiftedValues.resolveBoxed(value);
+        if (value instanceof Thunk thunk) return thunk.getAsynchronousExceptions();
         if (!(value instanceof Closure closure)) return false;
         return closure.target.getRootNode() instanceof GuestRoot root && root.getAsynchronousExceptions();
     }
@@ -139,7 +173,7 @@ public final class HostReference implements TruffleObject {
         return forceTarget;
     }
     @ExportMessage @TruffleBoundary public Object execute(Object[] arguments,
-            @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) throws UnsupportedMessageException {
+            @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) throws UnsupportedMessageException, ArityException {
         if (Language.currentState(dispatch) != owner) throw new IllegalArgumentException("Host function belongs to another context");
         if (!isExecutable()) throw UnsupportedMessageException.create();
         owner.admitGuestOrigin();
@@ -149,8 +183,13 @@ public final class HostReference implements TruffleObject {
         var outcome = GuestThreadStatus.FINISHED;
         try {
             try {
-                Object forced = value instanceof Closure ? value : AsyncContinuations.publicResult(
-                    dispatch.executePublic(forcingTarget(), new Object[]{value, new Object[0]}), dispatch);
+                Object demand = LiftedValues.resolveBoxed(value);
+                Object forced = demand instanceof Closure ? demand : AsyncContinuations.publicResult(
+                    dispatch.executePublic(forcingTarget(), new Object[]{demand, new Object[0]}), dispatch);
+                if (!(forced instanceof Closure) && value instanceof Thunk && proof.getKind() != CoreKind.CLOSURE) {
+                    if (arguments.length != 0) throw ArityException.create(0, 0, arguments.length);
+                    return this;
+                }
                 if (!(forced instanceof Closure function) || !(function.target.getRootNode() instanceof GuestRoot root))
                     throw new RuntimeFault("Host function has no guest signature");
                 // A thunk can return a callable from a separately loaded program.

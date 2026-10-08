@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
@@ -52,15 +53,30 @@ public final class ManagedExportScalar {
         var spec = specification(type, role, wordBits);
         var id = "ghc-internal:" + spec.owner + "." + spec.constructor;
         var layout = layoutById.apply(id);
-        if (!layout.getId().equals(id) || !layout.getName().equals(spec.constructor) ||
-            layout.getArity() != (spec.rep.isEmpty() ? 0 : 1) ||
-            (!spec.rep.isEmpty() && !layout.hasFieldRepresentation(0, spec.rep)))
-            throw fault("Foreign-export constructor layout mismatch: " + id);
+        requireLayout(spec, layout);
         var falseLayout = spec.kind == Kind.BOOL ? layoutById.apply("ghc-internal:GHC.Internal.Types.False") : null;
         if (falseLayout != null && (!falseLayout.getId().equals("ghc-internal:GHC.Internal.Types.False") ||
             !falseLayout.getName().equals("False") || falseLayout.getArity() != 0))
             throw fault("Foreign-export Bool constructor layout mismatch");
         return new ManagedExportScalar(spec.kind, spec.bits == 0 ? wordBits : spec.bits, layout, falseLayout);
+    }
+    private static void requireLayout(Specification spec, DataLayout layout) {
+        var id = "ghc-internal:" + spec.owner + "." + spec.constructor;
+        if (!layout.getId().equals(id) || !layout.getName().equals(spec.constructor) ||
+            layout.getArity() != (spec.rep.isEmpty() ? 0 : 1) ||
+            (!spec.rep.isEmpty() && !layout.hasFieldRepresentation(0, spec.rep)))
+            throw fault("Foreign-export constructor layout mismatch: " + id);
+    }
+    /** Observe a genuine numeric constructor; unrelated one-field records remain opaque. */
+    @TruffleBoundary public static Object toInteropNumber(DataValue value) {
+        var layout = value.getLayout();
+        for (var spec : SPECIFICATIONS.values()) {
+            if (spec.kind != Kind.SIGNED && spec.kind != Kind.UNSIGNED && spec.kind != Kind.FLOAT && spec.kind != Kind.DOUBLE) continue;
+            if (!layout.getId().equals("ghc-internal:" + spec.owner + "." + spec.constructor)) continue;
+            requireLayout(spec, layout);
+            return new ManagedExportScalar(spec.kind, spec.bits == 0 ? Long.SIZE : spec.bits, layout, null).toHost(value);
+        }
+        return null;
     }
     private static Specification specification(Map<String, ?> type, Role role, int wordBits) {
         if (wordBits != 32 && wordBits != 64) throw fault("Unsupported foreign-export target word width");
