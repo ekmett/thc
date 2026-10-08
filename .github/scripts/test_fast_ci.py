@@ -779,6 +779,59 @@ class FastRunnerTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             list(ci.python_commands({"python": {"commands": [["bash", "-c", "exit 0"]]}}, "/python"))
 
+    def test_python_auditors_build_declared_inputs_once_before_consuming_them(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipt")
+        selection = {"python": {"commands": [["python3", path] for path in (
+            "bin/test-audit-core.py", "bin/test-core-package-manifest.py", "bin/test-independent.py")]}}
+        built, checked = [], []
+        def command(name, argv, *, env=None):
+            if "--build" in argv:
+                self.assertEqual(["fixture-tools", "prepare-foreign-ownership"], argv[argv.index("--target") + 1:])
+                built.append(name)
+                output = self.root / "build"
+                output.mkdir()
+                for tool in ("thc-fixtures", "thc-compact"):
+                    executable = output / tool
+                    executable.write_text("#!/bin/sh\nexit 0\n")
+                    executable.chmod(0o755)
+                    (output / (tool + ".path")).write_text(str(executable) + "\n")
+                (output / "foreign-ownership.json").write_text("{}\n")
+            elif name.startswith("python-"):
+                checked.append(argv[-1])
+                if argv[-1] == "bin/test-independent.py":
+                    self.assertIsNone(env)
+                else:
+                    self.assertEqual(1, len(built))
+                    for variable, filename in (("THC_FIXTURES", "thc-fixtures"),
+                                               ("THC_COMPACT", "thc-compact"),
+                                               ("THC_FOREIGN_OWNERSHIP", "foreign-ownership.json")):
+                        self.assertEqual(str(self.root / "build" / filename), env[variable])
+        with patch.object(recorder, "command", side_effect=command):
+            self.assertEqual([], ci.run_python_checks(recorder, selection, False))
+        self.assertEqual(6, len(checked))
+        self.assertEqual(1, len(built))
+
+    def test_python_auditor_failure_does_not_retry_or_block_independent_checks(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipt")
+        selected = {"python": {"commands": [["python3", path] for path in (
+            "bin/test-audit-core.py", "bin/test-core-package-manifest.py", "bin/test-independent.py")]}}
+        for failure in (RuntimeError("producer failed"), FileNotFoundError("missing output")):
+            with self.subTest(failure=failure), \
+                 patch.object(ci, "python_auditor_environment", side_effect=failure) as prepare, \
+                 patch.object(recorder, "command") as command:
+                failures = ci.run_python_checks(recorder, selected, False)
+                self.assertEqual(1, len(failures))
+                self.assertIn(str(failure), failures[0])
+                prepare.assert_called_once_with(recorder)
+                self.assertEqual(["bin/test-independent.py"] * 2,
+                                 [call.args[1][-1] for call in command.call_args_list])
+                prepare.reset_mock()
+                self.assertEqual([], ci.run_python_checks(recorder, {
+                    "python": {"commands": [["python3", "bin/test-independent.py"]]}}, False))
+                prepare.assert_not_called()
+
     def test_matching_automation_job_reuses_only_its_complete_test_files(self):
         selected = {"python": {"commands": [["python3", path] for path in (
             ".github/scripts/test_fast_select.py", "bin/test-audit-core.py",

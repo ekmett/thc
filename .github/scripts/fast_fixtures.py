@@ -118,14 +118,19 @@ def prepare_cmake(root, selection, run):
         raise ValueError("Fixture file rules are not yet migrated: " + ", ".join(pending)
                          + "; see docs/fixture-inputs.log. No legacy preparation was run.")
     targets = [manifest["groups"][name]["cmakeTarget"] for name in groups]
-    if targets:
-        configure = ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"]
-        for tool in ("GHC", "GHC_PKG", "CABAL"):
-            if os.environ.get(tool):
-                configure.append("-D" + tool + "=" + os.environ[tool])
-        run("fixture-configure", configure)
-        run("fixture-build", ["cmake", "--build", "build/fixtures", "--parallel", "4", "--target", *targets])
+    build_cmake_targets(targets, run)
     return {"mode": "cmake", "targets": targets}
+
+
+def build_cmake_targets(targets, run):
+    if not targets:
+        return
+    configure = ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"]
+    for tool in ("GHC", "GHC_PKG", "CABAL"):
+        if os.environ.get(tool):
+            configure.append("-D" + tool + "=" + os.environ[tool])
+    run("fixture-configure", configure)
+    run("fixture-build", ["cmake", "--build", "build/fixtures", "--parallel", "4", "--target", *targets])
 
 
 def local_selection(selector, owners):

@@ -651,6 +651,44 @@ def python_commands(selection, executable, automation_checked=False):
         yield [executable, "-O", *command[1:]]
 
 
+PYTHON_AUDITORS = {"bin/test-audit-core.py", "bin/test-core-package-manifest.py"}
+
+
+def python_auditor_environment(recorder):
+    fixtures.build_cmake_targets(["fixture-tools", "prepare-foreign-ownership"], recorder.command)
+    env = os.environ.copy()
+    for variable, marker in (("THC_FIXTURES", "thc-fixtures.path"), ("THC_COMPACT", "thc-compact.path")):
+        path = Path((recorder.root / "build" / marker).read_text().strip())
+        require(path.is_file() and os.access(path, os.X_OK), f"Missing graph-produced {variable}: {path}")
+        env[variable] = str(path)
+    command = recorder.root / "build/foreign-ownership.json"
+    require(command.is_file(), f"Missing graph-produced ownership command: {command}")
+    env["THC_FOREIGN_OWNERSHIP"] = str(command)
+    return env
+
+
+def run_python_checks(recorder, selection, automation_checked):
+    failures, auditor_env, auditor_failed = [], None, False
+    for index, command in enumerate(python_commands(selection, sys.executable, automation_checked)):
+        env = None
+        if PYTHON_AUDITORS.intersection(command):
+            if auditor_failed:
+                continue
+            if auditor_env is None:
+                try:
+                    auditor_env = python_auditor_environment(recorder)
+                except (RuntimeError, OSError) as error:
+                    failures.append(f"Python auditors could not prepare their inputs: {error}")
+                    auditor_failed = True
+                    continue
+            env = auditor_env
+        try:
+            recorder.command(f"python-{index:03d}", command, env=env)
+        except RuntimeError as error:
+            failures.append(str(error))
+    return failures
+
+
 def haskell_suites(selection):
     selected = selection.get("haskell")
     require(isinstance(selected, dict) and isinstance(selected.get("suites"), list)
@@ -795,11 +833,7 @@ def execute(recorder, base, head, identity_path):
     automation_sha = os.environ.get("FAST_AUTOMATION_SHA", "")
     automation_checked = bool(SHA.fullmatch(automation_sha)) and automation_sha == git(recorder.root, "rev-parse", "HEAD")
     recorder.data["automationReused"] = automation_sha if automation_checked else None
-    for index, command in enumerate(python_commands(selection, sys.executable, automation_checked)):
-        try:
-            recorder.command(f"python-{index:03d}", command)
-        except RuntimeError as error:
-            failures.append(str(error))
+    failures.extend(run_python_checks(recorder, selection, automation_checked))
     summaries = {}
     try:
         summaries, mode_failures = run_modes(recorder, selection, install_dist=False)

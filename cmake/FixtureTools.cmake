@@ -167,5 +167,10 @@ set(encoder_path "${PROJECT_SOURCE_DIR}/build/thc-fixtures.path")
 add_custom_command(OUTPUT "${encoder_path}"
   COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_BINARY_DIR}/thc-fixtures.path" "${encoder_path}"
   DEPENDS "${fixtures_exe}" "${CMAKE_CURRENT_BINARY_DIR}/thc-fixtures.path" VERBATIM)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/thc-compact.path" CONTENT "${compact_exe}\n")
+set(compact_path "${PROJECT_SOURCE_DIR}/build/thc-compact.path")
+add_custom_command(OUTPUT "${compact_path}"
+  COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_BINARY_DIR}/thc-compact.path" "${compact_path}"
+  DEPENDS "${compact_exe}" "${CMAKE_CURRENT_BINARY_DIR}/thc-compact.path" VERBATIM)
 add_custom_target(fixture-compact-model DEPENDS "${encoder_path}" "${fixtures_exe}")
-add_custom_target(fixture-tools DEPENDS ${tool_outputs} ${plugin_outputs} "${encoder_path}")
+add_custom_target(fixture-tools DEPENDS ${tool_outputs} ${plugin_outputs} "${encoder_path}" "${compact_path}")
