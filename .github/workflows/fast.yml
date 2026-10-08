@@ -133,7 +133,8 @@ jobs:
   fast-check:
     needs: automation
     runs-on: ${{ fromJSON(needs.automation.outputs.runner) }}
-    timeout-minutes: 18
+    # About 2.3x the observed cold run; the commit performance target remains 7m.
+    timeout-minutes: 30
     env:
       GRADLE_USER_HOME: ${{ needs.automation.outputs.persistent == 'true' && '/home/ekmett/ai/thc-fast/cache/gradle' || format('{0}/.gradle-user-home', github.workspace) }}
       EXPECTED_SHA: ${{ inputs.expected_sha }}
