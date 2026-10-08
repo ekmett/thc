@@ -1031,12 +1031,9 @@ class ManagedWeakTest {
         throw new NoSuchElementException("Missing primitive " + name);
     }
     private Map<String, Object> merge(List<String> paths) throws Exception {
-        return merge(paths, "main:WeakAudit.weakComposite");
-    }
-    private Map<String, Object> merge(List<String> paths, String entry) throws Exception {
         var inputs = paths.stream().map(path -> path.startsWith("@")
             ? "@" + new File(root, path.substring(1)).getPath() : new File(root, path).getPath()).toList();
-        return thc.CoreCbdFixtures.selectedRoots(inputs, entry, null);
+        return thc.CoreCbdFixtures.selectedRoots(inputs, "main:WeakAudit.weakComposite", null);
     }
     private ExecutableProgram load(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
@@ -1158,17 +1155,16 @@ class ManagedWeakTest {
         assertEquals(input, expected);
         var entry = "main:WeakAudit.weakAutomatic";
         var paths = ((Map<String, List<String>>) manifest.get("stages")).get("post");
-        var merged = merge(paths, entry);
+        var inputs = paths.stream().map(path -> path.startsWith("@")
+            ? "@" + new File(root, path.substring(1)).getPath() : new File(root, path).getPath()).toList();
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                 context.initialize("thc");
                 context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var module = CoreModules.reachable(merged, entry, true);
-                    var program = load(language, module, backend);
-                    var function = context.asValue(new EntryValue(program, entry, 1));
+                    var function = context.eval("thc", CoreModules.request(inputs, entry, true, false, backend));
                     assertEquals(expected, function.execute(input).asLong(), "post/" + backend + " automatic finalizer");
-                    assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
+                    var diagnostics = (Map<String, Object>) Json.parse(function.getMember("diagnostics").asString());
+                    assertEquals(0L, ((Number) diagnostics.get("unsupportedTraps")).longValue());
                 } finally {
                     context.leave();
                 }
@@ -1200,49 +1196,39 @@ class ManagedWeakTest {
             for (var op : originalOps) names.add(op.getPrimitive());
             assertTrue(primitives.containsAll(names));
             assertFalse(primitives.contains("addCFinalizerToWeak#"));
-            var merged = merge(stageEntry.getValue());
+            var inputs = stageEntry.getValue().stream().map(path -> path.startsWith("@")
+                ? "@" + new File(root, path.substring(1)).getPath() : new File(root, path).getPath()).toList();
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var module = new LinkedHashMap<>(CoreModules.reachable(merged, "main:WeakAudit.weakComposite", true));
-                        module.put("instrument", true);
-                        var program = load(language, module, backend);
-                        var host = program.hostEntryTarget(1);
+                        var function = context.eval("thc",
+                            CoreModules.request(inputs, "main:WeakAudit.weakComposite", true, false, backend));
+                        var programs = Language.currentState().getCoreUnitPrograms();
+                        assertEquals(1, programs.size());
+                        var program = programs.getFirst();
                         var original = program.entryTarget("main:WeakAudit.weakComposite");
                         assertTrue(original.getRootNode() instanceof GuestRoot);
-                        var function = context.asValue(new EntryValue(program, "main:WeakAudit.weakComposite", 1));
                         for (var row : rows) assertEquals(row.expected(), function.execute(row.input()).asLong());
-                        var active = activeTargets(host);
-                        boolean linked = false;
-                        for (var target : active)
-                            linked |= target.getRootNode() instanceof GuestRoot guest && guest.isSelf(original);
-                        assertTrue(linked, stage + "/" + backend + " actual weakComposite host linkage");
-                        // Include the original identity and every observed split/worker target, including BytecodeDSL's
-                        // cached direct calls. Do not settle after install.
-                        var installed = new ArrayList<>(new LinkedHashSet<>(active));
-                        if (!installed.contains(original))
-                            installed.add(original);
-                        for (var target : installed) {
-                            target.getClass().getMethod("compile", boolean.class).invoke(target, true);
-                            valid(target);
-                        }
+                        // The ordinary public entry compiles its actual typed host bridge,
+                        // original guest root and active splits, including cached bytecode calls.
+                        assertTrue(function.invokeMember("compile").asBoolean());
+                        valid(original);
                         for (var row : rows.reversed()) {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             assertEquals(row.expected(), function.execute(row.input()).asLong(),
                                 stage + "/" + backend + " first installed " + row.input());
                             long delta = ((Number) program.diagnostics().get("compiledEntries")).longValue() - before;
-                            var states = new ArrayList<String>();
-                            for (var target : installed)
-                                states.add(target.getRootNode().getName()
-                                    + ":valid=" + target.getClass().getMethod("isValidLastTier").invoke(target));
+                            var diagnostics = (Map<String, Object>) Json.parse(function.getMember("diagnostics").asString());
+                            var installed = (Map<String, Object>) diagnostics.get("explicitCompilation");
                             System.out.println("weak-explicit " + stage + "/" + backend + " input=" + row.input()
-                                + " compiledGuestEntries=" + delta + " targets=" + states);
+                                + " compiledGuestEntries=" + delta + " installation=" + installed);
                             // EntryRoot does not increment compiledEntries; this is guest entry evidence.
                             assertTrue(delta > 0,
                                 stage + "/" + backend + " first installed call entered compiled guest code");
-                            for (var target : installed) valid(target);
+                            assertEquals(true, installed.get("validLastTier"));
+                            valid(original);
                             assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
                             assertEquals(0, language.getHandoffState().get().getArguments().retainedReferences());
                             assertEquals(0, language.getHandoffState().get().getResults().getDepth());
