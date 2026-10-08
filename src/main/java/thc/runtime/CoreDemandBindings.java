@@ -89,7 +89,7 @@ public final class CoreDemandBindings {
         }
     }
     public void call(String id, List<CoreRepresentation> arguments) {
-        try (var ownership = lock.acquire()) { calls.computeIfAbsent(id, ignored -> new ArrayList<>()).add(arguments); if (programs.containsKey(id)) validateCall(id, arguments); }
+        try (var ownership = lock.acquire()) { calls.computeIfAbsent(id, ignored -> new ArrayList<>()).add(arguments); if (definitions.containsKey(id)) validateCall(id, arguments); }
     }
     private static void validateOccurrence(CoreRepresentation expected, CoreRepresentation actual) {
         CoreVectors.requireVariableProof(expected, actual);

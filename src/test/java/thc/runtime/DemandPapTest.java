@@ -136,6 +136,22 @@ class DemandPapTest {
         }
         long count(String field) { return ((Number) demand.program("caller").diagnostics().get(field)).longValue(); }
     }
+    @Test void decodedUnpublishedDefinitionValidatesNewCallProofsWithoutPreparingItsCell() {
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var fixture = new Fixture(language, "ast", false, definitions("full", true));
+                fixture.demand.definition("head");
+                assertTrue(fixture.demand.preparedPrograms().isEmpty());
+                var scalar = CoreRepresentations.binder(binder("component", LONG));
+                var wrong = new CoreRepresentation(CoreKind.UNKNOWN, true, true, List.of("IntRep", "IntRep"), List.of(scalar, scalar));
+                assertThrows(UnsupportedCore.class, () -> fixture.demand.call("head", List.of(wrong)));
+                assertTrue(fixture.demand.preparedPrograms().isEmpty());
+                assertNull(fixture.demand.cell("head").peek());
+            } finally { context.leave(); }
+        }
+    }
     @ParameterizedTest
     @CsvSource({"ast,false,false", "ast,false,true", "ast,true,false", "ast,true,true",
         "bytecode,false,false", "bytecode,false,true", "bytecode,true,false", "bytecode,true,true"})
