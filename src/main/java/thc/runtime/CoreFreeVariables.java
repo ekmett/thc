@@ -47,6 +47,21 @@ public final class CoreFreeVariables {
         return dead.stream().mapToInt(Integer::intValue).toArray();
     }
 
+    /** Physical reference fields whose logical constructor binder is unused. */
+    static int[] unusedConstructorReferences(List<?> alternative, DataLayout layout) {
+        if (layout == null) return new int[0];
+        var free = coreFreeVariables((List<?>) alternative.get(3));
+        var binders = (List<?>) alternative.get(2);
+        var dead = new ArrayList<Integer>();
+        for (int i = 0; i < binders.size(); i++) if (!free.contains(binders.get(i))) {
+            int end = layout.fieldOffset(i) + layout.logicalWidth(i);
+            for (int field = layout.fieldOffset(i); field < end; field++)
+                if (!layout.isInt(field) && !layout.isLong(field) && !layout.isFloat(field) && !layout.isDouble(field))
+                    dead.add(field);
+        }
+        return dead.stream().mapToInt(Integer::intValue).toArray();
+    }
+
     private static final class Collector {
         private final Set<String> free = new LinkedHashSet<>();
         private final Set<String> bound = new HashSet<>();

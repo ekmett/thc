@@ -29,6 +29,11 @@ whole-tuple alias retains its fields; discarding a lazy field never forces it.
 Unused result slots therefore do not keep objects alive during a later body
 collection or loop iteration.
 
+Ordinary constructor cases apply the same lifetime rule after restoring the
+selected fields. Unused reference field slots are released before the body;
+used logical aggregate fields retain all their leaves. Both backends also
+release an unused whole-case value after matching and field restoration.
+
 Fixture-free controls execute ordinary scalar State# producers in ignored fields
 and suppress later field work on a guest exception, with released loans after
 failure and recovery. Genuine GHC/export preservation of arbitrary State-producing

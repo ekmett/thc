@@ -1773,6 +1773,10 @@ public final class Program implements ExecutableProgram {
                 new Alternative(tag, layout.reusableStorage(), ints(slots), body, vectorFields, false,
                     scope.programSlot, required(constructorIndices, layout.getId())) :
                 new Alternative(tag, value, ints(slots), body, vectorFields, !reusableCode && alternatives.length > 1);
+            int[] dead = CoreFreeVariables.unusedConstructorReferences(alt, layout);
+            for (int i = 0; i < dead.length; i++) dead[i] = slots.get(dead[i]);
+            child.layout.clearInitially(dead);
+            alternatives[a].discardUnusedFields(dead);
             results.add(body.getRepresentation()); kinds.add(tag);
             allLong &= tag != LITERAL_ALTERNATIVE || value instanceof Long;
             anyAggregate |= body.getRepresentation().isAggregate();

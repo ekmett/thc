@@ -215,6 +215,7 @@ class Case extends Expr {
                 else alt.restoreVector(data, i, frame, lanes);
             }
         }
+        alt.releaseUnusedFields(frame);
         // Selection and field restoration have consumed the scrutinee. Keep a
         // live/captured binder, but do not carry a dead value into the next loop.
         if (unusedBinder) frame.clear(binderSlot);

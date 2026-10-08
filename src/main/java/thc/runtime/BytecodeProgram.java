@@ -5835,7 +5835,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (old != null) local.locals.put(id, new Local(old.id, old.name, old.primitive,
                 evaluatedProof(old.proof, true), old.cell, old.entry, old.arityCertificate));
         }
-        record Alternative(String kind, Object value, List<List<Local>> fields, Expression body) {}
+        record Alternative(String kind, Object value, List<List<Local>> fields, int[] deadReferences, Expression body) {}
         var alternatives = new ArrayList<Alternative>();
         for (var alt : (List<List<Object>>) expr.get(3)) {
             var child = local.child();
@@ -5891,8 +5891,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                         evaluatedProof(proof, layout != null && fieldIsEvaluated((String) alt.get(1), index)))));
                 }
             }
-            alternatives.add(new Alternative(kind, value, fields, compile((List<Object>) alt.get(3), child, tail)));
+            alternatives.add(new Alternative(kind, value, fields, CoreFreeVariables.unusedConstructorReferences(alt, layout),
+                compile((List<Object>) alt.get(3), child, tail)));
         }
+        boolean unusedBinder = ((List<List<Object>>) expr.get(3)).stream()
+            .noneMatch(alt -> CoreFreeVariables.coreFreeVariables((List<Object>) alt.get(3)).contains(expr.get(2)));
         var explicit = new ArrayList<Alternative>();
         Alternative defaultArm = null;
         var categories = new ArrayList<Integer>(alternatives.size());
@@ -5975,6 +5978,17 @@ public final class BytecodeProgram implements ExecutableProgram {
                             else e.staticScalars.put(field.id, kind);
                             b.beginRestoreDataScalar(layout, index, e.locals.get(field.id));
                             read(binder, false).emit(e); b.endRestoreDataScalar();
+                        }
+                    }
+                    for (int index : alt.deadReferences) for (var field : alt.fields.get(index)) {
+                        b.beginStaticStoreObject(e.locals.get(field.id)); b.emitLoadNull(); b.endStaticStoreObject();
+                    }
+                    if (unusedBinder && !binderProof.isLong() && binderProof.getKind() != CoreKind.FLOAT
+                            && binderProof.getKind() != CoreKind.DOUBLE) {
+                        if (e.staticObjectLocals.contains(binder.id)) {
+                            b.beginStaticStoreObject(e.locals.get(binder.id)); b.emitLoadNull(); b.endStaticStoreObject();
+                        } else {
+                            b.beginStoreLocal(e.locals.get(binder.id)); b.emitLoadNull(); b.endStoreLocal();
                         }
                     }
                     emitResult(alt.body, e, destination); b.endBlock();

@@ -5,6 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.profiles.CountingConditionProfile;
 import static thc.runtime.RuntimeFault.fault;
 
@@ -16,6 +17,7 @@ final class Alternative extends Node {
     private final Object value;
     @CompilationFinal(dimensions = 1) private final int[] fields;
     @Child private Expr body;
+    @CompilationFinal(dimensions = 1) private int[] deadReferences = new int[0];
     @CompilationFinal(dimensions = 2) private final int[][] vectorFields;
     private final CountingConditionProfile matchProfile;
     private final int programSlot;
@@ -41,6 +43,11 @@ final class Alternative extends Node {
     public Expr getBody() { return body; }
     public void setBody(Expr body) { this.body = body; }
     public int[][] getVectorFields() { return vectorFields; }
+    /** Assigned by lowering before this alternative is adopted. */
+    void discardUnusedFields(int[] slots) { deadReferences = slots; }
+    @ExplodeLoop void releaseUnusedFields(VirtualFrame frame) {
+        for (int slot : deadReferences) frame.clear(slot);
+    }
     DataLayout layout(VirtualFrame frame) {
         return constructorIndex < 0 ? (DataLayout) value : Program.instance(frame, programSlot).constructorLayout(constructorIndex);
     }
