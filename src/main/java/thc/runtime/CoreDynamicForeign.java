@@ -12,11 +12,14 @@ import static thc.runtime.RuntimeFault.fault;
 /** A dynamic import's GHC calling convention belongs to the call, not its pointer. */
 final class CoreDynamicForeign {
     private CoreDynamicForeign() {}
-    static PackageScalarCall validate(Map<?, ?> metadata, Map<?, ?> descriptor, Map<?, ?> target,
-            List<?> arguments, List<?> flags, Object output) {
-        var kind = "dynamic".equals(target.get("kind")) ? PackageScalarCall.Kind.DYNAMIC
+    static PackageScalarCall.Kind select(Map<?, ?> target) {
+        return "dynamic".equals(target.get("kind")) ? PackageScalarCall.Kind.DYNAMIC
             : "createAdjustor".equals(target.get("symbol")) && target.get("unit") == null ? PackageScalarCall.Kind.CREATE_CALLBACK
             : "freeHaskellFunctionPtr".equals(target.get("symbol")) && "ghc-internal".equals(target.get("unit")) ? PackageScalarCall.Kind.FREE_CALLBACK : null;
+    }
+    static PackageScalarCall validate(Map<?, ?> metadata, Map<?, ?> descriptor, Map<?, ?> target,
+            List<?> arguments, List<?> flags, Object output) {
+        var kind = select(target);
         if (kind == null) return null;
         boolean dynamic = kind == PackageScalarCall.Kind.DYNAMIC;
         if (!(dynamic ? target.keySet().equals(Set.of("kind"))

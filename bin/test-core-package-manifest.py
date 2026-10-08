@@ -26,6 +26,12 @@ import weakref
 from zipfile import ZipFile
 
 import core_package_manifest
+import core_original_foreign
+
+
+def native_archive_blocks(module, binding, archive, ownership=None):
+    ownership = ownership or core_original_foreign.ForeignOwnership(core_package_manifest.native_archive_calls(binding))
+    return core_package_manifest.native_archive_blocks(module, binding, archive, ownership)
 
 
 @lru_cache(maxsize=1)
@@ -724,9 +730,9 @@ class PackageNativeVariantsTest(unittest.TestCase):
         link, proved = core_package_manifest.package_scalar_link(module)
         self.assertEqual({link['abi'][0]['entry']}, proved)
         archive = core_package_manifest.package_native_archive(module)
-        self.assertFalse(core_package_manifest.native_archive_blocks(module, {}, archive))
+        self.assertFalse(native_archive_blocks(module, {}, archive))
         binding = dict(foreignCall=dict(target=dict(unit=module['unit'], symbol='blocked'), convention='ccall', safety='interruptible'))
-        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, archive))
+        self.assertTrue(native_archive_blocks(module, binding, archive))
         for key, value in [('unsupportedImports', []), ('unclassifiedReason', 'invented'), ('schema', True)]:
             bad = copy.deepcopy(module); bad['packageNativeArchive'][key] = value
             with self.subTest(key=key), self.assertRaises(ValueError): core_package_manifest.package_scalar_link(bad)
@@ -734,7 +740,7 @@ class PackageNativeVariantsTest(unittest.TestCase):
         archived['packageNativeArchive']['artifact'] = archived.pop('packageNativeLink')
         archived['packageNativeArchive']['unresolvedSymbols'] = ['unknown_external']
         self.assertIsNone(core_package_manifest.package_scalar_link(archived))
-        self.assertTrue(core_package_manifest.native_archive_blocks(archived, {}, archived['packageNativeArchive']))
+        self.assertTrue(native_archive_blocks(archived, {}, archived['packageNativeArchive']))
         archived['packageNativeArchive']['artifact']['bitcodeHex'] = '4342'
         with self.assertRaisesRegex(ValueError, 'bitcode digest'): core_package_manifest.package_native_archive(archived)
 
@@ -804,7 +810,7 @@ class PackageNativeVariantsTest(unittest.TestCase):
             execution='not-linked', unit=module['unit'], module=module['module'],
             unsupportedImports=[declaration['emitted']], unclassifiedReason=None, unresolvedSymbols=[], artifact=None)
         archive = core_package_manifest.package_native_archive(module)
-        self.assertFalse(core_package_manifest.native_archive_blocks(module, binding, archive))
+        self.assertFalse(native_archive_blocks(module, binding, archive))
         for mutation in ('weak-payload', 'missing-call', 'abi'):
             bad = copy.deepcopy(module)
             if mutation == 'weak-payload':
@@ -815,9 +821,9 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 core_package_manifest.package_native_archive(bad)
         whole = dict(archive, unclassifiedReason='non-static-c-import-declaration')
-        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, whole))
+        self.assertTrue(native_archive_blocks(module, binding, whole))
         unresolved = dict(archive, unresolvedSymbols=['ordinary_native_import'])
-        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, unresolved))
+        self.assertTrue(native_archive_blocks(module, binding, unresolved))
 
     def test_primitive_archive_retains_recursive_nominal_tuple_without_native_abi(self):
         import copy
@@ -845,7 +851,7 @@ class PackageNativeVariantsTest(unittest.TestCase):
             unclassifiedReason=None, unresolvedSymbols=[], artifact=None)
         archive = core_package_manifest.package_native_archive(module)
         self.assertIsNone(core_package_manifest.package_scalar_link(module))
-        self.assertTrue(core_package_manifest.native_archive_blocks(module, module['bindings'][0], archive))
+        self.assertTrue(native_archive_blocks(module, module['bindings'][0], archive))
         mixed = self.module(['WordRep'])
         mixed['staticForeignImports']['profile'] = core_package_manifest.IMPORT_PROFILES[1]
         primitive = copy.deepcopy(entry); primitive['binder']['occurrence'] = 'primitive'
@@ -897,9 +903,9 @@ class PackageNativeVariantsTest(unittest.TestCase):
         link, proved = core_package_manifest.package_scalar_link(module)
         self.assertEqual({link['abi'][0]['entry']}, proved)
         archive = core_package_manifest.package_native_archive(module)
-        self.assertFalse(core_package_manifest.native_archive_blocks(module, {}, archive))
+        self.assertFalse(native_archive_blocks(module, {}, archive))
         binding = dict(foreignCall=dict(target=dict(unit=module['unit'], symbol='width'), convention='ccall', safety='unsafe'))
-        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, archive))
+        self.assertTrue(native_archive_blocks(module, binding, archive))
         for witnesses in ([], [narrow['emitted']], [wide], [narrow['emitted'], narrow['emitted']],
                           [narrow['emitted'], dict(wide, unit='other')],
                           [narrow['emitted'], dict(wide, result=['void', 'invented'])]):
@@ -975,28 +981,28 @@ class PackageNativeVariantsTest(unittest.TestCase):
         import copy
         profile = json.loads((Path(__file__).resolve().parents[1] /
             'src/main/resources/thc/core-native-overrides.json').read_text())
+        ownership = core_original_foreign.ForeignOwnership(profile['calls'])
+        # Every declared owned operation, including dynamic callback release,
+        # must keep its real validator rather than becoming an archive ban.
         for call in profile['calls']:
             module = dict(unit=call['target']['unit'])
             binding = dict(foreignCall=call)
             emitted = dict(symbol=call['target']['symbol'], convention=call['convention'], safety=call['safety'])
             archive = dict(unclassifiedReason=None, unresolvedSymbols=[], unsupportedImports=[emitted])
             with self.subTest(symbol=emitted['symbol']):
-                self.assertFalse(core_package_manifest.native_archive_blocks(module, binding, archive))
-                self.assertTrue(core_package_manifest.native_archive_blocks(module, binding,
-                    dict(archive, unclassifiedReason='non-static-c-import-declaration')))
-                self.assertTrue(core_package_manifest.native_archive_blocks(module, binding,
-                    dict(archive, unresolvedSymbols=['ordinary_native_import'])))
-            # Preserve identity matching while falsifying the full descriptor.
-            # Legacy owned names retain their existing downstream validators.
-            if core_package_manifest.core_original_foreign.context_owned_rts_call(call): continue
-            for mutate in (lambda c: c.update(schema=True), lambda c: c.update(arity=True),
-                    lambda c: c['argumentReps'][-1].update(primReps=['IntRep']),
-                    lambda c: c.update(resultRep={})):
-                changed = copy.deepcopy(call); mutate(changed)
-                with self.subTest(symbol=emitted['symbol'], changed=changed):
-                    self.assertTrue(core_package_manifest.native_archive_blocks(module, dict(foreignCall=changed), archive))
+                self.assertTrue(ownership(call))
+                self.assertFalse(native_archive_blocks(module, binding, archive, ownership))
+                self.assertTrue(native_archive_blocks(module, binding,
+                    dict(archive, unclassifiedReason='non-static-c-import-declaration'), ownership))
+                self.assertTrue(native_archive_blocks(module, binding,
+                    dict(archive, unresolvedSymbols=['ordinary_native_import']), ownership))
+            # Ownership is identity selection only, exactly as in runtime
+            # lowering. ABI mutations are rejected by the selected validator in
+            # CoreOwnedPackageDispatchTest, not by native archive routing.
+            changed = copy.deepcopy(call); changed['arity'] = True
+            self.assertFalse(native_archive_blocks(module, dict(foreignCall=changed), archive, ownership))
         ordinary = dict(schema=1, target=dict(unit='ghc-internal', symbol='ordinary_missing'), convention='ccall', safety='unsafe')
-        self.assertTrue(core_package_manifest.native_archive_blocks(dict(unit='ghc-internal'), dict(foreignCall=ordinary),
+        self.assertTrue(native_archive_blocks(dict(unit='ghc-internal'), dict(foreignCall=ordinary),
             dict(unclassifiedReason=None, unresolvedSymbols=[], unsupportedImports=[dict(
                 symbol='ordinary_missing', convention='ccall', safety='unsafe')])))
 

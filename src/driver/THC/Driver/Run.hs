@@ -220,7 +220,7 @@ runResolvedPackage opts working target prepareRuntime = do
   let modules = [core </> file | file <- files]
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
   when (runVerifyArtifacts opts) $
-    checked True python ([thcRoot </> "bin/audit-core.py", "--entry", entry, "--io-main",
+    checked True python ([thcRoot </> "bin/audit-core.py", "--runtime", runtime, "--entry", entry, "--io-main",
                       "--package-manifest", supportManifest,
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
   checked False runtime (runtimeLaunchArguments (runVerifyArtifacts opts)

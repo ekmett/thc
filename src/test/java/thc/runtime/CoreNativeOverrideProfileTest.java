@@ -68,6 +68,15 @@ class CoreNativeOverrideProfileTest {
         assertNotNull(selected);
         assertEquals(PackageScalarCall.Kind.FREE_CALLBACK, selected.getKind());
         assertFalse(selected.executesForeign());
+        var archive = new thc.PackageNativeArchive("original native obligation", false, "ghc-internal",
+            List.of(Map.of("symbol", "freeHaskellFunctionPtr", "convention", "ccall", "safety", "unsafe")));
+        assertEquals("FREE_CALLBACK", CoreForeignOverride.owner(metadata));
+        assertFalse(archive.blocks(metadata), "native obligations cannot prohibit THC-owned callback release");
+        assertTrue(new thc.PackageNativeArchive("unresolved native symbol", true, "ghc-internal", List.of()).blocks(metadata));
+        var malformed = with(call, "arity", 0L);
+        assertFalse(archive.blocks(Map.of("foreignCall", malformed)), "selection does not admit malformed ABI");
+        assertThrows(RuntimeFault.class, () -> CorePackageScalarForeign.validate(
+            Map.of("foreignCall", malformed, "rep", result), arguments, Collections.nCopies(arguments.size(), false), result, List.of()));
         assertNull(selected.getLink(), "this is not a fabricated C entry or exported native callback namespace");
         assertThrows(RuntimeFault.class, () -> CorePackageScalarForeign.validate(metadata, arguments,
             List.of(true, false), result, List.of()), "the actual operand/flag validator still runs");

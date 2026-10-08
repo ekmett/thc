@@ -729,7 +729,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
     publish manifest (Just bridge) linked
   when (action == RunGuest) $ do
     when verifyArtifacts $
-      runCommand True "python3" ([thcRoot </> "bin/audit-core.py", "--package-manifest", manifest,
+      runCommand True "python3" ([thcRoot </> "bin/audit-core.py", "--runtime", runtime, "--package-manifest", manifest,
                                 "--entry", entry, "--entry", shutdown] ++
                                ["--io-main", "--output", audit]) thcRoot
     -- Full-Core main and shutdown share one program and its Handle CAFs.

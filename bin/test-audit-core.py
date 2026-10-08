@@ -421,6 +421,13 @@ class RuntimeServicesQueryTest(unittest.TestCase):
 
 
 class CoreOwnedPackageDispatchTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        calls = cls().calls()
+        changed = [dict(call, target=dict(call['target'], **alteration)) for call in calls
+                   for alteration in (dict(unit='ordinary-provider'), dict(symbol='ordinary_missing'))]
+        cls.ownership = core_original_foreign.ForeignOwnership(calls + changed)
+
     def calls(self):
         return json.loads((ROOT.parent / 'src/main/resources/thc/core-native-overrides.json').read_text())['calls']
 
@@ -436,6 +443,7 @@ class CoreOwnedPackageDispatchTest(unittest.TestCase):
         auditor = audit_core.Audit([], cap or CAP)
         unit = expression[6]['foreignCall']['target']['unit']
         auditor.package_scalar_links[unit] = dict(unit=unit, abi=[])
+        auditor.foreign_ownership = self.ownership
         auditor.polyglot_call(expression, bound, 'root', 'root')
         return auditor
 
@@ -488,6 +496,7 @@ class JavaScriptPackageTest(unittest.TestCase):
                     convention='ccall', safety='unsafe', arity=1, suppliedArity=1,
                     argumentReps=[dict(state, evaluated=False)], resultRep=dict(result, evaluated=False))
         ordinary = {key: value for key, value in call.items() if key not in ('intrinsic', 'javascriptSource')}
+        ownership = core_original_foreign.ForeignOwnership([call])
         for descriptor, accepted in ((call, True), (dict(call, javascriptSource='() => 8'), False),
                                      (dict(call, arity=2), False), (ordinary, False)):
             audit = audit_core.Audit([], CAP)
@@ -495,6 +504,7 @@ class JavaScriptPackageTest(unittest.TestCase):
             expression = ['app', ['var', 'foreign', dict(rep=CLOSURE)],
                           [['var', 'state', dict(rep=state)]], [False], False, False,
                           dict(rep=result, foreignCall=descriptor)]
+            audit.foreign_ownership = ownership
             audit.polyglot_call(expression, {'state': state}, 'root', 'root')
             self.assertEqual(['foreign-exception-bridge'] if accepted else ['foreign-call'],
                              [issue['code'] for issue in audit.issues])
@@ -504,6 +514,11 @@ class JavaScriptPackageTest(unittest.TestCase):
 class PackageScalarOperandTest(unittest.TestCase):
     """Call-proof controls only. Valid calls still require a genuine runtime bridge;
     no invented dictionary, component or bitcode is executed."""
+    @classmethod
+    def setUpClass(cls):
+        _, expression, _ = cls().call('WordRep')
+        cls.ownership = core_original_foreign.ForeignOwnership([expression[6]['foreignCall']])
+
     def call(self, primitive):
         scalar = lambda rep, evaluated=True: dict(kind=core_original_foreign.scalar_kind(rep),
             primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -522,6 +537,7 @@ class PackageScalarOperandTest(unittest.TestCase):
     def inspect(self, abi, expression, stored):
         audit = audit_core.Audit([], CAP)
         audit.package_scalar_links['first'] = dict(unit='first', abi=abi if isinstance(abi, list) else [abi])
+        audit.foreign_ownership = self.ownership
         self.assertTrue(audit.polyglot_call(expression, dict(argument=stored), 'root', 'root'))
         return audit.issues
 
@@ -3492,6 +3508,28 @@ class OriginalDupAuditTest(unittest.TestCase):
     def audit(self, module, cap=CAP):
         return audit_core.Audit([('dup-control.json', module)], cap).run(['root'])
 
+    def test_interruptible_open_uses_owned_transport_before_package_adapter(self):
+        module = self.fixture('__hscore_open')
+        call = self.call(module)
+        call[6]['foreignCall']['safety'] = 'interruptible'
+        ownership = core_original_foreign.ForeignOwnership([call[6]['foreignCall']])
+        archive = dict(unclassifiedReason=None, unresolvedSymbols=[], unsupportedImports=[
+            dict(symbol='__hscore_open', convention='ccall', safety='interruptible')])
+        self.assertFalse(core_package_manifest.native_archive_blocks(dict(unit='ghc-internal'),
+            module['bindings'][0], archive, ownership))
+        for malformed in (False, True):
+            candidate = copy.deepcopy(module)
+            if malformed:
+                self.call(candidate)[6]['foreignCall']['argumentReps'][0]['primReps'] = ['IntRep']
+            auditor = audit_core.Audit([('open-control.json', candidate)], CAP)
+            auditor.package_scalar_links['ghc-internal'] = dict(unit='ghc-internal', abi=[])
+            auditor.foreign_ownership = ownership
+            report = auditor.run(['root'])
+            with self.subTest(malformed=malformed):
+                self.assertEqual(not malformed, report['accepted'], report['issues'])
+                if malformed:
+                    self.assertIn('foreign-call', {issue['code'] for issue in report['issues']})
+
     def test_exact_original_duplication_requires_production_capability(self):
         for symbol in self.symbols:
             self.assertEqual(1, CAP['managedForeignCalls'].count(symbol))
@@ -4121,6 +4159,7 @@ class OriginalShutdownAuditTest(unittest.TestCase):
             # accidental package selection fail deterministically.
             mixed = audit_core.Audit([('shutdown.json', module)], CAP)
             mixed.package_scalar_links['ghc-internal'] = dict(unit='ghc-internal', abi=[])
+            mixed.foreign_ownership = core_original_foreign.ForeignOwnership(core_package_manifest.native_archive_calls(module))
             self.assertTrue(mixed.run(['root'])['accepted'])
             for key, value in (('safety', 'unsafe'), ('arity', 0), ('resultRep', state)):
                 malformed = copy.deepcopy(module)

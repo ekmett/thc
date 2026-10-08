@@ -34,7 +34,11 @@ native build still uses its selected GHC and native compiler; LLVM acquisition
 is a separate step.
 Use `thc acquire` with the same build options to prepare the package without
 executing it. Add `--verify-artifacts` to `thc run` for a strict pre-launch Core
-audit and artifact-hash verification.
+audit and artifact-hash verification. This audit uses the selected runtime’s
+canonical operation selector for THC-owned transport, including original
+interruptible Handle operations, while retaining complete ABI and provenance
+validation. See [standalone audit preparation](contributing.md) for the explicit
+runtime dependency.
 
 Haskell FFI uses native-enabled Sulong. Embedding contexts must permit native
 access. These calls are not a sandbox for

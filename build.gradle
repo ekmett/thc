@@ -177,6 +177,32 @@ if (stockTruffle) {
 }
 apply(from: "src/gradle/bytecode-metadata.gradle")
 apply(from: "src/gradle/java-build-tests.gradle")
+// Only package-aware cold audits need this command. Java compilation has no
+// fixture dependency; native resources and the installed distribution are not
+// prerequisites. Consumers invoke this prepared argv, never Gradle implicitly.
+tasks.register("foreignOwnershipCommand", JavaExec) {
+    dependsOn(tasks.compileJava)
+    def output = layout.buildDirectory.file("foreign-ownership.json")
+    def response = new ByteArrayOutputStream()
+    executable = new File(jamHome, windowsHost ? "bin/java.exe" : "bin/java").path
+    mainClass = "thc.Main"
+    classpath = files(sourceSets.main.output.classesDirs, configurations.runtimeClasspath)
+    jvmArgs("--add-modules=jdk.incubator.vector")
+    args("--classify-foreign-calls")
+    standardInput = new ByteArrayInputStream("[]".getBytes("UTF-8"))
+    standardOutput = response
+    inputs.files(classpath)
+    inputs.property("javaHome", jamHome.canonicalPath)
+    outputs.file(output)
+    doLast {
+        def identity = new JsonSlurper().parseText(response.toString("UTF-8")).runtime
+        def command = [executable] + jvmArgs + ["-cp", classpath.asPath, mainClass.get()] + args
+        def text = JsonOutput.toJson([command: command, runtime: identity]) + "\n"
+        def file = output.get().asFile
+        file.parentFile.mkdirs()
+        if (!file.exists() || file.getText("UTF-8") != text) file.setText(text, "UTF-8")
+    }
+}
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
 tasks.withType(JavaCompile).configureEach {
     dependsOn(verifyJamToolchain)
