@@ -14,7 +14,9 @@ import static thc.CoreBackendTestSupport.*;
 
 /** Independent public transport models; native GHC arithmetic is checked separately. */
 class FullHostAbiTest {
-    @org.junit.jupiter.api.Test void scalarThunkHandoffIsLazyUntilInvocationAndNumericQueriesNeverForce() throws Exception {
+    @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory;
+    @org.junit.jupiter.api.AfterEach void releaseIdleFixtureMappings() { CoreFileMappings.shared.evictIdleBelow(directory); }
+    @org.junit.jupiter.api.Test void scalarThunkHandoffIsLazyUntilNumericConversionAndQueriesNeverForce() throws Exception {
         for (boolean hosted : new boolean[]{false, true}) try (var context = context(hosted)) {
             context.initialize("thc"); context.enter();
             try {
@@ -30,16 +32,24 @@ class FullHostAbiTest {
                 var reference = new HostReference(Language.currentState(), delayed, proof, null);
                 var interop = InteropLibrary.getUncached();
                 assertTrue(interop.isExecutable(reference));
-                assertFalse(interop.isNumber(reference)); assertFalse(interop.fitsInLong(reference));
-                assertThrows(UnsupportedMessageException.class, () -> interop.asLong(reference));
+                assertFalse(interop.isNumber(reference));
+                assertFalse(interop.fitsInByte(reference)); assertFalse(interop.fitsInShort(reference));
+                assertFalse(interop.fitsInInt(reference)); assertFalse(interop.fitsInLong(reference));
+                assertFalse(interop.fitsInBigInteger(reference)); assertFalse(interop.fitsInFloat(reference));
+                assertFalse(interop.fitsInDouble(reference));
+                var rawProof = thc.runtime.CoreRepresentations.parse(scalar("object", "BoxedRep (Just Unlifted)"))
+                    .withHostCarrier(thc.runtime.CoreRepresentation.HostCarrier.OBJECT);
+                var raw = new HostReference(Language.currentState(), delayed, rawProof, null);
+                assertFalse(interop.isExecutable(raw));
+                assertThrows(UnsupportedMessageException.class, () -> interop.asLong(raw));
                 assertFalse(interop.hasArrayElements(reference));
                 interop.toDisplayString(reference, false);
                 assertEquals(0, forces.get());
                 var lazy = context.asValue(reference);
                 assertTrue(lazy.canExecute()); assertFalse(lazy.isNumber());
-                var demanded = lazy.execute();
-                assertTrue(demanded.isNumber()); assertEquals(9_007_199_254_740_993L, demanded.asLong());
-                assertFalse(demanded.fitsInDouble());
+                assertEquals(9_007_199_254_740_993L, lazy.asLong());
+                assertTrue(lazy.isNumber()); assertFalse(lazy.fitsInDouble());
+                assertThrows(ClassCastException.class, lazy::asDouble);
                 assertEquals(9_007_199_254_740_993L, lazy.asLong());
                 assertEquals(9_007_199_254_740_993L, lazy.execute().asLong());
                 assertSame(answer, delayed.getValue()); assertEquals(1, forces.get());
@@ -120,16 +130,15 @@ class FullHostAbiTest {
                     var reference = new HostReference(Language.currentState(), key, proof, null);
                     assertFalse(interop.isNumber(reference));
                     assertFalse(interop.fitsInLong(reference));
-                    assertThrows(UnsupportedMessageException.class, () -> interop.asLong(reference));
                     assertEquals(state, key.getState());
                 }
                 assertEquals(0, forces.get());
                 var delayed = new thc.runtime.Thunk(target, null);
                 var reference = new HostReference(Language.currentState(), delayed, proof, null);
-                for (int attempt = 0; attempt < 2; attempt++)
-                    assertSame(failure, assertThrows(thc.runtime.RuntimeFault.class, () -> interop.execute(reference)));
+                assertSame(failure, assertThrows(thc.runtime.RuntimeFault.class, () -> interop.asLong(reference)));
+                assertSame(failure, assertThrows(thc.runtime.RuntimeFault.class, () -> interop.execute(reference)));
+                assertSame(failure, assertThrows(thc.runtime.RuntimeFault.class, () -> interop.asDouble(reference)));
                 assertEquals(1, forces.get()); assertFalse(interop.isNumber(reference));
-                assertThrows(UnsupportedMessageException.class, () -> interop.asLong(reference));
             } finally { context.leave(); }
         }
     }
@@ -161,8 +170,23 @@ class FullHostAbiTest {
                     new Object[]{new thc.runtime.Closure(null, 1, factory.getCallTarget())}, false));
                 var lazy = view.getArrayElement(0).execute(0L);
                 assertEquals(0, forces.get()); assertTrue(lazy.canExecute());
+                assertThrows(ClassCastException.class, lazy::asLong);
+                assertEquals(1, forces.get()); assertFalse(lazy.isNumber());
                 assertEquals(73L, lazy.execute(73L).asLong());
                 assertEquals(91L, lazy.execute(91L).asLong()); assertEquals(1, forces.get());
+                var applications = new java.util.concurrent.atomic.AtomicInteger();
+                var zeroArgument = new thc.runtime.GuestRoot(language, new thc.runtime.FrameLayout().build()) {
+                    @Override public long bloom(com.oracle.truffle.api.frame.VirtualFrame frame) { return 0; }
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { applications.incrementAndGet(); return 37L; }
+                };
+                zeroArgument.configureInputProofs(List.of()); zeroArgument.configureScalarResult(integer);
+                var zeroFunction = new thc.runtime.Closure(null, 0, zeroArgument.getCallTarget());
+                var zeroThunk = delayed(language, () -> zeroFunction);
+                var zeroView = context.asValue(new HostReference(Language.currentState(), zeroThunk, closure, null));
+                assertThrows(ClassCastException.class, zeroView::asLong);
+                assertThrows(ClassCastException.class, zeroView::asDouble);
+                assertEquals(0, applications.get(), "numeric demand must not apply even a zero-argument closure");
+                assertEquals(37L, zeroView.execute().asLong()); assertEquals(1, applications.get());
             } finally { context.leave(); }
         }
     }
@@ -170,8 +194,13 @@ class FullHostAbiTest {
     @org.junit.jupiter.api.Test void storageViewsStopAtContextLifetimeAndDoNotPromoteAddresses() {
         var context = context();
         context.initialize("thc"); context.enter();
-        final Value view;
+        final Value view, lazy;
+        var forces = new java.util.concurrent.atomic.AtomicInteger();
         try {
+            var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            lazy = context.asValue(new HostReference(Language.currentState(),
+                delayed(language, () -> { forces.incrementAndGet(); return 73L; }),
+                thc.runtime.CoreRepresentations.parse(scalar("object", "BoxedRep (Just Lifted)")), null));
             view = context.asValue(HostReference.storage(Language.currentState(), new byte[8], true));
             var address = context.asValue(new HostReference(Language.currentState(),
                 thc.runtime.ManagedAddress.nullAddress(),
@@ -181,6 +210,103 @@ class FullHostAbiTest {
         } finally { context.leave(); }
         context.close();
         assertThrows(IllegalStateException.class, view::getBufferSize);
+        assertThrows(IllegalStateException.class, lazy::asLong); assertEquals(0, forces.get());
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"byte", "short", "int", "long", "bigInteger", "float", "double"})
+    void everyNumericConversionDemandsWhnfAndPreservesExactScalars(String conversion) {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                String constructor = switch (conversion) { case "bigInteger" -> "W#"; case "float" -> "F#"; case "double" -> "D#"; default -> "I#"; };
+                String rep = switch (conversion) { case "bigInteger" -> "WordRep"; case "float" -> "FloatRep"; case "double" -> "DoubleRep"; default -> "IntRep"; };
+                Object payload = switch (conversion) { case "bigInteger" -> -1L; case "float" -> -0f; case "double" -> Double.POSITIVE_INFINITY; default -> 42L; };
+                var answer = new thc.runtime.DataLayout(language, "ghc-internal:GHC.Internal.Types." + constructor, constructor, new String[]{rep}).create(new Object[]{payload});
+                var forces = new java.util.concurrent.atomic.AtomicInteger();
+                var thunk = delayed(language, () -> { forces.incrementAndGet(); return answer; });
+                var lazy = context.asValue(new HostReference(Language.currentState(), thunk,
+                    thc.runtime.CoreRepresentations.parse(scalar("object", "BoxedRep (Just Lifted)")), null));
+                java.util.function.Function<Value, Object> convert = switch (conversion) {
+                    case "byte" -> Value::asByte; case "short" -> Value::asShort; case "int" -> Value::asInt;
+                    case "long" -> Value::asLong; case "bigInteger" -> Value::asBigInteger;
+                    case "float" -> Value::asFloat; case "double" -> Value::asDouble;
+                    default -> throw new AssertionError(conversion);
+                };
+                Object expected = switch (conversion) {
+                    case "byte" -> (byte) 42; case "short" -> (short) 42; case "int" -> 42; case "long" -> 42L;
+                    case "bigInteger" -> java.math.BigInteger.ONE.shiftLeft(64).subtract(java.math.BigInteger.ONE);
+                    case "float" -> -0f; case "double" -> Double.POSITIVE_INFINITY;
+                    default -> throw new AssertionError(conversion);
+                };
+                assertFalse(lazy.isNumber()); assertEquals(0, forces.get());
+                assertEquals(expected, convert.apply(lazy)); assertTrue(lazy.isNumber());
+                assertEquals(expected, convert.apply(lazy)); assertEquals(1, forces.get());
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void publicNumericDemandSharesCoreEffectsAndGuestFailures(String backend) throws Exception {
+        var integer = scalar("long", "IntRep");
+        var data = with(scalar("object", "BoxedRep (Just Lifted)"), "evaluated", false);
+        var state = map("kind", "void", "primReps", list(), "evaluated", true);
+        var result = map("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", true,
+            "primReps", list("IntRep", "BoxedRep (Just Lifted)"), "components", list(integer, data));
+        String constructor = "ghc-internal:GHC.Internal.Types.I#";
+        var box = list("app", list("con", constructor, 1, map()),
+            list(list("lit", "int", "73", map("rep", integer))), list(false), true, true, map("rep", with(data, "evaluated", true)));
+        var bindings = new ArrayList<Map<String,Object>>();
+        for (String name : List.of("value", "failure")) {
+            var body = name.equals("value") ? box : list("app", list("prim", "raise#", map()), list(box), list(true), false, false, map("rep", data));
+            var trace = list("app", list("prim", "traceEvent#", map()),
+                list(list("lit", "string-bytes", HexFormat.of().formatHex(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)), map()), list("void", map("rep", state))),
+                list(false, false), false, false, map("rep", state));
+            var traced = list("case", trace, "traced", list(list("default", null, list(), body, map("binders", list()))),
+                map("rep", data, "binder", map("id", "traced", "lifted", false, "rep", state)));
+            bindings.add(map("id", "host:Host." + name, "name", name, "arity", 0, "lifted", true, "rep", data, "expr", traced));
+            var pair = list("app", list("con", "host:Host.Pair", 2, map()),
+                list(list("var", "x", map("rep", integer)), list("var", "host:Host." + name, map("rep", data))),
+                list(false, true), false, false, map("rep", result));
+            var getter = list("lam", list(map("id", "x", "name", "x", "rep", integer, "lifted", false)),
+                pair, map("rep", CLOSURE, "resultRep", result));
+            bindings.add(map("id", "host:Host." + name + "View", "name", name + "View", "arity", 1, "lifted", true, "rep", CLOSURE, "expr", getter));
+        }
+        var module = map("schema", 1, "ghc", "9.14.1", "unit", "host", "module", "Host", "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", bindings,
+            "constructors", list(map("id", "host:Host.Pair", "name", "(#,#)", "kind", "unboxed-tuple", "arity", 2, "tag", 1,
+                "strictFields", list(false, false), "fieldLifted", list(false, true),
+                "fieldReps", list(list("IntRep"), list("BoxedRep (Just Lifted)")), "fieldTypes", list(integer, data)),
+                map("id", constructor, "name", "I#", "kind", "boxed", "arity", 1, "tag", 1,
+                "fieldReps", list(list("IntRep")), "fieldTypes", list(integer), "strictFields", list(false), "fieldLifted", list(false))));
+        var path = CoreCbdFixtures.write(directory.resolve("Host.cbd"), module);
+        var output = new java.io.ByteArrayOutputStream();
+        try (var context = Context.newBuilder("thc").err(output).build()) {
+            var program = Main.loadProgram(context, List.of(path.toString()), false, backend, false, false);
+            context.enter();
+            try { Language.currentState().getRuntimeTrace().control(500, 1); }
+            finally { context.leave(); }
+            var success = Main.loadEntry(program, "host:Host.valueView");
+            var failure = Main.loadEntry(program, "host:Host.failureView").execute(0).getArrayElement(1);
+            var first = success.execute(0).getArrayElement(1); var second = success.execute(0).getArrayElement(1);
+            assertFalse(first.isNumber()); assertFalse(second.fitsInLong()); assertFalse(failure.isNumber());
+            assertEquals("", output.toString(java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals(73L, first.asLong()); assertEquals(73L, second.asLong());
+            for (int attempt = 0; attempt < 2; attempt++) {
+                var thrown = assertThrows(PolyglotException.class, failure::asLong);
+                assertTrue(thrown.isGuestException()); assertFalse(thrown.isHostException());
+                assertEquals("Haskell exception (payload retained lazily)", thrown.getMessage());
+            }
+            assertTrue(assertThrows(PolyglotException.class, failure::execute).isGuestException());
+            assertEquals(73L, success.execute(0).getArrayElement(1).asLong());
+            assertEquals("[thc trace event] value\n[thc trace event] failure\n", output.toString(java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
+    private static thc.runtime.Thunk delayed(Language language, java.util.function.Supplier<Object> body) {
+        return new thc.runtime.Thunk(new thc.runtime.GuestRoot(language, new thc.runtime.FrameLayout().build()) {
+            @Override public long bloom(com.oracle.truffle.api.frame.VirtualFrame frame) { return 0; }
+            @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { return body.get(); }
+        }.getCallTarget(), null);
     }
     private static final Map<String,Object> CLOSURE = scalar("closure", "BoxedRep (Just Lifted)");
     private static Map<String,Object> scalar(String kind, String rep) {

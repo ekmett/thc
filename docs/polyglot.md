@@ -254,14 +254,18 @@ allocation lifetime checks still apply.
 A lifted guest value can cross the Truffle boundary without being evaluated.
 The existing context-owned `HostReference` holds the actual thunk; exporting,
 querying its numeric capabilities and displaying it without side effects do not
-force it. A pending thunk is executable. Invoking a nonfunction thunk with no
-arguments demands its shared result:
+force it. Explicit numeric conversion demands its shared result:
 
 ```java
 Value lazy = guestArray.getArrayElement(0);
-Value evaluated = lazy.execute();
-long answer = evaluated.asLong();
+long answer = lazy.asLong();
 ```
+
+All seven numeric conversions (`asByte`, `asShort`, `asInt`, `asLong`,
+`asBigInteger`, `asFloat` and `asDouble`) demand only weak head normal form.
+A thunk that produces a function is evaluated but that function is not applied;
+a nonnumeric result rejects conversion. A pending thunk is also executable:
+`lazy.execute()` with no arguments explicitly demands a nonfunction result.
 
 Function-valued thunks retain the existing signature-driven invocation behavior:
 the arguments apply to the resulting Haskell function. Ordinary invocation uses
@@ -276,8 +280,16 @@ values; a lossy conversion remains unsupported. Unrelated one-field records are
 not interpreted as numbers. The language constructor continues to store its
 primitive payload; a scalar conversion at the host boundary may box that value.
 
-Truffle specifies that numeric predicates and conversions have no observable
-side effects. They therefore do not force a pending thunk: invoke it first.
-After evaluation, the original view can also observe the published numeric
-answer. This policy allows foreign code to choose when to demand a lazy value
-without adding context ownership to every guest thunk.
+THC deliberately allows these explicit conversions to evaluate guest code,
+extending Truffle's usual side-effect-free conversion contract. Conversions use
+the same guest admission, thread hosting, exception translation and shared thunk
+updates as invocation. Success and synchronous failure are memoized; converting
+again does not repeat the computation. Raw foreign references have no such guest
+evaluation authority, and closing the context prevents further conversion.
+
+`isNumber()` and every `fitsIn*()` query remain nonforcing and return false for a
+pending thunk. After successful evaluation, those queries observe the published
+numeric answer. Clients that first query a capability and decline conversion
+when it is false never request evaluation; they must explicitly demand the value
+if they want it computed. The nonforcing `Lifted.resolve` and `Lifted.project`
+value-resolution protocol is unchanged.
