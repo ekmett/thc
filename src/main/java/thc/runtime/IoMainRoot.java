@@ -13,7 +13,7 @@ public final class IoMainRoot extends ContextRoot {
     public IoMainRoot(Language language, CoreRepresentation result) {
         super(language, new FrameLayout().build());
         TupleShape shape = new TupleShape(result, language);
-        dispatch = new TupleDispatch(new IoResultDestination(shape, language, false), new Metrics(false), 1, false);
+        dispatch = new TupleDispatch(new IoResultDestination(shape, language), new Metrics(false), 1, false);
     }
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);

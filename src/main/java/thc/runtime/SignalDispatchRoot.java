@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
 import java.util.List;
 import thc.Language;
 /** Exact program-owned Ptr/Int32 layouts preserve constructor case identity. */
@@ -16,7 +14,6 @@ public final class SignalDispatchRoot extends ContextRoot {
     private final CoreRepresentation result;
     private final TupleShape shape;
     @Child private Force force = new Force(new Metrics(false), true);
-    @Child private Force unitForce = new Force(new Metrics(false), true);
     @Child private TupleDispatch dispatch;
     public SignalDispatchRoot(Language language, ExecutableProgram program) {
         super(language, new FrameLayout().build());
@@ -28,7 +25,7 @@ public final class SignalDispatchRoot extends ContextRoot {
             new CoreRepresentation(CoreKind.VOID, true, true, List.of(), null, null, null, null, null),
             new CoreRepresentation(CoreKind.DATA, false, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null)), null, null, null, null);
         shape = new TupleShape(result, language);
-        dispatch = new TupleDispatch(new IoResultDestination(shape, language, true), new Metrics(false), 3, false);
+        dispatch = new TupleDispatch(new IoResultDestination(shape, language), new Metrics(false), 3, false);
     }
     /** The service boxes these arguments even when the guest dispatcher ignores them. */
     static void prepareLayouts(ExecutableProgram program) {
@@ -53,13 +50,7 @@ public final class SignalDispatchRoot extends ContextRoot {
         }
         var boxedSignal = signal.createInt(((Long) number).intValue());
         dispatch.execute(frame, closure, new Object[]{boxedPointer, boxedSignal, thc.runtime.Unit.INSTANCE});
-        if (!(unitForce.execute(frame, frame.getObject(FrameLayout.TAIL_RESULT)) instanceof DataValue unit))
-            throw RuntimeFault.fault("Signal dispatcher did not return boxed unit");
-        validateUnit(unit); return thc.runtime.Unit.INSTANCE;
-    }
-    @TruffleBoundary private void validateUnit(DataValue unit) {
-        if (!"ghc-internal:GHC.Internal.Tuple.()".equals(unit.getLayout().getId()) || unit.getLayout().getArity() != 0)
-            throw RuntimeFault.fault("Signal dispatcher did not return boxed unit");
+        return thc.runtime.Unit.INSTANCE;
     }
     @Override public String getName() { return "THC original process signal dispatcher"; }
 }

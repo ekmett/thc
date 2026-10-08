@@ -328,25 +328,6 @@ public class ProcessSignalsTest {
             } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
         });
     }
-    private Object returnSignal(Object value) {
-        if (value instanceof List<?> list) {
-            if (list.size() > 1 && Objects.equals(list.getFirst(), "con") && Objects.equals(list.get(1), unitId)) return variable("signal", boxed);
-            var result = new ArrayList<>(); for (var child : list) result.add(returnSignal(child)); return result;
-        }
-        if (value instanceof Map<?, ?> map) { var result = new LinkedHashMap<>(); for (var entry : map.entrySet()) result.put(entry.getKey(), returnSignal(entry.getValue())); return result; }
-        return value;
-    }
-    @Test public void dispatcherRejectsAWrongBoxedResultAfterGuestEffects() throws Exception {
-        onBackends((language, backend) -> {
-            var source = (Map<String, Object>) returnSignal(module(true, descriptor)); ExecutableProgram program = backend.equals("ast") ? new Program(language, source, true) : new BytecodeProgram(language, source, true);
-            var target = new SignalDispatchRoot(language, program).getCallTarget(); var owner = Language.currentState(); var address = owner.getNativeAllocations().malloc(128L);
-            address.writeWord8(0, 77); owner.getThreads().enterCurrent();
-            try {
-                var failure = assertThrows(RuntimeFault.class, () -> target.call(address, 12L)); assertEquals("Signal dispatcher did not return boxed unit", failure.getMessage());
-                assertEquals(12L, address.readWord8(0), "result validation remains after the guest action"); ThreadInventoryCoreEvidence.released(language);
-            } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
-        });
-    }
     @Test public void nativeEventsCrossTheActualJvmBoundaryInAnIsolatedProcess() throws Exception {
         boolean linux = System.getProperty("os.name").equals("Linux");
         boolean darwin = System.getProperty("os.name").startsWith("Mac");

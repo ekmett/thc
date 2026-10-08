@@ -219,11 +219,14 @@ retain the state they still own.
 The unchanged `WeakThreads` program also matches its complete six-line native-GHC
 oracle in redirected, relocated Native Image execution. It exercises completed
 thread collection, resurrection and a fresh weak lifetime, with each finalizer
-running once. The build uses the tracked resource-copy recipe and the normal
-published Jam package. No diagnostic queue overlay is required. Execution needs
-only the executable and its declared `.jam` libraries and notices, without
-source, CBD, GHC or JDK runtime mounts. This qualifies the resource-copy profile;
-it does not establish default-intrinsics execution.
+running once. Both the resource-copy and intrinsics image profiles pass with the
+normal published Jam package and tracked recipe. No diagnostic queue overlay is
+required. Execution needs only the executable and its declared `.jam` libraries
+and notices, without source, CBD, GHC or JDK runtime mounts. The intrinsics check
+includes the general executable IO entry repair at `3e5e7f330`; its input proof
+uses indexed access and an emptiness check, avoiding generic collection traversal
+in the runtime compilation graph. The user-facing driver and `native-runtime`
+wrapper still default to resource-copy.
 
 Recovery from actual heap exhaustion, macOS execution and remaining Windows
 coverage are still open. The older combined Native Image component candidate

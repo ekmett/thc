@@ -25,6 +25,7 @@ test commands.
 Executable `IO a` entries validate the erased RealWorld state-transformer tuple
 and discard its lifted answer without forcing it, as GHC does. This includes
 returned bottoms and functions; exceptions raised by the action still propagate.
+Signal dispatch uses the same answer-discarding completion path.
 
 ## Narrow Core literals
 
