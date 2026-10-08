@@ -1136,6 +1136,15 @@ tasks.register("probe", JavaExec) {
     workingDir(projectDir)
 }
 
+tasks.register("hostResourceDemo", JavaExec) {
+    group = "application"
+    description = "Runs a Java host holding and releasing an ordinary Haskell resource."
+    classpath = examples.runtimeClasspath
+    mainClass.set("thc.HostResourceDemo")
+    jvmArgs(application.applicationDefaultJvmArgs)
+    workingDir(projectDir)
+}
+
 tasks.register("polyglotDemo", JavaExec) {
     group = "application"
     description = "Runs exported Haskell against GraalJS through THC.Polyglot."
