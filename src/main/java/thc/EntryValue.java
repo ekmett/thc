@@ -57,8 +57,10 @@ public final class EntryValue implements TruffleObject {
         if (hostInputs != null) argumentCount = hostInputs.size();
         this.program = program; this.entry = entry; this.argumentCount = argumentCount;
         this.hostResultFault = hostResultFault; this.processSignals = processSignals;
-        var untypedTarget = program.hostEntryTarget(argumentCount);
+        // An explicitly loaded program may not have admitted any entry yet.
+        // Reading its cell prepares the lazy value without evaluating a CAF.
         guestEntry = program.entryValue(entry);
+        var untypedTarget = program.hostEntryTarget(argumentCount);
         boolean admittedSignature = hostInputs != null;
         if (hostInputs == null && guestEntry instanceof Closure closure && closure.target.getRootNode() instanceof GuestRoot root) {
             var complete = root.getInputProofs();

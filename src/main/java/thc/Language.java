@@ -427,6 +427,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
                 @Override public String getName() { return "THC load managed exports from unit directory"; }
             }.getCallTarget();
         }
+        require(!prepareCode || !"program".equals(input.get("mode")), "Reusable code requires a selected entry");
         if (!prepareCode) return unitRoot(input, directory);
         if (!(input.get("entry") instanceof String entry)) throw new IllegalStateException("Expected entry name");
         return preparedRoot(CoreModules.selectedModules(input, entry));
@@ -558,57 +559,41 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         @Override public String getName() { return "THC prepared load " + entry; }
     }
 
-    @SuppressWarnings("unchecked") private CallTarget unitRoot(Map<String, Object> input, CoreUnitDirectory directory) {
-        if (!(input.get("entry") instanceof String entry)) throw new IllegalStateException("Expected entry name");
+    private CallTarget unitRoot(Map<String, Object> input, CoreUnitDirectory directory) {
+        boolean explicitProgram = "program".equals(input.get("mode"));
+        String entry = input.get("entry") instanceof String value ? value : null;
+        require(explicitProgram || entry != null, "Expected entry name");
         String shutdown = input.get("shutdownEntry") instanceof String value ? value : null;
-        require(shutdown == null || Boolean.TRUE.equals(input.get("ioMain")) && !blank(shutdown) && !shutdown.equals(entry),
-            "Executable shutdown requires a distinct IO entry");
+        boolean ioMain = Boolean.TRUE.equals(input.get("ioMain"));
+        require(!explicitProgram || entry == null && !ioMain && shutdown == null, "Program load does not select an entry");
+        var view = explicitProgram ? null : new ProgramValue.View(entry, ioMain, shutdown);
         Object backendValue = input.get("backend");
         if (backendValue == null) backendValue = Main.defaultBackend();
         require("ast".equals(backendValue) || "bytecode".equals(backendValue), "Unknown THC backend: " + backendValue);
         String backend = (String) backendValue;
         require(input.get("asyncExceptions") == null || input.get("asyncExceptions") instanceof Boolean, "asyncExceptions must be a Boolean");
         boolean async = Boolean.TRUE.equals(input.get("asyncExceptions"));
-        require(!Boolean.TRUE.equals(input.get("ioMain")) || !Boolean.TRUE.equals(input.get("diagnosticUnsupported")), "IO main requires strict unsupported-Core rejection");
+        boolean diagnostic = Boolean.TRUE.equals(input.get("diagnosticUnsupported"));
+        require(!ioMain || !diagnostic, "IO main requires strict unsupported-Core rejection");
         return new RootNode(this) {
             @Override public Object execute(VirtualFrame frame) {
                 var owner = currentState(this);
                 var program = new CoreUnitProgram(Language.this, directory, input, entry, backend, async, owner);
                 try {
-                    var bindings = program.signatureBindings(entry);
-                    var selected = single(bindings, binding -> entry.equals(binding.get("id")));
-                    var expression = (List<Object>) selected.get("expr");
-                    var io = Boolean.TRUE.equals(input.get("ioMain")) ? CoreRepresentations.ioUnitMainResult(selected, bindings) : null;
-                    CoreRepresentation shutdownResult = null;
-                    if (shutdown != null) {
-                        var definitions = program.signatureBindings(shutdown);
-                        shutdownResult = CoreRepresentations.ioUnitMainResult(single(definitions, binding -> shutdown.equals(binding.get("id"))), definitions);
-                    }
-                    List<CoreRepresentation> hostInputs = null;
-                    CoreRepresentation hostResult = null;
-                    if (io == null) {
-                        var signature = CoreHostSignature.select(selected, bindings);
-                        if (signature != null) { hostInputs = signature.getInputs(); hostResult = signature.getResult(); }
-                        else if (((Number) selected.get("arity")).intValue() == 0) {
-                            hostResult = CoreRepresentations.binder(selected).refine(CoreRepresentations.expression(expression));
-                            hostInputs = List.of();
-                        }
-                    }
-                    if (hostInputs != null) {
-                        for (var proof : hostInputs) HostAbi.require(proof);
-                        HostAbi.require(hostResult);
-                    }
+                    // Legacy single-entry loads validate before native startup.
+                    // Explicit programs defer only entry selection, not registration.
+                    var plan = view == null ? null : ProgramValue.EntryPlan.select(program, view, diagnostic);
                     var registrations = program.registerStartup();
                     var exports = new ArrayList<ManagedExportSignature>();
                     for (var registration : registrations) exports.addAll(registration.getExports());
                     owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, program::signatureBindings), program::linkStartup);
-                    var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), null,
-                        io, Language.this, shutdown, shutdownResult, program.getCapturesContinuations() && program.contains(CoreSignalForeign.dispatcher), hostInputs, hostResult);
+                    Object value = plan == null ? new ProgramValue(program, Language.this, owner, diagnostic)
+                        : plan.create(program, Language.this);
                     owner.coreUnitPrograms.add(program);
                     return value;
                 } catch (Throwable failure) { owner.foreignRoots.release(program); program.close(); throw failure; }
             }
-            @Override public String getName() { return "THC load " + entry + " from unit directory"; }
+            @Override public String getName() { return "THC load " + (explicitProgram ? "program" : entry) + " from unit directory"; }
         }.getCallTarget();
     }
     private static <T> T singleOrNull(List<T> values, Predicate<T> selected) {

@@ -231,6 +231,17 @@ class CoreUnitLoadTest {
     @Test void mutualFunctionReferencesPrepareWithoutRecursingThroughColdBodies() throws Exception {
         var manifest = fixture(false, true); for (var backend : List.of("ast", "bytecode")) try (var context = executionContext()) { var entry = context.eval("thc", request(manifest, backend)); assertEquals(7L, entry.execute(1).asLong()); assertEquals(2L, count(entry, "coreCompactDecodedBindings")); }
     }
+    @Test void explicitProgramAndItsEntryViewsBecomeUnusableWhenTheirContextCloses() throws Exception {
+        var paths = List.of("@" + fixture());
+        try (var context = executionContext()) {
+            var program = Main.loadProgram(context, paths, true, "bytecode", false, false);
+            var entry = Main.loadEntry(program, "uA:A.entry");
+            assertEquals(2L, entry.execute(1).asLong());
+            context.close();
+            assertThrows(IllegalStateException.class, () -> Main.loadEntry(program, "uB:B.entry"));
+            assertThrows(IllegalStateException.class, () -> entry.execute(0));
+        }
+    }
     @Test void sharedMappingsKeepDecodedContextStateSeparateAndSurviveClosingEitherContext() throws Exception {
         var manifest = fixture(); try (var engine = Engine.create()) { var source = Source.newBuilder("thc", request(manifest, "bytecode"), "unit-model").cached(true).build(); var first = Context.newBuilder("thc").engine(engine).build(); var second = Context.newBuilder("thc").engine(engine).build();
             try { var a = first.eval(source); var b = second.eval(source); assertEquals(1L, count(a, "coreCompactPhysicalMappingOpens")); assertEquals(0L, count(a, "coreCompactMappingCacheHits")); assertEquals(0L, count(b, "coreCompactPhysicalMappingOpens")); assertEquals(1L, count(b, "coreCompactMappingCacheHits")); assertEquals(2L, a.execute(1).asLong()); assertEquals(1L, count(b, "coreCompactDecodedBindings")); first.close(); assertEquals(3L, b.execute(2).asLong()); assertEquals(2L, count(b, "coreCompactDecodedBindings")); } finally { first.close(); second.close(); }

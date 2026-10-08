@@ -71,16 +71,16 @@ build. It needs the normal [foreign-code setup](../../docs/interface-foreign.md)
 For already acquired Core, invoke the Java example directly through Gradle:
 
 ```sh
-./gradlew hostResourceDemo --args="@/absolute/path/to/packages.json UNIT:HostResource.session"
+./gradlew hostResourceDemo --args="@/absolute/path/to/packages.json UNIT:HostResource"
 ```
 
-One application factory returns its operations through the existing logical
-tuple/function boundary. Its closures retain only the counter; the resource is
-created later and belongs only to Java's `Value` collection. The small `io`
-helper supplies the erased `State#` argument and selects the result field from
-an ordinary Core IO call. See the [embedding guide](../../docs/site/embedding.md)
-for that transport and the current limitation on separately loading entries
-whose packages declare overlapping native exports.
+Java loads one program and looks up its resource operations as entry views,
+sharing the program's CAFs and native registrations. The program, entry views
+and independent counter stay live after the resource leaves the collection.
+The small `io` helper supplies the erased `State#` argument and selects the
+result field from an ordinary Core IO call. See the
+[embedding guide](../../docs/site/embedding.md) for shared program loading and
+that transport.
 
 Automatic cleanup has no fixed collection count or timing guarantee. Use
 explicit close or scoped ownership for scarce resources. The example keeps its

@@ -2,8 +2,9 @@
 
 THC's current host boundary is a GraalVM polyglot `Context` and its returned
 `Value`s. `thc.Main.loadManagedExports` exposes declared Haskell functions as polyglot
-members. `thc.Main.executionContext` creates a launcher context, while `thc.Main.loadEntry`
-provides the lower-level kernel and executable entrypoints. Their signatures and Java source
+members. `thc.Main.executionContext` creates a launcher context, while
+`thc.Main.loadProgram` and `thc.Main.loadEntry` provide shared applications and
+their lower-level kernel and executable entrypoints. Their signatures and Java source
 links are in the **Runtime** reference navigation.
 
 Use the repository's pinned GraalVM and JVM dependencies. There is no published,
@@ -96,6 +97,32 @@ void main() {
     }
 }
 ```
+
+For several entries in the same application, load the program once:
+
+```java
+var program = thc.Main.loadProgram(context,
+    List.of("@/absolute/path/to/packages.json"));
+var create = thc.Main.loadEntry(program, "app:Buffers.create");
+var read = thc.Main.loadEntry(program, "app:Buffers.read");
+```
+
+These views share lazy globals, memoized results and exceptions, and native
+export registration. Lookup admits the selected entry without evaluating its
+CAFs. A missing or invalid entry does not discard the loaded program. Context
+closure releases its readers and native roots; discarding the public `program`
+value does not close the application while its context is open.
+
+Backend, instrumentation, async policy and artifact verification are selected
+by `loadProgram` and stay fixed for its entry views. The equivalent interop
+operation is `program.invokeMember("entry", name)`, optionally followed by an
+IO-main Boolean and a distinct shutdown entry name. Java's
+`loadEntry(program, name, true, shutdown)` selects that executable view.
+Repeated lookup of the same `(name, ioMain, shutdown)` configuration shares its
+compilation and lifecycle state. A view with shutdown is one-shot; ordinary
+`runIO` without shutdown is reusable. Other configurations are separate views,
+so this is not a program-wide shutdown guarantee. Program loading uses the
+ordinary CBD loader; prepared single-entry images do not expose this API.
 
 `loadEntry` uses the entry's retained Core signature. Host values follow its
 logical argument and result shapes, not the runtime's flattened transport slots:
@@ -236,16 +263,17 @@ held by Java as well as references held by guest code. The
 keeps a buffer in a Java collection, then observes automatic cleanup after the
 collection releases it while the context stays open.
 
-Separate `loadEntry` calls currently create separate program instances. If their
-packages declare overlapping static native exports, the second load rejects the
-conflict; identical declaration text does not establish shared CAF ownership.
-A single application factory can return related operations through the existing
-tuple/function transport. General shared-program loading remains unresolved.
+Separate `loadProgram` calls, or the original `loadEntry(context, modules, name)`
+form, create independent program instances. If their packages declare
+overlapping static native exports, the second load rejects the conflict;
+identical paths or declaration text do not establish shared CAF ownership.
+Use entry views of the same explicit program to share that ownership.
 
 Compilation and metrics members are development controls, not evidence that
 every reachable operation is supported. Keep diagnostic unsupported traps out
-of accepted executable runs. `loadEntry` disables that diagnostic option for
-the `ioMain` path.
+of accepted executable runs. A direct `loadEntry` disables that diagnostic
+option for the `ioMain` path; an explicitly loaded diagnostic program rejects
+IO-main lookup instead of changing its fixed admission policy.
 
 For guest calls into other languages, see [polyglot calls](../polyglot.md).
 Core acquisition through `THC.Plugin` or `THC.Interface` is a different boundary;

@@ -5,4 +5,4 @@ set -eu
 cd "$(dirname "$0")/.."
 bin/acquire-polyglot-demo.sh host-resource "$@"
 entry=$(cat build/host-resource/entry.txt)
-exec ./gradlew hostResourceDemo --console=plain --args="@build/host-resource/packages.json ${entry%.main}.session"
+exec ./gradlew hostResourceDemo --console=plain --args="@build/host-resource/packages.json ${entry%.main}"

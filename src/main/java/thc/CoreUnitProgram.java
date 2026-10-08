@@ -264,10 +264,13 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         synchronized (startupLinks) { links = new ArrayList<>(startupLinks.values()); }
         for (var link : links) owner.getPackageCbits().link(link);
     }
-    /** Follow only the selected alias/PAP spine, never unrelated body references. */
+    /** Selected binding first, followed by unique bindings on its alias/PAP
+     * spine in discovery order. Never follows unrelated body references. */
     public List<Map<String,Object>> signatureBindings(String id) {
-        var selected = new LinkedHashMap<String,Map<String,Object>>(); var binding = binding(id); selected.put(id, binding);
-        follow((List<Object>) binding.get("expr"), selected); return new ArrayList<>(selected.values());
+        try (var ownership = demand.getPreparationLock().acquire()) {
+            var selected = new LinkedHashMap<String,Map<String,Object>>(); var binding = binding(id); selected.put(id, binding);
+            follow((List<Object>) binding.get("expr"), selected); return new ArrayList<>(selected.values());
+        }
     }
     private void follow(List<Object> expression, Map<String,Map<String,Object>> selected) {
         if (expression.isEmpty()) return;

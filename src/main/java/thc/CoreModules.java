@@ -341,6 +341,17 @@ public final class CoreModules {
         try { return requestDocument(paths, settings); }
         catch (Exception failure) { throw rethrow(failure); }
     }
+    /** Serialize an explicit application load through the ordinary CBD capability boundary. */
+    public static String programRequest(List<String> paths, boolean instrument, boolean diagnosticUnsupported,
+            String backend, boolean sourceNotesEnabled, Boolean asyncExceptions, boolean verifyArtifacts) {
+        var settings = new LinkedHashMap<String,Object>();
+        settings.put("mode", "program"); settings.put("instrument", instrument); settings.put("diagnosticUnsupported", diagnosticUnsupported);
+        settings.put("backend", backend); settings.put("sourceNotesEnabled", sourceNotesEnabled); settings.put("verifyArtifacts", verifyArtifacts);
+        for (String path : paths) if (path.startsWith("@")) { settings.put("strictLink", true); break; }
+        if (asyncExceptions != null) settings.put("asyncExceptions", asyncExceptions);
+        try { return requestDocument(paths, settings); }
+        catch (Exception failure) { throw rethrow(failure); }
+    }
     public static String managedExportRequest(List<String> paths, String backend, boolean instrument) { return managedExportRequest(paths, backend, instrument, false); }
     public static String managedExportRequest(List<String> paths, String backend, boolean instrument, boolean verifyArtifacts) {
         var settings = new LinkedHashMap<String,Object>(); settings.put("mode", "managed-exports"); settings.put("backend", backend); settings.put("instrument", instrument); settings.put("strictLink", true); settings.put("verifyArtifacts", verifyArtifacts);

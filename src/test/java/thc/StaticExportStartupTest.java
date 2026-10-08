@@ -119,6 +119,31 @@ class StaticExportStartupTest {
     }
     @AfterEach void releaseMappings() { CoreFileMappings.shared.evictIdleBelow(directory); }
 
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void explicitProgramEntriesShareRegistrationAndIndependentLoadsStillConflict(String backend) throws Exception {
+        var module = module(false, "data-addr");
+        var paths = List.of("@" + packaged(module));
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            // Invalid legacy entry selection must precede native constructors;
+            // otherwise their retained callback would belong to a failed program.
+            assertThrows(RuntimeException.class, () -> Main.loadEntry(context, paths, "missing", true, backend));
+            var program = Main.loadProgram(context, paths, true, backend, false, true);
+            assertTrue(Main.loadEntry(program, id).canExecute());
+            assertTrue(Main.loadEntry(program, unit + ":" + name + ".label").canExecute());
+            var failure = assertThrows(RuntimeException.class, () -> Main.loadProgram(context, paths, true, backend, false, true));
+            assertTrue(failure.getMessage().contains("Conflicting native static export"), failure.toString());
+            assertTrue(Main.loadEntry(program, id).canExecute(), "failed independent load cannot invalidate the original views");
+            context.enter();
+            try {
+                var owner = Language.currentState();
+                var link = Objects.requireNonNull(PackageScalarLinks.read(module)).getLink();
+                var function = owner.getPackageCbits().resolve(link, link.getAbi().getFirst()).getReceiver();
+                var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+                assertEquals(49, interop.asInt(interop.execute(function, 42)), "constructor and retained callback still use the first program");
+            } finally { context.leave(); }
+        }
+    }
+
     /** Real C constructors, with the existing exact legacy CAPI admission shape. */
     private Map<String,Object> capiModule(String initializer) throws Exception {
         String capiUnit = "base-test-unit", capiModule = "System.CPUTime.Posix.ClockGetTime";

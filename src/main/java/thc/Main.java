@@ -75,6 +75,31 @@ public final class Main {
             strictBoolean(System.getProperty("thc.sourceNotesEnabled", "true")), ioMain,
             shutdownEntry, asyncExceptions, verifyArtifacts));
     }
+    /**
+     * Load one application for repeated entry lookup. Its lazy cells, native
+     * registrations and input readers belong to this context until it closes.
+     * Independent loads never share program identity, even for identical paths.
+     */
+    public static Value loadProgram(Context context, List<String> modules) {
+        return loadProgram(context, modules, true, defaultBackend(), configuredAsyncExceptions(), false);
+    }
+    public static Value loadProgram(Context context, List<String> modules, boolean instrument, String backend,
+            Boolean asyncExceptions, boolean verifyArtifacts) {
+        return context.eval("thc", CoreModules.programRequest(modules, instrument,
+            Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
+            strictBoolean(System.getProperty("thc.sourceNotesEnabled", "true")), asyncExceptions, verifyArtifacts));
+    }
+    /** Select a lazy entry view from an explicitly loaded program. Lookup does not evaluate its CAFs. */
+    public static Value loadEntry(Value program, String entry) { return program.invokeMember("entry", entry); }
+    /**
+     * Select an IO view, optionally with executable shutdown. Only a view with
+     * shutdown is one-shot; repeated lookup of that exact configuration retains
+     * its lifecycle state. Other entry configurations have independent views.
+     */
+    public static Value loadEntry(Value program, String entry, boolean ioMain, String shutdownEntry) {
+        return shutdownEntry == null ? program.invokeMember("entry", entry, ioMain)
+            : program.invokeMember("entry", entry, ioMain, shutdownEntry);
+    }
     public static Boolean configuredAsyncExceptions() {
         String configured = System.getProperty("thc.asyncExceptions");
         return configured == null ? null : strictBoolean(configured);

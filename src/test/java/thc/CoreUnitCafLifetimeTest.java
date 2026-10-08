@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import thc.runtime.*;
@@ -56,7 +57,8 @@ class CoreUnitCafLifetimeTest {
         var raised = list("app", list("prim", "raise#", map()), list(box(23)), list(true), false, false, map("rep", data));
         var b = unit("B", List.of(caf("uB:B.value", trace("success", box(17))), caf("uB:B.failure", trace("failure", raised))),
             list(map("id", "uB:B.Box", "name", "Box", "kind", "boxed", "arity", 1, "tag", 1, "fieldReps", list(list("IntRep")), "fieldTypes", list(integer), "strictFields", list(false), "fieldLifted", list(false))));
-        var c = unit("C", List.of(function("uC:C.success", readCaf("uB:B.value")), function("uC:C.failure", readCaf("uB:B.failure"))), List.of());
+        var c = unit("C", List.of(function("uC:C.success", readCaf("uB:B.value")), function("uC:C.failure", readCaf("uB:B.failure")),
+            function("uC:C.successAgain", readCaf("uB:B.value")), function("uC:C.failureAgain", readCaf("uB:B.failure"))), List.of());
         return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, b, c))));
     }
     private long count(ExecutableProgram program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
@@ -87,6 +89,36 @@ class CoreUnitCafLifetimeTest {
             if (queue.remove(100) == sentinel) { assertNull(sentinel.get()); return; }
         } while (System.nanoTime() < deadline);
         fail("Allocation pressure plus collection requests did not collect the unrelated cyclic sentinel");
+    }
+    @Test void publicProgramEntriesShareLazySuccessAndFailureWhileIndependentLoadsDoNot() throws Exception {
+        var paths = List.of("@" + fixture());
+        var effects = "[thc trace event] success\n[thc trace event] failure\n";
+        for (var backend : List.of("ast", "bytecode")) {
+            var output = new ByteArrayOutputStream();
+            try (var context = Context.newBuilder("thc").err(output).build()) {
+                var program = Main.loadProgram(context, paths, true, backend, false, false);
+                context.enter();
+                try { Language.currentState().getRuntimeTrace().control(500, 1); }
+                finally { context.leave(); }
+                assertThrows(PolyglotException.class, () -> Main.loadEntry(program, "uC:C.missing"));
+                var success = Main.loadEntry(program, "uC:C.success");
+                var successAgain = Main.loadEntry(program, "uC:C.successAgain");
+                var failure = Main.loadEntry(program, "uC:C.failure");
+                var failureAgain = Main.loadEntry(program, "uC:C.failureAgain");
+                assertEquals("", output.toString(StandardCharsets.UTF_8), "looking up views cannot evaluate CAFs");
+                assertEquals(17L, success.execute(0).asLong());
+                assertThrows(PolyglotException.class, () -> failure.execute(0));
+                assertEquals(17L, successAgain.execute(0).asLong());
+                assertThrows(PolyglotException.class, () -> failureAgain.execute(0));
+                assertEquals(effects, output.toString(StandardCharsets.UTF_8), "both views must observe the same memoized effects");
+                var independent = Main.loadProgram(context, paths, true, backend, false, false);
+                assertEquals(17L, Main.loadEntry(independent, "uC:C.success").execute(0).asLong());
+                assertThrows(PolyglotException.class, () -> Main.loadEntry(independent, "uC:C.failure").execute(0));
+                assertEquals(effects + effects, output.toString(StandardCharsets.UTF_8), "another explicit load has fresh CAFs");
+                assertEquals(17L, Main.loadEntry(program, "uC:C.success").execute(0).asLong());
+                assertEquals(effects + effects, output.toString(StandardCharsets.UTF_8));
+            }
+        }
     }
     @Test void laterColdNameLookupPreservesMemoizedResultAndFailureWithoutRepeatingEffects() throws Exception {
         var manifest = fixture();

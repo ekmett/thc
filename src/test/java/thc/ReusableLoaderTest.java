@@ -137,6 +137,22 @@ class ReusableLoaderTest {
             }
         }
     }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void programLookupPreservesExecutableViewLifecycleAndReusableIo(String backend) throws Exception {
+        var path = CoreCbdFixtures.write(directory.resolve("ProgramIo.cbd"), ioModule());
+        try (var context = Context.newBuilder("thc").build()) {
+            var program = Main.loadProgram(context, List.of(path.toString()), true, backend, false, true);
+            assertThrows(PolyglotException.class, () -> Main.loadEntry(program, "entry", false, "stop"));
+            var action = Main.loadEntry(program, "entry", true, "stop");
+            assertTrue(action.invokeMember("runIO").asBoolean());
+            var again = Main.loadEntry(program, "entry", true, "stop");
+            assertTrue(assertThrows(PolyglotException.class, () -> again.invokeMember("runIO")).getMessage().contains("already started"));
+            // A standalone IO action has no executable shutdown latch.
+            var reusable = Main.loadEntry(program, "entry", true, null);
+            assertTrue(reusable.invokeMember("runIO").asBoolean());
+            assertTrue(Main.loadEntry(program, "entry", true, null).invokeMember("runIO").asBoolean());
+        }
+    }
     private String nativeBinding(Map<String,Object> module) throws Exception {
         module = with(module, "bindings", ((List<Map<String,Object>>) module.get("bindings")).stream()
             .map(binding -> with(binding, "id", "fixture:PreparedIo." + binding.get("id"))).toList());
