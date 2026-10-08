@@ -19,3 +19,9 @@ executable polyglot
   import: guest
   main-is: PolyglotDemo.hs
   ghc-options: -main-is PolyglotDemo
+
+executable weak-threads
+  main-is: WeakThreads.hs
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+  ghc-options: -O2 -Wall -main-is WeakThreads
