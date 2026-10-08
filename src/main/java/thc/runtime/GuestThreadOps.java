@@ -19,6 +19,7 @@ import thc.Language;
 
 public final class GuestThreadOps {
     private GuestThreadOps() {}
+    private static final Object CONSUMED_REGISTRATION = new Object();
     public static TupleShape actionResult(Closure action, boolean asyncEnabled) {
         if (!(action.target.getRootNode() instanceof GuestRoot root)) throw RuntimeFault.fault("fork# requires a guest action");
         if (asyncEnabled) {
@@ -62,10 +63,12 @@ public final class GuestThreadOps {
         var root = new ForkActionRoot(language, shape, asyncEnabled).getCallTarget();
         MaskingState inheritedMask = state.getMaskingState().get();
         CountDownLatch ready = new CountDownLatch(1);
-        AtomicReference<Throwable> registrationFailure = new AtomicReference<>();
-        AtomicReference<GuestThreadId> identity = new AtomicReference<>();
+        // Only the waiting parent owns this result, never the retained carrier task.
+        // The terminal marker also rejects publication after the parent abandons its wait.
+        AtomicReference<Object> registration = new AtomicReference<>();
         Thread child = threads.newThread(state.getEnv(), () -> {
             boolean registered = false;
+            boolean registrationCompleted = false;
             GuestThreadStatus outcome = GuestThreadStatus.FINISHED;
             AutoCloseable affinity = null;
             Throwable failure = null;
@@ -76,7 +79,8 @@ public final class GuestThreadOps {
                     if (!threads.isLoom()) affinity = capability == null ? threads.getCpuAffinity().resetCurrent() : threads.getCpuAffinity().bindCurrent(threads.currentIdentity().getCapability());
                     GuestThreadId current = threads.currentIdentity();
                     if (!threads.isLoom()) current.setAffinityApplied(capability != null && affinity != null);
-                    identity.set(current);
+                    registration.compareAndSet(null, current);
+                    registrationCompleted = true;
                     ready.countDown();
                     root.call(action);
                 } catch (UncaughtForkAsync uncaught) {
@@ -89,7 +93,7 @@ public final class GuestThreadOps {
             } catch (Throwable caught) {
                 failure = caught;
                 outcome = GuestThreadStatus.uncaught(caught);
-                if (!registered) registrationFailure.set(caught);
+                if (!registered) registration.compareAndSet(null, caught);
             } finally {
                 if (!registered) ready.countDown();
                 try { if (registered) threads.leaveCurrent(outcome); }
@@ -98,27 +102,31 @@ public final class GuestThreadOps {
                 catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
             }
             if (failure != null) {
-                if (identity.get() != null) reportHostFailure(state, failure);
+                if (registrationCompleted) reportHostFailure(state, failure);
                 GuestThreadOps.<RuntimeException, Object>rethrow(failure);
             }
         }, capability, node);
         var handler = child.getUncaughtExceptionHandler();
         child.setUncaughtExceptionHandler((thread, failure) -> {
-            if (identity.get() == null) { registrationFailure.set(failure); ready.countDown(); }
+            // This includes failure after enterCurrent but before identity publication.
+            // A consumed successful result must not be mistaken for failed registration.
+            if (ready.getCount() != 0) { registration.compareAndSet(null, failure); ready.countDown(); }
             if (handler != null) handler.uncaughtException(thread, failure);
         });
         // pthreads inherit their creator's mask. Broaden even across Truffle entry.
-        try { threads.startThread(child); }
-        catch (Throwable failure) { return GuestThreadOps.<RuntimeException, GuestThreadId>rethrow(failure); }
-        try (var admission = LoomScheduler.suspendCurrentGuest()) {
-            TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, AWAIT_REGISTRATION, ready);
-        }
-        Throwable failure = registrationFailure.get();
-        if (failure != null) throw new RuntimeFault("fork# child registration failed: " + failure.getClass().getSimpleName());
-        GuestThreadId result = identity.get();
-        if (result == null) throw RuntimeFault.fault("fork# child did not publish its ThreadId#");
-        return result;
+        try {
+            threads.startThread(child);
+            try (var admission = LoomScheduler.suspendCurrentGuest()) {
+                TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, AWAIT_REGISTRATION, ready);
+            }
+            Object result = registration.getAndSet(CONSUMED_REGISTRATION);
+            if (result instanceof Throwable failure)
+                throw new RuntimeFault("fork# child registration failed: " + failure.getClass().getSimpleName());
+            if (!(result instanceof GuestThreadId identity)) throw RuntimeFault.fault("fork# child did not publish its ThreadId#");
+            return identity;
+        } finally { registration.set(CONSUMED_REGISTRATION); }
     }
+
     /** A language-owned thread cannot cancel its non-creator TruffleContext. */
     static void reportHostFailure(Language.State state, Throwable failure) {
         if (!fatalForkFailure(failure)) return;

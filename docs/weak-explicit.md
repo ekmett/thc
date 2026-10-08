@@ -130,8 +130,10 @@ between tested JVM behavior and the remaining qualification boundaries.
 
 [`WeakThreads`](../src/examples/WeakThreads.hs) uses ordinary `Control.Concurrent`,
 `GHC.Conc` and `System.Mem.Weak` APIs. A running guest roots its `ThreadId#`.
-After the finite guest lifetime ends, the runtime drops its identity cache and
-scheduler references; keeping only its Java carrier does not retain the weak key.
+The fork startup handoff releases its published identity when the parent receives
+it or abandons the wait. After the finite guest lifetime ends, the runtime drops
+its identity cache and scheduler references; keeping only its Java carrier does
+not retain the weak key.
 A guest or Java reference to the actual `ThreadId#` remains an independent root.
 Platform host reentry continues to reuse the host's identity and capability.
 

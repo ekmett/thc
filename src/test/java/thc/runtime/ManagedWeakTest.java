@@ -1198,6 +1198,26 @@ class ManagedWeakTest {
         assertNull(closing.liveJavaId());
         assertNull(capability.liveJavaId());
     }
+    /** Exercise fork#'s real registration handoff while observing its retained carrier. */
+    private Thread forkWeakObserver(Language language, Runnable observe) {
+        var state = Map.of("kind", "void", "primReps", List.of(), "evaluated", true);
+        var boxed = Map.of("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
+        var closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
+        var io = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "primReps", List.of("BoxedRep (Just Lifted)"),
+            "components", List.of(state, boxed), "evaluated", true);
+        var pair = List.of("app", List.of("con", "Pair", 2),
+            List.of(List.of("void", Map.of("rep", state)), List.of("con", "Done", 0, Map.of("rep", boxed))),
+            List.of(false, true), false, false, Map.of("rep", io));
+        var program = new Program(language, Map.of("constructors", List.of(
+            Map.of("id", "Done", "name", "Done", "arity", 0, "tag", 1, "fieldReps", List.of(), "strictFields", List.of(), "fieldLifted", List.of()),
+            Map.of("id", "Pair", "name", "(#,#)", "arity", 2, "kind", "unboxed-tuple")),
+            "bindings", List.of(Map.of("id", "done", "name", "done", "arity", 1, "lifted", true, "expr", List.of("lam",
+                List.of(Map.of("id", "s", "rep", state, "lifted", false)), pair, Map.of("rep", closure, "resultRep", io))))));
+        var target = new RootNode(language) {
+            @Override public Object execute(VirtualFrame frame) { observe.run(); return program.entryValue("done"); }
+        }.getCallTarget();
+        return Objects.requireNonNull(GuestThreadOps.fork(target.getRootNode(), new Thunk(target, null), true).getCarrier().get());
+    }
     @Test
     void weakThreadIdentityFollowsGuestLifetimeRatherThanRetainedCarrier() throws Exception {
         for (var hosting : List.of("platform", "loom"))
@@ -1206,14 +1226,14 @@ class ManagedWeakTest {
             context.initialize("thc"); context.enter();
             try {
                 var state = Language.currentState(); var threads = state.getThreads();
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var owner = state.getWeaks(); var queue = new ReferenceQueue<Object>();
                 var registration = new AtomicReference<Registration>();
                 var retained = new AtomicReference<GuestThreadId>();
                 var failure = new AtomicReference<Throwable>();
                 var ready = new CountDownLatch(1); var finish = new CountDownLatch(1);
                 state.admitGuestConcurrency();
-                var worker = threads.newThread(state.getEnv(), () -> {
-                    threads.enterCurrent(null, forked, true, null);
+                Runnable observe = () -> {
                     try {
                         retained.set(threads.currentIdentity());
                         registration.set(new Registration(
@@ -1223,9 +1243,17 @@ class ManagedWeakTest {
                         if (!finish.await(10, TimeUnit.SECONDS)) throw new AssertionError("Guest was not released");
                     } catch (Throwable caught) {
                         failure.set(caught); ready.countDown();
-                    } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
-                }, null, null);
-                threads.startThread(worker);
+                    }
+                };
+                Thread worker;
+                if (forked) worker = forkWeakObserver(language, observe);
+                else {
+                    worker = threads.newThread(state.getEnv(), () -> {
+                        threads.enterCurrent(null, false, true, null);
+                        try { observe.run(); } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
+                    }, null, null);
+                    threads.startThread(worker);
+                }
                 try {
                     assertTrue(ready.await(3, TimeUnit.SECONDS));
                     if (failure.get() != null) throw new AssertionError("Guest failed", failure.get());
