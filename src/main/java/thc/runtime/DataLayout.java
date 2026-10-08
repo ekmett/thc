@@ -13,6 +13,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.api.staticobject.StaticShape;
+import jam.vm.Lifted;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -265,6 +266,18 @@ public final class DataLayout {
     public void initializeVector(DataValue value, int index, BytecodeNode bytecode, VirtualFrame frame, LocalAccessor[] slots, int offset) { checkedVector(value, index).initialize(value, bytecode, frame, slots, offset); }
     public void restoreVector(DataValue value, int index, Frame frame, int[] slots, int offset) { checkedVector(value, index).restore(value, frame, slots, offset); }
     public void restoreVector(DataValue value, int index, BytecodeNode bytecode, VirtualFrame frame, LocalAccessor[] slots, int offset) { checkedVector(value, index).restore(value, bytecode, frame, slots, offset); }
+    /** Logical scalar reference projections preserve the existing carrier identity. */
+    public Lifted project(DataValue value, int index) {
+        if (index < 0 || index >= logicalArity) return null;
+        CoreRepresentation proof = logicalProof(index);
+        if (proof != null && proof.isAggregate()) return null;
+        int physical = fieldOffset(index);
+        checkField(value, physical);
+        Field field = fields[physical];
+        if (!field.isReference()) return null;
+        Object reference = field.read(value);
+        return reference instanceof Lifted lifted ? lifted : null;
+    }
     public Object read(DataValue value, int index) { checkField(value, index); return fields[index].read(value); }
     public boolean compactPointer(int index) { return exactFieldReps[index].equals("LiftedRep") || exactFieldReps[index].equals("UnliftedRep") || exactFieldReps[index].equals("BoxedRep"); }
     public boolean inactiveSumReference(DataValue value, int index) {
@@ -449,6 +462,7 @@ public final class DataLayout {
                 default -> thc.runtime.Unit.INSTANCE;
             };
         }
+        boolean isReference() { return kind == OBJECT && !address; }
         boolean isInt() { return kind == INT; }
         boolean isLong() { return kind == LONG; }
         boolean isFloat() { return kind == FLOAT; }

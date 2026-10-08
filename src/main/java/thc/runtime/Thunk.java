@@ -3,9 +3,10 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
+import jam.vm.Lifted;
 
 /** A shared lazy update cell; state publishes the answer and ownership release. */
-public final class Thunk {
+public final class Thunk implements Lifted {
     private RootCallTarget target;
     private final boolean asynchronousExceptions;
     private CapturedFrame environment;
@@ -20,6 +21,13 @@ public final class Thunk {
         this.environment = environment;
         // The target is cleared on completion or suspension; admission still needs its policy.
         asynchronousExceptions = target.getRootNode() instanceof GuestRoot root && root.getAsynchronousExceptions();
+    }
+    /** The volatile WHNF state publishes the existing answer; other states are opaque. */
+    @Override public Lifted resolve() { return state == 2 && value instanceof Lifted answer ? answer : null; }
+    /** Inspect an already published reference field without entering this thunk. */
+    @Override public Lifted project(int field) {
+        Object answer = LiftedValues.resolveBoxed(this);
+        return answer != this && answer instanceof Lifted lifted ? lifted.project(field) : null;
     }
     public boolean getAsynchronousExceptions() { return asynchronousExceptions; }
     public RootCallTarget getTarget() { return target; }

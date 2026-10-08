@@ -4,11 +4,12 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
+import jam.vm.Lifted;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 /* Cadenza-derived closure/PAP convention; upstream notices remain in LICENSE.txt and NOTICE.md. */
 @CompilerDirectives.ValueType
-public final class Closure {
+public final class Closure implements Lifted {
     public static final Object[] NO_PAP_ARGUMENTS = new Object[0];
     public final CapturedFrame environment;
     @CompilerDirectives.CompilationFinal(dimensions = 1) public final Object[] supplied;
@@ -44,4 +45,8 @@ public final class Closure {
         System.arraycopy(arguments, offset, combined, supplied.length, count);
         return new Closure(environment, combined, arity - logicalCount, target, suppliedCount + logicalCount);
     }
+    /** This carrier is already a terminal language value. */
+    @Override public Lifted resolve() { return null; }
+    /** This value exposes no constructor-field projections. */
+    @Override public Lifted project(int field) { return null; }
 }
