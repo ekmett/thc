@@ -16,7 +16,6 @@ module THC.Driver.InstalledForeign
   ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext
   , observeProbeInterfaces, retainedUsageFiles, verifyUsageFiles, matchUsageFiles ) where
 
-import Control.Exception (bracketOnError)
 import Control.Monad (filterM, forM, forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), FromJSON, Result(..), fromJSON, eitherDecodeStrict', encode, object, (.=))
@@ -24,7 +23,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.Char (isHexDigit, isSpace)
+import Data.Char (isAlpha, isHexDigit, isSpace)
 import Data.List (isPrefixOf, nub, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
@@ -37,11 +36,15 @@ import Distribution.PackageDescription (library, libBuildInfo, cppOptions, hcOpt
   defaultLanguage, defaultExtensions, includeDirs, hsSourceDirs)
 import Distribution.Pretty (prettyShow)
 import Distribution.Simple.Configure (getPersistBuildConfig)
+import Distribution.Simple.GHC (componentGhcOptions)
+import Distribution.Simple.Program.GHC (renderGhcOptions)
 import qualified Distribution.Simple.Compiler as Compiler
 import Distribution.Simple.LocalBuildInfo (localPkgDescr, compiler, hostPlatform, buildDir,
   allComponentsInBuildOrder, componentPackageDeps, componentUnitId)
 import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
+import Distribution.Verbosity (normal)
 import GHC.Fingerprint (getFileHash)
+import GHC.Clock (getMonotonicTimeNSec)
 import Numeric (showHex)
 import System.Directory
 import System.Environment (getEnvironment)
@@ -56,7 +59,7 @@ import THC.Driver.Installed
 import THC.Compact.Module (readModuleMetadata)
 
 -- | The published plugin library and the actual Cabal registration are both
--- checked: -plugin-package-id loads the latter, not an arbitrary copied .so.
+-- checked: -plugin-package-id loads the latter, not an arbitrary copied library.
 data ForeignCompiler = ForeignCompiler
   { foreignGhc :: FilePath, foreignPluginDb :: FilePath, foreignPluginUnit :: String
   , foreignPluginLibrary :: FilePath, foreignRegisteredLibrary :: FilePath
@@ -103,9 +106,11 @@ prepareForeignInterfaces :: ForeignCompiler -> FilePath -> FilePath -> Installed
                             [InstalledUnit] -> IO InstalledContext
 prepareForeignInterfaces producer cache source context registrations = do
   root <- canonicalizePath source
-  base <- prepareProfile [boundModule, posixModule] context { installedSource = Just root }
-  unix <- prepareProfile unixModules base
-  prepareProfile [directoryModule] unix
+  let selected = context { installedSource = Just root }
+  if Host.os == "mingw32" then prepareProfile nominalModules selected else do
+    base <- prepareProfile [boundModule, posixModule] selected
+    unix <- prepareProfile unixModules base
+    prepareProfile [directoryModule] unix
   where
     prepareProfile names selected = do
       let candidates = [u | u <- registrations, all (`elem` map fst (installedInterfaces u)) names]
@@ -180,7 +185,7 @@ prepareForeignInterfaces producer cache source context registrations = do
       files <- recipeFiles config
       observed <- fileInventory files
       forM_ (installedInterfaces unit) $ \(name, installed) -> do
-        forM_ ["hi", "dyn_hi"] $ \suffix -> do
+        forM_ (interfaceSuffixes (recipeWay config)) $ \suffix -> do
           let original = recipeBuilt config </> modulePath name <.> suffix
           check (lookup (replaceExtension installed suffix) observed == lookup original observed)
             ("selected GHC and source interfaces changed: " ++ name)
@@ -195,15 +200,16 @@ prepareForeignInterfaces producer cache source context registrations = do
         "globalRegistrations" .= global,
         "driver" .= foreignDriverHash producer]
 
--- This first recipe deliberately supports a configured native Linux stage1
--- tree, not an arbitrary source tarball or a guessed installed-GHC source path.
+-- Original configured builds only: Linux Hadrian stage1, or the retained
+-- Windows Cabal producer's source/dist pair. A source tarball is insufficient.
 data Recipe = Recipe { recipeRoot :: FilePath, recipeArguments :: [String]
                      , recipeFiles :: IO [FilePath], recipeIdentity :: Value
                      , recipeUsageFiles :: [(String, [(FilePath, String)])]
                      , recipeSourceFiles :: [(FilePath, String)]
                      , recipeVersionHeaders :: (FilePath, FilePath)
                      , recipeProducerLibraries :: [FilePath]
-                     , recipeBuilt :: FilePath, recipeSources :: [(String, FilePath)] }
+                     , recipeBuilt :: FilePath, recipeSources :: [(String, FilePath)]
+                     , recipeWay :: InterfaceWay }
 
 configuredRecipe :: ForeignCompiler -> InstalledContext -> InstalledUnit -> FilePath -> [String] -> IO Recipe
 configuredRecipe producer context unit root names = do
@@ -213,24 +219,31 @@ configuredRecipe producer context unit root names = do
   packageName <- case names of
     bound : posix : nominal | bound == boundModule && posix == posixModule &&
       all (`elem` nominalModules) nominal && length (nub nominal) == length nominal -> pure "ghc-internal"
+    _ | names == nominalModules -> pure "ghc-internal"
     _ | names == unixModules -> pure "unix"
     [directory] | directory == directoryModule -> pure "directory"
     _ -> fail "unsupported installed foreign source profile"
-  let hscProfile = packageName /= "ghc-internal"
+  let windows = Host.os == "mingw32"
+      way = installedInterfaceWay context
+      suffix = if way == VanillaInterfaces then "hi" else "dyn_hi"
+      hscProfile = packageName /= "ghc-internal"
       includeDirectory = if packageName == "directory" then "." else "include"
       stage = root </> "_build/stage1"
-      packageRoot = root </> "libraries" </> packageName
-      configured = stage </> "libraries" </> packageName
+      packageRoot = if windows then root </> "source" else root </> "libraries" </> packageName
+      configured = if windows then root </> "dist" else stage </> "libraries" </> packageName
       built = configured </> "build"
       autogen = built </> "autogen"
       src = if hscProfile then packageRoot else packageRoot </> "src"
+      invocation = if windows then packageRoot else root
+  check (not windows || (names == nominalModules && way == VanillaInterfaces))
+    "Windows foreign regeneration requires the nominal profile and vanilla interfaces"
   lbi <- getPersistBuildConfig Nothing (makeSymbolicPath configured)
   check (prettyShow (Compiler.compilerId (compiler lbi)) == "ghc-9.14.1") "GHC source configuration compiler differs"
   let platform = prettyShow (hostPlatform lbi)
-  check (platform `elem` ["x86_64-linux", "aarch64-linux"] &&
-         platform == Host.arch ++ "-" ++ Host.os &&
+  check (platform `elem` ["x86_64-linux", "aarch64-linux", "x86_64-windows"] &&
+         platform == Host.arch ++ "-" ++ (if windows then "windows" else Host.os) &&
          member "platform" (installedCompiler context) == Just (String (Text.pack platform)))
-    "--ghc-source supports matching native x86_64/aarch64 Linux stage1 builds only"
+    "foreign source configuration must match the native selected compiler platform"
   actualBuild <- canonicalizePath (getSymbolicPath (buildDir lbi))
   expectedBuild <- canonicalizePath built
   check (actualBuild == expectedBuild) "GHC setup-config belongs to a different build tree"
@@ -242,28 +255,49 @@ configuredRecipe producer context unit root names = do
   check (prettyShow (componentUnitId component) == registeredId unit &&
          sort (map (prettyShow . fst) (componentPackageDeps component)) == sort (installedDepends unit))
     "GHC source configuration unit/dependencies differ from selected installation"
+  registeredUnit <- parseRegistration (registration unit)
+  let expectedIncludes = [includeDirectory] ++
+        (if windows then packageRoot : Package.includeDirs registeredUnit else [])
   check (map getSymbolicPath (hsSourceDirs info) == [if hscProfile then "." else "src"] &&
-         map getSymbolicPath (includeDirs info) == [includeDirectory])
-    "unsupported GHC source/include directory configuration"
+         map (normalise . getSymbolicPath) (includeDirs info) == map normalise expectedIncludes)
+    ("unsupported GHC source/include directory configuration: " ++
+      show (map getSymbolicPath (hsSourceDirs info), map getSymbolicPath (includeDirs info)))
   -- Do not execute hidden arbitrary hooks/plugins from a setup-config. This is
   -- the known library option profile; conditional CPP comes from Cabal itself.
   check (hcOptions GHC info == (if hscProfile then ["-Wall"] else
            ["-this-unit-id", "ghc-internal", "-Wcompat", "-Wnoncanonical-monad-instances"]) &&
-         cppOptions info == (if hscProfile then [] else ["-DBIGNUM_GMP"]) &&
+         cppOptions info == (if hscProfile then [] else
+           ["-DBIGNUM_GMP"] ++ ["-D_WIN32_WINNT=0x06010000" | windows]) &&
          fmap prettyShow (defaultLanguage info) == Just "Haskell2010" &&
          map prettyShow (defaultExtensions info) == (if hscProfile then [] else ["NoImplicitPrelude"]))
     "unsupported original library compiler option profile"
   forM_ (installedInterfaces unit) $ \(name, installed) -> do
-    let original = built </> modulePath name <.> "dyn_hi"
+    let original = built </> modulePath name <.> suffix
     left <- hashFile installed
     right <- hashFile original
     check (left == right) ("--ghc-source interfaces do not match selected GHC: " ++ name)
-  let includeRoots = [root </> "rts/include", stage </> "rts/build/include", built] ++
+  descriptions <- command (installedPackageTool context)
+    (packageGlobalArguments context ++ ["--package-db", foreignPluginDb producer, "dump"]) Nothing
+  records <- mapM parseRegistration (splitRegistrations (lines descriptions))
+  rts <- case [record | record <- records, prettyShow (Package.sourcePackageId record) == "rts-1.0.3"] of
+    [record] -> pure record
+    _ -> fail "expected exactly one selected RTS registration"
+  versionCandidates <- filterM doesFileExist [directory </> "ghcversion.h" | directory <- Package.includeDirs rts]
+  selectedVersion <- case versionCandidates of
+    [path] -> canonicalizePath path
+    _ -> fail "expected exactly one selected RTS ghcversion.h"
+  originalVersion <- canonicalizePath (if windows then selectedVersion else root </> "rts/include/ghcversion.h")
+  originalVersionHash <- show <$> getFileHash originalVersion
+  _ <- verifyUsageFiles invocation [(selectedVersion, originalVersionHash)]
+  let includeRoots = if windows then nub
+        ([built, autogen, packageRoot, packageRoot </> "include", built </> "include"] ++
+         Package.includeDirs registeredUnit ++ Package.includeDirs rts) else
+        [root </> "rts/include", stage </> "rts/build/include", built] ++
         if includeDirectory == "." then [packageRoot] else [built </> "include", packageRoot </> "include"]
       roots = [built, autogen, src]
       macros = autogen </> "cabal_macros.h"
   originalInputs <- forM names $ \name -> do
-    let original = built </> modulePath name <.> "dyn_hi"
+    let original = built </> modulePath name <.> suffix
         -- Unix/directory retain the configured hsc2hs output, whose own
         -- UsageFile points back to the original .hsc. Never rerun hsc2hs with
         -- newly guessed headers and call that the installed source.
@@ -274,10 +308,10 @@ configuredRecipe producer context unit root names = do
     check (fingerprints == [digest])
       ("--ghc-source original source does not match retained self-recomp metadata: " ++ name)
     retained <- either fail pure (retainedUsageFiles description)
-    verified <- verifyUsageFiles root retained
+    verified <- verifyUsageFiles invocation retained
     required <- mapM canonicalizePath $ (if hscProfile
       then [src </> modulePath name <.> "hsc"] else
-        [path | not (null retained), path <- [root </> "rts/include/ghcversion.h", macros]]) ++
+        [path | not (null retained), path <- [originalVersion, macros]]) ++
       (if name == posixModule then [built </> "include/HsBaseConfig.h", stage </> "rts/build/include/ghcplatform.h"] else [])
     check (all (`elem` map fst verified) required)
       ("original interface lacks required CPP dependency evidence: " ++ name)
@@ -285,10 +319,15 @@ configuredRecipe producer context unit root names = do
   let usageFiles = [(name, files) | (name, _, files) <- originalInputs]
       sourceFiles = [file | (_, file, _) <- originalInputs]
       baseFiles = [configured </> "setup-config", packageRoot </> packageName <.> "cabal", macros,
-                   root </> "hadrian/cfg/system.config", stage </> "lib/settings", installedLibdir context </> "settings",
+                   installedLibdir context </> "settings",
                    foreignPluginLibrary producer, foreignRegisteredLibrary producer, installedHelper context] ++ map fst sourceFiles ++
-                  [replaceExtension path suffix | (_, path) <- installedInterfaces unit, suffix <- ["hi", "dyn_hi"]]
-      args = ["-c", "-fforce-recomp", "-O2", "-static", "-dynamic-too", "-fsplit-sections",
+                  (if windows then [] else [root </> "hadrian/cfg/system.config", stage </> "lib/settings"]) ++
+                  [replaceExtension path extension | (_, path) <- installedInterfaces unit, extension <- interfaceSuffixes way]
+      configuredArgs = if windows then
+        renderGhcOptions (compiler lbi) (hostPlatform lbi)
+          (componentGhcOptions normal lbi info component (makeSymbolicPath built)) ++
+        ["-clear-package-db", "-package-db", installedGlobalDb context, "-package-id", registeredId unit]
+        else ["-static", "-fsplit-sections",
               "-hide-all-packages", "-no-user-package-db", "-package-env", "-",
               "-this-package-name", packageName, "-i"] ++
         (if hscProfile then ["-this-unit-id", registeredId unit] else []) ++
@@ -296,7 +335,9 @@ configuredRecipe producer context unit root names = do
         hcOptions GHC info ++ maybe [] (\lang -> ["-X" ++ prettyShow lang]) (defaultLanguage info) ++
         map (("-X" ++) . prettyShow) (defaultExtensions info) ++
         map ("-i" ++) roots ++ map ("-I" ++) includeRoots ++
-        map ("-optP" ++) (cppOptions info) ++ ["-optP-include", "-optP" ++ macros,
+        map ("-optP" ++) (cppOptions info) ++ ["-optP-include", "-optP" ++ macros]
+      args = configuredArgs ++ ["-c", "-fforce-recomp", "-O2"] ++
+        ["-dynamic-too" | way == DynamicInterfaces] ++ ["-no-user-package-db", "-package-env", "-",
         "-fwrite-if-simplified-core", "-dcore-lint", "-package-db", foreignPluginDb producer,
         "-plugin-package-id", foreignPluginUnit producer, "-fplugin=THC.Plugin",
         "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified"]
@@ -307,47 +348,43 @@ configuredRecipe producer context unit root names = do
     (packageGlobalArguments context ++ ["--package-db", foreignPluginDb producer,
      "--ipid", "describe", foreignPluginUnit producer]) Nothing
   plugin <- parseRegistration pluginDescription
-  libraryMatches <- filterM doesFileExist
-    [directory </> "lib" ++ name ++ "-ghc9.14.1.so"
-    | directory <- Package.libraryDynDirs plugin, name <- Package.hsLibraries plugin]
+  libraryMatches <- filterM doesFileExist (registeredLibraries way plugin)
   check (foreignRegisteredLibrary producer `elem` libraryMatches && length libraryMatches == 1)
-    "THC plugin registration does not resolve to the recorded shared library"
+    "THC plugin registration does not resolve to the recorded library for its selected way"
   -- GHC records dynamically loaded plugin dependencies as UsageFiles too. Only
   -- those exact registered library paths may be additional producer inputs;
   -- accepting every .so (or ignoring every non-.h) would hide a new CPP include.
-  descriptions <- command (installedPackageTool context)
-    (packageGlobalArguments context ++ ["--package-db", foreignPluginDb producer, "dump"]) Nothing
-  records <- mapM parseRegistration (splitRegistrations (lines descriptions))
   dependencies <- registrationClosure records (foreignPluginUnit producer)
   producerLibraries <- sort . nub <$> (mapM canonicalizePath =<< filterM doesFileExist
-    [directory </> "lib" ++ name ++ "-ghc9.14.1.so"
-    | dependency <- dependencies, directory <- Package.libraryDynDirs dependency,
-      name <- Package.hsLibraries dependency])
-  rts <- case [record | record <- records, prettyShow (Package.sourcePackageId record) == "rts-1.0.3"] of
-    [record] -> pure record
-    _ -> fail "expected exactly one selected RTS registration"
-  versionCandidates <- filterM doesFileExist [directory </> "ghcversion.h" | directory <- Package.includeDirs rts]
-  selectedVersion <- case versionCandidates of
-    [path] -> canonicalizePath path
-    _ -> fail "expected exactly one selected RTS ghcversion.h"
-  originalVersion <- canonicalizePath (root </> "rts/include/ghcversion.h")
-  originalVersionHash <- show <$> getFileHash originalVersion
-  _ <- verifyUsageFiles root [(selectedVersion, originalVersionHash)]
+    (concatMap (registeredLibraries way) dependencies))
   infoOutput <- command (foreignGhc producer) ["--info"] Nothing
   let allFiles = do
         includes <- concat <$> mapM (treeFiles (\p -> takeExtension p `elem` [".h", ".hpp"])) includeRoots
         interfaces <- treeFiles (\p -> takeExtension p `elem` [".hi", ".dyn_hi", ".hi-boot", ".dyn_hi-boot"]) built
         pluginFiles <- treeFiles (\p -> takeExtension p == ".conf" || takeFileName p == "package.cache")
           (foreignPluginDb producer)
-        pure (sort (nub (selectedVersion : baseFiles ++ includes ++ interfaces ++ pluginFiles ++ concatMap (map fst . snd) usageFiles)))
+        pure (sort (nub (selectedVersion : baseFiles ++ includes ++ interfaces ++ pluginFiles ++
+          producerLibraries ++ concatMap (map fst . snd) usageFiles)))
   let identity = object
         ["root" .= root, "ghc" .= foreignGhc producer, "ghcInfo" .= infoOutput,
          "arguments" .= args, "pluginUnit" .= foreignPluginUnit producer, "pluginRegistration" .= pluginDescription,
          "originalUsageFiles" .= usageFiles, "originalSourceFiles" .= sourceFiles,
          "versionHeaders" .= (originalVersion, selectedVersion),
          "producerLibraries" .= producerLibraries]
-  pure (Recipe root args allFiles identity usageFiles sourceFiles (originalVersion, selectedVersion) producerLibraries
-    built [(name, path) | (name, (path, _), _) <- originalInputs])
+  pure (Recipe invocation args allFiles identity usageFiles sourceFiles (originalVersion, selectedVersion) producerLibraries
+    built [(name, path) | (name, (path, _), _) <- originalInputs] way)
+
+interfaceSuffixes :: InterfaceWay -> [String]
+interfaceSuffixes VanillaInterfaces = ["hi"]
+interfaceSuffixes DynamicInterfaces = ["hi", "dyn_hi"]
+
+registeredLibraries :: InterfaceWay -> Package.InstalledPackageInfo -> [FilePath]
+registeredLibraries way info = nub
+  [directory </> "lib" ++ name ++ suffix | directory <- directories, name <- Package.hsLibraries info]
+  where
+    directories = if way == VanillaInterfaces then Package.libraryDirsStatic info ++ Package.libraryDirs info
+      else Package.libraryDynDirs info
+    suffix = if way == VanillaInterfaces then ".a" else "-ghc9.14.1.so"
 
 compileOriginal :: ForeignCompiler -> Recipe -> FilePath -> String -> IO ()
 compileOriginal producer recipe destination name = do
@@ -362,11 +399,24 @@ compileOriginal producer recipe destination name = do
   let arguments = ["-fplugin-opt=THC.Plugin:" ++ scratch] ++ recipeArguments recipe ++
         map ("-fplugin-opt=THC.Plugin:" ++) options ++
         ["-odir", scratch, "-stubdir", scratch, "-tmpdir", scratch, "-dumpdir", scratch,
-         "-ohi", stem <.> "hi", "-dynohi", stem <.> "dyn_hi",
-         "-o", stem <.> "o", "-dyno", stem <.> "dyn_o",
-         source]
+         "-hiedir", scratch, "-ohi", stem <.> "hi", "-o", stem <.> "o"] ++
+        (if recipeWay recipe == DynamicInterfaces then
+          ["-dynohi", stem <.> "dyn_hi", "-dyno", stem <.> "dyn_o"] else []) ++
+        [source]
+  let receipt = scratch </> "compilation.json"
+      record exit seconds = object ["command" .= (foreignGhc producer : arguments),
+        "cwd" .= recipeRoot recipe, "nativeExit" .= (exit :: Maybe Int), "seconds" .= (seconds :: Maybe Double)]
+  atomicJson receipt (record Nothing Nothing)
+  started <- getMonotonicTimeNSec
   _ <- command (foreignGhc producer) arguments (Just (recipeRoot recipe))
-  description <- command (foreignGhc producer) ["--show-iface", stem <.> "dyn_hi"] Nothing
+  finished <- getMonotonicTimeNSec
+  -- A failed command leaves its exact arguments and an unknown exit here;
+  -- the thrown diagnostic retains the actual native status. Never record 0
+  -- until the owning subprocess check has succeeded.
+  removeFile receipt
+  atomicJson receipt (record (Just 0) (Just (fromIntegral (finished - started) / 1e9)))
+  description <- command (foreignGhc producer)
+    ["--show-iface", stem <.> if recipeWay recipe == VanillaInterfaces then "hi" else "dyn_hi"] Nothing
   retained <- either fail pure (retainedUsageFiles description)
   verified <- verifyUsageFiles (recipeRoot recipe) retained
   expected <- maybe (fail "missing original CPP input inventory") pure (lookup name (recipeUsageFiles recipe))
@@ -388,9 +438,7 @@ createView context unit destination names = do
       directory <- doesDirectoryExist original
       (if directory then createDirectoryLink else createFileLink) original (libdir </> name)
   forM_ (installedInterfaces unit) $ \(name, original) ->
-    forM_ (case installedInterfaceWay context of
-      VanillaInterfaces -> ["hi"]
-      DynamicInterfaces -> ["hi", "dyn_hi"]) $ \suffix -> do
+    forM_ (interfaceSuffixes (installedInterfaceWay context)) $ \suffix -> do
       -- Dynamic compilation also reads vanilla dependencies; a vanilla-only
       -- view must not manufacture a dynamic interface from vanilla bytes.
       let target = interfaces </> modulePath name <.> suffix
@@ -399,12 +447,13 @@ createView context unit destination names = do
       createDirectoryIfMissing True (takeDirectory target)
       (if Host.os == "mingw32" then copyFile else createFileLink) actual target
   dumped <- command (installedPackageTool context) (packageGlobalArguments context ++ ["dump"]) Nothing
+  canonicalInterfaces <- canonicalizePath interfaces
   records <- mapM parseRegistration (splitRegistrations (lines dumped))
   check (length [() | record <- records, prettyShow (Package.installedUnitId record) == registeredId unit] == 1)
     "selected package database lost the original foreign unit"
   forM_ (zip [(0 :: Int)..] records) $ \(index, original) -> do
     let record = if prettyShow (Package.installedUnitId original) == registeredId unit
-                 then original { Package.importDirs = [interfaces] } else original
+                 then original { Package.importDirs = [canonicalInterfaces] } else original
     writeFile (db </> show index <.> "conf") (showInstalledPackageInfo record)
   _ <- command (installedPackageTool context) ["--global-package-db", db, "--global", "recache"] Nothing
   unless (Host.os == "mingw32") $ do
@@ -493,7 +542,7 @@ retainedUsageFiles description = do
     (Left "original interface lacks retained usage evidence")
   traverse parse rows
   where
-    parse row = case reads (drop (length ("addDependentFile" :: String)) row) :: [(String, String)] of
+    parse row = case quotedPath (dropWhile isSpace (drop (length ("addDependentFile" :: String)) row)) of
       [(path, rest)] ->
         let (digest, ending) = span isHexDigit (dropWhile isSpace rest)
         in if not (null path) && not (null digest) && length digest <= 32 &&
@@ -501,6 +550,13 @@ retainedUsageFiles description = do
            then Right (path, digest)
            else Left "unsupported GHC UsageFile fingerprint record"
       _ -> Left "unsupported GHC UsageFile path record"
+    -- GHC pretty-prints Windows FilePaths verbatim, not as Haskell string
+    -- literals: reads would interpret \t/\r or reject other backslashes.
+    quotedPath value@('"':body) = case break (== '"') body of
+      (path@(drive:':':'\\':_), '"':rest) | isAlpha drive -> [(path, rest)]
+      (path@('\\':'\\':_), '"':rest) -> [(path, rest)]
+      _ -> reads value
+    quotedPath value = reads value
 
 -- Relative UsageFile paths are relative to the original Hadrian invocation
 -- directory, which is the explicitly supplied tree root. Absolute system
@@ -609,17 +665,18 @@ command program arguments directory = do
         ["GHC_PACKAGE_PATH", "GHC_ENVIRONMENT", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "OBJC_INCLUDE_PATH"]) inherited
   (status, output, diagnostic) <- readCreateProcessWithExitCode
     (proc program arguments) { cwd = directory, env = Just clean } ""
-  check (status == ExitSuccess) ("installed foreign command failed: " ++ program ++ "\n" ++ diagnostic)
+  check (status == ExitSuccess) ("installed foreign command failed: " ++ program ++ " (" ++ show status ++ ")\n" ++ diagnostic)
   pure output
 
 freshDirectory :: FilePath -> (FilePath -> IO a) -> IO a
-freshDirectory parent action = bracketOnError create removePathForcibly action
-  where create = do
-          (path, handle) <- openTempFile parent "producer-"
-          hClose handle
-          removeFile path
-          createDirectory path
-          pure path
+freshDirectory parent action = do
+  (path, handle) <- openTempFile parent "producer-"
+  hClose handle
+  removeFile path
+  createDirectory path
+  -- A failed compiler/validation attempt must retain its actual outputs.
+  -- Only a fully verified generation gets an index receipt.
+  action path
 
 atomicJson :: FilePath -> Value -> IO ()
 atomicJson path value = do
