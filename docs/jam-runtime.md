@@ -98,10 +98,18 @@ force guest code, allocate Java roots, or acquire a stopped mutator's monitor.
 All other objects and non-success thunk states retain identity semantics.
 The required provider interface is `jam.vm.Lifted`, with language-owned
 `resolve()` and `resolveField(int)` methods. A null result means no replacement;
-both terminal values and unresolved thunks stop resolution that way. Jam must
-follow available replacements, rewrite eligible source slots and trace the
-endpoint normally. Weak-key normalization must not mark that endpoint. Selector
+both terminal values and unresolved thunks stop resolution that way. Language-owned
+tracing follows available replacements, repairs eligible source slots and then
+requests ordinary tracing of the endpoint. Jam supplies safe execution and the
+slot-repair/claim mechanisms, without selecting a special lifted pointer category
+in the collector. Weak-key normalization must not mark that endpoint. Selector
 contraction must release obsolete captures without evaluating the selected field.
+
+Ordinary weak references preserve object identity. A Haskell-facing lifted weak
+reference adds resolution through its tracing customization. Conditional value,
+ownership and finalizer edges cannot establish independent key liveness. The
+precise resolve/repair versus claim/follow bridge remains under design; these
+requirements do not establish a new runtime ABI.
 
 Fields eligible for replacement must admit every endpoint through their declared
 representation. A concrete Java `Thunk` reference retains wrapper identity;
