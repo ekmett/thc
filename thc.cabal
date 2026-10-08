@@ -330,13 +330,6 @@ extra-source-files:
   nih/pinned/openbsd-memchr-1.8.c
   nih/pinned/text-2.1.3/cbits/utils.c
   nih/pinned/text-2.1.3/cbits/measure_off.c
-  t/fixtures/run-wcwidth/cabal.project
-  t/fixtures/run-wcwidth/wcwidth-ffi.cabal
-  t/fixtures/run-wcwidth/src/Width.hs
-  t/fixtures/run-wcwidth/app/Main.hs
-  t/fixtures/compiler/GcStatsAudit.hs
-  t/fixtures/compiler/OriginalTimeClockAudit.hs
-  t/fixtures/compiler/RtsEventAudit.hs
   docs/rts-event-capabilities.md
   docs/gc-stats-clock.md
   t/fixtures/compiler/RubbishLiteralAudit.hs
@@ -437,7 +430,6 @@ extra-source-files:
   t/fixtures/compiler/FileWaitNative.hs
   t/fixtures/compiler/OriginalFdReadyAudit.hs
   t/fixtures/compiler/OriginalRtsLocksAudit.hs
-  t/fixtures/compiler/CompilerRtsAudit.hs
   t/fixtures/compiler/RtsDiagnosticsNative.hs
   t/fixtures/compiler/OriginalPathLinkAudit.hs
   t/fixtures/compiler/OriginalDirectoryPathsAudit.hs
@@ -450,13 +442,10 @@ extra-source-files:
   t/fixtures/compiler/WindowsBridgeAudit.hs
   t/fixtures/compiler/OriginalErrnoAudit.hs
   t/fixtures/compiler/OriginalErrnoNative.hs
-  t/fixtures/compiler/OriginalProcessIdentityAudit.hs
   t/fixtures/compiler/ProcessLifecycleAudit.hs
   t/fixtures/process-lifecycle/Main.hs
   t/fixtures/process-lifecycle/sigchld-policy.c
-  t/fixtures/compiler/OriginalProcessIdentityNative.hs
-  t/fixtures/compiler/OriginalOpenAudit.hs
-  t/fixtures/compiler/OriginalOpenNative.hs
+  t/fixtures/compiler/OriginalOpenRequestNative.hs
   t/fixtures/compiler/OriginalSavedTermiosAudit.hs
   t/fixtures/compiler/OriginalSavedTermiosNative.hs
   t/fixtures/compiler/OriginalTcsetattrAudit.hs
@@ -932,6 +921,7 @@ library driver
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
     THC.Driver.NativeCache
+    THC.Driver.NativeImage
     THC.Driver.NativeDependencies
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
@@ -1011,6 +1001,7 @@ test-suite driver-tests
     ScalarBitcodeTests
     PackageNativeTests
     NativeCacheTests
+    NativeImageTests
     NativeRecipeTests
     RuntimeShimTests
     InstalledForeignTests
@@ -1265,7 +1256,6 @@ executable thc-fixtures
     SimdArithmeticFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
-    SqrtFixtures
     FloatDecodeFixtures
     FloatingRemainderFixtures
     ProxyVoidFixtures
@@ -1294,23 +1284,14 @@ executable thc-fixtures
     FileWaitFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
-    CompilerRtsFixtures
-    GcStatsFixtures
-    OriginalTimeClockFixtures
-    RtsEventFixtures
-    FloatForeignFixtures
     GhcApiFixtures
     GhcApiAudit
     RtsDiagnosticFixtures
-    OriginalOpenFixtures
     PackageScalarFixtures
     StablePtrFFIFixtures
     PackageNativeOriginalsFixtures
     PackageNativeArchiveFixtures
     DynamicCallbackFixtures
-    GetEntropyFixtures
-    LibyamlNativeFixtures
-    WcwidthFixtures
     UnixLibcFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
@@ -1324,11 +1305,6 @@ executable thc-fixtures
     WindowsSmokeFixtures
     StablePointerFixtures
     StableNameFixtures
-    SumJoinFixtures
-    TupleJoinFixtures
-    SumInputFixtures
-    TupleCaptureFixtures
-    SumJoinInputFixtures
     WeakFixtures
     ShrinkByteArrayFixtures
     ByteArrayFixtures
@@ -1341,7 +1317,6 @@ executable thc-fixtures
     StackDecoderFixtures
     InstalledCoreFixtures
     BoxedArrayExtensionsFixtures
-    AlignedScalarMemoryFixtures
     BoxedCasFixtures
     WideCharAddressFixtures
     ManagedAddressReadFixtures

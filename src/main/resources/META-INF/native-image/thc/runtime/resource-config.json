@@ -1,6 +1,7 @@
 {
   "resources": {
     "includes": [
+      { "pattern": "thc/native/[^/]+" },
       { "pattern": "thc/core-native-overrides\\.json" },
       { "pattern": "thc/cbits/[^/]+(\\.bc|-LICENSE)" },
       { "pattern": "thc/cbits/rts-float\\.(so|dylib|dll)" }

@@ -43,6 +43,7 @@ foreign import THC_LABEL_CONVENTION "&thc_provenance_unknown_function" unknownFu
 #endif
 #ifdef THC_FINALIZER_LABEL
 foreign import capi "stdlib.h &thc_provenance_unlinked_finalizer" pointerFinalizer :: Pointer.FunPtr (Pointer.Ptr () -> IO ())
+foreign import ccall "&thc_provenance_unlinked_environment_finalizer" environmentFinalizer :: Pointer.FunPtr (Pointer.Ptr () -> Pointer.Ptr () -> IO ())
 #endif
 #endif
 foreign import capi unsafe "stdlib.h abs" first :: CInt -> IO CInt

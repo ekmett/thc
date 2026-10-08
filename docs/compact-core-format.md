@@ -396,9 +396,10 @@ status's `expectedCalls`; schema 1 is unchanged. `AddressAssociation` is
 ForeignType declaredType, ForeignType normalizedType, str normalizationRole,
 b hasCallback`, followed, only when true, by `list(str) arguments, str result`.
 This preserves stock GHC address declarations separately from calls. The
-one-pointer IO-unit callback profile requires the actual normalized `FunPtr
-(Ptr a -> IO ())` identity and a checked native component; the address record
-alone does not grant executable authority.
+C-finalizer IO-unit callback profile requires the actual normalized `FunPtr
+(Ptr a -> IO ())` or `FunPtr (Ptr env -> Ptr a -> IO ())` identity and a native
+component with the same argument list; the address record alone does not grant
+executable authority.
 
 Import proof schema 3 retains the schema-2 address list and then appends
 `list(WrapperAssociation)`. Each wrapper is the `ExportAssociation` layout
@@ -460,8 +461,8 @@ component bytes and dependency graph, not a fabricated Haskell ABI.
 Native link schema 2 appends `list(str) finalizers` after `NativeExtras`;
 these are existing namespaced ABI entry names, not original symbols or an
 invented foreign-call inventory. Every entry must be a proved `ccall unsafe`
-one-pointer/void adapter with its original definition retained by native
-linking. Schema 1 has no appended list and preserves its original bytes.
+one- or two-pointer/void adapter with its matching original definition retained
+by native linking. These argument lists use the existing ABI encoding. Schema 1 has no appended list and preserves its original bytes.
 
 `NativeBuildInputs` is `list(CompileGroup) translationUnits,
 list(NativeProvider), p(list(NativeDependency)), list(NativeLibrary),

@@ -8,184 +8,36 @@ from the new graph pending repair; inventory is not admission.
 No fixture generation or runtime test execution is part of this scan. Shared tool inputs
 are called out separately from fixture outputs; unresolved closure is explicit.
 
-001  narrow-literal-proofs
-Fixture rationale (001 narrow-literal-proofs)
-Purpose: Check signed and high-bit narrow literals survive real Core export and runtime
-  lowering.
-Produces/consumed result: Pre/post CBDs and native oracle.tsv; tests also consume
-  projected/mutated Core.
-Cost and overlap: Keep the boundary behavior; compare with signed-narrow and array
-  literal cases before retaining a separate native build. Metadata-only proof ceremony
-  is not a benefit.
-Build status: QUARANTINED: exact24 direct writes/metadata projection shape must not constrain optimization.
+Shared exporter/auditor inputs (where consumed):
+  bin/build-compiler.sh, bin/export-core.sh, bin/toolchain.sh, bin/plugin.py;
+  selected GHC9.14.1/ghc-pkg/Cabal, THC plugin/shared library, registrations and
+  package interfaces/libraries. Component builds also consume thc.cabal,
+  cabal.project, Setup.hs, component sources and resolved plans/package databases;
+  that closure is not individually enumerated in this scan.
+  CBD inspection uses thc-compact, bin/core_package_manifest.py and
+  bin/core_original_foreign.py. Audits consume bin/audit-core.py, imported core_*
+  modules, bin/core-capabilities.json, scalar-primop-signatures.json,
+  src/test/resources/thc/polyglot-abi.json and bin/simd-families.json.
+  GHC/GHC_PKG/CABAL/THC_COMPACT and inherited tool/configuration environments select
+  these tools. Export flags and pre/post stage options are separate inputs.
 
-Producer: bin/prepare-narrow-literal-proofs.py:main
-Consumers: thc.runtime.NarrowLiteralProofTest; producer --check-only.
-The deleted test-narrow-literal-proofs.py is not a current consumer.
-
-Apparent direct inputs:
-  t/fixtures/compiler/NarrowLiteralProofAudit.hs
-  t/fixtures/compiler/NarrowLiteralProofAuditNative.hs (imports the first module)
-  bin/prepare-narrow-literal-proofs.py (generation, projections and checked model)
-  bin/build-compiler.sh, bin/export-core.sh, bin/toolchain.sh, bin/plugin.py
-  bin/core_package_manifest.py and bin/core_original_foreign.py (CBD inspection)
-  bin/audit-core.py and its imported core_* modules
-  bin/core-capabilities.json
-  src/main/resources/thc/scalar-primop-signatures.json
-  src/test/resources/thc/polyglot-abi.json (audit-core import-time read)
-  bin/simd-families.json (core_vectors import-time read)
-  Tools: selected GHC 9.14.1, matching ghc-pkg, Cabal, Python, shell;
-    THC Core plugin/shared library and package registration; thc-compact executable.
-  Native Haskell inputs include GHC.Exts and its selected compiler package closure.
-  The plugin/tool build reads thc.cabal, cabal.project, Setup.hs, relevant Haskell
-    component sources and Cabal's resolved plan/package databases. That shared
-    build closure is not yet individually enumerated here.
-
-Selection/configuration consumed:
-  GHC, GHC_PKG, CABAL, THC_COMPACT; PATH for unresolved tool names.
-  THC_SOURCE_NOTES defaults to true in export-core.sh.
-  GHC_ENVIRONMENT and Cabal configuration are inherited, not cleared by this script.
-  Producer supplies THC_CORE_OUT and THC_GHC_OUT per stage.
-  Export flags: -O2 -dynamic -fforce-recomp -dcore-lint; post stage adds post-tidy.
-  Native flags: --make -O2 -fforce-recomp; target platform/word size/native ABI apply.
-
-Published outputs, relative to build/narrow-literal-proofs/:
-  pre-core/NarrowLiteralProofAudit.cbd
-  post-core/NarrowLiteralProofAudit.cbd
-  pre-audit.json, post-audit.json
-  oracle.tsv
-  native/narrow-literal-oracle
-  manifest.json (sources/artifacts with hashes, commands and model inventory)
-Intermediate outputs:
-  pre-ghc/, post-ghc/, native/ object/interface files; compiler/plugin publication;
-  Cabal build products; temporary CBD inspection files. Exporter may emit further
-  diagnostic products: inspect the exporter/plugin closure before declaring these.
-
-Actual test reads:
-  manifest.json; every path in its sources and artifacts sections;
-  pre/post CBD and oracle.tsv. Native executable/audit files are also read as bytes
-  by manifest verification, even when the test does not execute/read their contents.
-  Runtime/test classpath and test implementation are separate test inputs.
-
-Artifact-by-artifact file flow (paths below use this fixture directory):
-  native/narrow-literal-oracle
-    IN: NarrowLiteralProofAuditNative.hs, NarrowLiteralProofAudit.hs, selected
-        GHC package interfaces/libraries and native linker/compiler tools.
-    OUT: native/narrow-literal-oracle; native object/interface intermediates.
-  pre-core/NarrowLiteralProofAudit.cbd
-    IN: NarrowLiteralProofAudit.hs, published THC plugin/package DB, GHC package
-        interfaces, export-core.sh/toolchain.sh/plugin.py and export flags.
-    OUT: that CBD; pre-ghc/ intermediates. Further plugin side outputs unresolved.
-  post-core/NarrowLiteralProofAudit.cbd
-    IN: same as pre, plus the post-tidy plugin option.
-    OUT: that CBD; post-ghc/ intermediates. Further plugin side outputs unresolved.
-  oracle.tsv
-    IN: native/narrow-literal-oracle (executed with its embedded input cases).
-    OUT: captured stdout as oracle.tsv.
-  pre-audit.json / post-audit.json (two separate files)
-    IN: the corresponding stage CBD, oracle.tsv, checked model in the producer,
-        thc-compact, auditor Python import closure and JSON tables listed above.
-    OUT: corresponding audit JSON; temporary decoded Core JSON is not published.
-  manifest.json
-    IN: all six artifact files above (both CBDs, both audits, oracle TSV and
-        native executable); the exact source paths assembled in main(); commands.
-    OUT: manifest.json. This happens after all generation/checks succeed.
-
-Missing edges / caveats:
-  The producer builds the plugin itself, and each export builds it again. Those are
-  procedural calls rather than shared producer edges.
-  Decoder availability is reached indirectly through build-compiler.sh, which
-  currently builds exe:thc-compact; inspection otherwise only locates the executable.
-  The fixture's source receipt omits bin/plugin.py and polyglot-abi.json despite
-  consuming them; bin/simd-families.json is also an imported data input. Its src/compiler/THC/**/*.hs and core_*.py lists also hash files
-  more broadly than their proven consumption.
-  --check-only rewrites pre/post audit JSON; it is not a read-only verification step.
-  Current Gradle input globs do not create a producer dependency. The former Python
-  test exposed this by reading oracle.tsv before any producer had run.
-
-002  empty-join-input
-Fixture rationale (002 empty-join-input)
-Purpose: Check empty-tuple arguments do not shift live join arguments or change results.
-Produces/consumed result: Pre/post CBDs and native oracle.tsv.
-Cost and overlap: Distinct argument-erasure regression, including first compiled
-  execution. Two exports and one native reference are defensible; exact join shapes are
-  not the contract.
-Build status: QUARANTINED: exact join-call and State-lambda shape must not constrain optimization.
-
-Producer: bin/prepare-empty-join-input.py:main / verify
-Consumers: thc.runtime.EmptyJoinInputTest; producer --check-only.
-bin/test-empty-join-inputs.py imports model definitions, not these generated outputs.
-
-Apparent direct inputs:
-  t/fixtures/compiler/EmptyJoinInputAudit.hs
-  t/fixtures/compiler/EmptyJoinInputAuditNative.hs (imports the first module)
-  bin/prepare-empty-join-input.py (generation and independent 64-bit formulas)
-  Same exporter/plugin, CBD inspector, auditor, capability tables and tool/package
-    dependencies as 001, including the polyglot-abi.json and simd-families.json import-time reads.
-  Haskell source supplies -fno-full-laziness -fno-worker-wrapper -fno-specialise
-    -fno-spec-constr; these are part of the producer code/input, not test setup.
-  GHC/GHC_PKG/CABAL/THC_COMPACT/PATH/THC_SOURCE_NOTES and inherited package
-    environment/configuration apply as in 001; GHC --info is recorded in output.
-
-Published outputs, relative to build/empty-join-input/:
-  pre-core/EmptyJoinInputAudit.cbd, post-core/EmptyJoinInputAudit.cbd
-  pre-audit.json, post-audit.json, checks.json
-  oracle.tsv, native/oracle, provenance.json
-Intermediate outputs:
-  pre-ghc/, post-ghc/, native/ object/interface files; shared plugin/Cabal products;
-  temporary CBD decode files. Native executable is compiled -O2 -fforce-recomp
-    -dcore-lint; pre/post exporters use the flags recorded under 001.
-
-Actual test reads:
-  provenance.json and every path named by inputs/artifacts, including native/oracle
-    and checks.json through byte hashing; both CBD files, pre/post audit JSON and
-    oracle.tsv directly. Runtime/test classpath and implementation are test inputs.
-
-Artifact-by-artifact file flow (paths below use this fixture directory):
-  native/oracle
-    IN: EmptyJoinInputAuditNative.hs, EmptyJoinInputAudit.hs, selected GHC package
-        interfaces/libraries and native linker/compiler tools.
-    OUT: native/oracle; native object/interface intermediates.
-  pre-core/EmptyJoinInputAudit.cbd
-    IN: EmptyJoinInputAudit.hs, published plugin/package DB, GHC package
-        interfaces, exporter/toolchain/plugin scripts and export flags.
-    OUT: that CBD; pre-ghc/ intermediates. Further plugin side outputs unresolved.
-  post-core/EmptyJoinInputAudit.cbd
-    IN: same as pre plus post-tidy plugin option.
-    OUT: that CBD; post-ghc/ intermediates. Further plugin side outputs unresolved.
-  oracle.tsv
-    IN: native/oracle (its source embeds cases and expected observation format).
-    OUT: captured stdout as oracle.tsv.
-  pre-audit.json / post-audit.json (two separate files)
-    IN: corresponding CBD, oracle.tsv, formulas/structural checks in verify(),
-        thc-compact and the auditor import/data closure.
-    OUT: corresponding audit JSON.
-  checks.json
-    IN: both decoded CBDs, oracle.tsv, formulas and checks in verify(), both
-        in-memory audit reports. Reads no previous checks.json while generating.
-    OUT: combined stage/row/join inventory in checks.json.
-  provenance.json
-    IN: the seven artifact files listed above, the source paths assembled in
-        main(), commands, selected GHC version and GHC --info output.
-    OUT: provenance.json, written after verify() succeeds.
-
-Missing edges / caveats:
-  Plugin construction is called at top level and again by each export.
-  Provenance hashes only src/compiler/THC/*.hs (nonrecursive); imported deeper
-    compiler modules are not covered by that list. It also omits plugin.py,
-    thc.cabal, polyglot-abi.json and simd-families.json, although invoked tools
-    consume them.
-  verify() writes both audit files and checks.json. --check-only first validates
-    old hashes, then calls this writer; it is not a read-only input check.
-  This producer has no dependency on another fixture's generated oracle/Core.
-    Its missing graph edges are the shared tools and its own consumers.
+002  empty join semantics (fixture-free)
+Owners: thc.runtime.TupleJoinLoweringTest and thc.runtime.EmptyArgumentRuntimeTest.
+Inputs are typed Core modules or local frames built in the test; outputs are
+observed values, ordered effects, failed-transfer state and released loans.
+No producer, generated oracle or pre/post CBD products are required.
+The source-core RepresentationAudit/RealCoreJoinTest owner (118) retains the real
+recursive empty-tuple/scalar swap. Linux issue1066 remains open; this consolidation
+does not establish a runtime fix or post-Tidy equivalence.
+bin/test-empty-join-inputs.py independently tests auditor policy using constructed
+Core and consumes no generated fixture products.
 
 003  signed-narrow-primops
 Fixture rationale (003 signed-narrow-primops)
 Purpose: Check sign extension, narrowing and signed boundary arithmetic against GHC.
 Produces/consumed result: Exported primitive CBDs and native oracle.tsv.
-Cost and overlap: Keep one bounded signed-width corpus. Fold duplicate literal cases
-  from narrow-literal-proofs into it where the same execution path is exercised.
+Cost and overlap: Keep one bounded signed-width corpus; array fixtures own exported
+  literal transport, and fixture-free narrow carrier controls own loader behavior.
 Build status: Value review only; admission still requires explicit inputs and single-
   owner outputs.
 
@@ -198,7 +50,7 @@ Files/tools in:
   t/haskell-fixtures/Main.hs (entry list, operand cases, generated native driver)
   t/haskell-fixtures/FixtureSupport.hs (subprocesses, platform adapter, hashing)
   Built exe:thc-fixtures and its Cabal component/package closure.
-  Shared exporter/plugin/GHC package inputs from 001. No Python auditor stage.
+  Shared exporter/plugin/GHC package inputs. No Python auditor stage.
   Windows: bin/export-core.ps1 and bin/windows-common.ps1; PowerShell, generated
     GHC response file; native executable has .exe suffix.
   GHC selects native compiler; exporter additionally selects GHC_PKG/CABAL and
@@ -387,6 +239,10 @@ Build status: Value review only; admission still requires explicit inputs and si
 
 Producer: Main.hs:prepareArray, arraySpec "int-arrays".
 Consumer: src/test/java/thc/runtime/IntArrayNativeTest.java.
+  Reads the four post-stage CBD paths from manifest.json and native oracle.tsv.
+  Checks six signed/overflow inputs for four public/aliasing entries; compiles
+  unboxedST once per backend. Produces no files. Shared memory tests own bounds
+  and lifetime checks; loader tests own malformed Core.
 Under build/int-arrays/, for each stage pre and post:
   stage/0/core/UnboxedArrays.cbd, stage/0/core/THC.InterfaceClosure.cbd
     IN: t/fixtures/core/UnboxedArrays.hs, array interfaces, shared exporter.
@@ -557,7 +413,7 @@ Producer: t/haskell-fixtures/Main.hs:preparePinnedPointers.
 Consumer: src/test/java/thc/runtime/PinnedPointerCellsTest.java.
 Inputs: t/fixtures/compiler/PinnedPointerCellsAudit.hs and
   PinnedPointerCellsNative.hs; Main.hs, FixtureSupport.hs, built thc-fixtures;
-  shared exporter/plugin/native GHC closure and Python auditor closure from 001.
+  shared exporter/plugin/native GHC closure and Python auditor closure from the shared inputs above.
   Native source imports audit source, GHC.Exts and Data.List. GHC=9.14.1 enforced.
 Under build/pinned-pointer-cells/:
   native/oracle
@@ -594,6 +450,15 @@ Cost and overlap: Keep semantic demand/erasure controls. The recipe currently wr
   admission in this form.
 Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
 
+Scalar newtype identity is owned by 113 runtime-core-native: Fixtures.hs,
+NativeOracle.hs and RuntimeTest replace this family's scalarCastEntry helpers
+and ScalarLexicalProofTest identity method. RawInt remains here for the separate
+primitive arithmetic/conversion controls. This consolidation covers the shared
+pre-Tidy export only; it does not qualify this family's post-Tidy paths.
+Boxed polymorphic/returned-function join controls are owned by 118 source-core's
+RepresentationAudit and RealCoreJoinTest. The separate join producer and its
+pre/post outputs are retired; no join post-Tidy equivalence is claimed.
+
 Producer sequence currently in .github/scripts/fast-fixtures.json:cbv-coercion.
 Consumers: thc.RealCoreCallDemandTest, thc.RealCoreEntryContractTest,
   thc.runtime.BoxedLexicalProofTest, BoxedValueCacheTest, ScalarLexicalProofTest,
@@ -609,12 +474,12 @@ Artifact flows (all paths repository-relative):
   build/explicit64-primops/core/Explicit64PrimopsAudit.cbd
     IN: t/fixtures/compiler/Explicit64PrimopsAudit.hs, shared exporter inputs.
     OUT: CBD plus build/explicit64-primops/ghc/ scratch outputs.
-  build/core/CBVAudit.cbd, CBVJoinAudit.cbd, CBVCoercionAudit.cbd, DemandAudit.cbd
+  build/core/CBVAudit.cbd, CBVCoercionAudit.cbd, DemandAudit.cbd
     IN: respective t/fixtures/compiler/<module>.hs files, shared exporter inputs.
-    OUT: these four CBDs; default build/ghc/ intermediates.
-  build/cbv-post-core/CBVAudit.cbd, CBVJoinAudit.cbd, CBVCoercionAudit.cbd
-    IN: same three CBV sources, exporter/plugin with post-tidy option.
-    OUT: three CBDs; build/cbv-post-ghc/ intermediates.
+    OUT: these three CBDs; default build/ghc/ intermediates.
+  build/cbv-post-core/CBVAudit.cbd, CBVCoercionAudit.cbd
+    IN: same two CBV sources, exporter/plugin with post-tidy option.
+    OUT: two CBDs; build/cbv-post-ghc/ intermediates.
   Temporary demand API Main.hs
     IN: API_CHECK string in bin/check-demand-metadata.py. OUT: temporary source.
   Temporary check-demand executable
@@ -651,7 +516,7 @@ Producer: t/haskell-fixtures/IntegerCompletionFixtures.hs:prepareIntegerCompleti
 Consumer: src/test/java/thc/runtime/IntegerCompletionTest.java.
 IN common: producer, Main.hs/FixtureSupport.hs and built thc-fixtures;
   t/fixtures/compiler/IntegerCompletionAudit.hs; native 64-bit GHC 9.14.1;
-  exporter/plugin plus auditor/decoder/data closure from 001.
+  exporter/plugin plus auditor/decoder/data closure from the shared inputs above.
 Under build/integer-completion/:
   pre-core/IntegerCompletionAudit.cbd, post-core/IntegerCompletionAudit.cbd
     IN: audit source and exporter/plugin (post adds post-tidy). OUT: stage CBDs,
@@ -689,7 +554,7 @@ Producer: t/haskell-fixtures/WordFloatingFixtures.hs:prepareWordFloating.
 Consumer: src/test/java/thc/runtime/WordFloatingTest.java.
 IN common: producer, Main.hs/FixtureSupport.hs and built thc-fixtures;
   t/fixtures/compiler/WordFloatingAudit.hs and WordFloatingNative.hs;
-  native 64-bit GHC 9.14.1 (host must equal target); exporter and auditor as in 001.
+  native 64-bit GHC 9.14.1 (host must equal target); exporter and auditor as listed above.
 Under build/word-floating/:
   pre-core/WordFloatingAudit.cbd, post-core/WordFloatingAudit.cbd
     IN: audit source, exporter/plugin/GHC interfaces and stage option.
@@ -740,7 +605,9 @@ Under build/tuple-arithmetic/:
     IN: export arguments/options; OUT response files consumed by PowerShell export.
   manifest.json: IN two CBDs/reports, both TSVs, driver, native executable,
     Windows response files if used, source receipt, GHC --info; OUT manifest.
-Consumer reads receipt paths, CBDs and TSVs; WordCarryTest also reads audits.
+TupleArithmeticTest reads receipt paths, CBDs and TSVs. WordCarryTest reads only
+  the post CBD and call-oracle.tsv, checking carry/borrow across calls; direct
+  arithmetic is already covered by TupleArithmeticTest. Neither creates fixtures.
 Ownership collision with 014 confirmed at pre-core/TupleArithmeticAudit.cbd.
   Here the options match the unrooted pre export in cbv-coercion; it should be a
   shared artifact, not an independent producer. Receipt omits some auditor tables.
@@ -761,7 +628,7 @@ Shared command-log artifacts (used by 015 and later runLogged producers)
 Shared byte-array producer observed for 018-022
   t/haskell-fixtures/ByteArrayFixtures.hs:prepareByteArrayFamily plus Main.hs,
   FixtureSupport.hs and built thc-fixtures. Reads native 64-bit GHC 9.14.1 and
-  bytestring-0.12.2.0 registration; uses exporter/plugin and auditor closure (001).
+  bytestring-0.12.2.0 registration; uses exporter/plugin and auditor closure listed above.
   Every stage exports named roots then lists ALL *.cbd in the destination and
   passes that list to each entry audit. Old CBDs are not removed first: directory
   contents are an undeclared, open-ended input. Exact closure outputs need fixing.
@@ -1000,7 +867,9 @@ Fixture rationale (024 float-decode)
 Purpose: Check floating decomposition agrees with GHC on signs, exponents and mantissas.
 Produces/consumed result: Pre/post CBDs, native bit-pattern observations, two audits
   and the original Integer worker called by public exponent.
-Cost and overlap: Independent integer model covers subnormals, infinities and NaNs.
+Cost and overlap: Native GHC covers twelve IEEE boundary inputs per precision;
+  direct decode is compiled once per backend. Public exponent is interpreted.
+  No duplicate integer emulator or per-fixture metadata corruption matrix.
   The private bignum export is a separate reusable dependency, not repeated preparation.
 Build status: cmake/BootFixtures.cmake owns every file and compilation directory.
 
@@ -1036,9 +905,8 @@ Separate dependency products under build/float-decode/original/:
     {hi,o,hi-boot,o-boot}, boot-core/GHC.Internal.Bignum.
     {BigNat,Integer,Natural}.cbd, copies in core/, boot-provenance.json. Only Integer
     and provenance are retained in the fixture's artifact receipt.
-Consumer reads manifest/receipt paths, CBDs, TSV and audit reports; mutation
-  controls also write temp CBD/report/stdout/stderr using shared encoder and
-  python3 auditor. Native objects are native/{Main,FloatDecodeAudit,FloatDecode}.
+Consumer reads the two post CBDs, original Integer CBD and oracle.tsv, and produces
+  no files. Native objects are native/{Main,FloatDecodeAudit,FloatDecode}.
   {hi,o}; all selected tool/package inputs and overlay files are in the CMake graph.
 
 025  floating-remainder
@@ -1074,38 +942,6 @@ Under build/floating-remainder/:
     source receipt; OUT hashes and entry/toolchain inventory.
 Consumer reads inputs, TSV, manifest/receipt paths, CBDs and audit reports;
   mutation controls also require temp CBD encoder and python3 auditor/report files.
-
-026  sqrt
-Fixture rationale (026 sqrt)
-Purpose: Check Float/Double square root at exceptional and rounding boundaries.
-Produces/consumed result: SqrtAudit CBD, oracle.tsv and post audit; integer-oracle.tsv
-  is only receipt-hashed.
-Cost and overlap: Move useful cases into floating arithmetic. Deleting the published
-  output directory and producing a redundant oracle subset are not justified;
-  quarantined.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: t/haskell-fixtures/SqrtFixtures.hs:prepareSqrt.
-Consumer: src/test/java/thc/runtime/SqrtPrimitiveTest.java.
-IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor;
-  t/fixtures/compiler/SqrtAudit.hs and SqrtAuditNative.hs; GHC 9.14.1/native packages.
-Under build/sqrt/ (whole directory removed at producer start):
-  inputs.tsv: IN producer inputRows (integer patterns plus host Float/Double bit
-    conversions for math inputs); OUT native request file.
-  native/oracle: IN both Haskell sources/GHC tools/packages;
-    OUT executable and native/ interfaces/objects.
-  oracle.tsv: IN executable, inputs.tsv passed as filename argument;
-    OUT checked three-column native results.
-  integer-oracle.tsv: IN oracle stdout filtered to floatCase/doubleCase;
-    OUT subset TSV (consumer hashes it via receipt).
-  post-core/SqrtAudit.cbd: IN audit source/exporter, post-tidy and source notes;
-    OUT CBD and post-ghc/ intermediates. There is no pre stage in this producer.
-  post-audit.json: IN post CBD, all entry names, auditor/decoder/data; OUT report.
-  manifest.json: IN all six artifacts above, source receipt, GHC --info; OUT hashes.
-Consumer directly reads manifest, receipts, CBD, oracle.tsv and post-audit.json.
-  Receipt hashes PrimopTools.hs without executing it, and omits auditor tables.
-  The destructive directory reset prevents independent incremental output edges
-  inside this function until generation is split into owning operations.
 
 027  simd-address-families
 Fixture rationale (027 simd-address-families)
@@ -1375,8 +1211,10 @@ Under build/fused-floating/:
   pre-audit.json, post-audit.json: IN respective CBD/eight entries/auditor closure;
     OUT stage reports.
   manifest.json: IN TSV, CBDs, reports, source receipt, GHC --info; OUT hashes.
-Consumer reads manifest/receipt paths, CBDs, TSV and audits. Native executable is
-  produced but excluded from artifact hashes. Auditor tables/tool closure omitted.
+Consumer reads the post CBD and oracle.tsv, checking ten boundary triples for
+  all four operations in both precisions. Only fused add is compiled per precision
+  and backend. It produces no files. Native executable is produced but excluded
+  from artifact hashes. Auditor tables/tool closure omitted.
 
 035  simd-floatx4-fma (also FloatX8, DoubleX2 and DoubleX4)
 Fixture rationale (035 simd-floatx4-fma)
@@ -1464,7 +1302,7 @@ Under build/simd-calls/:
     OUT native TSV, non-ARM only.
   manifest.json: IN CBDs/reports/optional TSV, short source receipt; OUT hashes.
 Consumer reads manifest/receipt paths, stage CBDs/reports, optional TSV. Native
-  executable not hashed; short source receipt omits shared inputs listed in 001.
+  executable not hashed; short source receipt omits shared inputs listed above.
 
 038  simd-arithmetic (shuffle)
 Fixture rationale (038 simd-arithmetic)
@@ -1509,7 +1347,7 @@ Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture
 
 Producer: bin/prepare-data-to-tag.py:main; consumer thc.runtime.DataToTagTest.
 IN: producer, t/fixtures/compiler/DataToTagAudit.hs, exporter/plugin and full
-  auditor/decoder closure (001). GHC9.14.1 also runs a ghc-package -e signature query.
+  auditor/decoder closure listed above. GHC9.14.1 also runs a ghc-package -e signature query.
 Under build/data-to-tag/:
   pre/core/DataToTagAudit.cbd and post/core/DataToTagAudit.cbd
     IN source/exporter/stage option; OUT CBDs, stage/ghc/ scratch. Every CBD in
@@ -1880,43 +1718,6 @@ Under build/wide-char-address/:
 Old manifest is not removed before generation. Source receipt is incomplete:
   top-level compiler files/core_*.py collection misses actual auditor JSON tables.
 
-052  aligned-scalar-memory
-Fixture rationale (052 aligned-scalar-memory)
-Purpose: Check aligned loads/stores for each scalar kind and offset.
-Produces/consumed result: Stage CBDs and oracle.tsv.
-Cost and overlap: Keep data/offset behavior, merge duplicate width cases with
-  address/array tests. Exact root or primitive-use counts must be removed before
-  optimization work.
-Build status: QUARANTINED; compiler-structure assertions must be removed.
-  Excluded from build/test entry points; see docs/fixture-quarantine.log.
-
-Producer: t/haskell-fixtures/AlignedScalarMemoryFixtures.hs:prepareAlignedScalarMemory.
-Consumer: thc.runtime.AlignedScalarMemoryTest.
-IN: t/fixtures/compiler/AlignedScalarMemoryAudit.hs, AlignedScalarMemoryNative.hs;
-  t/fixtures/core/StableWideCells.hs; producer/Main.hs/FixtureSupport.hs, built
-  thc-fixtures, exporter/auditor/tool closure; native 64-bit GHC9.14.1.
-Under build/aligned-scalar-memory/:
-  <pre|post>/core/AlignedScalarMemoryAudit.cbd: IN audit source/exporter/stage
-    option; OUT CBD plus stage/ghc/ intermediates.
-  <stage>/audit.json: IN stage CBD, alignedWideChar/alignedStablePtr entries,
-    auditor/data; OUT report.
-  native/oracle: IN native driver/audit source/native packages, --make -O2
-    -dynamic -dcore-lint -dstg-lint; OUT executable/native intermediates.
-  inputs.txt: IN producer WideChar/StablePtr cases; OUT requests.
-  oracle.tsv: IN native/oracle and inputs.txt read as stdin; OUT results.
-  native/stable-wide-cells: IN StableWideCells.hs/native packages; OUT executable
-    and native/example/ intermediates.
-  logs/example-run.stdout: IN stable-wide-cells execution; OUT two checked lines.
-  Logs ghc-version/info/inventory, pre/post-export/audit, native-build/oracle,
-    example-build/run: OUT three standard files per label. Inventory reads GHC
-    package via -package ghc -e, not a tracked text inventory.
-  manifest.json: IN both executables, requests/TSV, CBDs/reports/logs/source
-    receipt; OUT hashes. Old manifest removed first.
-Consumer reads receipts, oracle.tsv, CBDs and audits. It also asserts exact Core
-  binding/lambda counts (1 binding, 2 original lambdas, 1 lowered label) and 12
-  original calls: review as compiler-shape fossilization, separate from useful
-  memory behavior/ABI checks. Receipt misses polyglot ABI/SIMD auditor tables.
-
 053  scalar-memory-utilities
 Fixture rationale (053 scalar-memory-utilities)
 Purpose: Check memory utility operations preserve bytes, lengths and offsets.
@@ -1924,8 +1725,8 @@ Produces/consumed result: CBDs and native oracle.tsv.
 Cost and overlap: Keep only THC-owned transport/aliasing semantics. Hundreds of
   observations do not justify retesting arbitrary libc implementations; consolidate
   overlapping copies/fills.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: Admitted by fixture-scalar-memory-utilities in CMake. Native values
+  and managed lifetime/aliasing checks are independent of compiler root layouts.
 
 Producer: t/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs.
 Consumer: thc.runtime.ScalarMemoryUtilitiesTest.
@@ -2357,40 +2158,29 @@ Both old manifests removed. Neither receipt hashes native binary/logs. Windows
   uses .exe and omits -dynamic. Tests consume oracle/receipts and descriptor JSON;
   these producers do not export any Core or require the Core auditor.
 
-069  original-open
-Fixture rationale (069 original-open)
-Purpose: Check open requests preserve resource ownership and blocking/async behavior.
-Produces/consumed result: Core CBDs, oracle.json and the runtime native-open provider.
-Cost and overlap: Retain open/cancel/resource-leak behavior. Exact internal root counts
-  must go; native provider testing is justified only by THC-owned request state.
-Build status: QUARANTINED; compiler-structure assertions must be removed.
-  Excluded from build/test entry points; see docs/fixture-quarantine.log.
-
-Producer: t/haskell-fixtures/OriginalOpenFixtures.hs.
-Consumers: thc.runtime.OriginalOpenTest, LoomOriginalOpenTest.
-IN: t/fixtures/compiler/OriginalOpenAudit.hs, OriginalOpenNative.hs,
-  OriginalOpenRequestNative.hs; src/main/c/native-open-request.c;
-  shared exporter/auditor/GHC9.14.1/ghc-internal/unix and Driver.NativeCache's
-  SDK compiler/linker flags, system headers/pthread.
-Under build/original-open/:
-  native/oracle: IN native driver/request module/C implementation/native packages,
-    -threaded, THC_OPEN_REQUEST_TEST, C11 warnings and SDK flags;
-    OUT executable/intermediates.
-  native/cases/: IN executable's generated cases; OUT scratch filesystem tree,
-    removed before each native run. oracle.json: IN oracle stdout; OUT 13 cases.
-  <pre|post>/core/OriginalOpenAudit.cbd, THC.InterfaceClosure.cbd
-    IN audit source/exporter/unsafe,safe,interruptible closure roots/stage;
-    OUT CBD pair and stage/ghc/.
-  <stage>/<originalOpen|originalOpenSafe|originalOpenInterruptible>.audit.json
-    IN CBD pair/auditor; OUT six reports.
-  logs/: ghc-version/info,native-build/run,stage-export/audit-entry;
-    OUT log triplets. manifest.json reads all published artifacts/source receipt.
-Linux x86_64 and macOS x86_64/arm64 supported; other hosts only negative manifest.
-Tests read receipts/Core/audits/oracle and generated StdioHostAbi/native open
-  transport resources. They create FIFOs using mkfifo, temporary files/symlinks;
-  read /proc on Linux, run /bin/sh for umask on macOS. Loom class reuses same
-  artifacts/behavior with different thread hosting. Exact binding/lambda counts
-  in OriginalOpenTest are another compiler-shape review candidate.
+069  native-open-request
+Purpose: Check THC-owned native request cancellation, publication, descriptor and
+  worker retirement, caller signal masks, and existing/later signal ownership.
+Producer: cmake/ProcessFixtures.cmake, fixture-native-open-request.
+Consumer: NativeFileProviderTest.nativeRequestControlsRunInFreshProcess; the test
+  executes one fresh subprocess because signal disposition is process-global.
+IN: t/fixtures/compiler/OriginalOpenRequestNative.hs; src/main/c/native-open-request.c;
+  selected native 64-bit GHC 9.14.1/ghc-pkg, installed global package registrations,
+  interfaces, archives and headers, GHC settings and configured compiler/linker;
+  on Darwin, SDKROOT or xcrun-selected SDK and SDK settings. CMake owns the C object
+  and its compiler-discovered source/system header dependencies.
+OUT: build/native-open-request/native/oracle;
+  build/native-open-request/native/OriginalOpenRequestNative.hi and .o;
+  build/fixtures/CMakeFiles/fixture-native-open-request-c.dir/src/main/c/native-open-request.c.o.
+  GHC uses --make -main-is OriginalOpenRequestNative.main, -O2 -threaded;
+  the C object uses C11, THC_OPEN_REQUEST_TEST and warnings; GHC links pthread.
+No Core export, audit, fixture-tool executable or descriptor hash manifest is
+  required. NativeFileProviderTest's scratch and stdout/stderr are test-private,
+  not cached fixture products. The child brackets its named FIFO; rerunning with
+  unrelated scratch files does not consume or remove them.
+Platform guards: Linux x86_64 and Darwin x86_64/arm64 only. Darwin graph/child and
+  same nonempty scratch reruns are qualified at 0f21bf171; Linux execution awaits CI.
+This native control does not qualify installed GHC wrappers or Loom-hosted open.
 
 070  rts-diagnostics
 Fixture rationale (070 rts-diagnostics)
@@ -2889,33 +2679,25 @@ This producer executes an entire cache correctness suite before publishing ordin
   interface fixtures. Separate those test operations from reusable fixture products.
 
 086 floating-tuples
-Fixture rationale (086 floating-tuples)
-Purpose: Check mixed floating aggregate results survive calls and joins.
-Produces/consumed result: Pre/post CBDs, oracle.tsv and bits.tsv.
-Cost and overlap: Aggregate floating transport is useful; combine with general tuple
-  result coverage. Recursive receipts and frozen CPR/tuple/join shapes keep this recipe
-  quarantined.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-floating-tuples.py; consumer: thc.runtime.FloatingTupleTest.
-Inputs: t/fixtures/compiler/FloatingTupleAudit.hs and FloatingTupleAuditNative.hs,
-  producer, shared exporter/plugin/auditor/decoder and pinned GHC/native libraries.
-Outputs under build/floating-tuple/ (singular):
-  native/oracle and native compiler intermediates: IN both Haskell sources/GHC.
-  oracle.tsv, bits.tsv: IN native/oracle, invoked normally and with argument bits.
-  pre-core/FloatingTupleAudit.cbd, post-core/FloatingTupleAudit.cbd and pre/post-ghc/:
-    IN audit source/exporter with corresponding stage flag.
-  pre-audit.json, post-audit.json: IN corresponding CBD, five entry names/auditor.
-  provenance.json: IN TSVs/audits, recursively found non-JSON files in native/,
-    pre-core/,post-core/, source receipts, build/compiler/plugin.json and its
-    sharedLibrary. OUT receipt; previous receipt is not invalidated first.
-  checks.json: IN receipt/all hashed files, oracles/CBDs/audits; OUT coverage checks.
-    --check-only also writes this file.
-Preflight consumes existing plugin manifest/database/library or builds if absent or
-  invalid; exporter subsequently invokes compiler build again. Consumer reads
-  receipt/all hashed files, both CBDs, audits, oracle.tsv and bits.tsv.
-Exact CPR producer/tuple/join shapes are asserted; review for compiler fossilization.
-Receipt includes unused PrimopTools.hs but misses shared auditor data tables.
+Purpose: Genuine Data.Complex CPR, mixed nested floating results, and native IEEE
+  tuple-bit transport. FloatingTupleTest consumes two CBDs and two native TSVs.
+Producer: fixture-floating-tuples in cmake/CoreFixtures.cmake, using the explicit
+  existing plugin publication/exporter and pinned GHC/package toolchain.
+Inputs: unchanged FloatingTupleAudit.hs/FloatingTupleAuditNative.hs, exporter,
+  plugin/toolchain inputs and atomic CaptureOutput.cmake.
+Outputs under build/floating-tuple/: pre/post-core/FloatingTupleAudit.cbd,
+  pre/post-ghc/FloatingTupleAudit.hi/.o; native/oracle, native/Main.hi/.o and
+  native/FloatingTupleAudit.hi/.o; oracle.tsv and bits.tsv (native argument bits).
+  No recursive receipt, audit JSON, cached test success or implicit build.
+Consumer: four existing methods, AST/bytecode, inlined/residual native arithmetic,
+  installed IEEE result delivery and a synthetic retained whole-tuple case.
+  Arithmetic NaNs are classified, not required to preserve native payload/sign.
+  Root owns actual product and both-mode qualification before publication.
+Overlap: TupleCompletionTest owns dynamic raw floating payload/reference copies;
+  ReusableTypedTest and BytecodeTypedTupleInputTest own mixed typed host/guest
+  transport; TupleRepresentationTest owns logical nesting/consumer cleanup.
+  Their component controls replace reflection/storage and body-position probes,
+  not genuine GHC CPR qualification. No new component matrix.
 
 087 pinned-addresses
 Fixture rationale (087 pinned-addresses)
@@ -2954,69 +2736,62 @@ Modes native-only/export-only/allow-unsupported change the output set; default f
 Consumer reads receipts, TSVs, CBDs, audit/negative reports and command records.
 Receipt again includes unused PrimopTools.hs and omits shared auditor data tables.
 
-088 sum-results (three indexed commands, four producer flows)
-Fixture rationale (088 sum-results)
-Purpose: Check sum alternatives and aggregate result layouts carry the right values
-  through execution.
-Produces/consumed result: Aggregate-frontier, aggregate-layout, sum-layout and sum-
-  result CBDs/oracles.
-Cost and overlap: Retain semantic layout cases in one aggregate corpus. Four producer
-  flows, recursive receipts and shape proofs are not justified; quarantined pending
-  consolidation.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Consumers: thc.AggregateFrontierTest, AggregateLayoutTest, SumLayoutMetadataTest;
-  thc.runtime.SumProtocolTest, SumResultTest, TupleRepresentationTest,
-  UnknownBoxedNativeTest. AggregateFrontierTest and SumProtocolTest also write
-  model CBDs, consuming shared compact-model encoder (041).
-A. bin/prepare-aggregate-frontier.sh:
-  IN bin/toolchain.sh, built thc-fixtures, t/fixtures/compiler/AggregateFrontier.hs,
-    AggregateFrontierNative.hs, exporter/native GHC/shared package libraries.
-  OUT build/aggregate-core/AggregateFrontier.cbd,
-    build/aggregate-post-core/AggregateFrontier.cbd and corresponding
-    build/aggregate-ghc/,aggregate-post-ghc/ intermediates.
-  build/aggregate-native/aggregate-frontier: IN native driver/audit source/GHC;
-    OUT executable and compiler intermediates.
-  build/aggregate-native/oracle.tsv: IN executable.
-  build/aggregate-frontier.json: IN CBD pair/oracle,
-    bin/check-aggregate-frontier.py and shared auditor/decoder/capabilities.
-  Then invokes B below.
-B. bin/check-aggregate-layout.py --prepare:
-  IN t/fixtures/compiler/AggregateLayoutAudit.hs, bin/sum_layout_model.py,
-    producer/exporter/auditor/decoder/capability data.
-  Under build/aggregate-layout/:
-    native/: IN source/GHC --make -no-link -O2 -dynamic; OUT .hi/.o (no oracle).
-    <pre|post>-core/AggregateLayoutAudit.cbd and stage-ghc/: IN source/exporter.
-    provenance.json: IN recursively found non-JSON native/core/ghc artifacts,
-      plugin manifest/shared library, GHC/ghc-pkg facts and source hashes.
-    checks.json: IN receipt/all hashes, CBDs/in-process auditor/layout model;
-      OUT coverage. Checking without --prepare still writes checks.json.
-C. bin/check-sum-layout.py --prepare:
+088 aggregate families (named file rules; no cached execution receipts)
+Purpose: Preserve actual GHC layout metadata, native sum observations and result
+  ownership/exception/deoptimization behavior at their existing owners.
+AggregateFrontierTest writes two public diagnostic/host ABI CBD models with
+  compact-model (041); TupleRepresentationTest is fixture-free. Both use commit
+  cadence. SumProtocolTest still reads genuine CBDs and writes a public alias CBD;
+  it has explicit compact-model and sum-layout dependencies and is not fixture-free.
+Generation, source admission and actual owner execution are separate proofs.
+A. Admitted aggregate-layout (cmake/CoreFixtures.cmake):
+  IN AggregateLayoutAudit.hs, explicit plugin publication, export-core.sh/plugin.py,
+    toolchain.sh and the selected GHC/package/SDK/compiler closure.
+  OUT build/aggregate-layout/<pre|post>-core/AggregateLayoutAudit.cbd;
+    <pre|post>-ghc/AggregateLayoutAudit.hi and .o from the same export compilation.
+  Two independent stage commands use the published plugin; no nested tool build,
+    native no-link duplicate/oracle, recursive provenance, checks.json or test result.
+  Consumers: AggregateLayoutTest and thc.runtime.UnknownBoxedNativeTest, commit
+    cadence on Linux/macOS. They read only the named CBD pair, preserving ABI
+    metadata, malformed/abstract boundaries, lazy boxed values and first-installed
+    unknown-levity returns. Generation and actual execution require separate proof.
+  These source exports do not qualify matching retained-library hydration.
+B. fixture-sum-layout (cmake/CoreFixtures.cmake):
   IN t/fixtures/compiler/SumLayoutAudit.hs, SumLayoutAuditNative.hs,
-    bin/sum_layout_model.py and shared tools/data.
+    bin/export-core.sh, bin/toolchain.sh, bin/plugin.py, explicit plugin publication,
+    selected GHC/package/settings/compiler-library inputs, cmake/CaptureOutput.cmake.
   Under build/sum-layout/:
-    <pre|post>-core/SumLayoutAudit.cbd and stage-ghc/: IN audit source/exporter.
-    native/sum-layout-oracle and compiler intermediates: IN native/audit sources.
-    oracle.tsv: IN binary; checked against independent model.
-    provenance.json: IN recursive generated products/plugin/toolchain/source hashes;
-      old receipt removed first. Includes bin/test-sum-layout.py, not executed here.
-    checks.json: IN receipt/CBD inventory/in-process audits/layout model.
-D. bin/prepare-sum-result-audit.py:
-  IN t/fixtures/compiler/SumResultAudit.hs, SumResultAuditNative.hs,
-    producer model/shared exporter/auditor/decoder/data.
+    pre-core/SumLayoutAudit.cbd, post-core/SumLayoutAudit.cbd: IN audit source/exporter.
+    pre-ghc/SumLayoutAudit.hi/.o, post-ghc/SumLayoutAudit.hi/.o: named export byproducts.
+    native/sum-layout-oracle, native/Main.hi/.o, native/SumLayoutAudit.hi/.o:
+      IN both HS sources and selected native GHC toolchain.
+    oracle.tsv: IN native binary; CaptureOutput publishes stdout after exit success.
+    No recursive provenance, checks/audit JSON, Core JSON or cached test-success result.
+  SumLayoutMetadataTest alone is selected at Linux/macOS commit cadence. It checks
+    genuine State/empty and generic boxed-levity signatures, accepted/rejected roots
+    and all named native scalar observers on both export stages/backends. It does
+    not assert installed execution. Native row count is not a behavioral contract.
+  SumResultTest/SumProtocolTest retain named sum-layout data through an explicit
+    fixture dependency; there is no cached acceptance/evidence gate.
+  Pre-Tidy generated IDs need not reproduce byte-for-byte after prior-interface reuse;
+    output directories may contain unrelated files. Source export does not qualify
+    matching retained-library hydration.
+C. fixture-sum-results (cmake/CoreFixtures.cmake):
+  IN SumResultAudit.hs and SumResultAuditNative.hs; explicit plugin publication,
+    export-core.sh/toolchain.sh/plugin.py and selected GHC/package/SDK/compiler inputs.
   Under build/sum-result/:
-    <pre|post>-core/SumResultAudit.cbd and stage-ghc/: IN audit source/exporter.
-    pre-audit.json, post-audit.json: IN corresponding CBD/in-process auditor/data.
-    native/oracle and intermediates: IN native/audit sources/GHC.
-    oracle.tsv, oracle-pairs.tsv: IN binary normally / with --pairs respectively.
-    checks.json: IN model/oracle/audits; OUT coverage.
-    provenance.json: IN recursively all output files except itself/Core JSON,
-      plugin manifest/shared library, GHC/package descriptions and source hashes.
-      Old receipt removed first.
-Consumers read their named CBDs/oracles/checks and receipt-referenced files.
-Recursive receipts turn stale compiler intermediates into extra inputs; output sets
-  are not closed. Review overlap among frontier/layout/sum-layout/result suites
-  before carrying all four producers into the graph.
+    pre-core/SumResultAudit.cbd and post-core/SumResultAudit.cbd: independent exports.
+    pre-ghc/SumResultAudit.hi/.o and post-ghc/SumResultAudit.hi/.o: export byproducts.
+    native/oracle, native/Main.hi/.o and native/SumResultAudit.hi/.o: native compilation.
+    oracle.tsv and oracle-pairs.tsv: independent successful captures from the same
+      binary, with --pairs only for the latter. Atomic publication preserves an old
+      output on child failure; unrelated directory members are not inputs.
+  Consumers: SumResultTest and SumProtocolTest, Linux/macOS commit cadence. Gradle
+    Test inputs are only the CBD pair and TSV pair. Native values, installed entry,
+    release/throw recovery and post-return materialization remain runtime assertions.
+    No recursive provenance, cached audit acceptance, checks.json, source notes,
+    exact native row/root counts or body-position metadata gates. Runtime execution
+    must qualify the class bodies before publication; generation alone is not proof.
 
 089 simd-floatx4
 Fixture rationale (089 simd-floatx4)
@@ -3094,7 +2869,7 @@ Consumer reads receipt/all hashes, oracle.tsv, both CBDs/audits. Native binary a
 Fixture rationale (092 floating-address)
 Purpose: Check Float/Double address loads and stores retain numeric/bit results.
 Produces/consumed result: CBDs and oracle.tsv.
-Cost and overlap: Keep the address boundary; combine cases with aligned scalar memory.
+Cost and overlap: Keep the address boundary; shared widths are covered by general memory suites.
   Another full acquisition pipeline is not warranted.
 Build status: Value review only; admission still requires explicit inputs and single-
   owner outputs.
@@ -3180,7 +2955,7 @@ Under build/unaligned-scalar-memory/:
     OUT standard command triplets.
   manifest.json: IN source hashes/inputs/oracle/CBDs/audits/logs; old receipt removed.
 Consumer reads receipt/all hashes, oracle.tsv, stage CBDs/audits. Review overlap with
-  explicit64/floating-byte-offset/aligned scalar suites using behavior coverage.
+  explicit64/floating-byte-offset/general memory suites using behavior coverage.
 
 097 compiled-thunk-retention (two producers)
 Fixture rationale (097 compiled-thunk-retention)
@@ -3610,40 +3385,20 @@ Consumers: thc.BytecodeBackendTest, FastSmokeTest, RuntimeTest, SelfTailProfileT
 Consumers read the two CBDs/oracle TSV. Script always recompiles/dumps before executing;
   ordinary runtime test input does not need the simplifier dumps.
 
-114 tuple-input
-Fixture rationale (114 tuple-input)
-Purpose: Check aggregate arguments preserve component values and calling convention
-  layout.
-Produces/consumed result: TupleInputAudit CBDs and oracle TSVs.
-Cost and overlap: Keep aggregate transport cases, sharing the aggregate corpus.
-  Recursive output receipts make this recipe quarantined; no need to archive compiler
-  intermediates.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-tuple-input-audit.py; consumer: thc.runtime.TupleInputNativeTest.
-IN t/fixtures/compiler/TupleInputAudit.hs, TupleInputAuditNative.hs, producer model,
-  shared tools/data/GHC and ghc-pkg executables.
-Under build/tuple-input/:
-  native/tuple-input and intermediates: IN native/audit sources/GHC.
-  oracle.tsv, oracle-pairs.tsv: IN binary default/--pairs.
-  <pre|post>-core/TupleInputAudit.cbd and stage-ghc/: IN audit source/exporter.
-  stage-audit.json: IN stage CBD/auditor/all model entries and pairInputs.
-  provenance.json: IN recursively all non-JSON native/core files, TSVs/audits,
-    source hashes/GHC/ghc-pkg binaries/toolchain facts.
-  checks.json: IN receipt/hash files/CBD inspection/independent model/oracles.
---check-only still writes checks.json. No old receipt invalidation; recursive input set.
-Consumer reads receipts/all hashes/checks/oracles/audits/CBDs. Exact shape checks merit review.
+NativeOracle also observes scalarCastEntry at full machine-width boundaries.
+RuntimeTest checks the actual exported IntRep signatures and native identity
+results in both backends, including the first installed call without warmup.
+This shared owner exports pre-Tidy Core; no post-Tidy qualification is implied.
 
 115 live-async
 Fixture rationale (115 live-async)
 Purpose: Check async delivery during live/strict execution preserves sharing and
-  continuation state.
-Produces/consumed result: CBDs, oracle.txt and strict-oracle.txt.
+  continuation state; executable shutdown terminates a blocked child.
+Produces/consumed result: CBDs, oracle.txt, strict-oracle.txt and shutdown-oracle.txt.
 Cost and overlap: Keep synchronized live-delivery regressions distinct from static
   exception tests. One shared thread/native setup is enough; no timing-dependent success
   criteria.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: CMake owns the declared Core, oracle and audit outputs.
 
 Producer: t/haskell-fixtures/LiveAsyncFixtures.hs.
 Consumers: thc.runtime.AsyncStrictEntryNativeTest, LiveAsyncNativeTest.
@@ -3653,7 +3408,8 @@ Under build/live-async/:
   stage/<entry>-audit.json: IN CBD/auditor; forceShared,strictWorker,strictCall,
     strictEntry,takeReady,takeRunning,releaseGate,prefixCount,warmLoop,asyncPayload.
   native/oracle and intermediates: IN native/audit sources/GHC.
-  oracle.txt, strict-oracle.txt: IN binary default/strict, both +RTS -N2.
+  oracle.txt, strict-oracle.txt, shutdown-oracle.txt: IN binary default/strict/shutdown,
+    all +RTS -N2. Shutdown observes ThreadBlocked BlockedOnMVar before main returns.
   manifest.json: IN sources/observations/CBDs/audits; old receipt removed.
 Consumers read receipt/all hashes/their oracle/CBDs/audits.
 
@@ -3735,6 +3491,15 @@ Build status: Value review only; admission still requires explicit inputs and si
 
 Producers: bin/export-core.sh with THC_SOURCE_NOTES=true, then bin/check-source-metadata.py --fixture.
 Consumers: thc.RealCoreJoinTest, thc.runtime.CoreSourceTest.
+Boxed join tests preserve erased type-slot alignment, entry obligations without
+manufactured WHNF, and a used boxed returned-function suffix outside the join
+prefix. Expected values remain n+7 and 2*n+5, with Java machine-Int wraparound.
+The same admitted owner checks recursive scalar swaps across an empty-tuple join
+parameter against an independent checked model: input MAX masks to 31 swaps (18),
+MAX-1 to 30 (-18), including the immediate first installed call on both backends.
+This preserves the unique EmptyJoin regression contract without qualifying a
+current-main Linux reproduction or a runtime fix for issue1066.
+This admitted pre-Tidy export does not qualify retired join post-Tidy agreement.
 IN t/fixtures/compiler/{SourceNotes,RepresentationAudit}.hs/shared exporter;
   metadata checker/shared decoder.
 OUT build/source-core/{SourceNotes,RepresentationAudit}.cbd and build/source-ghc/.
@@ -3870,30 +3635,6 @@ Under build/array-slices/:
 Consumer reads receipt/all hashes/advertised CBDs/oracle. Exact missing-global and
   recursive-bottom shape checks need review alongside boxed-arrays coverage.
 
-124 tuple-join
-Fixture rationale (124 tuple-join)
-Purpose: Check joins transporting tuple results preserve values across branches and
-  recursion.
-Produces/consumed result: TupleJoinAudit CBDs and oracle.tsv; generated receipt/audits
-  are not consumer inputs.
-Cost and overlap: Keep distinct join-result execution in the aggregate corpus. Drop
-  unused receipt work and exact join/state-lambda counts; do not retain a whole pipeline
-  for metadata ceremony.
-Build status: QUARANTINED; compiler-structure assertions must be removed.
-  Excluded from build/test entry points; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-tuple-join-audit.py; consumer: thc.runtime.TupleJoinResultTest.
-IN t/fixtures/compiler/TupleJoinAudit.hs, TupleJoinAuditNative.hs, producer model,
-  shared exporter/auditor/decoder/data/native GHC.
-Under build/tuple-join/:
-  <pre|post>-core/TupleJoinAudit.cbd and stage-ghc/: IN audit source/exporter.
-  native/oracle and intermediates: IN driver/audit source/GHC.
-  oracle.tsv: IN binary.
-  provenance.json: IN source/tool/CBD/binary/oracle hashes/toolchain facts.
-  checks.json: IN CBDs/in-process auditor/model/oracle; written even by --check-only.
-Receipt omits producer itself and much shared tool closure; no old receipt invalidation.
-Consumer directly reads stage CBDs/oracle, not provenance/checks. Review unused receipt work.
-
 125 vector-api
 Fixture rationale (125 vector-api)
 Purpose: Check the public THC vector API and example loops execute with native-
@@ -3910,27 +3651,6 @@ IN src/examples/VectorLoops.hs, src/runtime/THC/Prim.hs,
   build/vector-api/core/{VectorLoops,THC.Prim}.cbd, ghc/: IN example/API/post-Tidy exporter.
   build/vector-api/native/oracle and intermediates: IN VectorScalar.hs/GHC.
   build/vector-api/oracle.tsv: IN binary; consumer reads TSV/Core. No receipt.
-
-126 empty-tuple-input
-Fixture rationale (126 empty-tuple-input)
-Purpose: Check erased empty-tuple parameters leave ordinary arguments/results intact.
-Produces/consumed result: EmptyTupleInputAudit CBDs and oracle TSVs.
-Cost and overlap: Consolidate with empty-join and tuple-input, retaining any distinct
-  call boundary. Recursive receipts keep this separate recipe quarantined.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-empty-tuple-input-audit.py; consumer: thc.runtime.EmptyTupleInputNativeTest.
-IN t/fixtures/compiler/EmptyTupleInputAudit.hs, EmptyTupleInputAuditNative.hs,
-  producer model/shared tools/data/GHC/ghc-pkg.
-Under build/empty-tuple-input/:
-  native/empty-tuple-input and intermediates: IN native/audit sources/GHC.
-  oracle.tsv, oracle-pairs.tsv: IN binary default/--pairs.
-  <pre|post>-core/EmptyTupleInputAudit.cbd and stage-ghc/: IN source/exporter.
-  stage-audit.json: IN stage CBD/auditor/model entries and betweenInputs.
-  provenance.json: IN recursive non-JSON native/core products/TSVs/audits/sources,
-    GHC/ghc-pkg binary hashes; no old receipt invalidation.
-  checks.json: IN receipts/hashes/CBD inventory/model/oracles; --check-only also writes.
-Consumer reads receipt/hashes/CBDs/audits/oracles. Assess overlap with tuple-input/empty-join.
 
 127 show-word-list
 Fixture rationale (127 show-word-list)
@@ -3958,28 +3678,6 @@ Under build/show-word-list/:
     boot receipts and recursive native files; no old receipt invalidation.
 --check-only runs inventory again and REWRITES audits, in addition to reading hashes/oracle.
 Consumer reads manifest/CBDs/oracle/audits. PrimopTools.hs is hashed without being executed.
-
-128 state-tuple
-Fixture rationale (128 state-tuple)
-Purpose: Check State#-containing tuple results preserve effects and live value
-  positions.
-Produces/consumed result: StateTupleAudit CBDs and oracle.tsv.
-Cost and overlap: Keep effect/value transport within the aggregate corpus. Recursive
-  output receipts and a separate setup pipeline are unjustified; quarantined.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-state-tuple-audit.py; consumer: thc.runtime.StateTupleTest.
-IN t/fixtures/compiler/StateTupleAudit.hs, StateTupleAuditNative.hs, producer model,
-  shared exporter/auditor/decoder/data/native GHC.
-Under build/state-tuple/:
-  native/state-tuple and intermediates: IN driver/audit sources/GHC.
-  oracle.tsv: IN binary.
-  <pre|post>-core/StateTupleAudit.cbd and stage-ghc/: IN source/exporter.
-  stage-audit.json: IN CBD/auditor/declared entries.
-  provenance.json: IN recursive native/core files/TSV/audits/source hashes.
-  checks.json: IN receipt/hashes/oracle/model/CBD shape; --check-only also writes.
-No old receipt invalidation. Unused PrimopTools.hs included when present.
-Consumer reads receipt/hashes/oracle/CBDs/audits; review shape ceremony and tuple-suite overlap.
 
 129 short-bytes-slices
 Fixture rationale (129 short-bytes-slices)
@@ -4009,32 +3707,6 @@ Under build/short-bytes-slices/:
     installed Short.Internal.dyn_hi hash; old receipt removed.
 --check-only also calls ghc-pkg and inventory (rewrites audits). Consumer reads
   manifest/advertised CBDs/oracle/audits. Check whether exceptions export is overbroad.
-
-130 tuple-return
-Fixture rationale (130 tuple-return)
-Purpose: Check tuple-valued returns preserve components through callers and aggregate
-  paths.
-Produces/consumed result: TupleReturnAudit CBDs/oracle.tsv and aggregate-frontier
-  CBDs/oracle.
-Cost and overlap: Keep result transport in the general aggregate corpus. This is not
-  independent of sum-results; recursive receipts and undeclared-looking setup complexity
-  justify quarantine.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-tuple-return-audit.py; consumer: thc.runtime.TupleResultTest.
-IN t/fixtures/compiler/TupleReturnAudit.hs, TupleReturnAuditNative.hs, producer model,
-  shared exporter/decoder/GHC/ghc-pkg, plugin manifest/shared library.
-Under build/tuple-return/:
-  native/tuple-return and intermediates: IN native/audit sources/GHC.
-  oracle.tsv: IN binary.
-  <pre|post>-core/TupleReturnAudit.cbd and stage-ghc/: IN audit source/exporter.
-  provenance.json: IN recursively native/core/ghc files except JSON, oracle, source
-    hashes, plugin manifest/library, GHC/ghc-pkg binaries/package descriptions/environment.
-  checks.json: IN receipt/hashes/CBD shape/oracle/model; --check-only also writes.
-No old receipt invalidation. No standalone audit report from this producer.
-Consumer reads tuple-return CBDs/oracle AND build/aggregate-core/AggregateFrontier.cbd,
-  build/aggregate-post-core/AggregateFrontier.cbd, build/aggregate-native/oracle.tsv
-  from 088. This is an explicit cross-group dependency, even when selecting this class alone.
 
 131 process-signals
 Fixture rationale (131 process-signals)
@@ -4207,30 +3879,6 @@ Consumer reads receipt/all hashes/advertised CBDs/oracle. Producer no longer pre
   rejection and first compiled calls without requiring a particular DirectCallNode
   arrangement. Native Main/AddressFieldAudit and pre/post .hi/.o are CMake byproducts.
 
-137 sum-join
-Fixture rationale (137 sum-join)
-Purpose: Check sum alternatives and payloads survive joins and recursion.
-Produces/consumed result: SumJoinAudit CBDs and oracle.tsv; manifest/audits are not
-  consumed by the test.
-Cost and overlap: Keep distinct join/sum execution cases within one aggregate corpus.
-  Drop unused receipts and exact join/state-lambda/case counts rather than fossilize
-  lowering.
-Build status: QUARANTINED; compiler-structure assertions must be removed.
-  Excluded from build/test entry points; see docs/fixture-quarantine.log.
-
-Producer: t/haskell-fixtures/SumJoinFixtures.hs; consumer: thc.runtime.SumJoinResultTest.
-IN t/fixtures/compiler/SumJoinAudit.hs, SumJoinAuditNative.hs, shared tools/data/GHC.
-Under build/sum-join/:
-  native/oracle and intermediates: IN native/audit sources/GHC.
-  oracle.tsv: IN binary (42 observations).
-  <pre|post>/core/SumJoinAudit.cbd and stage/ghc/: IN source/exporter.
-  stage/audit.json: IN CBD/auditor; forwardCase,recursiveCase,nestedCase,
-    stateForwardCase,stateRecursiveCase,tupleForwardCase,sumForwardCase.
-  commands/: OUT ghc-version,native-build/run,stage-export/audit triplets.
-  manifest.json: IN sources/TSV/Core/audits/logs; no old receipt invalidation.
-Consumer reads Core/oracle directly. Producer enforces join/state-lambda counts and
-  exact case shapes. Review unused receipt work and overlap with 088/124/130.
-
 138 simd-int64x2
 Fixture rationale (138 simd-int64x2)
 Purpose: Check Int64x2 lane arithmetic and signed wraparound.
@@ -4288,7 +3936,7 @@ Directory state is a defect, not a prerequisite to preserve
     intermediates into receipts and therefore into consumer input sets.
   - 044 boxed-cas and 098 original-stack: directory state selects run-N output paths;
     previous receipts and attempt directories accumulate.
-  - 026 sqrt deletes its output tree; 119 corpus deletes group directories; 133
+  - 119 corpus deletes group directories; 133
     managed-mvars refresh deletes its tree. Those observations identify current
     replacement policy; they do not justify a clean-directory graph dependency.
   - prepare-tests.sh removes build/synchronous-exceptions before its producer.
@@ -4345,7 +3993,7 @@ Shared Haskell component builds
   bin/build-compiler.sh publishes build/compiler/plugin.json, plugin-package-dbs
     and a shared-library copy through bin/plugin.py, which reads the Cabal plan
     and local/store/global registrations. Building lib:thc alone does not publish
-    this separate plugin description. See 001/066 for actual consumer paths.
+    this separate plugin description. See entry 066 for installed-Core consumer paths.
   build/thc-fixtures.path:
     IN resolved executable path. OUT plain path sidecar, written by several entry
     points (including prepare-tests.sh and fast CI common-encoder setup).
@@ -4428,10 +4076,10 @@ Fixture entry points
 
   Quarantined legacy metadata producers (excluded from the graph):
     t/fixtures/compiler/{SpeculationAudit,RepresentationAudit,SourceNotes,CBVAudit,
-      CBVJoinAudit,CBVCoercionAudit,ConstructorFieldAudit,DemandAudit}.hs and
+      CBVCoercionAudit,ConstructorFieldAudit,DemandAudit}.hs and
       t/fixtures/core/Fixtures.hs + StrictFields.hs + shared exporter/plugin/GHC ->
       build/core/<module>.cbd and build/ghc/ compiler intermediates.
-    CBVAudit/CBVJoinAudit/CBVCoercionAudit with post-tidy ->
+    CBVAudit/CBVCoercionAudit with post-tidy ->
       build/cbv-post-core/<module>.cbd and build/cbv-post-ghc/ intermediates.
     bin/check-{speculation,representation,cbv,constructor-field}-metadata.py consume
       the corresponding CBDs through the decoder and emit checks/stdout, no required
@@ -4489,191 +4137,6 @@ Quarantine enforcement checkpoint
   CI selection contains 103 groups / 419 classes and no quarantined consumers.
   Direct quarantined/wildcard CLI requests exit 2 with PATH=/nonexistent, before
   toolchain discovery. No Gradle application build or runtime suite was executed.
-
-140 original-time-clock (custom full-Core suite)
-Fixture rationale (140 original-time-clock)
-Purpose: Exercise clock CAPI buffer/errno transport and coexistence of base/time.
-Produces/consumed result: linked original/specialized CBDs and oracle.json;
-  OriginalTimeClockTest also hashes source/interface/audit receipts.
-Cost and overlap: Complete time/base interface Core, typed FCallId rewriting,
-  native interpreter calls and eight audits are excessive for ordinary package
-  calls. Keep a package-level time smoke and a small general FFI buffer/errno
-  boundary test if those cases are missing; do not preserve a clock-C conformance
-  harness. The test hard-codes one/two executed compiler roots.
-Build status: QUARANTINED; excluded from all Gradle Test tasks and from the new graph.
-Producer: t/haskell-fixtures/OriginalTimeClockFixtures.hs.
-Consumer: src/fullCoreTest/java/thc/runtime/OriginalTimeClockTest.java;
-  Gradle originalTimeClockDefault/originalTimeClockDense.
-Inputs: t/fixtures/compiler/OriginalTimeClockAudit.hs, built thc-fixtures with
-  GHC API/plugin/interface/Driver.ForeignBitcode modules, selected Linux64 GHC
-  9.14.1/ghc-pkg, native time/base/unix packages and headers resolved by
-  THC.Driver.ForeignBitcode.timeClockHeaders. Complete installed interfaces:
-  time Data/Time/Clock/Internal/CTimespec.hi and base System/CPUTime/Posix/ClockGetTime.hi.
-Under build/original-time-clock/:
-  original.cbd, base-original.cbd <- respective installed interfaces/Core loader.
-  linked.cbd, base-linked.cbd <- originals and linkClockGetTime; the helper compiles
-    temporary clock.c/clock.bc using selected headers and attaches foreign linkage.
-  specialized-closed.cbd <- fixture source and typed original FCallId substitutions.
-  pre.cbd, post.cbd <- specialized Core simplified/tidied by GHC API.
-  ghc/ <- compiler/interpreter and foreign-bitcode intermediate outputs.
-  oracle.json <- hscCompileCoreExpr native functions, current clock state, guarded
-    memory images and errno; nine observations. Time values are live observations,
-    not deterministic content derived solely from files.
-  <pre|post>-<originalId|originalConstant|originalResolution|originalTime>.audit.json
-    <- linked.cbd + stage CBD/auditor; originalId is an expected rejection.
-  logs/{version,libdir,info,imports,includes,unit,base-imports,<stage>-<entry>}.*
-    <- corresponding commands; stdout/stderr/command.json.
-  manifest.json <- source/header/interface hashes, named CBD/oracle/audit/log outputs.
-Consumer additionally reads generated runtime ABI resources, allocates test-private
-  buffers, links the embedded foreign bitcode and writes temporary controls.
-No ordinary index group or Make/workflow producer invocation found. The Gradle
-  tasks require a preexisting manifest; that is a missing producer edge, not setup.
-
-Structural-assertion quarantine follow-up
-  052 aligned-scalar-memory, 069 original-open, 124 tuple-join and 137 sum-join
-  are now excluded too. Their previously recorded exact Core/root/join/state-lambda
-  assumptions are not admission requirements for the future compiler.
-
-141 rts-event (custom full-Core suite; I/O-manager prerequisites, not eventlog/JFR)
-Fixture rationale (141 rts-event)
-Purpose: Check logical capabilities, context-local manager slots and descriptor
-  lifecycles; the same JUnit class contains a useful direct masking/resumption test.
-Produces/consumed result: entry-specific pre/post CBDs, oracle.json and manifest.
-Cost and overlap: Six complete interfaces, thirty CBDs/audits, native interpreter
-  calls and three recursive producer subprocesses are excessive for ordinary
-  pipe/eventfd/poll package behavior. Preserve THC-owned capability/context state
-  and safe-completion masking in focused tests; use package integration for libc.
-Build status: QUARANTINED. Native child invocations rewrite the parent's log/compiler
-  paths, and consumers assert exact compiled-entry increments. Split valuable
-  fixture-free masking coverage before readmission; do not weaken first-call checks.
-Producer: t/haskell-fixtures/RtsEventFixtures.hs; consumer RtsEventNativeTest in
-  src/fullCoreTest; Gradle rtsEventFullCoreTest/rtsEventFullCoreDenseTest.
-IN t/fixtures/compiler/RtsEventAudit.hs, shared thc-fixtures/GHC API/plugin/interface
-  tools and auditor, selected GHC 9.14.1 native64 RTS/packages. Full ghc-internal
-  interfaces GHC/Internal/{Conc/Sync,Event/Thread,Event/Control,Event/EPoll,
-  Event/Poll,System/Posix/Internals}.hi. This is Linux API-dependent even though
-  the producer's initial host check only requires native64.
-Under build/rts-event/:
-  <entry>-<pre|post>.cbd <- typed original FCallId substitution into fixture Core;
-    entries processors, capabilities, siginfo, setfd, cloexec, eventThread,
-    timerManager, timerThread, eventfdCycle, pipeCycle, epollCycle, epollSafeCycle,
-    pollCycle, pollSafeCycle, controlCycle. GHC API serializes/tidies each separately.
-  ghc/ <- GHC interpreter/compiler products for the shared audit source.
-  oracle.json <- in-process hscCompileCoreExpr native calls for inputs 1,2,4;
-    rows (24) and descriptorRows (21). Capability changes are restored afterward.
-    controlCycle instead reexecutes thc-fixtures rts-event three times with
-    THC_RTS_EVENT_NATIVE_CONTROL set; each child repeats interface/compiler setup
-    in the SAME directory, rewrites version/info/libdir/imports logs, executes
-    native control and exits before the ordinary export/receipt phase.
-  <entry>-<stage>.audit.json <- corresponding CBD, named binder and Python auditor;
-    thirty auditor subprocesses.
-  logs/{version,info,libdir,imports,<entry>-<stage>,controlCycle-native-<1|2|4>}.*
-    <- command stdout/stderr/command.json; parent and child ownership collides.
-  manifest.json <- source/interface hashes, CBDs/audits/oracle; command logs are
-    produced but not in artifactHashes.
-Consumer reads receipts/Core/oracles, uses runtime native providers and creates
-  test-private descriptor/control state. Exact row/source declarations and compiled
-  entry increments are asserted; context capability values themselves are API
-  semantics, distinct from internal compiler root counts.
-
-142 gc-stats (custom full-Core suite)
-Fixture rationale (142 gc-stats)
-Purpose: Check GC/clock calls return through the runtime boundary and unavailable
-  stats do not write a guest buffer. These do not prove equivalent GC algorithms.
-Produces/consumed result: twelve entry/stage CBDs and oracle.json/manifest.
-Cost and overlap: Three complete interfaces, native interpreter compilation and
-  twelve auditor starts are disproportionate to mostly input/input+1 observations.
-  Keep a bounded runtime GC/clock smoke and the unavailable-stats buffer guard.
-Build status: QUARANTINED. Native preparation secretly requires RTS stats disabled;
-  inherited runtime settings can invalidate it. Exact compiled-entry increments
-  also constrain compiler structure. Required RTS settings must be explicit inputs.
-Producer: t/haskell-fixtures/GcStatsFixtures.hs; consumer GcStatsNativeTest in
-  src/fullCoreTest; Gradle gcStatsFullCoreTest/gcStatsFullCoreDenseTest.
-IN t/fixtures/compiler/GcStatsAudit.hs, thc-fixtures/GHC API/plugin/interface/auditor
-  closure, selected native64 GHC 9.14.1/ghc-internal, complete installed interfaces
-  GHC/Internal/{Stats,System/Mem,Clock}.hi, producer RTS settings including GHCRTS.
-Under build/gc-stats/:
-  <enabled|stats|minor|major|blocking|clock>-<pre|post>.cbd <- typed original FCallId
-    substitution into audit source, simplification/tidying/serialization through GHC API.
-  ghc/ <- compiler/interpreter intermediates.
-  oracle.json <- hscCompileCoreExpr/in-process native calls for -7,0,42; fifteen rows
-    across five entries (stats leaf is not invoked). Requires enabled result equal
-    input and every other result input+1; aborts when native RTS stats are enabled.
-  <entry>-<stage>.audit.json <- matching CBD + named entry + auditor (twelve calls).
-  logs/{version,info,libdir,imports,<entry>-<stage>}.* <- stdout/stderr/command.json.
-  manifest.json <- input/interface hashes and CBD/oracle hashes; audit/log outputs
-    are produced but not included in artifactHashes; statsEnabled is hard-coded false.
-Consumer hashes the receipt, reads CBD/oracle rows, creates temporary controls and
-  checks unavailable stats leaves a buffer intact. Preexisting manifest is demanded
-  by the custom Gradle tasks; no producing task edge exists.
-
-143 compiler-rts (custom full-Core suite)
-Fixture rationale (143 compiler-rts)
-Purpose: Check compiler-package shared CAF slots/keepCAFs and unique address cells
-  cross the guest runtime boundary with the correct ownership and identity.
-Produces/consumed result: pre.cbd, post.cbd, oracle.tsv and unique-oracle with receipt.
-Cost and overlap: Compiler-owned global state is a legitimate boundary, unlike a
-  random libc function. Retain a narrow semantic/identity test. Three complete
-  interfaces, in-process native compilation, another native executable and twelve
-  declaration audits should not be replicated per consumer; share compiler package
-  acquisition and remove reports the test does not consume.
-Build status: Value review only; not yet admitted to the new graph. This consumer
-  checks compiledEntries increases, not an exact internal-root count.
-Producer: t/haskell-fixtures/CompilerRtsFixtures.hs; consumer CompilerRtsNativeTest
-  in src/fullCoreTest; custom compiler RTS default/dense Gradle tasks.
-IN t/fixtures/compiler/CompilerRtsAudit.hs, selected GHC 9.14.1/ghc-pkg and full
-  installed GHC.hi, GHC/Data/FastString.hi, GHC/Utils/GlobalVars.hi; shared linked
-  GHC API/plugin/interface and auditor closure. Unit owner is hard-coded to
-  ghc-9.14.1-inplace, which needs checking against supported complete-Core installs.
-Under build/compiler-rts/:
-  pre.cbd, post.cbd <- typed original FCallId substitution for keepCAFsForGHCi and
-    four get-or-set compiler globals, plus uniqueCells/counter/increment Core.
-  ghc/ <- GHC API/interpreter and standalone native compiler intermediates; both
-    native phases use this same directory, so phase ownership must be separated.
-  oracle.tsv <- native hscCompileCoreExpr calls (five operations x five inputs),
-    after explicitly initializing three native GHC global IORefs. It is written
-    provisionally, then replaced with thirty rows after the unique oracle runs.
-  UniqueOracle.hs <- producer template importing CompilerRtsAudit.
-  unique-oracle <- generated driver/audit source, GHC --make -O2 -dynamic -package ghc.
-  logs/unique-oracle.stdout <- executable; checked against input+4; contributes
-    five more rows to final oracle.tsv.
-  <pre|post>-<six entries>.audit.json <- stage CBD/auditor; twelve reports.
-  logs/{version,libdir,imports,unique-build,unique-oracle,<stage>-audit-<entry>}.*
-    <- stdout/stderr/command.json.
-  manifest.json <- source/interface hashes and CBD/oracle/generated driver/native
-    executable hashes. Audits/logs are not included in artifactHashes.
-Consumer hashes receipt paths and reads CBD/oracle; declaration controls mutate
-  in-memory Core. The task demands preexisting manifest rather than owning a rule.
-
-144 float-foreign (custom full-Core suite)
-Fixture rationale (144 float-foreign)
-Purpose: Check floating classification and rounding across actual foreign-call
-  transport, including signed zero, subnormals, NaNs/payloads and halfway values.
-Produces/consumed result: pre/post CBDs and oracle.tsv; source/interface/log hashes.
-Cost and overlap: Classification/rounding cases are not established as covered by
-  the already-scanned bitcast/remainder tests. Keep those semantic cases, but move
-  them into shared public floating behavior coverage. Two complete interface reads,
-  typed FCallId rewriting and twenty-four audits are not necessary merely to check
-  math. First-compiled verification uses an increase, not an exact root count.
-Build status: Value review only; no separate expensive producer admitted yet.
-Producer: t/haskell-fixtures/FloatForeignFixtures.hs; consumer FloatForeignNativeTest
-  in src/fullCoreTest, custom floatForeignTest/floatForeignDenseTest tasks.
-IN t/fixtures/compiler/FloatForeignAudit.hs, GHC API/plugin/interface/auditor closure,
-  selected GHC 9.14.1 and complete ghc-internal GHC/Internal/Float.hi and
-  GHC/Internal/Float/RealFracMethods.hi; native libraries used by those FCallIds.
-Under build/float-foreign/:
-  pre.cbd, post.cbd <- twelve original classification/rint FCallIds specialized into
-    typed audit-source consumers and simplified/tidied through GHC API.
-  ghc/ <- GHC API/native interpreter intermediate files.
-  oracle.tsv <- twelve hscCompileCoreExpr/native functions x 32 bit-pattern inputs
-    (384 rows); no separate native executable. Native environment/rounding behavior
-    remains a real input, not merely the logged compiler version.
-  <pre|post>-<entry>.audit.json <- matching stage CBD and auditor (24 subprocesses).
-  logs/{version,libdir,imports,<stage>-audit-<entry>}.* <- command triplets.
-  manifest.json <- source/interface hashes and CBD/oracle/command log hashes;
-    audit JSON files themselves are not in artifactHashes. Old receipt is removed.
-Consumer reads receipt paths, CBDs and oracle.tsv; performs in-memory declaration
-  mutation controls. Gradle requires a preexisting manifest, not a producer edge.
 
 145 aggregate-heap (custom full-Core suite)
 Fixture rationale (145 aggregate-heap)
@@ -4810,131 +4273,6 @@ Those are representation contracts; do not equate them with arbitrary root count
 Consumer reads receipt/oracle and lists stage CBDs. Independent direct tests cover
   carrier identity, inactive references, vector species and invalid payload levity;
   first-compiled checks use counter increases. Gradle has no producing task edge.
-
-149 tuple-join-input (custom fixture)
-Fixture rationale (149 tuple-join-input)
-Purpose: Check tuple/empty join arguments, recursive swaps, exceptions and retry.
-Consumes: TupleJoinInputAudit{,Native}.hs, exporter/auditor and GHC; optional
-  complete installed Core or THC_TUPLE_JOIN_PACKAGES and its referenced archives.
-Produces/consumed result: Named pre/post CBDs, oracle.tsv, audits and manifest.
-Cost and overlap: Keep join-move/empty/bottom cases in shared aggregate coverage.
-  Original roundTo acquisition should not be required for basic join transport.
-Build status: QUARANTINED. Generation demands minimum join/case counts and an
-  original roundTo reference even when original-library roots are not requested.
-Producer: t/haskell-fixtures/TupleJoinFixtures.hs; consumer TupleJoinNativeTest.
-Under build/tuple-join-input/:
-  native/oracle and native intermediates <- audit/driver sources, GHC --make -O2
-    -dynamic -fforce-recomp -dcore-lint -dstg-lint -package ghc-internal.
-  oracle.tsv <- native executable, 222 rows across six entries; native includes all
-    six even when originalLibrary=False exports only four guest entry roots.
-  installed/bundles/<unit>.zip, installed/packages.json <- prepareInstalledCore
-    (shared acquisition in entry 066), or THC_TUPLE_JOIN_PACKAGES. The latter selects
-    ghc-internal/rts units, checks/copies bundle hashes and rewrites bundle paths;
-    other referenced native/package paths still need explicit dependency closure.
-  <pre|post>/core/TupleJoinInputAudit.cbd <- source, selected roots, stage/exporter;
-    stage/ghc/ intermediates. Its directory filter accepts this EXACT filename;
-    this is not an output-glob defect.
-  stage/audit.json <- named CBD + optional installed/packages.json + auditor.
-  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
-    <- command/stdout/stderr triplets.
-  manifest.json <- source/native binary/oracle/package/Core/audit/log hashes;
-    records originalLibrary and packageManifest; old receipt removed first.
-Producer requires at least three tuple joins/two empty cases and roundTo reference
-  unconditionally. The false-mode root/reference mismatch needs review; it has not
-  been executed in this inventory pass. Consumer reads named CBDs, oracle, receipt
-  paths and optional package modules. First-compiled checks use increases, which
-  are valid; arbitrary join/case counts are not a lasting compiler contract.
-
-150 sum-input (custom fixture)
-Fixture rationale (150 sum-input)
-Purpose: Check sum arguments through direct calls, PAPs, capture, tail calls,
-  overapplication, empty payloads and escaped references without leaking handoffs.
-Consumes: SumInputAudit{,Native}.hs, selected GHC, exporter/plugin and auditor.
-Produces/consumed result: Named pre/post CBDs, 333 native rows, audits and manifest.
-Cost and overlap: Transport/lifetime cases are useful; share the aggregate corpus
-  with generic/fourway coverage instead of keeping another preparation framework.
-Build status: QUARANTINED. Generation fixes lambda/partial-application/capture
-  shapes and exact worker arity; semantic tests must survive compiler optimization.
-Producer: t/haskell-fixtures/SumInputFixtures.hs; consumer SumInputNativeTest.
-Under build/sum-input/:
-  native/oracle and native intermediates <- audit/driver sources and GHC 9.14.1,
-    --make -O2 -dynamic -fforce-recomp -dcore-lint -dstg-lint.
-  oracle.tsv <- native executable, nine entries x 37 inputs (333 rows).
-  <pre|post>/core/SumInputAudit.cbd <- source, nine named roots, stage/exporter;
-    stage/ghc/ intermediates. No Core output-directory inventory.
-  stage/audit.json <- named CBD, nine entries and auditor; must be accepted.
-  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
-    <- command triplets.
-  manifest.json <- source closure and native binary/oracle/Core/audit/log hashes;
-    old receipt removed first. Source closure includes discovered compiler .hs and
-    core_*.py files; replace broad inventories with actual tool dependencies.
-Producer checks >=4 sum formals, a consume partial call, overArities==[2] and
-  captured-sum occurrences. Consumer reads these exact CBD/audit paths and oracle;
-  verifies values plus zero remaining handoff depth/references. Those cleanup and
-  semantic observations justify tests; the producer's internal inventory does not.
-
-151 tuple-capture (custom fixture)
-Fixture rationale (151 tuple-capture)
-Purpose: Check escaped tuple captures, thunk sharing, independent closures,
-  PAP reuse, empty/state captures and unforced lazy fields.
-Consumes: TupleCaptureAudit{,Native}.hs, selected GHC, exporter and auditor.
-Produces/consumed result: Named pre/post CBDs, 296 native rows, audits and manifest.
-Cost and overlap: Retain capture lifetime/sharing in shared aggregate coverage;
-  direct representation controls should not require a separate native pipeline.
-Build status: QUARANTINED. Producer requires at least eight capture occurrences;
-  consumer also fixes capture storage/image sizes that optimization can change.
-Producer: TupleCaptureFixtures.hs; consumer TupleCaptureNativeTest.
-Under build/tuple-capture/:
-  native/oracle and intermediates <- audit/native driver, GHC 9.14.1 --make -O2
-    -dynamic -fforce-recomp -dcore-lint -dstg-lint.
-  oracle.tsv <- native binary, eight entries x 37 inputs (296 rows).
-  <pre|post>/core/TupleCaptureAudit.cbd <- source, eight closure roots and exporter;
-    stage/ghc/ intermediates.
-  stage/audit.json <- exact CBD and entries/auditor; accepted checked.
-  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
-    <- command triplets.
-  manifest.json <- source/tool closure and native binary/oracle/CBD/audit/log hashes;
-    old manifest removed first.
-No output CBD glob. Producer counts free tuple variables inside lambdas (>=8).
-Consumer hashes receipt inputs, reads exact paths, verifies values and no retained
-  handoff references. Direct checks fix six storage fields and 56-byte closure image.
-  Keep identity, unforced ignored fields and exactly-once thunk evaluation: those
-  assert sharing semantics rather than the incidental number of compiler roots.
-
-152 sum-join-input (custom fixture)
-Fixture rationale (152 sum-join-input)
-Purpose: Check sum join arguments through recursion, swaps, captures, empty
-  payloads and changing tags, including released handoff references.
-Consumes: SumJoinInputAudit{,Native}.hs, GHC 9.14.1, exporter/plugin and auditor.
-Produces/consumed result: Named pre/post CBDs, 259 native rows, audits and manifest.
-Cost and overlap: Consolidate semantic join moves with tuple/generic aggregate
-  coverage; another native/export/audit framework is not independently justified.
-Build status: QUARANTINED. Producer counts joins; consumer fixes GHC let/wrapper
-  shapes and exact transfer counts. These prevent valid compiler optimization.
-Producer: SumJoinInputFixtures.hs; consumer SumJoinInputNativeTest.
-Under build/sum-join-input/:
-  native/oracle and intermediates <- audit/driver sources, GHC --make -O2 -dynamic
-    -fforce-recomp -dcore-lint -dstg-lint.
-  oracle.tsv <- native executable, seven entries x 37 inputs (259 rows).
-  <pre|post>/core/SumJoinInputAudit.cbd <- source, seven roots, stage/exporter;
-    stage/ghc/ intermediates. Exact named output, not a Core glob.
-  stage/audit.json <- named CBD + seven entries/auditor; accepted checked.
-  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
-    <- command triplets.
-  manifest.json <- source/tool closure, binary/oracle/Core/audit/log hashes;
-    old manifest removed first.
-Producer requires >=7 sum join inputs. Consumer traverses a specific wrapper/loop
-  let shape, asserts binding counts and transfer identities, then checks exact
-  execution transfer counts. Native results, first-compiled execution and zero
-  retained handoff references are useful; those incidental shape counts are not.
-
-Verification checkpoint after entry 152 (base a4b375785, local changes):
-  16 Haskell producer edits compared with HEAD after stripping line comments and
-    blank lines: code unchanged. Gradle quarantine expression evaluated standalone
-    with its bundled Groovy: 43 indexed groups / 74 consumer classes excluded
-    (61 ordinary plus 13 custom). git diff --check passed. No fixture builds,
-    runtime tests, pushes or CI dispatches were performed. Earlier selector tests
-    remain valid; exclusions are missing coverage, not passing behavior.
 
 153 graph-bfs (custom fixture)
 Fixture rationale (153 graph-bfs)
@@ -5356,87 +4694,6 @@ Consumer: PackageNativeOriginalsTest. Under build/original-native/:
 Reject the fresh-directory prerequisite and native library conformance ceremony;
   retain only package integration cases not already covered by public smoke.
 
-167 libyaml-native (custom fixture)
-Fixture rationale (167 libyaml-native)
-Purpose: Check original libyaml package parser/encoder linkage and C-only dependency.
-Consumes: THC_LIBYAML_CAPTURE_STAGE plan/capture/store/native-pieces, exact native
-  registrations/archives, OriginalLibyamlNative.hs and selected GHC/package tool.
-Produces/consumed result: libyaml.zip, native.tsv, generated input.yaml and manifest.
-Cost and overlap: Package parser/encoder smoke supplies the useful behavior. A
-  retained-Cabal-capture fixture and per-C-library harness add unjustified setup.
-Build status: QUARANTINED. Output directory must not exist; an independently built
-  capture/store is required and native-pieces is symlinked to that external attempt.
-Consumer: LibyamlNativeProductsTest. Output defaults build/libyaml-native/ or
-  THC_LIBYAML_FIXTURE_OUTPUT; refuses any preexisting output path.
-  capture/<resolved libyaml unit>/** <- copied external stage/capture unit selected
-    from dist/cache/plan.json (libyaml0.1.4 + libyaml-clib0.2.5 dependency).
-  native-pieces symlink <- stage/native-pieces, retaining live external dependence.
-  libyaml.zip and native products <- publishCapturedStoreUnit using external plan,
-    store/package registrations, dist and copied capture.
-  native + objects/ <- OriginalLibyamlNative.hs, registered .a files of both units,
-    GHC --make -O0 -hide-all-packages with base/bytestring.
-  input.yaml <- native executable's test file; native.tsv <- executable stdout.
-  native-source.sha256, manifest.json <- oracle/source/input/bundle/native archive
-    hashes and command records. logs/native-{build,run} triplets <- commands.
-External registration search enumerates store partitions and candidate library dirs.
-  None of these inputs has a producer rule here. Do not port retained attempt state
-  or fresh-output rejection into the build graph.
-
-168 wcwidth (custom fixture)
-Fixture rationale (168 wcwidth)
-Purpose: Check locale-sensitive character widths through a safe CAPI call.
-Consumes: run-wcwidth package sources, external Tasty1.5.4 source/license,
-  C/C.UTF-8 locale data, GHC/Cabal/native tools and driver/plugin.
-Produces/consumed result: Width.cbd/native linkage, two native TSVs, audits/manifest.
-Cost and overlap: Public Tasty/package behavior is enough. Source-line matching,
-  copied upstream source and a dedicated wcwidth acquisition are unnecessary.
-Build status: QUARANTINED. Captured CBD directory must contain exactly Width.cbd;
-  generation additionally pins verbatim upstream declaration/fallback lines.
-Consumer: WcwidthTest. Under build/wcwidth/:
-  ConsoleReporter.hs, TASTY-LICENSE <- THC_TASTY_SOURCE; exact declaration and fallback
-    text required even though a separate run-wcwidth package is compiled.
-  ghc-proxy-<driver hash>.sh <- proxy template; native-<hash>/ plan/package products,
-    capture-<hash>/, pieces-<hash>/ <- Cabal exe:oracle via GHC proxy/plugin/helper.
-  C.tsv, C.UTF-8.tsv <- native executable from plan with LC_ALL explicitly set;
-    twelve rows each. Presence/version of those locales is still a platform input.
-  Width.cbd/native products <- recursive captured-CBD listing, exact singleton
-    requirement, staged copy and finishPackageNative.
-  rawWidth.json, displayWidth.json <- staged CBD/auditor.
-  logs/* triplets, manifest.json <- source/copied upstream/Core/oracle/audit/log
-    hashes; driver hash names work directories. Old manifest is not invalidated.
-Replace bespoke package/source-shape proof with normal package acquisition plus
-  representative public width/encoding behavior where that package needs coverage.
-
-169 getentropy (custom fixture)
-Fixture rationale (169 getentropy)
-Purpose: Check splitmix initialization reaches native entropy and respects buffer
-  bounds/status through foreign calls.
-Consumes: External splitmix0.1.3.2 sources, OriginalSplitmixEntry/Native.hs,
-  NativeGetEntropy.c, driver/plugin/native tools and Linux x86_64 target libraries.
-Produces/consumed result: Splitmix/entry CBDs, audit, native TSVs, control.so/ll, manifest.
-Cost and overlap: Public splitmix initialization smoke is enough for this dependency.
-  Separate native entropy conformance and IR controls add little compiler value.
-Build status: QUARANTINED. Copied-source deletion demands a fresh directory;
-  recursive Core staging requires exact module inventory, with a fixed Linux target.
-Consumer: GetEntropyTest. Under build/getentropy/:
-  sources/splitmix-0.1.3.2/** <- THC_SPLITMIX_SOURCE; copied/retained inventories must
-    match, so deleted source files poison subsequent runs.
-  splitmix.project, ghc-proxy-<driver hash>.sh <- templates; native-<hash>/ plan/db,
-    capture-<hash>/ and pieces-<hash>/ <- Cabal/proxy acquisition.
-  System.Random.{SplitMix,SplitMix.Init,SplitMix32}.cbd/native products <- enumerated
-    captures and finishPackageNative; exact three-module requirement.
-  entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.cbd, entry-objects/
-    <- entry source/acquired packages/plugin; audit.json <- entry+package CBDs.
-  splitmix-oracle/objects, splitmix-native.tsv <- OriginalSplitmixNative.hs/GHC and
-    native execution (eight rows).
-  oracle, native.tsv <- NativeGetEntropy.c/Clang -DTHC_NATIVE_ORACLE, nine status rows.
-  control.so <- same C, --target=x86_64-unknown-linux-gnu -fembed-bitcode -shared -lc;
-    control.ll <- same target -emit-llvm -S.
-  logs/* triplets, manifest.json <- selected source/copied source/Core/audit/TSV/
-    control/log hashes; old manifest not invalidated. Native executables are omitted
-    from artifactHashes. Runtime randomness should be checked by invariants, not
-    cached random bytes; package-level initialization can retain that behavior.
-
 170 hashable-ffi (custom fixture)
 Fixture rationale (170 hashable-ffi)
 Purpose: Check public Hashable text/bytes instances agree with native GHC through
@@ -5604,7 +4861,7 @@ Native Windows execution is unverified here. Replace shared outputs and hidden
   tool/runtime prerequisites; keep cheap timeout and portable direct tests separate.
 
 Inventory/header checkpoint after entry 174 (base 16c7b9355, local changes):
-  Every inventory entry001-174 has a value rationale at its producer or input header;
+  Each recorded inventory entry has a value rationale at its producer or input header;
     common Main/InstalledCore helpers identify shared ownership separately. Eleven
     new Haskell header edits compared with HEAD: noncomment code unchanged.
   python3 -B .github/scripts/test_fast_fixtures.py: 47 passed in1.204s.
@@ -5618,14 +4875,3 @@ Inventory/header checkpoint after entry 174 (base 16c7b9355, local changes):
     classes. Mixed-class tagged methods add further excluded coverage, not a class count.
   git diff --check passed. PowerShell unavailable locally; native Windows script
     execution is unverified. No fixture/runtime builds, pushes or CI dispatches.
-
-Graph-admission correction for001/002:
-  NarrowLiteralProofTest.project requires exactly24 matching direct writes.
-  prepare-empty-join-input.verify requires one particular join call and exactly one
-  State lambda/application. Both are now excluded pending removal/consolidation of
-  structural checks. Preserve the semantic signed/high-bit and empty-join cases; the
-  known Linux empty-join first-compiled failure remains unresolved, not erased.
-  Correction verification: both Python producer changes are comment-only by AST
-  comparison. All45 blocked indexed groups refuse preparation before commands
-  (focused check passed in0.110s); Gradle expression evaluated with45 groups/93
-  classes and the full-Core tag excluded. git diff --check passed.

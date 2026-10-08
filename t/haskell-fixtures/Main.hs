@@ -60,7 +60,6 @@ import JavaArrayFixtures (prepareJavaArrays)
 import TruffleStringFixtures (prepareTruffleStrings)
 import SimdFloatFmaFixtures (prepareSimdFloatFma)
 import SimdWideFloatFmaFixtures (prepareSimdWideFloatFma)
-import SqrtFixtures (prepareSqrt)
 import FloatDecodeFixtures (prepareFloatDecode)
 import FloatingRemainderFixtures (prepareFloatingRemainder)
 import ProxyVoidFixtures (prepareProxyVoid)
@@ -101,21 +100,12 @@ import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
-import CompilerRtsFixtures (prepareCompilerRts)
-import GcStatsFixtures (prepareGcStats)
-import OriginalTimeClockFixtures (prepareOriginalTimeClock)
-import RtsEventFixtures (prepareRtsEvent)
-import FloatForeignFixtures (prepareFloatForeign)
-import GhcApiFixtures (prepareGhcApi, prepareRecordFields)
+import GhcApiFixtures (prepareGhcApi, prepareRecordFields, prepareRecordFieldsDemand, recordFieldsDemandInventory)
 import RtsDiagnosticFixtures (prepareRtsDiagnostics)
-import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar, preparePackageNativeDemand)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import DynamicCallbackFixtures (prepareDynamicCallbacks)
-import GetEntropyFixtures (prepareGetEntropy)
-import LibyamlNativeFixtures (prepareLibyamlNative)
-import WcwidthFixtures (prepareWcwidth)
 import UnixLibcFixtures (prepareUnixLibc)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
@@ -130,11 +120,6 @@ import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareW
 import StablePointerFixtures (prepareStablePointers)
 import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
-import SumJoinFixtures (prepareSumJoins)
-import TupleJoinFixtures (prepareTupleJoins)
-import SumInputFixtures (prepareSumInputs)
-import TupleCaptureFixtures (prepareTupleCaptures)
-import SumJoinInputFixtures (prepareSumJoinInputs)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
 import ByteArrayFixtures (prepareByteArrayFamily)
@@ -145,7 +130,6 @@ import StackFixtures (prepareOriginalStack)
 import StackDecoderFixtures (prepareOriginalStackDecoder)
 import SmallArrayFixtures (prepareSmallArrays)
 import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
-import AlignedScalarMemoryFixtures (prepareAlignedScalarMemory)
 import BoxedCasFixtures (prepareBoxedCas)
 import WideCharAddressFixtures (prepareWideCharAddress)
 import ManagedAddressReadFixtures (prepareManagedAddressReads)
@@ -1028,7 +1012,6 @@ main = do
     ["truffle-strings"] -> prepareTruffleStrings root
     ["simd-floatx4-fma"] -> prepareSimdFloatFma root
     ["simd-wide-floating-fma"] -> prepareSimdWideFloatFma root
-    ["sqrt"] -> prepareSqrt root
     ["proxy-void"] -> prepareProxyVoid root
     ["selector-proof"] -> prepareSelectorProof root
     ["unsafe-equality"] -> prepareUnsafeEquality root False
@@ -1042,16 +1025,12 @@ main = do
     ["original-directory-paths"] -> prepareOriginalDirectoryPaths root
     ["original-directory-streams"] -> prepareOriginalDirectoryStreams root
     ["windows-directory"] -> prepareWindowsDirectory root
-    ["original-open"] -> prepareOriginalOpen root
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["package-native-demand"] -> preparePackageNativeDemand root
     ["stableptr-ffi"] -> prepareStablePtrFFI root
     ["package-native-originals"] -> preparePackageNativeOriginals root
-    ["libyaml-native"] -> prepareLibyamlNative root
     ["package-native-archives"] -> preparePackageNativeArchives root
     ["dynamic-callback"] -> prepareDynamicCallbacks root
-    ["getentropy"] -> prepareGetEntropy root
-    ["wcwidth"] -> prepareWcwidth root
     ["unix-libc"] -> prepareUnixLibc root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["original-termios"] -> prepareOriginalTermios root
@@ -1073,20 +1052,11 @@ main = do
     ["hint-trace"] -> prepareHintTrace root
     ["closure-inspection"] -> prepareClosureInspection root
     ["stable-pointers"] -> prepareStablePointers root
-    ["compiler-rts"] -> prepareCompilerRts root
-    ["gc-stats"] -> prepareGcStats root
-    ["original-time-clock"] -> prepareOriginalTimeClock root
-    ["rts-event"] -> prepareRtsEvent root
-    ["float-foreign"] -> prepareFloatForeign root
     "ghc-api" : probes -> prepareGhcApi root probes
     ["record-fields"] -> prepareRecordFields root
+    ["record-fields-demand"] -> prepareRecordFieldsDemand root
+    ["record-fields-demand-inventory", mode, destination] -> recordFieldsDemandInventory root mode destination
     ["stable-names"] -> prepareStableNames root
-    ["sum-join"] -> prepareSumJoins root
-    ["tuple-join"] -> prepareTupleJoins True root
-    ["tuple-join", "--local"] -> prepareTupleJoins False root
-    ["sum-input"] -> prepareSumInputs root
-    ["tuple-capture"] -> prepareTupleCaptures root
-    ["sum-join-input"] -> prepareSumJoinInputs root
     ["aggregate-heap"] -> prepareAggregateHeap root False
     ["fourway-aggregate"] -> prepareFourWayAggregate root
     ["narrow-integer-transport"] -> prepareNarrowIntegerTransport root
@@ -1101,7 +1071,6 @@ main = do
     ["original-stack"] -> prepareOriginalStack root
     ["original-stack-decoder"] -> prepareOriginalStackDecoder root
     ["boxed-array-extensions"] -> prepareBoxedArrayExtensions root
-    ["aligned-scalar-memory"] -> prepareAlignedScalarMemory root
     ["boxed-cas"] -> prepareBoxedCas root
     ["wide-char-address"] -> prepareWideCharAddress root
     ["managed-address-reads"] -> prepareManagedAddressReads root
@@ -1136,4 +1105,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (compact-model INPUT_JSON OUTPUT_CBD|rts-event|gc-stats|rubbish-literals|backend-annotations|rts-shutdown|interface-core|core-continuation|large-literal-cases|delimited-continuations|arithmetic-exceptions [--core-only]|mask-functions|deep-evaluation|live-async|thread-async|thread-status|thread-label|thread-inventory|uncaught-self|original-stack|boxed-array-extensions|boxed-cas|original-errno|original-stdio-read|original-handle-readiness|original-stdio-truncate|original-fd-ready|file-wait|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stm|stable-pointers|stable-names|weak-explicit|shrink-bytearrays|bytearray|mutable-bytearrays|resize-bytearrays|mutable-bytearray-size|compare-byte-arrays|int32x4-bytearray|word32x4-bytearray|floatx4-bytearray|doublex2-bytearray [--export-only] [--ghc-option=OPTION]|atomic-int-arrays|bit|integer|integer-completion|signed-narrow|explicit64|word-floating|scalar-bitcasts|float-decode|floating-remainder|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|proxy-void|unsafe-equality [--check-only]|floating-address|atomic-address|floating-byte-offset|unaligned-scalar-memory|aligned-scalar-memory|explicit64-arrays|tuple-arithmetic|pinned-addresses [--native-only|--export-only] [--allow-unsupported]|pinned-pointer-cells|managed-address-reads|graph-bfs|address-array-copy|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (compact-model INPUT_JSON OUTPUT_CBD|rubbish-literals|backend-annotations|rts-shutdown|interface-core|core-continuation|large-literal-cases|delimited-continuations|arithmetic-exceptions [--core-only]|mask-functions|deep-evaluation|live-async|thread-async|thread-status|thread-label|thread-inventory|uncaught-self|original-stack|boxed-array-extensions|boxed-cas|original-errno|original-stdio-read|original-handle-readiness|original-stdio-truncate|original-fd-ready|file-wait|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stm|stable-pointers|stable-names|weak-explicit|shrink-bytearrays|bytearray|mutable-bytearrays|resize-bytearrays|mutable-bytearray-size|compare-byte-arrays|int32x4-bytearray|word32x4-bytearray|floatx4-bytearray|doublex2-bytearray [--export-only] [--ghc-option=OPTION]|atomic-int-arrays|bit|integer|integer-completion|signed-narrow|explicit64|word-floating|scalar-bitcasts|float-decode|floating-remainder|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|proxy-void|unsafe-equality [--check-only]|floating-address|atomic-address|floating-byte-offset|unaligned-scalar-memory|explicit64-arrays|tuple-arithmetic|pinned-addresses [--native-only|--export-only] [--allow-unsupported]|pinned-pointer-cells|managed-address-reads|graph-bfs|address-array-copy|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

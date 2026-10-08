@@ -62,7 +62,7 @@ final class AstTailAnchor implements SavedGuestContinuation {
                 try {
                     Object result;
                     if (pending != null) {
-                        result = root.drainTailChild(pending);
+                        result = root.drainTailChild(frame, pending);
                     } else {
                         result = root.restartTailAnchor(frame, transfer);
                     }

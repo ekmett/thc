@@ -81,6 +81,25 @@ public final class PackageScalarLinks {
         }
         return result;
     }
+    private static Map<?,?> nativeLibrary(Object raw) {
+        boolean bundled = raw instanceof Map<?,?> library && library.containsKey("bundledLibraries");
+        return record(raw, "sha256 hex" + (bundled ? " bundledLibraries" : ""));
+    }
+    private static List<PackageNativeComponent.BundledLibrary> bundledLibraries(Map<?,?> library) {
+        if (!library.containsKey("bundledLibraries")) return List.of();
+        check(System.getProperty("os.name").equals("Linux"), "bundled native libraries require Linux");
+        var names = new HashSet<String>(); var result = new ArrayList<PackageNativeComponent.BundledLibrary>();
+        for (Object raw : list(library.get("bundledLibraries"))) {
+            var provider = record(raw, "name sha256 hex");
+            String name = text(provider.get("name")), hash = text(provider.get("sha256")), hex = text(provider.get("hex"));
+            check(name.matches("[A-Za-z0-9_][A-Za-z0-9_.+\\-]*") && names.add(name), "unique bundled native library basename");
+            check(HASH.matcher(hash).matches() && canonicalHex(hex), "bundled native library encoding");
+            byte[] bytes = HexFormat.of().parseHex(hex);
+            check(bytes.length != 0 && digest(bytes).equals(hash), "bundled native library digest");
+            result.add(new PackageNativeComponent.BundledLibrary(name, hash, bytes));
+        }
+        return List.copyOf(result);
+    }
     private static List<PackageNativeComponent> nativeDependencies(Object raw, String target, Set<String> path,
             Map<String,PackageNativeComponent> components, Map<String,String> namespaces) {
         var result = new ArrayList<PackageNativeComponent>(); var owners = new HashSet<String>();
@@ -102,14 +121,16 @@ public final class PackageScalarLinks {
             String encoded = text(fields.get("bitcodeHex")); byte[] bytes = HexFormat.of().parseHex(encoded);
             check(bytes.length != 0 && canonicalHex(encoded) && digest(bytes).equals(bitcodeHash), "native dependency bitcode");
             byte[] nativeLibrary = new byte[0];
+            List<PackageNativeComponent.BundledLibrary> bundledLibraries = List.of();
             if (companion) {
-                var library = record(fields.get("nativeLibrary"), "sha256 hex");
+                var library = nativeLibrary(fields.get("nativeLibrary"));
+                bundledLibraries = bundledLibraries(library);
                 String hex = text(library.get("hex")); nativeLibrary = HexFormat.of().parseHex(hex);
                 check(nativeLibrary.length != 0 && canonicalHex(hex) &&
                     digest(nativeLibrary).equals(text(library.get("sha256"))), "native dependency companion");
             }
             var component = new PackageNativeComponent(unit, target, componentHash, bitcodeHash, format, bytes, nativeLibrary,
-                nativeExports(fields.get("exports")), nativeDependencies(fields.get("dependencies"), target, path, components, namespaces));
+                nativeExports(fields.get("exports")), nativeDependencies(fields.get("dependencies"), target, path, components, namespaces), bundledLibraries);
             var prior = components.putIfAbsent(unit, component);
             check(prior == null || prior.same(component), "conflicting native dependency identity");
             result.add(prior == null ? component : prior); path.remove(unit);
@@ -150,8 +171,10 @@ public final class PackageScalarLinks {
         check(canonicalHex(encoded), "bitcode encoding");
         byte[] bytes = HexFormat.of().parseHex(encoded); check((demand || bytes.length != 0) && digest(bytes).equals(bitcodeHash), "bitcode digest");
         byte[] nativeLibrary = new byte[0];
+        List<PackageNativeComponent.BundledLibrary> bundledLibraries = List.of();
         if (companion) {
-            var dependency = record(fields.get("nativeLibrary"), "sha256 hex");
+            var dependency = nativeLibrary(fields.get("nativeLibrary"));
+            bundledLibraries = bundledLibraries(dependency);
             String hex = text(dependency.get("hex")); nativeLibrary = HexFormat.of().parseHex(hex);
             check(nativeLibrary.length != 0 && canonicalHex(hex) &&
                 digest(nativeLibrary).equals(text(dependency.get("sha256"))), "native dependency digest");
@@ -229,7 +252,7 @@ public final class PackageScalarLinks {
                 abi.stream().allMatch(signature -> signature.convention().equals("ccall")), "ordinary demand component profile");
             var providers = new HashMap<String, PackageNativeComponent>();
             if (bytes.length != 0) providers.put(unit, new PackageNativeComponent(unit, target, componentHash, bitcodeHash,
-                format, bytes, nativeLibrary, exports, dependencies));
+                format, bytes, nativeLibrary, exports, dependencies, bundledLibraries));
             for (var dependency : dependencies) collectProviders(dependency, providers);
             for (Object item : list(fields.get("callSeeds"))) {
                 var seed = record(item, "entry bitcodeHex bitcodeSha256 providerUnit providerComponentSha256 providerSymbol");
@@ -255,7 +278,7 @@ public final class PackageScalarLinks {
             if (bytes.length == 0) check(nativeLibrary.length == 0 && exports.isEmpty() && dependencies.isEmpty() &&
                 dataSymbols.isEmpty() && finalizers.isEmpty() && seeds.size() == abi.size(), "absent component obligations");
         }
-        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary, dataSymbols, exports, dependencies, seeds);
+        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary, dataSymbols, exports, dependencies, seeds, bundledLibraries);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("staticForeignImportStubs"), "unproved retained import obligations");
             if (module.containsKey("foreign")) {

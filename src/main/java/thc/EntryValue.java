@@ -52,6 +52,9 @@ public final class EntryValue implements TruffleObject {
         owner = Language.currentState();
         requiredCode = Boolean.getBoolean("thc.requireCachedCode") && Boolean.getBoolean("thc.requireCompiledCode")
             ? Objects.requireNonNull(preparedCode, "Cached compiled entry requires its prepared code") : null;
+        // Optimizer arity may be zero for a callable OPAQUE binding. Host
+        // transport follows the checked physical signature, not that hint.
+        if (hostInputs != null) argumentCount = hostInputs.size();
         this.program = program; this.entry = entry; this.argumentCount = argumentCount;
         this.hostResultFault = hostResultFault; this.processSignals = processSignals;
         var untypedTarget = program.hostEntryTarget(argumentCount);

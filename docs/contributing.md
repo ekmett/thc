@@ -37,13 +37,14 @@ compiler and its companion package manager (`GHC_PKG` can override the latter).
 After preparing fixtures, run selected JVM tests without preparing them again:
 
 ```sh
-./gradlew --max-workers=2 --continue \
+./gradlew --max-workers=4 --continue \
   testDefault --tests 'thc.RuntimeTest' \
   testDense --tests 'thc.RuntimeTest'
 ```
 
-These tasks run separate JVMs with explicit default/dense handoff settings and
-share compilation. Add `installDist` when testing the command-line driver.
+These tasks share compilation and run one handoff mode at a time, distributing
+classes across up to four isolated JVM workers. Add `installDist` when testing
+the command-line driver.
 Selectors apply to the preceding task. Results are in
 `build/test-results/testDefault` and `build/test-results/testDense`, with HTML
 under `build/reports/tests`. See [handoff storage](handoff-slabs.md) for the
@@ -76,6 +77,26 @@ package tool and configured GHC sources when needed.
 `make foreign-exception-test-modes` stops before preparation. Its intended inputs
 include complete installed Core and matching configured GHC sources. See [Core compatibility checks](coverage.md)
 and [foreign code](interface-foreign.md) for setup and limits.
+
+Track CI performance against its expected duration, separately from the failure
+timeout. Set job and command timeouts to roughly two to three times the expected
+runtime on that platform, including preparation and ordinary cache variation.
+Commit CI should still finish below seven minutes: use recorded timings and
+Perfetto traces to catch drift and fix its cause. A timeout is a hang safeguard;
+placing it only 10–20% above normal runtime creates noisy failures and wasted
+rebuilds.
+
+## Known compiler limitation
+
+Use the pinned GraalVM Community Edition distribution used by CI. A recorded
+Linux run on Oracle GraalVM 25.3.4.1 (JDK
+`25.0.4.1+1-LTS-jvmci-25.3-b22`) returned the wrong value for a compiled AST loop
+that swaps scalars around an empty-tuple argument. Its saved compiler graphs
+first lose the required result in the Enterprise `LoopInversionPhase`.
+The corresponding regression passes on current Community Edition CI;
+that does not establish a fix for the Oracle build. See
+[issue #1066](https://github.com/ekmett/thc/issues/1066) for the affected build,
+graph evidence and remaining reproducer work.
 
 ## Find and change the implementation
 

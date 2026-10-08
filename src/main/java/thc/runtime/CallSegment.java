@@ -5,7 +5,8 @@ package thc.runtime;
 /** A cold, one-shot continuation whose answer may itself remain lazy. */
 public final class CallSegment {
     private MaskingState logicalMask;
-    private final MaskingState callerMask;
+    private MaskingState callerMask;
+    private boolean initialEntry;
     private final TupleShape tupleShape;
     private final boolean caughtIOAction;
     private final boolean tailSpill;
@@ -36,6 +37,16 @@ public final class CallSegment {
         this.tupleShape = tupleShape;
         this.caughtIOAction = caughtIOAction;
         this.tailSpill = tailSpill;
+    }
+    /** An unstarted call inherits the extent of its actual first evaluator. */
+    static CallSegment initial(SavedGuestContinuation entry, TupleShape shape) {
+        var segment = new CallSegment(entry, MaskingState.UNMASKED, MaskingState.UNMASKED, shape);
+        segment.initialEntry = true;
+        return segment;
+    }
+    // Caller holds monitor and has won ownership of the initial continuation.
+    void enterInitial(MaskingState mask) {
+        if (initialEntry) { logicalMask = callerMask = mask; initialEntry = false; }
     }
     public MaskingState getLogicalMask() { return logicalMask; }
     public void setLogicalMask(MaskingState value) { logicalMask = value; }

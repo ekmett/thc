@@ -13,12 +13,121 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.junit.jupiter.api.Test;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
 
 class GenericInputCallInvariantTest {
+    @Test void delimitedTypedOverapplicationRetainsArgumentsAndWritesItsFreshAggregateResult() {
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build();
+             var context = Context.newBuilder("thc").engine(engine).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var number = new CoreRepresentation(CoreKind.DOUBLE, true, true, List.of("DoubleRep"), null, null, null, null, null);
+                var answer = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
+                var aggregate = new CoreRepresentation(CoreKind.UNKNOWN, true, true, answer.getPrimReps(), List.of(answer), null, null, null, null);
+                var operand = new CoreRepresentation(CoreKind.UNKNOWN, true, true, List.of("DoubleRep", "IntRep"), List.of(number, answer), null, null, null, null);
+                var shape = new TupleShape(aggregate, language);
+                TupleShape producer;
+                try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                    preparation.initialize("thc"); preparation.enter();
+                    try { assertSame(language, TruffleLanguage.LanguageReference.create(Language.class).get(null)); producer = new TupleShape(aggregate, language); }
+                    finally { preparation.leave(); }
+                }
+                assertTrue(shape.matches(producer)); assertNotSame(shape.getLayout(), producer.getLayout());
+                var input = new TypedInputLayout(language, ArgumentLayout.fromProofs(List.of(operand)), false);
+                for (boolean generic : new boolean[]{false, true}) {
+                    int[] effects = new int[3];
+                    var middle = new GuestRoot(language, new FrameLayout().build()) {
+                        { configureEntry(new boolean[]{false}, false); configureInput(input.getLogical()); configureTypedInput(input); }
+                        @Override public long bloom(VirtualFrame frame) { return 0L; }
+                        @Override public Object execute(VirtualFrame frame) {
+                            var carrier = input.take(frame.getArguments());
+                            try { assertEquals(2.0, input.getPacket().getDouble(carrier, input.getHeader())); assertEquals(22L, input.getPacket().getLong(carrier, input.getHeader() + 1)); effects[1]++;
+                                throw new DelimitedCut(new PromptTag(Language.currentState()), null, null, SynchronousMasking.current(this), this);
+                            } finally { input.releaseChecked(carrier); }
+                        }
+                    };
+                    var first = new GuestRoot(language, new FrameLayout().build()) {
+                        { configureEntry(new boolean[]{false}, false); configureInput(input.getLogical()); configureTypedInput(input); }
+                        @Override public long bloom(VirtualFrame frame) { return 0L; }
+                        @Override public Object execute(VirtualFrame frame) {
+                            var carrier = input.take(frame.getArguments());
+                            try { assertEquals(1.0, input.getPacket().getDouble(carrier, input.getHeader())); assertEquals(11L, input.getPacket().getLong(carrier, input.getHeader() + 1)); effects[0]++;
+                                return new Closure(null, 1, middle.getCallTarget());
+                            } finally { input.releaseChecked(carrier); }
+                        }
+                    };
+                    var layout = new FrameLayout();
+                    int[] arguments = {layout.bind("first number"), layout.bind("first marker"), layout.bind("second number"), layout.bind("second marker"), layout.bind("remaining number"), layout.bind("remaining marker")};
+                    int[] result = {layout.bind("answer")};
+                    var source = new AstInputSource(ArgumentLayout.fromProofs(List.of(operand, operand, operand)), arguments);
+                    var call = new Expr() {
+                        @Child private InputDispatch cached = new InputDispatch(source, 3, false, new Metrics(false), new AstTupleDestination(shape, result, 0));
+                        @Child private GenericInputCall indirect = new GenericInputCall(source, 3, false, new Metrics(false), new AstTupleDestination(shape, result, 0), 0);
+                        { setRepresentation(aggregate); }
+                        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Tuple destination required"); }
+                        @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+                            FrameAccess.writeDouble(frame, arguments[0], 1.0); FrameAccess.writeLong(frame, arguments[1], 11L);
+                            FrameAccess.writeDouble(frame, arguments[2], 2.0); FrameAccess.writeLong(frame, arguments[3], 22L);
+                            FrameAccess.writeDouble(frame, arguments[4], 37.0); FrameAccess.writeLong(frame, arguments[5], 99L);
+                            var closure = new Closure(null, 1, first.getCallTarget());
+                            return generic ? indirect.execute(frame, closure, null) : cached.execute(frame, closure);
+                        }
+                    };
+                    var body = new TupleCase(call, result, new LocalRead(result[0], false).proven(answer));
+                    var root = new FunctionRoot(language, layout.build(), "typed delimited application", null, new int[0], new int[0], new int[0],
+                        body, new Metrics(false), new CoreRepresentation[0], answer, null, new boolean[0], null,
+                        null, new int[0], null, true, new int[0][], true, FunctionRootRole.FUNCTION, false);
+                    var cut = assertThrows(DelimitedCut.class, () -> root.getCallTarget().call(0L));
+                    var image = new DelimitedStack(cut, null);
+                    var tail = new GuestRoot(language, new FrameLayout().build()) {
+                        { configureTupleResult(producer); }
+                        @Override public long bloom(VirtualFrame frame) { return 0L; }
+                        @Override public Object execute(VirtualFrame frame) {
+                            throw new DelimitedCut(new PromptTag(Language.currentState()), null, producer, SynchronousMasking.current(this), this);
+                        }
+                    };
+                    var last = new GuestRoot(language, new FrameLayout().build()) {
+                        { configureEntry(new boolean[]{false}, false); configureInput(input.getLogical()); configureTypedInput(input); configureTupleResult(producer); }
+                        @Override public long bloom(VirtualFrame frame) { return 0L; }
+                        @Override public Object execute(VirtualFrame frame) {
+                            var carrier = input.take(frame.getArguments());
+                            try { assertEquals(37.0, input.getPacket().getDouble(carrier, input.getHeader())); assertEquals(99L, input.getPacket().getLong(carrier, input.getHeader() + 1)); effects[2]++;
+                                throw new TailCall(tail.getCallTarget(), new Object[]{0L});
+                            } finally { input.releaseChecked(carrier); }
+                        }
+                    };
+                    class Owner extends GuestRoot {
+                        @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                        Owner() { super(language, new FrameLayout().build()); }
+                        @Override public long bloom(VirtualFrame frame) { return 0L; }
+                        @Override public Object execute(VirtualFrame frame) { return frame.getArguments()[1]; }
+                        Object resume(DelimitedStack saved, Object value) {
+                            var action = new Closure(null, new Object[]{value}, 1, getCallTarget());
+                            return saved.resume(site, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor()), action);
+                        }
+                    }
+                    var owner = new Owner(); owner.getCallTarget();
+                    for (long add : new long[]{5L, 13L}) {
+                        var fresh = assertThrows(DelimitedCut.class, () -> owner.resume(image, new Closure(null, 1, last.getCallTarget())));
+                        var suffix = new DelimitedStack(fresh, null);
+                        var value = producer.getLayout().create(); producer.getLayout().setLong(value, 0, 37L + add);
+                        assertEquals(37L + add, owner.resume(suffix, value));
+                        assertEquals(37L + add, owner.resume(suffix, value), "Each fresh image owns its copied tuple destination");
+                    }
+                    assertArrayEquals(new int[]{1, 1, 2}, effects, "Copied images must not replay consumed calls");
+                    var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
+                    assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences());
+                    assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getResults().retainedReferences());
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
+                }
+            } finally { context.leave(); }
+        }
+    }
     private static final class ReferenceAccess extends RootNode {
         private final boolean write;
         private final ScalarArrayInputSource source = new ScalarArrayInputSource(null);

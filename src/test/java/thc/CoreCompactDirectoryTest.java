@@ -33,6 +33,23 @@ class CoreCompactDirectoryTest {
         assertTrue(parsed.getModules().stream().allMatch(it -> it.getArtifact().path().toString().endsWith(".cbd")));
         try (var files = Files.list(directory)) { assertEquals(0L, files.count()); }
     }
+    @Test void publishedOwnershipCannotBeChangedThroughLists() {
+        var parsed = CoreUnitDirectory.read(manifest(List.of(unit(List.of(module("A"))))));
+        var owner = Objects.requireNonNull(parsed.owner("unit:A.entry"));
+        var dependencies = new ArrayList<>(List.of("dependency"));
+        var modules = new ArrayList<>(List.of(owner));
+        var record = new CoreUnitDirectory.UnitRecord("unit", dependencies, modules);
+        dependencies.clear();
+        modules.clear();
+        assertEquals(List.of("dependency"), record.depends());
+        assertEquals(List.of(owner), record.modules());
+        assertThrows(UnsupportedOperationException.class, () -> record.depends().clear());
+        assertThrows(UnsupportedOperationException.class, () -> parsed.getUnits().clear());
+        assertThrows(UnsupportedOperationException.class, () -> parsed.getModules().clear());
+        assertThrows(UnsupportedOperationException.class, () -> parsed.getUnits().getFirst().getModules().clear());
+        assertEquals(List.of(owner), parsed.getModules());
+        assertSame(owner, parsed.owner("unit:A.entry"));
+    }
     @Test void modulelessDependencyIdentitySurvivesAlongsideCompactModules() throws Exception {
         var empty = map("id", "rts", "depends", List.of(), "modules", List.of());
         var parsed = Objects.requireNonNull(CoreUnitDirectory.read(manifest(List.of(empty,

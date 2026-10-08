@@ -439,7 +439,7 @@ endforeach()
 audited_fixture(live-async LiveAsyncAudit
   SOURCES t/fixtures/compiler/LiveAsyncAudit.hs t/fixtures/compiler/LiveAsyncNative.hs
   OBJECT_DIRS native pre/ghc post/ghc
-  OUTPUTS manifest.json native/oracle oracle.txt strict-oracle.txt pre/core/LiveAsyncAudit.cbd
+  OUTPUTS manifest.json native/oracle oracle.txt strict-oracle.txt shutdown-oracle.txt pre/core/LiveAsyncAudit.cbd
     post/core/LiveAsyncAudit.cbd ${live_reports})
 
 # 110: async delivery through suspended/masked continuations. The scheduling

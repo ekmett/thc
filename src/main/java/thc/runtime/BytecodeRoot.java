@@ -3642,6 +3642,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class SparkEnabled {
+        @Specialization public static boolean enabled(@Bind Node node) { return SparkPool.current(node).isEnabled(); }
+    }
+    @Operation public static final class ParSpark {
+        @Specialization public static void hint(Object payload, @Bind Node node) { SparkPool.current(node).hint(node, payload); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class SparkCount {
+        @Specialization public static void count(VirtualFrame frame, LocalAccessor destination, @Bind Node node) {
+            var bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setLong(bytecode, frame, SparkPool.current(node).count());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flag")
+    @ConstantOperand(type = LocalAccessor.class, name = "payload")
+    public static final class GetSpark {
+        @Specialization public static void get(VirtualFrame frame, LocalAccessor flag, LocalAccessor payload,
+                Object empty, @Bind Node node) {
+            var thunk = SparkPool.current(node).poll();
+            var bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flag.setLong(bytecode, frame, thunk == null ? 0L : 1L);
+            payload.setObject(bytecode, frame, thunk == null ? empty : thunk);
+        }
+    }
     @Operation public static final class PrepareThreadDelay {
         @Specialization public static ThreadDelayToken prepare(long microseconds, Object state, @Bind Node node) {
             TupleResults.requireVoidCarrier(state);
@@ -3999,7 +4025,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress function, ManagedAddress address, long flag, ManagedAddress environment,
                 Object weak, Object state, @Bind("$node") Node node) {
             TupleResults.requireVoidCarrier(state);
-            long added = ManagedWeaks.current(node).addCFinalizer(function, address, flag, weak,
+            long added = ManagedWeaks.current(node).addCFinalizer(function, address, flag, environment, weak,
                     SulongCbits.current(node));
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, added);
         }
@@ -4043,30 +4069,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             StablePointers.current(node).free(address);
         }
         @Fallback public static void invalid(Object address, Object state) { throw fail("Expected opaque StablePtr#"); }
-    }
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    @ConstantOperand(type = FloatForeignOp.class, name = "operation")
-    public static final class OriginalFloatCall {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                FloatForeignOp operation, float value, Object state, @Bind Node node) {
-            TupleResults.requireVoidCarrier(state);
-            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            if (operation.getRounding()) destination.setFloat(bytecode, frame, FloatForeignOp.round(value));
-            else destination.setLong(bytecode, frame, operation.classify(value));
-        }
-    }
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    @ConstantOperand(type = FloatForeignOp.class, name = "operation")
-    public static final class OriginalDoubleCall {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                FloatForeignOp operation, double value, Object state, @Bind Node node) {
-            TupleResults.requireVoidCarrier(state);
-            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            if (operation.getRounding()) destination.setDouble(bytecode, frame, FloatForeignOp.round(value));
-            else destination.setLong(bytecode, frame, operation.classify(value));
-        }
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")

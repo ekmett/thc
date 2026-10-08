@@ -31,8 +31,8 @@ class RuntimeTraceServicesTest {
         Jfr() { this(0L, 0L); }
         Jfr(long availability, long emission) { this.availability = availability; this.emission = emission; }
         @Override public long support() { return availability; }
-        @Override public long emit(long contextId, String phase, long token, String name, long elapsedNanos) {
-            if (emission == 0L) events.add(List.of(contextId, phase, token, name, elapsedNanos));
+        @Override public long emit(long contextId, String phase, long token, String name, long elapsedNanos, String payloadHex) {
+            if (emission == 0L) events.add(List.of(contextId, phase, token, name, elapsedNanos, payloadHex));
             return emission;
         }
     }
@@ -52,11 +52,41 @@ class RuntimeTraceServicesTest {
         var provider = new Jfr();
         try (var trace = new RuntimeTraceServices(output, provider)) {
             assertEquals(0L, trace.query(500, 0, 0));
+            assertTrue(trace.isPrimopDisabled());
+            trace.emitPrimop(TraceOp.EVENT, ManagedAddress.nullAddress(), 0L);
+            trace.emitPrimop(TraceOp.BINARY, ManagedAddress.nullAddress(), -1L);
             assertEquals(3L, trace.query(501, 0, 0));
             assertEquals(RuntimeServiceStatus.DISABLED, emit(trace, 0, "invisible", 0L));
             assertEquals(RuntimeServiceStatus.DISABLED, emit(trace, 1, "invisible", 0L));
             assertEquals(0, output.size());
             assertTrue(provider.events.isEmpty());
+        }
+    }
+
+    @Test void originalPrimopsShareSinkAndPreserveExactBytes() {
+        var output = new ByteArrayOutputStream();
+        var provider = new Jfr();
+        try (var trace = new RuntimeTraceServices(output, provider)) {
+            assertEquals(0L, trace.control(500, 3));
+            assertFalse(trace.isPrimopDisabled());
+            trace.emitPrimop(TraceOp.EVENT, ManagedAddress.fromByteArray(new byte[]{(byte) 0xff, 10, 0, 65}), 0L);
+            trace.emitPrimop(TraceOp.MARKER, ManagedAddress.fromByteArray(new byte[]{66, 0}), 0L);
+            trace.emitPrimop(TraceOp.BINARY, ManagedAddress.fromByteArray(new byte[]{0, (byte) 0xff, 10, 88}), 3L);
+            trace.emitPrimop(TraceOp.BINARY, ManagedAddress.nullAddress(), 0L);
+            assertEquals(List.of("event", "marker", "binary", "binary"), provider.events.stream().map(row -> row.get(1)).toList());
+            assertEquals(List.of("\ufffd\n", "B", "00ff0a", ""), provider.events.stream().map(row -> row.get(3)).toList());
+            assertEquals(List.of("ff0a", "42", "00ff0a", ""), provider.events.stream().map(row -> row.get(5)).toList());
+            assertEquals(1, provider.events.stream().map(row -> row.getFirst()).distinct().count());
+            assertArrayEquals("[thc trace event] \u00ff\\x0a\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1),
+                Arrays.copyOf(output.toByteArray(), 24));
+            assertTrue(output.toString(UTF_8).endsWith("[thc trace marker] B\n[thc trace binary] 00ff0a\n[thc trace binary] \n"));
+            trace.control(500, 0);
+            assertTrue(trace.isPrimopDisabled());
+            trace.emitPrimop(TraceOp.EVENT, ManagedAddress.nullAddress(), 0L);
+            assertEquals(4, provider.events.size());
+            trace.control(500, 2);
+            trace.emitPrimop(TraceOp.MARKER, ManagedAddress.fromByteArray(new byte[]{67, 0}), 0L);
+            assertEquals(5, provider.events.size());
         }
     }
 
@@ -303,6 +333,8 @@ class RuntimeTraceServicesTest {
                 assertEquals(0L, trace.control(500, 2));
                 assertEquals(RuntimeServiceStatus.DISABLED, emit(trace, 0, "not recorded", 0L));
                 assertEquals(RuntimeServiceStatus.DISABLED, emit(trace, 1, "not recorded", 0L));
+                trace.emitPrimop(TraceOp.EVENT, ManagedAddress.fromByteArray(new byte[]{65, 0}), 0L);
+                trace.emitPrimop(TraceOp.BINARY, ManagedAddress.nullAddress(), 0L);
                 assertEquals(settings, recording.getSettings());
                 var expectedRecordings = new HashSet<>(baseline);
                 expectedRecordings.add(recording.getId());

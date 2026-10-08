@@ -9,14 +9,19 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import static thc.runtime.RuntimeFault.fault;
 
 final class FunctionBody extends Node {
-    @Child private Evaluate value;
+    @Child private Expr value;
+    private final boolean initializer;
     private final TupleShape tuple;
     @CompilationFinal(dimensions = 1) private final int[] tupleSlots;
     private final CoreKind resultKind;
     private final boolean exactInt;
     @CompilationFinal private boolean genericResult;
     FunctionBody(Expr expression, Metrics metrics, CoreRepresentation result, TupleShape tuple, int[] tupleSlots) {
-        value = new Evaluate(expression, metrics);
+        this(expression, metrics, result, tuple, tupleSlots, false);
+    }
+    FunctionBody(Expr expression, Metrics metrics, CoreRepresentation result, TupleShape tuple, int[] tupleSlots, boolean initializer) {
+        this.initializer = initializer;
+        value = initializer ? expression : new Evaluate(expression, metrics);
         this.tuple = tuple; this.tupleSlots = tupleSlots;
         if (tuple != null) value.prepareTuple(tupleSlots, 0);
         CoreRepresentation effective = result.getKind() == CoreKind.UNKNOWN ? expression.getRepresentation() : result;
@@ -50,6 +55,7 @@ final class FunctionBody extends Node {
             // Both continuation protocols can retain a carrier in an owned frame.
             return shape.finish(frame, tupleSlots, AstControl.captures(this) || DelimitedControl.INSTANCE.enabled(this));
         }
+        if (initializer) return value.execute(frame);
         if (exactInt) return value.executeRequiredInt(frame);
         if (resultKind == CoreKind.LONG) return value.executeRequiredLong(frame);
         if (resultKind == CoreKind.FLOAT) return value.executeRequiredFloat(frame);

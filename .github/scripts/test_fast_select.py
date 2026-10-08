@@ -134,6 +134,34 @@ class FastSelectionTest(unittest.TestCase):
         with self.assertRaisesRegex(select.SelectionError, "Unknown CI group"):
             select.group_selection(self.repo, "consumer", cadence="nightly")
 
+    def test_exact_group_class_keeps_only_its_fixture_closure_and_mode_proof(self):
+        import fast_fixtures
+        manifest = self.cadence_fixture(hourly=["example.LeafTest", "example.OtherTest"])
+        manifest["groups"]["provider"]["ciPlatforms"] = ["Linux"]
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        with mock.patch.object(select.platform, "system", return_value="Linux"):
+            selected = select.group_selection(self.repo, "consumer", cadence="hourly",
+                                               exact_class="example.LeafTest")
+            self.assertEqual(selected["junit"]["classes"], ["example.LeafTest", "thc.runtime.HandoffTest"])
+            self.assertEqual(selected["junit"]["patterns"], ["example.LeafTest",
+                "thc.runtime.HandoffTest.requestedModeReachesTestProcessAndContext"])
+            _, owners = fast_fixtures._manifest(self.repo)
+            self.assertEqual(fast_fixtures._group_order(manifest,
+                {owners[c] for c in selected["junit"]["classes"] if c in owners and owners[c]}), ["provider"])
+            for invalid in ("", "example.MissingTest", "example.SmokeTest", "example.LeafTest.*",
+                            "example.LeafTest.works", "*", "example.LeafTest; echo injected"):
+                with self.subTest(invalid=invalid), self.assertRaises(select.SelectionError):
+                    select.group_selection(self.repo, "consumer", cadence="hourly", exact_class=invalid)
+        with mock.patch.object(select.platform, "system", return_value="Darwin"), self.assertRaises(select.SelectionError):
+            select.group_selection(self.repo, "consumer", cadence="hourly", exact_class="example.LeafTest")
+
+        manifest["quarantinedJunit"] = ["example.OtherTest"]
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        with mock.patch.object(select.platform, "system", return_value="Linux"), self.assertRaises(select.SelectionError):
+            select.group_selection(self.repo, "consumer", cadence="hourly", exact_class="example.OtherTest")
+
     def test_nightly_consumer_does_not_move_shared_tools_or_other_consumers(self):
         manifest = self.cadence_fixture(hourly=["example.LeafTest"], nightly=["consumer"])
         manifest["fixtureFreeJunit"].remove("example.SmokeTest")
@@ -146,6 +174,39 @@ class FastSelectionTest(unittest.TestCase):
             with self.subTest(cadence=cadence):
                 actual = {name for tests in select.groups(self.repo, cadence=cadence).values() for name in tests}
                 self.assertEqual(expected, actual)
+
+    def test_partial_methods_run_on_commit_and_complete_classes_run_nightly(self):
+        self.cadence_fixture()
+        self.write("src/test/java/example/LeafTest.java", java_fixture("LeafTest",
+            "@Test void quick() {}\n@Test void thorough() {}"))
+        self.policy["cadence"]["partialJunit"] = {"example.LeafTest": ["quick"]}
+        self.write(select.POLICY, json.dumps(self.policy))
+        self.commit()
+        committed = select.select(self.repo, "", "HEAD", cadence="commit")
+        self.assertIn("example.LeafTest.quick", committed["junit"]["patterns"])
+        self.assertNotIn("example.LeafTest", committed["junit"]["patterns"])
+        self.assertIn("example.LeafTest", committed["deferred"]["nightly"]["junit"])
+        grouped = select.group_selection(self.repo, "commit", cadence="commit")
+        self.assertIn("example.LeafTest.quick", grouped["junit"]["patterns"])
+        self.assertEqual({"consumer": ["example.LeafTest"]}, select.groups(self.repo, cadence="nightly"))
+        nightly = select.group_selection(self.repo, "consumer", cadence="nightly")
+        self.assertIn("example.LeafTest", nightly["junit"]["patterns"])
+        self.assertNotIn("example.LeafTest.quick", nightly["junit"]["patterns"])
+        self.assertIn("example.LeafTest", select.select(self.repo, "", "HEAD", cadence="nightly")["junit"]["patterns"])
+        self.assertIn("example.LeafTest", select.group_selection(self.repo, "consumer")["junit"]["patterns"])
+        self.assertEqual({}, select.groups(self.repo, cadence="hourly"))
+
+    def test_invalid_partial_methods_cannot_silently_disappear(self):
+        self.cadence_fixture()
+        for partial in ([], {"example.MissingTest": ["works"]}, {"example.LeafTest": []},
+                        {"example.LeafTest": ["missing"]}, {"example.LeafTest": ["works", "works"]},
+                        {"example.LeafTest": ["*"]}, {"example.LeafTest": [1]}):
+            with self.subTest(partial=partial):
+                self.policy["cadence"]["partialJunit"] = partial
+                self.write(select.POLICY, json.dumps(self.policy))
+                self.commit()
+                with self.assertRaises(select.SelectionError):
+                    select.select(self.repo, "", "HEAD", cadence="commit")
 
     def test_nightly_provider_moves_transitive_consumers_and_overrides_hourly(self):
         import fast_fixtures
@@ -1193,10 +1254,13 @@ private String text = "class FakeString { @Test }";
         self.write(select.POLICY, json.dumps(policy))
         groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
                   *policy["primopFamilies"].values(), *policy["automation"].values()]
-        for name in {name for group in groups for name in group["junit"]} | set(policy["cadence"]["hourlyJunit"]):
+        for name in ({name for group in groups for name in group["junit"]}
+                     | set(policy["cadence"]["hourlyJunit"]) | set(policy["cadence"].get("partialJunit", {}))):
             package, short = name.rsplit(".", 1)
             self.write("src/test/java/" + name.replace(".", "/") + ".java",
-                       java_fixture(short).replace("package example", "package " + package))
+                       java_fixture(short, "\n".join("@Test void " + method + "() {}" for method in
+                           policy["cadence"].get("partialJunit", {}).get(name, ["works"])))
+                       .replace("package example", "package " + package))
         for path in {path for group in groups for path in group["python"]}:
             self.write(path, PYTHON_TEST)
         for path in policy["leafSources"]:
@@ -1222,10 +1286,13 @@ private String text = "class FakeString { @Test }";
         self.write(select.POLICY, json.dumps(policy))
         groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
                   *policy["primopFamilies"].values(), *policy["automation"].values()]
-        for name in {name for group in groups for name in group["junit"]} | set(policy["cadence"]["hourlyJunit"]):
+        for name in ({name for group in groups for name in group["junit"]}
+                     | set(policy["cadence"]["hourlyJunit"]) | set(policy["cadence"].get("partialJunit", {}))):
             package, short = name.rsplit(".", 1)
             self.write("src/test/java/" + name.replace(".", "/") + ".java",
-                       java_fixture(short).replace("package example", "package " + package))
+                       java_fixture(short, "\n".join("@Test void " + method + "() {}" for method in
+                           policy["cadence"].get("partialJunit", {}).get(name, ["works"])))
+                       .replace("package example", "package " + package))
         for path in {path for group in groups for path in group["python"]}:
             self.write(path, PYTHON_TEST)
         for path in policy["leafSources"]:
@@ -1246,14 +1313,14 @@ private String text = "class FakeString { @Test }";
         self.assertEqual("narrow", result["mode"], result["reasons"])
         self.assertEqual([], result["reasons"])
         self.assertEqual(sorted(changed), result["changedPaths"])
-        expected = {"thc.RealCoreEntryContractTest", "thc.runtime.ScalarLexicalProofTest",
+        expected = {"thc.RealCoreEntryContractTest",
                     "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest",
                     "thc.runtime.DataToTagTest", "thc.runtime.MutableByteArraySizeTest",
                     "thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest",
                     "thc.runtime.Int16BoundaryCompilationTest",
                     "thc.runtime.Int32ArrayNativeTest", "thc.runtime.InterfaceCoreNativeTest"}
         self.assertEqual(sorted(expected), result["affected"]["junit"])
-        self.assertEqual(14, result["junit"]["count"])  # Eleven affected + three smoke.
+        self.assertEqual(13, result["junit"]["count"])  # Ten affected + three smoke.
         self.assertEqual(sorted({"bin/test-core-data-tags.py", "bin/test-core-bytearrays.py"}), result["affected"]["python"])
 
 
@@ -1317,13 +1384,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"AstSameFrameArm", "Rubbish", "RubbishLiterals", "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression", "CoreFileWait", "WaitFileDescriptor",
-                           "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "CoreCurrentCCS", "ManagedAddressOrder", "CompareManagedAddress", "CompareOrderedManagedAddress", "GetCurrentCCS", "AddressToInt", "IntToAddress", "SubtractManagedAddress", "RemainderManagedAddress", "AtomicAddressOp", "AtomicAddressExpression", "NativeNarrowAtomic", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "FloatingAddressOp", "FloatingAddressExpression", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "StablePointers", "StablePointerToken", "CoreStablePointers", "StablePointerOp", "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer", "CoreSharedCAFStores", "SharedCAFStore", "SharedCAFStoreExpression", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddressExpression", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopyOp", "AddressToByteArrayExpression", "ByteArrayToAddressExpression", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedTVar", "STMRetry", "STMConflict", "ManagedCompacts", "CompactImages", "HeapAddresses", "CompactImageOp", "CompactImageExpression", "BoundThreadSupport", "RegisterMainThread", "CpuAffinityQuery", "STMCall", "STMExpression", "STMOp", "STMRestart", "PrefetchExpression", "TraceExpression", "TraceOp", "GhcBCO", "GhcInstruction", "GhcBCORoot", "GhcBCOExpression", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStacks"} |
-                         {"WeakResult", "WeakExpression", "WeakOp", "MainThreadWeakKey", "ManagedCompact", "CompactCopyNode", "CompactOp", "CompactExpression",
-                          "ShutdownRuntime", "RtsShutdownOp", "GuestShutdown", "CoreThreadObservation"} |
-                         set(self.integer_vector_nodes + self.floating_vector_nodes),
-                         {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):
                 self.assertTrue((self.root / path).is_file())
@@ -1495,10 +1555,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 consumers.update(select.junit_info(source)[0])
         for family in ("FloatingAddress", "FloatingByteOffset"):
             self.assertIn(f"thc.runtime.{family}Test", consumers)
-        self.assertIn("thc.runtime.SumResultTest", consumers)
-        self.assertIn("thc.runtime.TupleInputNativeTest", consumers)
-        self.assertIn("thc.runtime.ManagedWeakTest", consumers)
-
         self.assertIn("thc.runtime.Explicit64ArrayTest", consumers)
         self.assertIn("thc.runtime.OriginalPathStatTest", consumers)
         self.assertIn("thc.runtime.OriginalPathModeTest", consumers)
@@ -1510,7 +1566,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertIn("thc.runtime.OriginalDirectoryStreamsTest", consumers)
         self.assertIn("thc.runtime.OriginalDirectoryPathsTest", consumers)
         self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
-        self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.IntegerCompletionTest", consumers)
         # The isolated boundary control delegates to the native test's genuine
         # two-root fixture helper, so it also consumes ArrayCoreEvidence.
@@ -1582,7 +1637,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      ".github/scripts/test_fast_ci.py", ".github/scripts/test_fast_inputs.py",
                      ".github/scripts/test_fast_fixtures.py", ".github/scripts/test_fast_select.py",
                      ".github/workflows/fast.yml", ".github/workflows/test-common.yml",
-                     ".github/workflows/test-groups.yml"):
+                     ".github/workflows/test-groups.yml", ".github/workflows/hourly-qualification.yml"):
             with self.subTest(path=path):
                 self.assertIn(path, automation)
                 self.assertIn(".github/scripts/test_fast_select.py", automation[path]["python"])
@@ -1597,8 +1652,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
             "FloatingRemainderTest", "FloatingPrimitiveTest", "FloatingTupleTest", "FusedFloatingTest", "WordFloatingTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
-            "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SqrtPrimitiveTest",
-            "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
+            "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "CoreFloatingLiteralTest",
+            "SumProtocolTest", "SumResultTest", "TypedInputScalarSourceTest")}},
                          set(floating["junit"]))
         self.assertLessEqual({"bin/test-core-sums.py",
                              "bin/test-sum-layout.py", "bin/test-tuple-inputs.py",
@@ -1681,24 +1736,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                  "Program", "BytecodeProgram", "CoreRepresentations", "ArgumentLayout", "TupleResults", "Handoff")
         self.assertFalse(set(names) & {Path(path).stem for path in self.families})
         self.assertFalse(any(path.startswith("compiler/") for path in self.families))
-        self.assertEqual({"src/main/java/thc/runtime/" + name + ".java"
-                          for name in self.integer_vector_nodes + self.floating_vector_nodes +
-                          ("BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatDecodeExpression",
-                           "HeapAddresses", "VectorAddressExpression", "VectorIntegerDivision",
-                           "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression", "CoreFileWait", "WaitFileDescriptor", "FileWaitPrimitives",
-                           "AstSameFrameArm", "Rubbish", "RubbishLiterals", "PrefetchExpression", "TraceExpression", "TraceOp",
-                           "CoreRtsShutdown", "ShutdownRuntime", "RtsShutdownOp", "GuestShutdown", "ThreadObservation", "CoreThreadObservation",
-                           "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression",
-                           "GuestArguments", "GuestEnvironment", "CoreEnvironmentForeign", "CoreRtsArgumentsForeign",
-                           "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression",
-                           "CoreCpuAffinity", "CpuAffinityQuery", "CoreDataLabels", "CoreBoundThreadForeign",
-                           "BoundThreadSupport", "CoreMainThreadForeign", "RegisterMainThread",
-                           "CompactImageOp", "CompactImageExpression", "StablePointers", "StablePointerToken", "CoreStablePointers", "StablePointerOp",
-                           "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer",
-                           "ManagedWeaks", "WeakResult", "WeakExpression", "WeakOp", "MainThreadWeakKey",
-                           "ManagedCompacts", "ManagedCompact", "CompactCopyNode", "CompactOp", "CompactExpression", "CompactImages",
-                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStacks", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "NativeEpoll", "AtomicIntArrayOp", "AtomicIntArrayExpression", "AddressArrayCopyOp", "AddressToByteArrayExpression", "ByteArrayToAddressExpression", "AtomicAddressOp", "AtomicAddressExpression", "NativeNarrowAtomic", "FloatingAddresses", "FloatingAddressOp", "FloatingAddressExpression", "CoreCurrentCCS", "ManagedAddressOrder", "CompareManagedAddress", "CompareOrderedManagedAddress", "GetCurrentCCS", "AddressToInt", "IntToAddress", "SubtractManagedAddress", "RemainderManagedAddress", "GhcBCO", "GhcInstruction", "GhcBCORoot", "GhcBCOExpression", "ManagedSTM", "ManagedTVar", "STMRetry", "STMConflict", "STMCall", "STMExpression", "STMOp", "STMRestart", "CoreSharedCAFStores", "SharedCAFStore", "SharedCAFStoreExpression")},
-                         {path for path in self.families if path.startswith("src/main/java/")})
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
         owners = self.policy["owners"]

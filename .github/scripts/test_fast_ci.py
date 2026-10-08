@@ -128,6 +128,56 @@ class FastRunnerTest(unittest.TestCase):
             os.kill(int((self.root / "pid").read_text()), 0)
         self.assertEqual(2, len(recorder.data["phases"]))
 
+    def test_cache_restores_overlap_checkout_and_gate_only_their_consumers(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        action = self.root / "cache-action/dist/restore-only/index.js"
+        action.parent.mkdir(parents=True)
+        action.write_text(textwrap.dedent('''
+            import os, time
+            from pathlib import Path
+            name = os.environ['INPUT_KEY']
+            assert 'INPUT_SCRIPT' not in os.environ
+            assert os.environ['INPUT_LOOKUP-ONLY'] == 'false'
+            Path(name).touch()
+            deadline = time.monotonic() + 5
+            while not all(Path(peer).exists() for peer in ('ghc', 'java', 'index', 'source')):
+                if time.monotonic() > deadline: raise SystemExit('restores did not overlap checkout')
+                time.sleep(0.01)
+            Path(name + '-done').touch()
+            hit = {'ghc': 'true', 'java': 'false', 'index': ''}[name]
+            Path(os.environ['GITHUB_OUTPUT']).write_text('cache-hit<<end\\n' + hit + '\\nend\\n')
+        '''))
+        layers = {name: {'path': 'cache/' + name, 'key': name} for name in ('ghc', 'java', 'index')}
+        layers['disabled'] = {'enabled': False}
+        with patch.dict(os.environ, THC_CACHE_ACTION=str(action.parents[2]), THC_NODE=sys.executable,
+                        INPUT_SCRIPT='must not leak'):
+            restores, environments, outputs = ci.cache_restores(recorder, layers)
+        source = [sys.executable, '-c', "from pathlib import Path; Path('source').touch()"]
+        consumer = [sys.executable, '-c', "from pathlib import Path; assert Path('ghc-done').exists()"]
+        recorder.parallel([('source', source), ('haskell', consumer)] + restores,
+                          dependencies={'haskell': ['restore-ghc']}, environments=environments)
+        self.assertEqual({'ghc': 'true', 'java': 'false', 'index': ''},
+                         {name: ci.action_outputs(path)['cache-hit'] for name, path in outputs.items()})
+        phases = {phase['name']: phase for phase in recorder.data['phases']}
+        self.assertGreaterEqual(phases['haskell']['started'], phases['restore-ghc']['finished'])
+        events = json.loads(next(recorder.trace_directory.glob('setup-*.events.json')).read_text())['traceEvents']
+        self.assertEqual(5, sum(event['ph'] == 'X' for event in events))
+
+    def test_setup_worker_limit_and_dependencies(self):
+        with patch.object(ci, 'git', return_value='a' * 40):
+            recorder = ci.Recorder(self.root, self.root / 'setup')
+        command = [sys.executable, '-c', 'pass']
+        recorder.parallel([(str(i), command) for i in range(5)], workers=2)
+        phases = recorder.data['phases']
+        for phase in phases:
+            active = sum(other['started'] <= phase['started'] < other['finished'] for other in phases)
+            self.assertLessEqual(active, 2)
+        with self.assertRaisesRegex(RuntimeError, 'Unknown setup dependency'):
+            recorder.parallel([('a', command)], dependencies={'a': ['missing']})
+        with self.assertRaisesRegex(RuntimeError, 'Cyclic setup dependencies'):
+            recorder.parallel([('a', command)], dependencies={'a': ['a']})
+
     def test_cached_haskell_and_java_setup_needs_no_download(self):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "setup")
@@ -505,15 +555,29 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual(summary["classes"], ["example.PolyglotTest"])
         self.assertEqual(json.loads((recorder.directory / "polyglot/summary.json").read_text())["tests"], 1)
 
-    def test_nonrunnable_or_method_only_selection_rejected(self):
+    def test_narrow_selection_allows_exact_methods_but_not_wildcards_or_unowned_classes(self):
         selection = self.selection()
         selection["runnable"] = False
         with self.assertRaises(RuntimeError):
             ci.gradle_command(selection)
         selection["runnable"] = True
         selection["junit"]["patterns"] = ["example.Test.oneMethod"]
-        with self.assertRaises(RuntimeError):
-            ci.gradle_command(selection)
+        self.assertEqual(2, ci.gradle_command(selection).count("example.Test.oneMethod"))
+        for patterns in ([], ["example.Test.*"], ["example.Other.oneMethod"],
+                         ["example.Test.oneMethod", "example.Test.oneMethod"],
+                         ["example.Test", "example.Test.oneMethod"]):
+            with self.subTest(patterns=patterns), self.assertRaises(RuntimeError):
+                ci.gradle_command(selection | {"junit": {"classes": ["example.Test"], "patterns": patterns}})
+
+    def test_partial_report_must_contain_exactly_the_selected_methods(self):
+        self.suite(body='<testcase name="works()" classname="example.Test"/>')
+        ci.validate_xml(self.root, ["example.Test"], ["example.Test.works"])
+        for patterns in (["example.Test.missing"], ["example.Test.works", "example.Test.missing"]):
+            with self.subTest(patterns=patterns), self.assertRaisesRegex(RuntimeError, "method mismatch"):
+                ci.validate_xml(self.root, ["example.Test"], patterns)
+        with self.assertRaisesRegex(RuntimeError, "method mismatch"):
+            ci.validate_methods([("example.Test", "works()"), ("example.Test", "unexpected()")],
+                                ["example.Test"], ["example.Test.works"])
 
     def test_python_runs_normal_and_optimized_without_shell(self):
         selected = {"python": {"commands": [["python3", "odd name/test_me.py"]]}}
@@ -575,6 +639,42 @@ class FastRunnerTest(unittest.TestCase):
             f'errors="0" skipped="0"><testcase name="{case}" classname="thc.runtime.HandoffTest">'
             + ('<failure/>' if failed else '') + '</testcase>'
             f'<system-out>THC_HANDOFF_MODE={marker}\n</system-out></testsuite>')
+
+    def test_group_requires_full_selected_classes_but_accepts_skips(self):
+        import fast_select
+        selection = self.batch_selection()
+        selection['junit']['classes'].append('example.SelectedTest')
+        selection['junit']['patterns'] = list(selection['junit']['classes'])
+        for present in (False, True, "empty"):
+            with self.subTest(present=present), patch.object(ci, 'git', return_value='a' * 40):
+                recorder = ci.Recorder(self.root, self.root / str(present))
+
+                def fresh(*args, **kwargs):
+                    for dense, task in ((False, 'testDefault'), (True, 'testDense')):
+                        self.mode_xml(task, dense)
+                        if present:
+                            (self.root / 'build/test-results' / task / 'TEST-example.SelectedTest.xml').write_text(
+                                '<testsuite name="example.SelectedTest" tests="0" failures="0" errors="0" skipped="0"/>'
+                                if present == "empty" else
+                                '<testsuite name="example.SelectedTest" tests="1" failures="0" errors="0" skipped="1">'
+                                '<testcase name="platformExcluded" classname="example.SelectedTest"><skipped/></testcase></testsuite>')
+                    return 0, ''
+
+                with patch.object(fast_select, 'group_selection', return_value=selection) as choose, \
+                     patch.object(ci.fixtures, '_manifest', return_value=({'groups': {}},
+                         {name: None for name in selection['junit']['classes']})), \
+                     patch.object(recorder, 'command', side_effect=fresh):
+                    if present is True:
+                        ci.run_group(recorder, 'selected', cadence='hourly', prepared=True, exact_class='example.SelectedTest')
+                        self.assertTrue(recorder.data['passed'])
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, 'Empty/inconsistent grouped JUnit suite'
+                                                   if present == 'empty' else 'Grouped JUnit class mismatch'):
+                            ci.run_group(recorder, 'selected', cadence='hourly', prepared=True, exact_class='example.SelectedTest')
+                    choose.assert_called_once_with(self.root, 'selected', cadence='hourly',
+                                                   exact_class='example.SelectedTest')
+                    for mode in ('default', 'dense'):
+                        self.assertTrue((recorder.directory / mode / 'xml/TEST-thc.runtime.HandoffTest.xml').exists())
 
     def test_batch_runs_once_and_preserves_both_actual_mode_outputs(self):
         with patch.object(ci, "git", return_value="a" * 40):

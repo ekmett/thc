@@ -28,6 +28,10 @@ public final class AstControl {
         ResumeChild(Object child, Node node) { this.child = child; this.node = node; }
         @Override public Object resume(VirtualFrame frame, Object input) { return resumeChild(child, node, input, this); }
     }
+    static AstCapture captureChild(Node node, CallSegmentSuspended suspended) {
+        return new AstCapture(suspended, SynchronousMasking.current(node))
+            .append(new ResumeChild(suspended.getSegment(), node));
+    }
     public static Object resumeChild(Object child, Node node, Object input, AstResumeStep step) {
         if (input instanceof TailCall tail && AstTailAnchor.accepts(AstStacks.astStackScope(node).getTailAnchor(), tail)) throw tail;
         if (input instanceof AstChildSuspension suspended) {

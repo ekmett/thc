@@ -16,6 +16,18 @@ own validation. This is not guest AOT: the launcher still lowers and compiles
 guest code after launch. Compiler assertions and blocklist checks remain enabled;
 a failed build must remain a failure.
 
+The separate `executable` mode now prepares a captured application's AST factory
+during Truffle context preinitialization and releases the selected Core bodies.
+Its JVM ownership/absence-of-runtime-lowering checks pass. Linux images execute
+checked IO/PAP and Unicode Text applications with their bound CBD inputs unavailable;
+the Text image retains ordinary Sulong/NFI and native resources. Executable capture
+also selects and embeds non-glibc package shared libraries using the image host's
+loader and pinned `llvm-readobj`. Runtime NFI owns their loading and constructors.
+These saved factories execute through the AST runtime, not compiled guest machine
+code. See the
+[application-bound recipe](../../docs/native-code-cache.md#application-bound-prepared-image)
+and [qualification limits](../../docs/native-image-feasibility.md#preinitialized-runtime-state).
+
 ## Reproduction
 
 The supported experimental entry point is `bin/native-runtime`. After building
@@ -68,9 +80,75 @@ These are the overlay choices used by the demonstrated preparation, not a
 guarantee that another revision builds or compiles guest code. Omitting an opt-in
 retains its original pinned builder behavior for independent diagnostics.
 
-On a shared host, wrap each command in its existing build-directory lease and
-check available host capacity. The script does not acquire a host-specific lock
-itself. Do not run duplicate image builders.
+The recipe accepts an optional third argument, `BUILD_DIR`, resolved relative
+to the caller's working directory. It defaults to `REPO/build/native-image`.
+Use a separate directory for each target; the installed runtime and recipe files
+remain shared read-only inputs. Generated probe classes, argument inventories,
+binding JARs, overlay products, the executable and its emitted sidecars belong to
+that directory. Graph dumps go there too unless `THC_NATIVE_IMAGE_DUMP_PATH`
+explicitly selects another location. Existing contents are reused; an empty
+directory is not required.
+
+```sh
+bash research/native-image-preparation/prepared-image.sh "$PWD" prepare-only "$PWD/build/my-target"
+```
+
+`executable-inputs` uses the same application binding, installed classpath and
+native provider selector as `executable`, but stops after writing
+`reproduction-inventory/native-libraries.json`. It runs on the JVM without
+constructing a Native Image, preparing guest code or executing native constructors.
+Use the same `THC_NATIVE_IMAGE_EXECUTABLE_CONFIG`,
+`THC_NATIVE_IMAGE_EXECUTABLE_NAME` and execution profile as the image build:
+
+```sh
+bash research/native-image-preparation/prepared-image.sh "$PWD" executable-inputs "$PWD/build/my-target"
+```
+
+The receipt ties each original companion digest and its direct ELF dependencies
+to the canonical provider paths and hashes actually selected by the host loader.
+It also retains provider dependency edges, tool identities and external system
+library observations. Repeated calls discover the current selection; they do not
+trust yesterday's provider paths. JVM discovery removes its prior receipt before
+selecting inputs; consume the new receipt only after the command succeeds.
+This is an input-discovery result, not proof of a completed or runnable image,
+and it does not enable image cache reuse. A complete image cache still needs the
+builder/toolchain and remaining recipe inputs, verified outputs, and a check that
+provider selection stayed the same between discovery and image construction.
+
+Application-bound builds also select the pinned Linux AMD64 JDK's static
+`libjsvml.a`. `StaticVectorLibrary` derives the full exported ABI from its
+matching `libjsvml.so`, retains those archive symbols in the executable, and
+registers the builtin through the existing per-isolate startup hook. It checks
+the pinned linker script before merging exports. Archive, shared-library, tool,
+recipe and builder identities are recorded under `staticLibraries` in the native
+receipt. JVM `executable-inputs` discovery does not perform this builder step.
+The ordinary JVM and the separate runtime/cache image recipes are unchanged.
+
+The metadata and linker-script check runs without constructing an image. From
+the repository root, with the pinned Linux JDK and built runtime classes:
+
+```sh
+vector_check=build/static-vector-check
+mkdir -p "$vector_check/classes"
+"${THC_LLVM_READOBJ:-llvm-readobj}" --dyn-symbols --dynamic-table --sections \
+  --elf-output-style=JSON "$JAVA_HOME/lib/libjsvml.so" > "$vector_check/shared.json"
+"${THC_LLVM_READOBJ:-llvm-readobj}" --symbols --elf-output-style=JSON \
+  "$JAVA_HOME/lib/static/linux-amd64/glibc/libjsvml.a" > "$vector_check/archive.json"
+vector_cp="build/classes/java/main:$JAVA_HOME/lib/svm/builder/*"
+"$JAVA_HOME/bin/javac" -cp "$vector_cp" -d "$vector_check/classes" \
+  research/native-image-preparation/StaticVectorLibrary{,Test}.java
+"$JAVA_HOME/bin/java" -cp "$vector_check/classes:$vector_cp" StaticVectorLibraryTest \
+  "$vector_check/shared.json" "$vector_check/archive.json"
+```
+
+These explicit inputs check export preservation and reject missing exports,
+incompatible ELF markers and linker scripts. Actual linkage and JDK symbol
+lookup need an isolated image run; numeric vector results alone can conceal a
+failed provider load because the JDK falls back to Java.
+
+Each build directory needs one writer. On a shared host, hold its existing
+build-directory lease and check available capacity before starting an image
+builder. The script does not acquire a host-specific lock itself.
 
 `THC_NATIVE_IMAGE_BUILDER_HEAP=16g` selects the qualified larger builder budget
 when the default generic/cache 8 GiB is insufficient. Only `8g` and `16g` are
@@ -208,6 +286,12 @@ generated stateless-hierarchy rule deliberately rejects them once their parent
 has an initializer; it is not weakened to admit arbitrary class-array holders.
 Preparing nested destination classes does not initialize their enclosing roots
 or STM implementation. Ordinary per-instance execution and ownership stay unchanged.
+
+`TargetLayout` retains the validated GHC ABI metadata used by prepared package
+stack operations. Its initializer creates only literal field/source-name
+collections and closure tags; target checks remain in layout parsing. The lazy
+Windows source-catalog cache starts null. Initialization performs no host probe,
+resource read, native allocation or context creation.
 
 The manual Windows additions are:
 

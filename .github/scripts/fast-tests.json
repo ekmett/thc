@@ -11,6 +11,7 @@
     ]
   },
   "leafSources": {
+
     "src/main/java/thc/runtime/AstSameFrameArm.java": {"junit": ["thc.runtime.SameFrameCaseTest", "thc.runtime.LocalJoinGraphBudgetTest"], "python": []},
     "src/main/java/thc/runtime/AstStackScope.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/java/thc/runtime/AstStackSpill.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
@@ -61,10 +62,10 @@
     "src/main/java/thc/runtime/MemcpyExpression.java": {"junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/MemmoveExpression.java": {"junit": ["thc.runtime.OriginalMemmoveTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreStringRtsForeign.java": {
-      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]
     },
-    "src/main/java/thc/runtime/StringRtsOp.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/StringRtsExpression.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/StringRtsOp.java": {"junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/StringRtsExpression.java": {"junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/GuestArguments.java": {
       "junit": ["thc.runtime.GuestArgumentsTest", "thc.runtime.GuestArgumentsEncodingTest"], "python": []
     },
@@ -190,11 +191,11 @@
       "python": []
     },
     "src/main/java/thc/runtime/CoreDataLabels.java": {
-      "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ByteStringDataLabelsTest"],
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ByteStringDataLabelsTest"],
       "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedWeaks.java": {
-      "junit": ["thc.runtime.ManagedWeakTest"],
+      "junit": ["thc.runtime.ManagedWeakTest", "thc.runtime.PackageFinalizerTest"],
       "python": []
     },
     "src/main/java/thc/runtime/WeakResult.java": {
@@ -256,11 +257,11 @@
       "python": []
     },
     "src/main/java/thc/runtime/StablePointers.java": {
-      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
+      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
     "src/main/java/thc/runtime/StablePointerToken.java": {
-      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
+      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
     "src/main/java/thc/runtime/CoreStablePointers.java": {
@@ -288,15 +289,15 @@
       "python": []
     },
     "src/main/java/thc/runtime/CoreSharedCAFStores.java": {
-      "junit": ["thc.runtime.StablePointerTest"],
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.StablePointerTest"],
       "python": []
     },
     "src/main/java/thc/runtime/SharedCAFStore.java": {
-      "junit": ["thc.runtime.StablePointerTest"],
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.StablePointerTest"],
       "python": []
     },
     "src/main/java/thc/runtime/SharedCAFStoreExpression.java": {
-      "junit": ["thc.runtime.StablePointerTest"],
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.StablePointerTest"],
       "python": []
     },
     "src/main/java/thc/runtime/FloatingAddresses.java": {
@@ -367,6 +368,7 @@
     },
     "src/main/java/thc/runtime/RawBitCasts.java": {
       "junit": [
+        "thc.runtime.CoreFloatingLiteralTest",
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FusedFloatingTest",
@@ -391,10 +393,8 @@
         "thc.runtime.SimdFloatVectorTest",
         "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SimdWideFloatFmaTest",
-        "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.SumProtocolTest",
         "thc.runtime.SumResultTest",
-        "thc.runtime.TupleInputNativeTest",
         "thc.runtime.TypedInputScalarSourceTest"
       ],
       "python": [
@@ -410,6 +410,7 @@
     },
     "src/main/java/thc/runtime/FloatingPrimitives.java": {
       "junit": [
+        "thc.runtime.CoreFloatingLiteralTest",
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FusedFloatingTest",
         "thc.runtime.WordFloatingTest",
@@ -433,10 +434,8 @@
         "thc.runtime.SimdFloatVectorTest",
         "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SimdWideFloatFmaTest",
-        "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.SumProtocolTest",
         "thc.runtime.SumResultTest",
-        "thc.runtime.TupleInputNativeTest",
         "thc.runtime.TypedInputScalarSourceTest"
       ],
       "python": [
@@ -1295,6 +1294,7 @@
     }
   },
   "owners": {
+
     "bin/run.sh": {"junit": ["thc.LauncherDiagnosticsTest"], "python": []},
     "src/test/java/thc/runtime/ExplicitInteropLibraryTest.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
     "src/test/java/thc/runtime/JavaArrayTest.java": {"junit": ["thc.runtime.JavaArrayTest"], "python": []},
@@ -1302,13 +1302,12 @@
     "t/fixtures/compiler/JavaArrays.hs": {"junit": ["thc.runtime.JavaArrayTest"], "python": []},
     "t/fixtures/compiler/JavaInteropSafe.hs": {"junit": ["thc.runtime.JavaArrayTest"], "python": []},
     "src/test/java/thc/runtime/ExplicitInteropProbeRoot.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
-    "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
     "src/test/java/thc/runtime/ScalarTestCalls.java": {
-      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.DescriptorFlagsTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
+      "junit": ["thc.ThreadedThunkTest","thc.runtime.CompilerRtsTest","thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.CompilerHeapHintTest","thc.runtime.EnabledCapabilitiesTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.DescriptorFlagsTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
       "python": []
     },
     "src/test/java/thc/runtime/ScalarValueTestSupport.java": {
-      "junit": ["thc.runtime.ArithmeticExceptionLazinessTest","thc.runtime.BigNatLiteralTest","thc.runtime.CoreFloatingLiteralTest","thc.runtime.CoreKeepAliveTest","thc.runtime.CoreTouchTest","thc.runtime.DataToTagTest","thc.runtime.EmptyArgumentRuntimeTest","thc.runtime.FloatDecodeTest","thc.runtime.FloatingPrimitiveTest","thc.runtime.FloatingRemainderTest","thc.runtime.FloatingTupleTest","thc.runtime.FusedFloatingTest","thc.runtime.IntegerCompletionTest","thc.runtime.NarrowIntegerCarrierTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.ProxyVoidTest","thc.runtime.RubbishLiteralTest","thc.runtime.ScalarBitCastTest","thc.runtime.ScalarExceptionResultsNativeTest","thc.runtime.ShowWordListTest","thc.runtime.SqrtPrimitiveTest","thc.runtime.TagToEnumTest","thc.runtime.UnsafeEqualityTest","thc.runtime.WordCarryTest","thc.runtime.WordFloatingTest"],
+      "junit": ["thc.runtime.ArithmeticExceptionLazinessTest","thc.runtime.BigNatLiteralTest","thc.runtime.CoreFloatingLiteralTest","thc.runtime.CoreKeepAliveTest","thc.runtime.CoreTouchTest","thc.runtime.DataToTagTest","thc.runtime.EmptyArgumentRuntimeTest","thc.runtime.FloatDecodeTest","thc.runtime.FloatingPrimitiveTest","thc.runtime.FloatingRemainderTest","thc.runtime.FloatingTupleTest","thc.runtime.FusedFloatingTest","thc.runtime.IntegerCompletionTest","thc.runtime.NarrowIntegerCarrierTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.ProxyVoidTest","thc.runtime.RubbishLiteralTest","thc.runtime.ScalarBitCastTest","thc.runtime.ScalarExceptionResultsNativeTest","thc.runtime.ShowWordListTest","thc.runtime.TagToEnumTest","thc.runtime.UnsafeEqualityTest","thc.runtime.WordCarryTest","thc.runtime.WordFloatingTest"],
       "python": []
     },
 
@@ -1416,7 +1415,7 @@
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "src/test/java/thc/runtime/ThreadInventoryCoreEvidence.java": {
-      "junit": ["thc.runtime.HintTraceTest", "thc.runtime.TupleCompletionTest", "thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.GhcBCOContinuationTest", "thc.runtime.ProcessSignalsTest"], "python": []
+      "junit": ["thc.runtime.HintTraceTest", "thc.runtime.TupleCompletionTest", "thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.GhcBCOContinuationTest", "thc.runtime.ProcessSignalsTest", "thc.runtime.ScalarMemoryUtilitiesTest"], "python": []
     },
     "src/main/java/thc/runtime/StableNames.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "src/main/java/thc/runtime/StableNameOp.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
@@ -1477,28 +1476,13 @@
     "t/haskell-fixtures/ThreadSchedulingFixtures.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "t/fixtures/core/ThreadScheduling.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "t/fixtures/compiler/ThreadSchedulingNative.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
-    "src/main/java/thc/runtime/CoreThreadScheduling.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/SparkResult.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreThreadScheduling.java": {"junit": ["thc.ThreadedThunkTest", "thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/SparkPool.java": {"junit": ["thc.ThreadedThunkTest", "thc.runtime.ThreadSchedulingTest"], "python": []},
+    "src/main/java/thc/runtime/SparkResult.java": {"junit": ["thc.ThreadedThunkTest", "thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/SetThreadAllocationCounter.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/ThreadDelayToken.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/DelayThread.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/GuestAllocationAccounting.java": {"junit": ["thc.runtime.ThreadSchedulingTest", "thc.runtime.GuestThreadsTest"], "python": []},
-    "t/fixtures/core/StableWideCells.hs": {
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "python": []
-    },
-    "t/fixtures/compiler/AlignedScalarMemoryAudit.hs": {
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "python": []
-    },
-    "t/fixtures/compiler/AlignedScalarMemoryNative.hs": {
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "python": []
-    },
-    "t/haskell-fixtures/AlignedScalarMemoryFixtures.hs": {
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "python": []
-    },
     "t/haskell-fixtures/IntegerCompletionFixtures.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/IntegerCompletionAudit.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
     "src/test/java/thc/runtime/IntegerCompletionTest.java": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
@@ -1579,23 +1563,14 @@
     "src/main/c/termios-abi-probe.c": {
       "junit": ["thc.runtime.TermiosAbiTest"], "python": []
     },
-    "t/fixtures/compiler/OriginalOpenAudit.hs": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
-    },
     "t/fixtures/compiler/OriginalOpenRequestNative.hs": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/c/native-open-request.c": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeOpenOperation.java": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
-    },
-    "t/fixtures/compiler/OriginalOpenNative.hs": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
-    },
-    "t/haskell-fixtures/OriginalOpenFixtures.hs": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/java/thc/runtime/RtsDiagnostics.java": {
       "junit": ["thc.runtime.RtsDiagnosticsTest", "thc.runtime.HintTraceTest"], "python": []
@@ -1642,53 +1617,53 @@
 
 
     "src/main/c/native-file-api.c": {
-      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.NativeEpollTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.NativeEpollTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeFileLease.java": {
-      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/NativeIO.java": {
-      "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/NativeFileSystem.java": {
-      "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
-    "src/main/java/thc/runtime/NativeDirectoryApi.java": {"junit":["thc.runtime.NativeDirectoryStreamsTest","thc.runtime.NativeDirectoryFileSystemTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathStatTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalPathLinkTest","thc.runtime.OriginalDirectoryPathsTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalFstatTest","thc.runtime.NativeFileProviderTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalCurrentDirectoryTest","thc.runtime.OriginalDirectoryStreamsTest"],"python":[]},
+    "src/main/java/thc/runtime/NativeDirectoryApi.java": {"junit":["thc.runtime.NativeDirectoryStreamsTest","thc.runtime.NativeDirectoryFileSystemTest","thc.runtime.OriginalPathStatTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalPathLinkTest","thc.runtime.OriginalDirectoryPathsTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalFstatTest","thc.runtime.NativeFileProviderTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalCurrentDirectoryTest","thc.runtime.OriginalDirectoryStreamsTest"],"python":[]},
     "src/main/java/thc/runtime/NativeDirectoryOwner.java": {
-      "junit": ["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/c/native-directory-api.c": {
-      "junit": ["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeFileException.java": {
-      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeFileProvider.java": {
-      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeOpenRequest.java": {
-      "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeFileResource.java": {
-      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/OpenedNativeFile.java": {
-      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
+      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/ManagedFiles.java": {
-      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/ManagedStdio.java": {
-      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/StdioHostAbi.java": {
-      "junit": ["thc.runtime.PosixStdioHostAbiModelTest", "thc.runtime.StdioHostAbiFailureTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.PosixStdioHostAbiModelTest", "thc.runtime.StdioHostAbiFailureTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/c/stdio-abi-probe.c": {
-      "junit": ["thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalOpenTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/CoreManagedFiles.java": {
@@ -1704,15 +1679,15 @@
       "python": []
     },
     "src/main/java/thc/runtime/CoreOriginalStdio.java": {
-      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/OriginalStdioOp.java": {
-      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/OriginalStdioExpression.java": {
-      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "t/fixtures/compiler/OriginalStdioReadAudit.hs": {
@@ -1728,7 +1703,7 @@
       "python": []
     },
     "src/compiler/interface/Main.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+      "junit": ["thc.CoreInterfaceLoadTest", "thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
     "t/haskell-fixtures/InterfaceFixtures.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
@@ -2020,22 +1995,17 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FloatingByteOffsetTest",
-        "thc.runtime.ManagedWeakTest","thc.runtime.AddressIdentityNativeTest",
+        "thc.runtime.AddressIdentityNativeTest",
         "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
-        "thc.runtime.OriginalOpenTest",
         "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest",
         "thc.runtime.AtomicIntArrayTest",
-        "thc.runtime.AlignedScalarMemoryTest",
         "thc.runtime.IntegerCompletionTest",
         "thc.runtime.UnalignedScalarMemoryTest",
         "thc.runtime.BoxedCasTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
-        "thc.runtime.SumResultTest",
-        "thc.runtime.TupleInputNativeTest",
-        "thc.runtime.IntArrayNativeTest",
         "thc.runtime.Int8ArrayNativeTest",
         "thc.runtime.Int16ArrayNativeTest",
         "thc.runtime.Int16BoundaryCompilationTest",
@@ -2147,17 +2117,10 @@
       ],
       "python": []
     },
-    "t/fixtures/compiler/CBVJoinAudit.hs": {
-      "junit": [
-        "thc.RealCoreEntryContractTest"
-      ],
-      "python": []
-    },
     "t/fixtures/compiler/CBVCoercionAudit.hs": {
       "junit": [
         "thc.runtime.InterfaceCoreNativeTest",
         "thc.RealCoreEntryContractTest",
-        "thc.runtime.ScalarLexicalProofTest",
         "thc.runtime.BoxedLexicalProofTest",
         "thc.runtime.ScalarPrimitiveSignatureTest"
       ],
@@ -2232,18 +2195,6 @@
     "t/fixtures/compiler/SignedNarrowPrimopsAudit.hs": {
       "junit": [
         "thc.SignedNarrowPrimopsTest"
-      ],
-      "python": []
-    },
-    "t/fixtures/compiler/TupleInputAudit.hs": {
-      "junit": [
-        "thc.runtime.TupleInputNativeTest"
-      ],
-      "python": []
-    },
-    "t/fixtures/compiler/TupleInputAuditNative.hs": {
-      "junit": [
-        "thc.runtime.TupleInputNativeTest"
       ],
       "python": []
     },
@@ -2379,12 +2330,6 @@
         "bin/test-simd-families.py"
       ]
     },
-    "bin/prepare-tuple-input-audit.py": {
-      "junit": [
-        "thc.runtime.TupleInputNativeTest"
-      ],
-      "python": []
-    },
     "bin/simd-families.json": {
       "junit": [
         "thc.runtime.SimdArithmeticTest",
@@ -2488,7 +2433,7 @@
     },
     "src/test/java/thc/CoreCbdTestSupport.java": {
       "junit": [
-        "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreUnitLoadTest",
+        "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreUnitLoadTest", "thc.CoreInterfaceLoadTest",
         "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest",
         "thc.LauncherDiagnosticsTest", "thc.CoreRequestTest", "thc.CoreUnitManagedExportTest",
         "thc.CoreCbdArchiveTest",
@@ -2503,7 +2448,7 @@
     },
     "src/test/java/thc/CoreExecutionTestSupport.java": {
       "junit": [
-        "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest", "thc.ReusableProgramTest",
+        "thc.CoreInterfaceLoadTest", "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest", "thc.ReusableProgramTest",
         "thc.RealCoreJoinTest", "thc.RuntimeTest", "thc.StrictFieldsTest",
         "thc.SumLayoutMetadataTest", "thc.TailCycleTest", "thc.ThreadedThunkTest",
         "thc.ThunkRetentionTest"
@@ -2556,7 +2501,7 @@
       "python": []
     },
     "t/haskell-fixtures/Main.hs": {
-      "junit": [
+      "junit": ["thc.CoreInterfaceLoadTest",
         "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest",
         "thc.CoreBackendPolicyTest",
         "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest",
@@ -2573,7 +2518,6 @@
         "thc.runtime.SimdAddressFamiliesTest",
         "thc.runtime.StableNamesTest",
         "thc.runtime.FloatingRemainderTest",
-        "thc.runtime.AlignedScalarMemoryTest",
         "thc.runtime.IntegerCompletionTest",
         "thc.runtime.UnalignedScalarMemoryTest",
         "thc.runtime.AtomicAddressTest",
@@ -2589,7 +2533,6 @@
         "thc.runtime.RtsShutdownTest",
         "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalErrnoTest",
         "thc.runtime.OriginalSavedTermiosTest",
-        "thc.runtime.OriginalOpenTest",
         "thc.runtime.OriginalRtsLocksTest",
         "thc.runtime.NativeAddressTest",
         "thc.runtime.NativeMallocTest",
@@ -2607,7 +2550,6 @@
         "thc.runtime.SimdCallNativeTest",
         "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SimdWideFloatFmaTest",
-        "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.WordFloatingTest",
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.LargeLiteralCaseNativeTest",
@@ -2881,10 +2823,6 @@
       "junit": ["thc.runtime.WordFloatingTest"],
       "python": []
     },
-    "t/haskell-fixtures/SqrtFixtures.hs": {
-      "junit": ["thc.runtime.SqrtPrimitiveTest"],
-      "python": []
-    },
     "t/haskell-fixtures/WideCharAddressFixtures.hs": {
       "junit": ["thc.runtime.WideCharAddressTest"],
       "python": []
@@ -2912,7 +2850,7 @@
       "haskell": ["driver-tests"]
     },
     "src/driver/THC/Driver/Installed.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
+      "junit": ["thc.CoreInterfaceLoadTest", "thc.runtime.InterfaceCoreNativeTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "src/main/java/thc/runtime/TargetLayout.java": {
@@ -3211,6 +3149,16 @@
         ".github/scripts/test_fast_workflows.py"
       ]
     },
+    ".github/workflows/hourly-qualification.yml": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py",
+        ".github/scripts/test_fast_workflows.py"
+      ]
+    },
     ".github/workflows/hourly.yml": {
       "junit": [],
       "python": [
@@ -3292,9 +3240,37 @@
     }
   },
   "cadence": {
+    "partialJunit": {
+      "thc.runtime.HandoffTest": [
+        "requestedModeReachesTestProcessAndContext",
+        "lazyReferencePrefixesAndCapturedEnvironmentsRemainOwnedAcrossResidualCalls"
+      ],
+      "thc.runtime.AstStackTest": [
+        "spillsRetainSharedUpdatesPrefixesMasksAndMemoizedFailure",
+        "coldInstalledBytecodeEntryPreservesAutonomousCutEffects"
+      ],
+      "thc.CoreUnitLoadTest": [
+        "coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding"
+      ],
+      "thc.runtime.ManagedStackSnapshotTest": [
+        "captureBeforeSynchronousUnwindRemainsStableAfterGuestFramesAndContextReturn"
+      ],
+      "thc.CoreInterfaceLoadTest": [
+        "retainedRecordHelperExecutesAndReusesDemandedLibrary",
+        "helperCapabilityIsExplicitAndContentBound"
+      ],
+      "thc.runtime.SumResultTest": [
+        "nativeResultsResidual",
+        "expandedLayoutResultsResidual",
+        "independentPairInputsResidual",
+        "representativeExtendedNativeResultsResidual"
+      ],
+      "thc.runtime.FloatingTupleTest": [
+        "compiledResidualProducerPreservesNativeIeeeBits",
+        "wholeNestedTupleCaseBinderCopiesFloatingSlotsOnBothBackends"
+      ]
+    },
     "hourlyJunit": [
-      "thc.AggregateFrontierTest",
-      "thc.AggregateLayoutTest",
       "thc.BloomHeaderTest",
       "thc.BoxedForeignProvenanceTest",
       "thc.BytecodeBackendTest",
@@ -3368,7 +3344,6 @@
       "thc.SignedNarrowPrimopsTest",
       "thc.StaticExportStartupTest",
       "thc.StrictFieldsTest",
-      "thc.SumLayoutMetadataTest",
       "thc.TailCycleTest",
       "thc.ThreadedThunkTest",
       "thc.ThunkDiagnosticsTest",
@@ -3382,7 +3357,6 @@
       "thc.runtime.AggregateHeapStorageTest",
       "thc.runtime.AggregateLetContinuationTest",
       "thc.runtime.AggregateLetTest",
-      "thc.runtime.AlignedScalarMemoryTest",
       "thc.runtime.ArithmeticExceptionLazinessTest",
       "thc.runtime.ArrayCoreEvidenceTest",
       "thc.runtime.ArraySliceTest",
@@ -3467,7 +3441,6 @@
       "thc.runtime.DoubleVectorMemoryProofTest",
       "thc.runtime.DoubleVectorStorageTest",
       "thc.runtime.EmptyArgumentRuntimeTest",
-      "thc.runtime.EmptyTupleInputNativeTest",
       "thc.runtime.EnabledCapabilitiesTest",
       "thc.runtime.EntryContractTest",
       "thc.runtime.EntrySelfCallTest",
@@ -3486,7 +3459,6 @@
       "thc.runtime.FloatingByteOffsetTest",
       "thc.runtime.FloatingPrimitiveTest",
       "thc.runtime.FloatingRemainderTest",
-      "thc.runtime.FloatingTupleTest",
       "thc.runtime.ForceLocalWritebackTest",
       "thc.runtime.ForcedBindingTest",
       "thc.runtime.ForeignExceptionPolicyTest",
@@ -3529,7 +3501,6 @@
       "thc.runtime.LoomForeignTest",
       "thc.runtime.LoomHostingTest",
       "thc.runtime.LoomNativeTest",
-      "thc.runtime.LoomOriginalOpenTest",
       "thc.runtime.LoomSignalProcessTest",
       "thc.runtime.ManagedAddressReadTest",
       "thc.runtime.ManagedAddressStorageTest",
@@ -3546,7 +3517,6 @@
       "thc.runtime.MutVarNativeTest",
       "thc.runtime.MutableByteArrayNativeTest",
       "thc.runtime.MutableByteArraySizeTest",
-      "thc.runtime.NarrowLiteralProofTest",
       "thc.runtime.NativeAddressTest",
       "thc.runtime.NativeMallocTest",
       "thc.runtime.OriginalCurrentDirectoryTest",
@@ -3559,7 +3529,6 @@
       "thc.runtime.OriginalHandleReadinessNativeTest",
       "thc.runtime.OriginalMemcpyTest",
       "thc.runtime.OriginalMemmoveTest",
-      "thc.runtime.OriginalOpenTest",
       "thc.runtime.OriginalPathAccessTest",
       "thc.runtime.OriginalPathLinkTest",
       "thc.runtime.OriginalPathModeTest",
@@ -3630,22 +3599,17 @@
       "thc.runtime.SimdWord32ByteArrayTest",
       "thc.runtime.SmallArrayTest",
       "thc.runtime.SourceCloneTest",
-      "thc.runtime.SqrtPrimitiveTest",
       "thc.runtime.StableNamesTest",
       "thc.runtime.StablePointerForeignTest",
       "thc.runtime.StablePointerTest",
       "thc.runtime.StackAnnotationsTest",
       "thc.runtime.StateLambdaJoinTest",
-      "thc.runtime.StateTupleTest",
       "thc.runtime.StaticShapeSafetyTest",
       "thc.runtime.StdioHostAbiFailureTest",
       "thc.runtime.StdioHostAbiTest",
       "thc.runtime.StockGraphRecoveryTest",
       "thc.runtime.SulongCbitsTest",
       "thc.runtime.SumInputLayoutTest",
-      "thc.runtime.SumJoinResultTest",
-      "thc.runtime.SumProtocolTest",
-      "thc.runtime.SumResultTest",
       "thc.runtime.SynchronousExceptionsNativeTest",
       "thc.runtime.TagToEnumTest",
       "thc.runtime.TailCallFrameTest",
@@ -3658,11 +3622,7 @@
       "thc.runtime.TruffleStringExceptionTest",
       "thc.runtime.TruffleStringTest",
       "thc.runtime.TupleCompletionTest",
-      "thc.runtime.TupleInputNativeTest",
       "thc.runtime.TupleJoinLoweringTest",
-      "thc.runtime.TupleJoinResultTest",
-      "thc.runtime.TupleRepresentationTest",
-      "thc.runtime.TupleResultTest",
       "thc.runtime.TypedCaseTest",
       "thc.runtime.TypedExecutionTest",
       "thc.runtime.TypedInputOwnershipTest",
@@ -3674,7 +3634,6 @@
       "thc.runtime.UncaughtSelfNativeTest",
       "thc.runtime.UnitCarrierTest",
       "thc.runtime.UnixLibcTest",
-      "thc.runtime.UnknownBoxedNativeTest",
       "thc.runtime.UnknownBoxedSumTest",
       "thc.runtime.UnknownBoxedTransportTest",
       "thc.runtime.UnsafeEqualityTest",

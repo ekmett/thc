@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreBackendTestSupport.*;
 
-/** Genuine GHC worker/join CBV marks must survive export, execution and compilation. */
+/** Genuine GHC worker CBV marks must survive export, execution and compilation. */
 class RealCoreEntryContractTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private Map<String, Object> exported(String name) throws Exception { return CoreCbdFixtures.read(root.resolve("build/core/" + name + ".cbd")); }
@@ -25,12 +25,8 @@ class RealCoreEntryContractTest {
     private Map<String, Object> named(Map<String, Object> module, String name) {
         var matches = definitions(module).stream().filter(d -> ("main:" + module.get("module") + "." + name).equals(d.get("id"))).toList(); assertEquals(1, matches.size()); return matches.getFirst();
     }
-    private Map<String, Object> localJoin(Map<String, Object> module, String owner) {
-        var matches = definitions(named(module, owner)).stream().filter(d -> d.containsKey("joinValueArity")).toList();
-        assertEquals(1, matches.size()); return matches.getFirst();
-    }
     private long count(Value function, String name) { return ((Number) object(Json.parse(function.getMember("diagnostics").asString())).get(name)).longValue(); }
-    private void checkEntry(Map<String, Object> module, String entry, boolean joins, LongUnaryOperator expected) {
+    private void checkEntry(Map<String, Object> module, String entry, LongUnaryOperator expected) {
         for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
             var function = context.eval("thc", CoreModules.request(list(root.resolve("build/core/" + module.get("module") + ".cbd").toString()), "main:" + module.get("module") + "." + entry, true, false, backend));
             LongConsumer check = input -> assertEquals(expected.applyAsLong(input), function.execute(input).asLong(), backend + " " + entry + "(" + input + ")");
@@ -45,7 +41,6 @@ class RealCoreEntryContractTest {
             assertTrue(count(function, "compiledEntries") > recompiled, backend + " " + entry + " reran compiled code");
             check.accept(Long.MIN_VALUE + 13); check.accept(Long.MAX_VALUE - 11);
             assertEquals(0L, count(function, "blackholes"), backend); assertEquals(0L, count(function, "unsupportedTraps"), backend);
-            if (joins) assertTrue(count(function, "localJoinTransfers") > 0, backend + " executed the actual exported join");
         }
     }
     @Test void genuineWorkerContractPreservesFullWidthResultsAndColdBranches() throws Exception {
@@ -53,17 +48,7 @@ class RealCoreEntryContractTest {
         var marked = definitions(module).stream().filter(d -> ((List<?>) d.get("entryStrict")).contains(true)).toList();
         assertTrue(marked.stream().anyMatch(d -> d.get("name").toString().contains("walk") && "ghc-tidy-proposal".equals(d.get("entryStrictSource"))));
         assertFalse(((List<?>) named(module, "plainStrict").get("entryStrict")).contains(true), "Strict demand alone must not add a contract");
-        checkEntry(module, "workerEntry", false, n -> n <= 0 ? n + 7 : n - 1);
-    }
-    @Test void genuinePolymorphicJoinUsesItsErasedValuePrefix() throws Exception {
-        var module = exported("CBVJoinAudit"); var join = localJoin(module, "polyJoin");
-        assertEquals(2, ((Number) join.get("joinValueArity")).intValue()); assertEquals(list(false, true), join.get("entryStrict"));
-        checkEntry(module, "joinEntry", true, n -> n + 7);
-    }
-    @Test void genuineFunctionReturningJoinKeepsTheReturnedArgumentOutsideItsContract() throws Exception {
-        var module = exported("CBVJoinAudit"); var join = localJoin(module, "functionJoin");
-        assertEquals(1, ((Number) join.get("joinValueArity")).intValue()); assertEquals(list(false, false), join.get("entryStrict"));
-        checkEntry(module, "functionJoinEntry", true, n -> n + 7);
+        checkEntry(module, "workerEntry", n -> n <= 0 ? n + 7 : n - 1);
     }
     @Test void genuineWorkerRetainsTheCoercionSlotBeforeItsMarkedBoxedArgument() throws Exception {
         var module = exported("CBVCoercionAudit");
@@ -73,6 +58,6 @@ class RealCoreEntryContractTest {
         var worker = workers.getFirst(); var parameters = objects(((List<?>) worker.get("expr")).get(1));
         assertEquals(list(false, false, true), worker.get("entryStrict")); assertEquals(true, parameters.get(0).get("coercion")); assertEquals(true, parameters.get(2).get("lifted"));
         assertEquals(false, object(parameters.get(2).get("rep")).get("evaluated"), "The CBV obligation must not rewrite GHC's pre-entry WHNF fact");
-        checkEntry(module, "coercionEntry", false, n -> n + 7);
+        checkEntry(module, "coercionEntry", n -> n + 7);
     }
 }

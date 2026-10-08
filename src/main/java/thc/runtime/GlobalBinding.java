@@ -18,6 +18,7 @@ public final class GlobalBinding {
     @CompilationFinal private volatile boolean prepared;
     @CompilationFinal private Object preparedValue;
     private Preparation prepare;
+    private Initializer initializer;
     private boolean preparing;
     private Exception preparationFailure;
 
@@ -62,31 +63,57 @@ public final class GlobalBinding {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new RuntimeFault("Uninitialized global binding");
         }
+        Initializer pending;
         synchronized (lock) {
             if (prepared) return preparedValue;
             if (preparationFailure != null) return rethrow(preparationFailure);
             if (preparing) throw new IllegalStateException("Recursive Core preparation for " + name);
-            preparing = true;
-            try {
-                if (prepare == null) throw new IllegalStateException("Uninitialized global binding");
-                Object result = prepare.get();
+            if (initializer == null) {
+                preparing = true;
+                try {
+                    if (prepare == null) throw new IllegalStateException("Uninitialized global binding");
+                    Object result = prepare.get();
+                    prepare = null;
+                    if (result instanceof Initializer code) initializer = code;
+                    else { preparedValue = result; prepared = true; return result; }
+                } catch (CancellationException cancelled) { throw cancelled; }
+                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return rethrow(interrupted); }
+                catch (Exception failure) { preparationFailure = failure; prepare = null; return rethrow(failure); }
+                finally { preparing = false; }
+            }
+            pending = initializer;
+        }
+        // Guest code, foreign calls and waits must never run under the lowering lock.
+        Object result = pending.execute();
+        synchronized (lock) {
+            if (!prepared) {
                 preparedValue = result;
                 prepared = true;
-                prepare = null;
-                return result;
-            } catch (CancellationException cancelled) {
-                throw cancelled;
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return rethrow(interrupted);
-            } catch (Exception failure) {
-                preparationFailure = failure;
-                prepare = null;
-                return rethrow(failure);
-            } finally {
-                preparing = false;
+                pending.published.run();
+                initializer = null;
             }
+            return preparedValue;
         }
+    }
+
+    /** Inert per-instance code; CallSegment owns execution and failures, including lazy answers. */
+    static final class Initializer {
+        private final Force force;
+        private final CallSegment segment;
+        private final Runnable published;
+        Initializer(com.oracle.truffle.api.RootCallTarget target, Object[] arguments, Metrics metrics, Runnable published) {
+            force = new Force(metrics, true);
+            SavedGuestContinuation entry = new SavedGuestContinuation() {
+                @Override public Object getIdentity() { return this; }
+                @Override public Object getYielded() { return Unit.INSTANCE; }
+                @Override public Object getSourceRoot() { return target.getRootNode(); }
+                @Override public Object continueWith(Object input) { return Calls.target(target, arguments); }
+            };
+            segment = CallSegment.initial(entry,
+                target.getRootNode() instanceof GuestRoot root ? root.getTupleResult() : null);
+            this.published = published;
+        }
+        Object execute() { return force.executeInitialization(segment); }
     }
     @SuppressWarnings("unchecked")
     private static <E extends Throwable> Object rethrow(Throwable failure) throws E {

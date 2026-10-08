@@ -3,6 +3,7 @@
 package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
@@ -86,6 +87,8 @@ public final class GenericInputCall extends Node {
                 CompilerDirectives.transferToInterpreter();
                 Object[] savedValues = values == null ? null : values.clone();
                 throw cut.append((saved, value) -> finish(saved, value, savedValues, exact, next, resultShape));
+            } catch (DelimitedCut cut) {
+                throw captureCall(frame, cut, values, exact, next, resultShape);
             }
             if (exact) {
                 if (destination != null) { destination.consume(frame, this, result, resultShape); return null; }
@@ -97,6 +100,8 @@ public final class GenericInputCall extends Node {
                 CompilerDirectives.transferToInterpreter();
                 Object[] savedValues = values == null ? null : values.clone();
                 throw cut.append((saved, value) -> execute(saved, requireClosure(value), savedValues, next));
+            } catch (DelimitedCut cut) {
+                throw captureCall(frame, cut, values, false, next, null);
             }
         }
     }
@@ -137,6 +142,8 @@ public final class GenericInputCall extends Node {
             throw transfer;
         } catch (AstCapture cut) {
             throw cut.append((saved, value) -> finish(saved, value, values, exact, next, resultShape));
+        } catch (DelimitedCut cut) {
+            throw captureCall(frame, cut, values, exact, next, resultShape);
         }
         return finish(frame, result, values, exact, next, resultShape);
     }
@@ -148,6 +155,25 @@ public final class GenericInputCall extends Node {
         Closure closure;
         try { closure = requireClosure(AstControl.force(frame, this, force, result)); }
         catch (AstCapture cut) { throw cut.append((saved, value) -> execute(saved, requireClosure(value), values, next)); }
+        catch (DelimitedCut cut) { throw captureCall(frame, cut, values, false, next, null); }
         return execute(frame, closure, values, next);
+    }
+    private DelimitedCut captureCall(VirtualFrame frame, DelimitedCut cut, Object[] values, boolean exact, int next, TupleShape resultShape) {
+        if (!DelimitedControl.enabled(this)) return cut;
+        if (exact) return destination == null ? cut : DelimitedControl.tupleCut(cut, frame.materialize(), destination, this, resultShape);
+        Object[] savedValues = values == null ? null : values.clone();
+        return cut.append(frame, new DelimitedPendingApplication() {
+            @Override public TupleDestination getDestination() { return destination; }
+            @Override public Object resume(MaterializedFrame saved, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
+                Object[] arguments = savedValues == null ? null : savedValues.clone();
+                Object result;
+                try { result = GenericInputCall.this.finish(saved, input.get(), arguments, false, next, null); }
+                catch (DelimitedCut nested) {
+                    if (destination != null) DelimitedControl.tupleCut(nested, saved, destination, GenericInputCall.this);
+                    throw nested;
+                }
+                return destination == null ? result : destination.delimitedResult(saved, GenericInputCall.this);
+            }
+        });
     }
 }

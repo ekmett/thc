@@ -48,30 +48,39 @@ public final class PackageFinalizers {
     }
 
     /** Recheck normalized nominal types independently of the producer's ABI tag. */
-    private static boolean finalizerType(Object value) {
+    private static List<String> finalizerArguments(Object value) {
         while (value instanceof Map<?, ?> type && "forall".equals(type.get("kind"))) value = type.get("body");
         List<?> arguments = named(value, "GHC.Internal.Ptr", "FunPtr", 1);
-        if (arguments == null || !(arguments.getFirst() instanceof Map<?, ?> function) ||
-                !"function".equals(function.get("kind")) ||
-                named(function.get("argument"), "GHC.Internal.Ptr", "Ptr", 1) == null) return false;
-        List<?> result = named(function.get("result"), "GHC.Internal.Types", "IO", 1);
-        return result != null && named(result.getFirst(), "GHC.Internal.Tuple", "Unit", 0) != null;
+        if (arguments == null) return null;
+        Object result = arguments.getFirst();
+        int arity = 0;
+        while (result instanceof Map<?, ?> function && "function".equals(function.get("kind"))) {
+            if (++arity > 2 || named(function.get("argument"), "GHC.Internal.Ptr", "Ptr", 1) == null) return null;
+            result = function.get("result");
+        }
+        List<?> io = named(result, "GHC.Internal.Types", "IO", 1);
+        if (arity == 0 || io == null || named(io.getFirst(), "GHC.Internal.Tuple", "Unit", 0) == null) return null;
+        return arity == 1 ? List.of("AddrRep") : List.of("AddrRep", "AddrRep");
+    }
+
+    private static boolean finalizerArguments(List<?> arguments) {
+        return List.of("AddrRep").equals(arguments) || List.of("AddrRep", "AddrRep").equals(arguments);
     }
 
     public static Set<String> declarations(Map<?, ?> module) {
         if (!(module.get("staticForeignImports") instanceof Map<?, ?> proof)) return Set.of();
-        return declarations(module, proof);
+        return declarations(module, proof).keySet();
     }
 
-    static Set<String> declarations(Map<?, ?> module, Map<?, ?> proof) {
+    static Map<String, List<?>> declarations(Map<?, ?> module, Map<?, ?> proof) {
         boolean wrappers = version(proof.get("schema"), 3) || version(proof.get("schema"), 4);
-        if (!version(proof.get("schema"), 2) && !wrappers) return Set.of();
+        if (!version(proof.get("schema"), 2) && !wrappers) return Map.of();
         require("verified".equals(proof.get("status")), "verified address inventory");
         require(proof.get("addresses") instanceof List<?>, "address inventory");
         List<?> addresses = (List<?>) proof.get("addresses");
         require(wrappers || !addresses.isEmpty(), "empty address inventory");
         Set<Object> binders = new HashSet<>();
-        Set<String> eligible = new LinkedHashSet<>();
+        Map<String, List<?>> eligible = new java.util.HashMap<>();
         for (Object raw : addresses) {
             Map<?, ?> entry = record(raw, "binder header symbol isFunction convention declaredType normalizedType normalizationRole callback");
             Map<?, ?> binder = PackageScalarLinks.archiveIdentity(entry.get("binder"));
@@ -91,13 +100,15 @@ public final class PackageFinalizers {
             PackageScalarLinks.archiveType(entry.get("normalizedType"));
             if (entry.get("callback") != null) {
                 Map<?, ?> callback = record(entry.get("callback"), "arguments result");
-                require(Boolean.TRUE.equals(entry.get("isFunction")) && List.of("AddrRep").equals(callback.get("arguments")) &&
-                    "void".equals(callback.get("result")) && finalizerType(entry.get("normalizedType")),
-                    "one-pointer IO-unit callback differs from normalized type");
-                eligible.add(symbol);
+                var arguments = finalizerArguments(entry.get("normalizedType"));
+                require(Boolean.TRUE.equals(entry.get("isFunction")) && arguments != null &&
+                    arguments.equals(callback.get("arguments")) && "void".equals(callback.get("result")),
+                    "pointer IO-unit callback differs from normalized type");
+                var previous = eligible.put(symbol, arguments);
+                require(previous == null || previous.equals(arguments), "conflicting callback declarations");
             }
         }
-        return Set.copyOf(eligible);
+        return Map.copyOf(eligible);
     }
 
     /** These entry names belong to the component's already checked, namespaced ABI. */
@@ -115,7 +126,7 @@ public final class PackageFinalizers {
                 signature = candidate;
             }
             require(signature != null, "finalizer absent from component ABI");
-            require(List.of("AddrRep").equals(signature.getArguments()) && "void".equals(signature.getResult()) &&
+            require(finalizerArguments(signature.getArguments()) && "void".equals(signature.getResult()) &&
                 "ccall".equals(signature.getConvention()) && "unsafe".equals(signature.getSafety()), "finalizer ABI");
             require(!signature.getSymbol().equals("free"), "reserved runtime finalizer");
         }
@@ -124,11 +135,16 @@ public final class PackageFinalizers {
     }
 
     public static Set<String> proved(Map<?, ?> module, PackageScalarLink link) {
-        Set<String> symbols = declarations(module);
+        Map<String, List<?>> declarations = module.get("staticForeignImports") instanceof Map<?, ?> proof
+            ? declarations(module, proof) : Map.of();
         Set<String> result = new HashSet<>();
-        for (PackageScalarSignature signature : link.getAbi())
-            if (link.getFinalizers().contains(signature.getEntry()) && symbols.contains(signature.getSymbol()))
-                result.add(signature.getEntry());
+        for (PackageScalarSignature signature : link.getAbi()) {
+            if (!link.getFinalizers().contains(signature.getEntry())) continue;
+            var arguments = declarations.get(signature.getSymbol());
+            if (arguments == null) continue;
+            require(signature.getArguments().equals(arguments), "declaration differs from component callback ABI");
+            result.add(signature.getEntry());
+        }
         return Set.copyOf(result);
     }
 }

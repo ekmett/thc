@@ -19,5 +19,7 @@ public final class RuntimeTraceEvent extends Event {
     public String phase = "";
     public long spanId;
     public String message = "";
+    /** Exact original primop bytes as lowercase hex; empty for THC.Trace events. */
+    public String payloadHex = "";
     @Timespan(Timespan.NANOSECONDS) public long elapsedNanos;
 }

@@ -28,8 +28,6 @@ import zlib
 
 SCHEMA = 1
 LINUX_X86_64_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
-ORIGINAL_OPEN_HOST = (platform.system(), platform.machine()) in {
-    ("Linux", "x86_64"), ("Darwin", "x86_64"), ("Darwin", "arm64"), ("Darwin", "aarch64")}
 ERRNO_NATIVE_HOST = platform.system() in ("Linux", "Darwin") and sys.maxsize > 2**32
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 ORIGINAL_UNIX_UNIT = re.compile(r"unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)\Z")
@@ -60,11 +58,11 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/CoreVectorMemory.java",
                   "src/main/java/thc/runtime/VectorByteArrayExpression.java",
                   "src/main/java/thc/runtime/VectorMemory.java")
-MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields array-slices atomic-address pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-open original-errno original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+native-addresses native-malloc original-stack original-stdio-read original-errno original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
@@ -463,21 +461,16 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
     "manifest.json", "pre-core/GeneratedSimdSmoke.cbd", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
-PROVENANCE_DIRS = """io-main-pap aggregate-layout empty-join-input empty-tuple-input
-floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
-tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
+PROVENANCE_DIRS = """io-main-pap
+tag-to-enum
+unsafe-equality simd simd-int32x4 simd-floatx4
 simd-doublex2 simd-int32x4-bytearray simd-word32x4-bytearray
 simd-floatx4-bytearray simd-doublex2-bytearray""".split()
-CHECK_DIRS = """aggregate-layout empty-join-input empty-tuple-input floating-tuple
-state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
-tuple-return unsafe-equality""".split()
+CHECK_DIRS = """tag-to-enum
+unsafe-equality""".split()
 AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
-    "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
     "build/floating/core/FloatingAudit.cbd",
     *(f"build/{family}/{stage}-core/{module}.cbd" for family, module in (
-        ("empty-tuple-input", "EmptyTupleInputAudit"), ("tuple-input", "TupleInputAudit"),
-        ("tuple-join", "TupleJoinAudit"), ("tuple-return", "TupleReturnAudit"),
-        ("state-tuple", "StateTupleAudit"), ("empty-join-input", "EmptyJoinInputAudit"),
         ("floating-tuple", "FloatingTupleAudit"), ("aggregate-layout", "AggregateLayoutAudit"),
         ("sum-layout", "SumLayoutAudit"), ("sum-result", "SumResultAudit"))
       for stage in ("pre", "post")),
@@ -485,28 +478,42 @@ AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
       for module in ("TagToEnumAudit", "TagToEnumExternal", "TagToEnumFrontier")),
 })
 
+SUM_RESULT_OUTPUTS = frozenset({
+    *(f"build/sum-result/{stage}-core/SumResultAudit.cbd" for stage in ("pre", "post")),
+    *(f"build/sum-result/{stage}-ghc/SumResultAudit.{suffix}" for stage in ("pre", "post") for suffix in ("hi", "o")),
+    "build/sum-result/native/oracle", "build/sum-result/oracle.tsv", "build/sum-result/oracle-pairs.tsv",
+    *(f"build/sum-result/native/{module}.{suffix}" for module in ("Main", "SumResultAudit") for suffix in ("hi", "o")),
+})
+
+FLOATING_TUPLE_OUTPUTS = frozenset({
+    *(f"build/floating-tuple/{stage}-core/FloatingTupleAudit.cbd" for stage in ("pre", "post")),
+    *(f"build/floating-tuple/{stage}-ghc/FloatingTupleAudit.{suffix}" for stage in ("pre", "post") for suffix in ("hi", "o")),
+    "build/floating-tuple/native/oracle", "build/floating-tuple/oracle.tsv", "build/floating-tuple/bits.tsv",
+    *(f"build/floating-tuple/native/{module}.{suffix}" for module in ("Main", "FloatingTupleAudit") for suffix in ("hi", "o")),
+})
+
 BASE_CORE_CBD_OUTPUTS = frozenset({
     *(f"build/core/{module}.cbd" for module in ("THC.Prim.Test", "Fixtures", "StrictFields", "SpeculationAudit",
-        "RepresentationAudit", "SourceNotes", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
-    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+        "RepresentationAudit", "SourceNotes", "CBVAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
     *(f"build/source-core/{module}.cbd" for module in ("SourceNotes", "RepresentationAudit")),
     *(f"build/map/{folder}/GHC.Internal.{module}.cbd" for folder in ("core", "boot-core") for module in ("CString", "Err")),
     "build/map/core/GHC.InterfaceClosure.cbd",
 })
 
 CORE_CONTRACT_CBD_REQUIRED = frozenset({
-    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
-    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
     "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
-    "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
 })
 
-CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
-             "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
+CORE_DIRS = ("build/core", "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
     *CORE_CONTRACT_CBD_REQUIRED,
     *BASE_CORE_CBD_OUTPUTS,
     *AGGREGATE_HOST_CBD_OUTPUTS,
+    *SUM_RESULT_OUTPUTS,
+    *FLOATING_TUPLE_OUTPUTS,
     *RUBBISH_OUTPUTS,
     *PROXY_VOID_OUTPUTS,
     *WEAK_OUTPUTS,
@@ -524,13 +531,13 @@ REQUIRED = tuple(sorted({
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
     *(f"build/{d}/checks.json" for d in CHECK_DIRS),
     "build/floating/checks.json", "build/primop-coverage.json",
-    "build/scalar-signatures/provenance.json", "build/aggregate-frontier.json",
-    "build/aggregate-native/oracle.tsv", "build/native/oracle.tsv",
+    "build/scalar-signatures/provenance.json",
+    "build/native/oracle.tsv",
     "build/map/boot-provenance.json", "build/corpus/corpus.json",
 
 }))
 BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-path-stat", "original-path-mode", "original-path-link", "original-directory-paths", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
-    "scalar-signatures", "aggregate-native", "native", "map"] +
+    "scalar-signatures", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 FLOAT_DECODE_COMMANDS = ("native-build", "native-oracle",
                         *(label for stage in ("pre", "post") for label in
@@ -571,7 +578,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/scalar-memory-utilities/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
-    "build/original-open/native/oracle",
     "build/original-errno/native/oracle",
     "build/original-tcsetattr/native/oracle",
     "build/original-tcgetattr/native/oracle",
@@ -580,8 +586,7 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/original-fd-ready/native/oracle",
     "build/original-handle-readiness/native/oracle",
     "build/original-posix-stat/native/oracle",
-    *(f"build/{name}/native/{name}" for name in
-      ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
+})
 ORIGINAL_STDIO_READ_OUTPUTS = frozenset("build/original-stdio-read/" + name for name in (
     "manifest.json", "oracle.json", "input.bin", "native/original-stdio-read-oracle",
     *(f"results/{index}.txt" for index in range(40)),
@@ -625,15 +630,6 @@ RTS_SHUTDOWN_OUTPUTS = frozenset("build/rts-shutdown/" + name for name in (
 ))
 
 ORIGINAL_RTS_LOCK_ENTRIES = ("originalLock", "originalUnlock")
-ORIGINAL_OPEN_ENTRIES = ("originalOpen", "originalOpenSafe", "originalOpenInterruptible")
-ORIGINAL_OPEN_OUTPUTS = frozenset("build/original-open/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"logs/{label}.{suffix}" for label in ("ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_OPEN_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalOpenAudit.cbd", "core/THC.InterfaceClosure.cbd", *(f"{entry}.audit.json" for entry in ORIGINAL_OPEN_ENTRIES))),
-))
 ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for name in (
     "manifest.json", "oracle.json", "declarations.json", "declarations.cbd",
     "pre.cbd", "post.cbd",
@@ -935,25 +931,6 @@ def fd_ready_artifact_hashes(manifest):
             "Incomplete/unreviewed original fdReady artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
             "Invalid original fdReady artifact hash")
-    return artifacts
-
-
-def original_open_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
-            "Invalid original open manifest")
-    if not ORIGINAL_OPEN_HOST:
-        require(manifest.get("supported") is False, "Unsupported original open host")
-        return {}
-    require(manifest.get("supported") is True and manifest.get("strictAccepted") is True and
-            manifest.get("runtimeVerified") is False and manifest.get("installedArtifactsHashed") is False and
-            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 13 and
-            manifest.get("nativeVariants") == ["unsafe", "safe", "interruptible"] and
-            manifest.get("ownedRequestControls") is True,
-            "Invalid original open proof")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_OPEN_OUTPUTS - {"build/original-open/manifest.json"},
-            "Incomplete/unreviewed original open artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid original open hash")
     return artifacts
 
 
@@ -1441,10 +1418,9 @@ SYNCHRONOUS_EXCEPTION_OUTPUTS = frozenset("build/synchronous-exceptions/" + name
       for suffix in (".stdout", ".stderr", ".command.json"))))
 
 CBV_CONTRACT_CBD_OUTPUTS = frozenset({
-    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
-    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
     "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
-    *(f"build/narrow-literal-proofs/{stage}-core/NarrowLiteralProofAudit.cbd" for stage in ("pre", "post")),
 })
 
 HEAP_CORPUS_CBD_OUTPUTS = frozenset(
@@ -1463,7 +1439,7 @@ def allowed_payload(name):
     if name.endswith(".json") and parts[-1][0].isupper() and any(
             part == "core" or part.endswith("-core") for part in parts[:-1]):
         return False
-    if name in ("build/primop-coverage.json", "build/aggregate-frontier.json"):
+    if name == "build/primop-coverage.json":
         return True
     if native_executable(name):
         return True
@@ -1475,6 +1451,20 @@ def allowed_payload(name):
         return name in BASE_CORE_CBD_OUTPUTS or name in AGGREGATE_HOST_CBD_OUTPUTS
     if name.endswith(".json") and name[:-5] + ".cbd" in AGGREGATE_HOST_CBD_OUTPUTS:
         return False
+    if parts[1] == "aggregate-layout":
+        return name in AGGREGATE_HOST_CBD_OUTPUTS or name in {
+            f"build/aggregate-layout/{stage}-ghc/AggregateLayoutAudit.{suffix}"
+            for stage in ("pre", "post") for suffix in ("hi", "o")}
+    if parts[1] == "sum-layout":
+        return name in AGGREGATE_HOST_CBD_OUTPUTS or name in {
+            f"build/sum-layout/{stage}-ghc/SumLayoutAudit.{suffix}"
+            for stage in ("pre", "post") for suffix in ("hi", "o")} or name in {
+            "build/sum-layout/native/sum-layout-oracle", "build/sum-layout/oracle.tsv",
+            *(f"build/sum-layout/native/{module}.{suffix}" for module in ("Main", "SumLayoutAudit") for suffix in ("hi", "o"))}
+    if parts[1] == "floating-tuple":
+        return name in FLOATING_TUPLE_OUTPUTS
+    if parts[1] == "sum-result":
+        return name in SUM_RESULT_OUTPUTS
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
     if parts[1] == "unix-libc":
@@ -1569,8 +1559,6 @@ def allowed_payload(name):
                                                 ("managed-address-reads", "{stage}-core", "ManagedAddressReadAudit"))
                 for stage in ("pre", "post") for module in (fixture, "THC.InterfaceClosure")}:
         return True
-    if name == "build/sqrt/post-core/SqrtAudit.cbd":
-        return True
     if name in {f"build/{family}/{stage}-core/{module}.cbd"
                 for family, module in (("word-floating", "WordFloatingAudit"),
                                        ("scalar-bitcasts", "ScalarBitCastAudit"),
@@ -1613,8 +1601,6 @@ def allowed_payload(name):
         return name in RTS_SHUTDOWN_OUTPUTS
     if parts[1] == "original-rts-locks":
         return name in ORIGINAL_RTS_LOCK_OUTPUTS
-    if parts[1] == "original-open":
-        return name in ORIGINAL_OPEN_OUTPUTS
     if parts[1] == "original-errno":
         return name in ORIGINAL_ERRNO_OUTPUTS
     if parts[1] == "original-termios":
@@ -1636,7 +1622,7 @@ def allowed_payload(name):
     # scripts, JARs, Gradle state or JUnit status. Native executables are data here.
     suffix = PurePosixPath(name).suffix
     return suffix in (".json", ".tsv", ".hs", ".hi", ".o", ".dyn_hi", ".dyn_o") or (
-        not suffix and ("oracle" in parts[-1] or parts[-1] == "aggregate-frontier"))
+        not suffix and "oracle" in parts[-1])
 
 
 def hashes_in(value, tc):
@@ -1799,8 +1785,6 @@ def inventory(root, current, read, core_files, verified=None):
             rts_shutdown_artifact_hashes(doc)
         if name == "build/original-rts-locks/manifest.json":
             rts_lock_artifact_hashes(doc)
-        if name == "build/original-open/manifest.json":
-            original_open_artifact_hashes(doc)
         if name == "build/original-errno/manifest.json":
             errno_artifact_hashes(doc)
         if name == "build/original-termios/manifest.json":
@@ -1841,7 +1825,7 @@ def safe_mode(mode, name):
     if mode & 0o111:
         path = PurePosixPath(name)
         require(native_executable(name) or (not path.suffix and
-                ("oracle" in path.name or path.name == "aggregate-frontier")) or path.suffix in (".so", ".dylib"),
+                "oracle" in path.name) or path.suffix in (".so", ".dylib"),
                 "Executable non-native input: " + name)
     return mode
 

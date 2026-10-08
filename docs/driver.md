@@ -1,7 +1,7 @@
 # Build and run Cabal programs
 
 THC uses Cabal to build selected components and acquires their optimized GHC
-Core. `thc build` stops after acquisition; `thc run` then executes one runnable
+Core. By default, `thc build` stops after acquisition; `thc run` executes one runnable
 component on the JVM. Native GHC still runs Setup programs, preprocessors and
 Template Haskell. THC does not launch the application's native executable.
 
@@ -63,13 +63,35 @@ ambiguities and disabled components. The selected dependency closure is built
 and published once in `DIST/packages.json`; earlier builds of unrelated
 components do not add them to that manifest.
 
-Build does not require a runtime launcher or execute an application. It does
+Ordinary build does not require a runtime launcher or execute an application. It does
 not audit reachable Core, so successful acquisition does not establish runtime
 support. Native Windows project acquisition, foreign-library components and
 detailed-library test suites are not supported; these fail explicitly.
 Backpack executable targets use Cabal's concrete instantiations. Direct Backpack
 library selection, including through `build all`, has not been qualified and
 may be rejected as ambiguous.
+
+Add `--native-image` to `build` to produce a fresh THC Native Image for each
+selected executable, `exitcode-stdio-1.0` test suite or benchmark after normal
+acquisition. Selected libraries still acquire their Core. For example:
+
+```sh
+thc build my-package:exe:my-program --native-image
+```
+
+The producer currently requires Linux x86_64 and the pinned GraalVM, and uses
+AST execution. The driver defaults to the qualified `resource-copy`
+vector profile; `THC_NATIVE_IMAGE_VECTOR_PROFILE` overrides that choice. Each
+component has its own `DIST/native-images/<unit-id SHA256>/packages.json`,
+containing its dependency closure and selected exception bridge. The shared
+`DIST/packages.json` remains acquisition inventory; it does not choose a main
+entry or bridge for the whole multi-target build. Each component's
+`completion.json` records `artifacts/program` and the runtime files/directories
+declared by Native Image. Every explicit image request builds afresh: there is no image cache or guarantee of static linking. Image
+production does not execute the application. Supply CBD through the `pinned`
+(default) or `required` installed-Core provider; `demand` conversion requires a
+running THC context and is unavailable to offline image capture. `run` and
+`acquire` reject this flag.
 
 `run` accepts executables, `exitcode-stdio-1.0` test suites and benchmarks.
 Use `PACKAGE:exe:NAME`, `PACKAGE:test:NAME`, `PACKAGE:bench:NAME`, or a shorter
@@ -84,6 +106,7 @@ missing and ambiguous targets fail explicitly.
 | `--dist-dir DIR` | Select the THC/Cabal build and publication directory. |
 | `--with-ghc PATH`, `--with-ghc-pkg PATH` | Select the matching compiler and package tool. |
 | `--installed-core required` | Acquire complete executable Core from the selected installation. |
+| `--installed-core demand` | Defer eligible whole installed units to module demand; acquire units with native or startup obligations as CBD. |
 | `--ghc-source DIR` | Supply the matching configured GHC source tree for required foreign annotations. |
 | `--verify-artifacts` | On `run`, audit the reachable Core before launch and verify artifact hashes. |
 | `--dap-port PORT` | On `run`, listen for Graal DAP on `127.0.0.1:PORT` (1..65535), configure attachment waiting and first-statement suspension. |
@@ -117,6 +140,41 @@ Select `--installed-core required` to read complete simplified Core already
 retained in installed interfaces; missing Core fails without a fallback.
 Acquisition alone does not establish runtime support.
 See [GHC library Core](ghc-core.md) to check or build that installation.
+
+`--installed-core demand` reads the same installation but publishes eligible whole units
+as helper-backed retained-interface sources. A single selected-GHC inventory probe
+checks their exact registered dependency closure, including cold interfaces.
+Every owned module must retain complete Core. Its decoded interface must prove
+no foreign products/calls/labels, delimited control, CLI main alias or
+foreign-exception bridge obligation. Annotations must be validated empty THC
+export, registration or import provenance; unknown annotations and backend
+policies remain on ordinary acquisition. Units outside
+that conservative gate use the existing CBD acquisition and native linking.
+Thin requested units fail acquisition with their unit, module, interface path
+and instructions to retain Core or choose `pinned`; unknown facts are not false.
+`--ghc-source DIR` remains available for this mode's ordinary native fallback.
+
+On the first demand for a module, the JVM invokes the pinned GHC helper and
+admits its CBD through the existing reader. Converted files and readers belong
+to that program's context, are reused for subsequent demands, and are removed
+when it closes. There is no persistent conversion cache. Exact helper, settings,
+package-cache and hydration-interface bytes are hashed before and after every
+conversion; this whole-inventory work is an initial cost limitation, with no
+claimed speedup. Missing or changed published inputs fail on demand.
+The launcher explicitly grants helper process permission; embeddings must use
+an entered THC context with `allowCreateProcess(true)`. Demand conversion preserves
+retained file identities and line/column spans with `--source-spans`, omitting
+source text and UTF-16 offsets so no source-text reads escape its input snapshot.
+
+The existing offline prelaunch auditor and host CBD readers do not convert
+interfaces. `demand --verify-artifacts` therefore fails option validation before
+building; choose `required` or `pinned` for that audit. Interface input content
+verification is mandatory even without `--verify-artifacts`. The registered
+record fixture checks producer-to-JVM demand, reuse and changed-input rejection.
+The ordinary word-frequency application matches native GHC on AST and bytecode
+in both handoff modes with retained installed Core, including actual interface
+conversion. Native-bearing units still use CBD fallback; this does not qualify
+every installed library.
 
 For the supported native x86_64/aarch64 Linux setup, `--ghc-source DIR` supplies
 the matching configured GHC 9.14.1 stage1 tree when selected `ghc-internal` or
@@ -169,6 +227,12 @@ ambiguous bridge identity is a link error; raw embedding must supply that suppor
 To append runtime metrics after a successful IO launch, set
 `JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"`. Normal guest stderr contains
 no metrics report. Embedded callers can read the `diagnostics` member directly.
+
+The launcher chooses Truffle's compiler pool, single-tier threshold (10 000),
+compilation timeout (30 s) and graph budget (`compiler.MaximumGraalGraphSize`,
+100 000). An explicit `polyglot.` system property overrides each, for example
+`JAVA_OPTS="${JAVA_OPTS:-} -Dpolyglot.compiler.MaximumGraalGraphSize=400000"`
+when a hot function stays interpreted after `GraphTooBigBailoutException`.
 
 ## Attach a debugger
 
@@ -268,6 +332,11 @@ and bundles.
 | Ambiguous target | Use the fully qualified Cabal component name. |
 
 ## Run real applications
+
+The [word-frequency example](../src/examples/standard-apps/word-frequency/README.md)
+is a small ordinary Cabal application using ByteString, Text and Map. Its recipe
+covers the default pinned provider and matching complete-Core installations,
+comparing file IO, Unicode output and error exits against native GHC.
 
 These Linux x86_64 examples run **Happy 2.2.1**, **HsColour 1.25** and
 **Alex 3.5.4.2** inside THC using bytecode and the executable startup/shutdown

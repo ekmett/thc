@@ -9,7 +9,9 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -310,6 +312,101 @@ class AdaptiveAsyncTest {
                     assertEquals(11L, drain(language, saved));
                 } finally { threads.leaveCurrent(); }
             } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void firstExternalRequestReachesRequestFreeCompiledConcurrentLoop(String backend) throws Exception {
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build();
+             var context = Context.newBuilder("thc").engine(engine).allowCreateThread(true).build();
+             var other = Context.newBuilder("thc").engine(engine).build()) {
+            context.initialize("thc"); other.initialize("thc");
+            final RootCallTarget otherTarget;
+            other.enter();
+            try {
+                var owner = Language.currentState(); owner.admitGuestConcurrency(); owner.getThreads().enterCurrent();
+                try {
+                    otherTarget = scalarRoot(language(), new Expr() {
+                        @Override public Object execute(VirtualFrame frame) { return 17L; }
+                    }).getCallTarget();
+                    for (int i = 0; i < 5; i++) assertEquals(17L, otherTarget.call(0L, Unit.INSTANCE));
+                    otherTarget.getClass().getMethod("compile", boolean.class).invoke(otherTarget, true);
+                    assertEquals(true, otherTarget.getClass().getMethod("isValidLastTier").invoke(otherTarget));
+                } finally { owner.getThreads().leaveCurrent(); }
+            } finally { other.leave(); }
+            context.enter();
+            try {
+                var owner = Language.currentState(); var language = language(); var threads = owner.getThreads();
+                owner.admitGuestConcurrency(); threads.enterCurrent();
+                try {
+                    var prefix = new AtomicInteger(); var suffix = new AtomicInteger(); var limit = new AtomicInteger(5);
+                    var observed = new AtomicReference<>(new CompletableFuture<Boolean>());
+                    var before = scalarRoot(language, new Expr() {
+                        @Override public Object execute(VirtualFrame frame) { prefix.incrementAndGet(); return 100L; }
+                    });
+                    var child = scalarRoot(language, new Expr() {
+                        @Override public Object execute(VirtualFrame frame) {
+                            suffix.incrementAndGet();
+                            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                            for (int i = 0; i < limit.get(); i++) {
+                                TruffleSafepoint.poll(this);
+                                var request = GuestThreads.pollCurrent(this, false);
+                                if (request != null) throw new AstCapture(request, SynchronousMasking.current(this))
+                                    .append((saved, input) -> 42L);
+                                observed.get().complete(CompilerDirectives.inCompiledCode());
+                                if (System.nanoTime() >= deadline) throw new AssertionError("External request did not reach the ordinary cut");
+                            }
+                            return 42L;
+                        }
+                    });
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, parentModule(), false) : new BytecodeProgram(language, parentModule(), false);
+                    var target = program.entryTarget("parent");
+                    var caller = new GuestRoot(language, new FrameLayout().build()) {
+                        @Child private DirectCallerNode call = new DirectCallerNode(target, new Metrics(true));
+                        @Override public long bloom(VirtualFrame frame) { return 0L; }
+                        @Override public Object execute(VirtualFrame frame) { return call.call(frame, frame.getArguments(), false); }
+                    }.getCallTarget();
+                    var arguments = new Object[]{0L, new Closure(null, 1, before.getCallTarget()), new Closure(null, 1, child.getCallTarget())};
+                    for (int i = 0; i < 5; i++) assertEquals(142L, Calls.target(caller, arguments));
+                    var identity = threads.currentIdentity(); var payload = new Object();
+                    for (int phase = 0; phase < 2; phase++) {
+                        child.getCallTarget().getClass().getMethod("compile", boolean.class).invoke(child.getCallTarget(), true);
+                        target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                        var runtime = Truffle.getRuntime();
+                        var installed = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+                        runtime.getClass().getMethod("bypassedInstalledCode", installed).invoke(runtime, child.getCallTarget());
+                        runtime.getClass().getMethod("bypassedInstalledCode", installed).invoke(runtime, target);
+                        var compiledLoop = new CompletableFuture<Boolean>(); observed.set(compiledLoop); limit.set(Integer.MAX_VALUE);
+                        var sent = CompletableFuture.supplyAsync(() -> {
+                            try { assertTrue(compiledLoop.get(10, TimeUnit.SECONDS), "Request-free loop executes installed code before publication"); }
+                            catch (Exception failure) { throw new CompletionException(failure); }
+                            return threads.send(identity, payload);
+                        });
+                        int prefixes = prefix.get(), suffixes = suffix.get();
+                        long compiled = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(Calls.target(caller, arguments)));
+                        var request = sent.get(10, TimeUnit.SECONDS);
+                        assertSame(request, saved.asyncRequest()); assertSame(payload, request.getPayload());
+                        assertFalse(request.getForceSelf()); assertEquals(AsyncRequestState.CLAIMED, request.getState());
+                        assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiled);
+                        assertEquals(true, otherTarget.getClass().getMethod("isValidLastTier").invoke(otherTarget), "Another context's request does not retire this target");
+                        request.acknowledge(); assertEquals(142L, drain(language, saved));
+                        assertEquals(prefixes + 1, prefix.get()); assertEquals(suffixes + 1, suffix.get());
+                        assertSame(target, program.entryTarget("parent"));
+                    }
+                    var handoff = language.getHandoffState().get();
+                    assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+                    assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+                } finally { threads.leaveCurrent(); }
+            } finally { context.leave(); }
+            other.enter();
+            try {
+                var threads = Language.currentState().getThreads(); threads.enterCurrent();
+                try { assertEquals(17L, otherTarget.call(0L, Unit.INSTANCE)); }
+                finally { threads.leaveCurrent(); }
+            } finally { other.leave(); }
         }
     }
     @Test void genericThreadAdmissionDoesNotChangeGuestOrigin() throws Exception {

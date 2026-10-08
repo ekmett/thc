@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import thc.Language;
@@ -27,8 +28,15 @@ public final class CompilerRts {
         return switch (symbol) {
             case "ghc_unique_counter64" -> counter;
             case "ghc_unique_inc" -> increment;
-            default -> throw RuntimeFault.fault("Unknown compiler RTS data label " + symbol);
+            default -> {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw unknownLabel(symbol);
+            }
         };
+    }
+
+    @TruffleBoundary private static RuntimeFault unknownLabel(String symbol) {
+        return new RuntimeFault("Unknown compiler RTS data label " + symbol);
     }
 
     /** Preserve lazy, synchronized publication and retry after initialization failure. */
@@ -49,7 +57,7 @@ public final class CompilerRts {
     }
 
     /** The selected GHC headers prove the original TraceFlags.user byte getter. */
-    public ManagedAddress flagsAddress(TargetLayout layout) {
+    @TruffleBoundary public ManagedAddress flagsAddress(TargetLayout layout) {
         requireCurrent();
         if (layout == null || !layout.hasRtsFlags())
             throw RuntimeFault.fault("RtsFlags requires selected-GHC RTS flag layout metadata");
@@ -62,8 +70,8 @@ public final class CompilerRts {
             CompilerDirectives.transferToInterpreter();
             throw RuntimeFault.fault("Unsupported RtsFlags byte field at offset " + byteOffset);
         }
-        // User trace always emits to context stderr; this is not native eventlog status.
-        return 1L;
+        // Selected context sink, independent of process-wide JFR recording state.
+        return Language.currentState(null).getRuntimeTrace().isPrimopDisabled() ? 0L : 1L;
     }
 
     public void close() { closed = true; }

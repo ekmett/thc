@@ -9,6 +9,10 @@ field, with carrier checks on construction, copy and consumption. Native pointer
 Saturated [tuple arithmetic primitives](tuple-arithmetic.md) write directly to
 typed local destinations without using the function-return carrier.
 
+Fixture-free owning tests cover tuple transport and result ownership. Genuine GHC
+pre/post-Tidy qualification of ordinary tuple-result calls, tails, PAPs and
+overapplication remains incomplete.
+
 Ordinary boxed tuples, boxed unit and unlifted boxed products continue to use
 `DataValue` references. An empty unboxed tuple remains logically distinct from
 `State#` and `Proxy#`. These zero-width scalar fields retain logical tuple positions
@@ -17,6 +21,12 @@ order, even if the corresponding pattern binder is unused. A bound zero-width
 field is a canonical Unit alias; nested closures need no capture field for that
 alias. Existing scalar State# formals and call packets retain their ordinary ABI.
 `ByteArray#` is one unlifted boxed reference, independent of State# erasure.
+
+Fixture-free controls execute ordinary scalar State# producers in ignored fields
+and suppress later field work on a guest exception, with released loans after
+failure and recovery. Genuine GHC/export preservation of arbitrary State-producing
+ordinary calls remains unqualified. Proofless State operands reject non-Unit
+scalar carriers and release loans; validation may follow operand materialization.
 
 The public Truffle boundary remains `Object[] -> Object`. Tuple results use a
 mandatory private protocol, independent of `thc.handoffSlabs`:
@@ -51,6 +61,12 @@ case binding and local join results. Layout interning distinguishes both widths
 from Longs and references. Cleanup touches only reference fields. This does not
 expand the optional scalar handoff ABI: its arguments remain Long/reference
 only, and residual scalar floating inputs still travel through Object packets.
+
+`FloatingTupleTest` retains genuine pre/post GHC complex/mixed arithmetic and
+native IEEE tuple-bit controls. Its whole-tuple identity case is deliberately
+inserted into exported Core; it does not qualify GHC preservation of that case.
+Arithmetic NaNs require classification, while non-arithmetic transport retains
+exact payload bits in the independent tuple completion owner.
 
 The compiler and auditor compare tagged recursive tuple/scalar layouts, not
 register counts or pretty names. They reject equal-width but differently nested

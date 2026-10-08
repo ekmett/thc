@@ -68,6 +68,8 @@ public class LauncherDiagnosticsTest {
             "options", Map.of("captureCallState", true)))); // NativeFileLease.close, actual ELF startup failure.
         assertTrue(calls.contains(Map.of("returnType", "jint", "parameterTypes", List.of("jint", "jint", "jint"),
             "options", Map.of("captureCallState", true, "firstVariadicArg", 2L)))); // fcntl readiness duplicate.
+        assertTrue(calls.contains(Map.of("returnType", "jlong", "parameterTypes", List.of("jint", "void*"))),
+            "NativeOpenOperation initializes the observation downcall before opening any file");
         for (var operation : thc.runtime.OriginalStdioOp.values()) if (operation.getUnixNative()) {
             var parameters = operation.getArguments().stream().filter(Objects::nonNull).map(LauncherDiagnosticsTest::foreignType).toList();
             assertTrue(calls.contains(Map.of("returnType", foreignType(operation.getResult()), "parameterTypes", parameters,

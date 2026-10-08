@@ -77,6 +77,13 @@ change it. The handler remains installed until process exit. Cancellation betwee
 an unsafe synchronous syscall and lease publication is not guaranteed safe.
 General interruptible byte transfers remain unsupported.
 
+Qualification covers synthetic Word32 Core open on both backends, including
+first installed execution, and the owning native request, mask and registry
+controls. Actual installed GHC wrappers before/after tidy, native Word16 wrapper
+execution, the full three-safety Core matrix and Loom-hosted open remain
+unqualified. The Darwin pathname control uses ordinary distinct basenames;
+Linux additionally checks distinct invalid UTF-8 basenames through native open.
+
 Forwarding flags does not establish every downstream operation for every flag
 combination. O_PATH/access-mode 3, native nonregular terminal classification,
 standard-endpoint extension with inherited append state, and some zero-count

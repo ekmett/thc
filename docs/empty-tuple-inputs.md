@@ -12,6 +12,14 @@ locals. Recursive/lifted aggregate lets, global aggregate storage and unresolved
 shapes remain unsupported. The [host ABI](site/embedding.md#load-a-core-entry)
 transports logical empty and nested tuples.
 
+Fixture-free `EmptyArgumentRuntimeTest` controls cover empty arguments in calls,
+PAPs, overapplication and ordinary self/mutual tail transfers, including distinct
+empty positions alongside independent scalar payloads. They observe values,
+operand effects, lazy tuple results, released loans and first installed calls in
+both backends. Genuine GHC-exported ordinary empty-argument calls, PAPs and
+overapplication remain unqualified; the exported empty-tuple local-join control
+is a separate contract.
+
 An immutable argument layout separates logical arity from scalar payload offsets.
 An empty argument consumes one logical parameter but contributes no array element,
 frame slot, or generated handoff field. A PAP records its logical supplied count

@@ -193,7 +193,48 @@ class ReusableBytesTest {
     }
     @Test void immutableLiteralsAndByteCafsHaveFreshLoadState() throws Exception { check(false); }
     @Test void firstCompiledByteConstructionNeedsNoTraining() throws Exception { check(true); }
-    @Test void nonliteralAddressOriginsAreNotPersistedAsStaticBytes() {
+    @Test void preparedNarrowAddressReadsUseRuntimeAllocation() {
+        var names = List.of("indexWord8OffAddr#", "indexInt8OffAddr#", "indexWord16OffAddr#", "indexInt16OffAddr#");
+        var representations = List.of("Word8Rep", "Int8Rep", "Word16Rep", "Int16Rep");
+        var bindings = new ArrayList<Map<String,Object>>();
+        for (int i = 0; i < names.size(); i++) {
+            var result = proof("long", representations.get(i));
+            bindings.add(function(names.get(i), list(parameter("address", ADDRESS), parameter("offset", INT)),
+                primitive(names.get(i), result, variable("address", ADDRESS), variable("offset", INT)), result));
+        }
+        var input = with(module(), "bindings", bindings);
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), input, names); }
+                finally { preparation.leave(); }
+            }
+            for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var program = code.newInstance(TruffleLanguage.LanguageReference.create(Language.class).get(null));
+                    var allocations = Language.currentState().getNativeAllocations();
+                    var address = allocations.malloc(4);
+                    address.writeWord8(0, 255);
+                    boolean little = java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN;
+                    address.writeWord8(2, little ? 1 : 128);
+                    address.writeWord8(3, little ? 128 : 1);
+                    int[] expected = {255, -1, 32769, -32767};
+                    var readers = new ArrayList<Closure>();
+                    for (int i = 0; i < names.size(); i++) {
+                        var reader = (Closure)program.entryValue(names.get(i)); readers.add(reader);
+                        assertEquals(Integer.valueOf(expected[i]), ScalarTestCalls.callScalarTestTarget(reader.target,
+                            new Object[]{0L, reader.environment, address, i < 2 ? 0L : 1L}), names.get(i));
+                    }
+                    allocations.free(address);
+                    for (var reader : readers) assertThrows(RuntimeFault.class, () -> ScalarTestCalls.callScalarTestTarget(reader.target,
+                        new Object[]{0L, reader.environment, address, 0L}));
+                } finally { context.leave(); }
+            }
+        }
+    }
+    @Test void computedAndNativeAddressesAreResolvedAtInstanceInitialization() {
         try (var context = Context.newBuilder("thc").build()) {
             context.initialize("thc"); context.enter();
             try {
@@ -203,15 +244,17 @@ class ReusableBytesTest {
                 var nullCode = Program.prepareCode(language, with(module(), "bindings", list(raw)), List.of("address"));
                 assertSame(ManagedAddress.nullAddress(), nullCode.newInstance(language).entryValue("address"));
                 raw.put("expr", list("lit", "data-addr", "unapproved", map("rep", ADDRESS)));
-                assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language,
-                    with(module(), "bindings", list(raw)), List.of("address")));
+                var missingData = Program.prepareCode(language, with(module(), "bindings", list(raw)), List.of("address"));
+                assertThrows(RuntimeFault.class, () -> missingData.newInstance(language));
                 raw.put("expr", list("lit", "function-addr", "unapproved", map("rep", ADDRESS)));
                 var functionCode = Program.prepareCode(language, with(module(), "bindings", list(raw)), List.of("address"));
                 assertThrows(RuntimeFault.class, () -> functionCode.newInstance(language));
                 var computed = map("id", "address", "name", "address", "lifted", false, "rep", ADDRESS,
                     "expr", primitive("plusAddr#", ADDRESS, literal("41"), integer(0)));
-                assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language,
-                    with(module(), "bindings", list(computed)), List.of("address")));
+                var computedCode = Program.prepareCode(language, with(module(), "bindings", list(computed)), List.of("address"));
+                var first = computedCode.newInstance(language); var second = computedCode.newInstance(language);
+                var left = (ManagedAddress)first.entryValue("address"); var right = (ManagedAddress)second.entryValue("address");
+                assertEquals(65L, left.readWord8(0)); assertEquals(65L, right.readWord8(0));
             } finally { context.leave(); }
         }
     }

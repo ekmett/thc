@@ -7402,7 +7402,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             CoreThreadScheduling.validate(name, loweredProofs(operands), flags, tupleProof);
-            if (name.equals("par#")) return new ProvenExpression(e -> e.builder.emitLoadConstant(1L), evaluatedProof(tupleProof, true));
+            if (name.equals("par#")) return new ProvenExpression(e -> {
+                var b = e.builder; b.beginBlock();
+                b.beginIfThen(); b.emitSparkEnabled();
+                b.beginParSpark(); operands.get(0).emit(e); b.endParSpark(); b.endIfThen();
+                b.emitLoadConstant(1L); b.endBlock();
+            }, evaluatedProof(tupleProof, true));
             if (name.equals("delay#")) return new ProvenExpression(e -> {
                 var b = e.builder;
                 Expression token = target -> {
@@ -7428,11 +7433,14 @@ public final class BytecodeProgram implements ExecutableProgram {
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginBlock();
-                if (name.equals("spark#")) { b.beginStoreLocal(destination.get(0)); operands.get(0).emit(e); b.endStoreLocal(); }
+                if (name.equals("spark#")) storeTupleResult(e, destination.get(0), () -> operands.get(0).emit(e));
                 b.beginDiscardVoid(); operands.getLast().emit(e); b.endDiscardVoid();
-                if (!name.equals("spark#")) {
-                    b.beginStoreLocal(destination.get(0)); b.emitLoadConstant(0L); b.endStoreLocal();
-                    if (empty != null) { b.beginStoreLocal(destination.get(1)); b.emitLoadConstant(empty); b.endStoreLocal(); }
+                if (name.equals("spark#")) {
+                    b.beginParSpark(); loadSavedInput(e, destination.get(0)); b.endParSpark();
+                } else if (name.equals("numSparks#")) {
+                    b.emitSparkCount(destination.get(0));
+                } else if (empty != null) {
+                    b.beginGetSpark(destination.get(0), destination.get(1)); b.emitLoadConstant(empty); b.endGetSpark();
                 }
                 b.endBlock();
             });

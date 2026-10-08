@@ -18,6 +18,7 @@ final class Delay extends Expr {
         this.target = target; this.captureLayout = captureLayout; this.captures = captures;
         this.programSlot = programSlot;
     }
+    RootCallTarget target() { return target; }
     @Override public Thunk execute(VirtualFrame frame) {
         return new Thunk(target, captureLayout == null ? null : captureLayout.capture(frame, captures,
             programSlot < 0 ? null : Program.instance(frame, programSlot)));

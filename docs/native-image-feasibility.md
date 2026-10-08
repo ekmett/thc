@@ -1,8 +1,15 @@
 # Native Image
 
-THC provides two experimental Native Image workflows on the pinned GraalVM
+THC provides three experimental Native Image workflows on the pinned GraalVM
 toolchain:
 
+- [`thc build --native-image`](driver.md) acquires selected
+  Cabal components and produces a fresh application-bound executable for each
+  executable, stdio test or benchmark. It embeds the reachable Core and native
+  providers for AST execution. This path currently requires Linux
+  x86-64 and the pinned toolchain; it does not enable guest machine-code
+  compilation or static linking. Deploy the files listed in its completion
+  inventory together.
 - The [selected-Core native code cache](native-code-cache.md) compiles selected
   guest code ahead of execution. `bin/native-cache build/store/run` produces a
   native launcher and matching machine-code cache. Each fresh run loads that
@@ -14,11 +21,11 @@ toolchain:
   executable and loads Core at launch. Its explicit guest compilation diagnostic
   remains unsupported.
 
-Neither workflow is a general Haskell executable distribution. The code cache
+These workflows have different execution contracts. The code cache
 does not yet admit bytecode, async delivery, IO or FFI. Its numeric CLI entry
 can exercise typed internal calls; direct typed public-host persistence remains
-to be qualified. Sulong execution and the full executable/resource lifecycle still need native
-image support and validation. See the cache guide for exact admission,
+to be qualified. The application-bound executable has separate IO/FFI evidence
+described below. See the cache guide for exact admission,
 platform requirements and the experimental preparation overlays it uses.
 
 ## Build and run the pure interpreter
@@ -58,3 +65,84 @@ required before claiming native-image guest JIT support.
 The pure classpath cannot establish Sulong, foreign callbacks, native-resource
 cleanup or complete executable startup/shutdown support. JVM tests of those
 facilities do not substitute for native-image execution checks.
+
+## Preinitialized runtime state
+
+THC supports Truffle's preinitialized-context handoff on the pinned runtime.
+Preparation retires its Env-bound services before capture. When Truffle patches
+that context, THC creates fresh runtime services from the new permissions,
+arguments and streams while preserving the language instance. Per-carrier cells
+are ready before the patch hook, because Truffle enters the runtime carrier first.
+Preparation requires native access to remain disabled; native linking belongs to
+the runtime context.
+
+The isolated `ContextOwnershipTest` uses Truffle's actual JVM preinitialization
+entry point and rejects silent fallback to a fresh language. It covers the runtime
+handoff and failed-startup cleanup in both handoff modes. The experimental
+application-bound recipe now captures its selected entry and shutdown dependencies,
+lowers them in this hook with one preparation worker, and discards the Core bodies.
+Runtime loads use the saved AST factory under its original language and fresh
+State; there is no runtime-lowering fallback. Ordinary cached-source preparation
+keeps its configured worker count.
+
+`ReusableLoaderTest` runs the saved factory after removing its CBD inputs with
+runtime Core lowering disabled. This is JVM evidence for preparation and runtime
+ownership.
+
+Linux diagnostics complete image generation and execute saved factories through
+`NativeExecutable.main`, including entry and shutdown, with their bound CBD
+namespace unavailable. The checked mutable-state IO/PAP sample uses the pure
+recipe's LLVM/NFI exclusions and heap byte arrays. A checked Unicode
+`Text.reverse` application also matches native GHC with LLVM/NFI and matching
+Linux native resources retained, using synchronous AST execution and native byte
+arrays. Its prepared graph retains the validated GHC target-layout descriptor;
+that exact class is included in the audited initialization inventory.
+
+The Text executable runs after relocation into a directory containing only its
+ELF, with an initially empty Graal resource cache, its bound CBD directory hidden
+and the original GMP provider unavailable. The image embeds GMP and extracts it
+before loading the package companion; the earlier image fails under the same
+conditions. File-access traces show no CBD or manifest reads. The hosted capture
+regression checks dependency order and provider identity without running native
+constructors; a native control confirms that the constructor witness is live.
+
+A freshly acquired `run-static-exports` package also executes from a prepared
+image in an otherwise empty filesystem containing only the executable and ten
+explicit system C/zlib libraries. It matches native GHC's result of `43`: a C
+constructor retains a Haskell callback, which dereferences a StablePtr and makes
+a nested native CAPI call; C then releases the StablePtr. Original GHC startup
+and shutdown run with no GHC, CBD archives, package installation or build tree
+available. The image includes THC's generated native IO resources, and preparation
+uses the ordinary linker's dependency graph for runtime-entered guest code.
+This qualifies synchronous callback execution and the release call, not leak
+freedom, post-release rejection or every callback lifetime.
+
+The unchanged `run-binary-buffers` application also passes this isolated Linux
+execution. Its original binary Handle operations preserve NUL and high-bit bytes,
+short reads, EOF and untouched buffer regions. A synchronous `IOException` crosses
+`bracket` cleanup, which frees the native buffer before the Haskell handler runs;
+normal shutdown flushes the final output without a newline. Output and file bytes
+match the independent native GHC executable from the same Cabal component.
+
+The ordinary `thc build --native-image` path also produces a checked concurrent
+application using platform threads and adaptive async admission. In the same
+isolated deployment, `LiveAsyncNative`/`LiveAsyncAudit` match the native GHC
+oracle for `forkIO`/`throwTo`, interrupted shared-CAF resumption, a once-only
+prefix effect, strict/PAP action heads and finite loop completion. The executable
+receives ordinary argv and runs the normal startup/shutdown entries. Its
+`shutdown` mode waits until a child is blocked on an MVar, keeps that MVar
+reachable through the final output, then returns from main without releasing or
+killing the child. A fresh image exits successfully in the isolated deployment,
+matching native GHC with empty stderr. This checks prepared AST execution and
+blocked platform-child shutdown; it does not establish disabled guest JIT
+compilation, Loom hosting or every masking/foreign-call case.
+
+Sulong and package native libraries are extracted at runtime. System C, math,
+zlib and the dynamic loader remain external dependencies. This qualifies captured
+native providers for the selected Linux x86-64 programs, not static linking or
+arbitrary clean-machine deployment. Providers that open additional data files
+still require those files.
+
+General package/Unix-library coverage, Windows images and guest machine-code
+compilation remain unqualified and are tracked in
+[issue #1060](https://github.com/ekmett/thc/issues/1060).

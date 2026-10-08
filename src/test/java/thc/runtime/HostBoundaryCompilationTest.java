@@ -71,6 +71,25 @@ class HostBoundaryCompilationTest {
                     reprofile.invoke(boundary);
                     assertEquals(false, hasCode.invoke(boundary), "Retire the boundary without executing another guest call");
                     observation.validTargets();
+                    // Raw target compilation does not repair the shared host
+                    // entry stub. The first public bridge still runs interpreted.
+                    var rawCompile = targetClass.getMethod("compile", boolean.class);
+                    var waitForCompilation = targetClass.getMethod("waitForCompilation");
+                    for (var target : List.of(guest, host)) {
+                        rawCompile.invoke(target, true);
+                        waitForCompilation.invoke(target);
+                    }
+                    assertEquals(false, hasCode.invoke(boundary), "Raw compilation leaves the stub retired");
+                    observation.validTargets();
+                    int hostCalls = (Integer) observation.calls().get(1);
+                    assertEquals(8L, function.execute(7L).asLong());
+                    assertEquals(hostCalls + 1, observation.calls().get(1), "The negative control misses installed host code");
+
+                    // The public compile operation must repair before the next
+                    // call, without using a guest invocation to settle the stub.
+                    reprofile.invoke(boundary);
+                    assertEquals(false, hasCode.invoke(boundary));
+                    observation.validTargets();
                     long beforeCompile = observation.entries(); var callsBeforeCompile = observation.calls();
                     assertTrue(function.invokeMember("compile").asBoolean());
                     var restoredBeforeCall = hasCode.invoke(boundary); observation.validTargets();
@@ -79,6 +98,7 @@ class HostBoundaryCompilationTest {
                     long beforeCall = observation.entries();
                     assertEquals(3_000_000_002L, function.execute(3_000_000_001L).asLong());
                     long delta = observation.entries() - beforeCall;
+                    assertEquals(callsBeforeCompile, observation.calls(), "The first public call must enter installed host and guest code");
                     System.out.println("HOST_BOUNDARY " + backend + " restoredBeforeCall=" + restoredBeforeCall + " firstCompiledDelta=" + delta);
                     assertAll(
                         () -> assertEquals(true, restoredBeforeCall, "Explicit compilation must restore the shared stub before the first public call"),

@@ -16,5 +16,5 @@ public final class DelimitedBytecodeStep implements DelimitedTransferStep {
     }
     @Override public Object finish(Object result, DelimitedActionSite site) { return site.finish(result, shape); }
     @Override public boolean accepts(ControlFlowException transfer) { return transfer instanceof TailCall; }
-    @Override public Object transfer(MaterializedFrame frame, ControlFlowException transfer, DelimitedActionSite site) { return site.tail((TailCall) transfer); }
+    @Override public Object transfer(MaterializedFrame frame, ControlFlowException transfer, DelimitedActionSite site) { return site.tail(frame, (TailCall) transfer); }
 }

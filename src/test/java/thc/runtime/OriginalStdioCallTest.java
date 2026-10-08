@@ -15,6 +15,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.function.Consumer;
 import thc.Language;
+import thc.ContextProfile;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
 import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
@@ -51,6 +52,70 @@ class OriginalStdioCallTest {
     private Context context(ByteArrayOutputStream out,ByteArrayOutputStream err) { return Context.newBuilder("thc").out(out).err(err).allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build(); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private void released(Language language) { var state = language.getHandoffState().get(); assertEquals(0,state.getArguments().getDepth()); assertEquals(0,state.getResults().getDepth()); assertEquals(0,state.getArguments().retainedReferences()); assertEquals(0,state.getResults().retainedReferences()); }
+    // Synthetic Word32 Core route on both POSIX hosts, independent of authentic GHC wrapper widths.
+    @Test @EnabledOnOs({OS.LINUX, OS.MAC})
+    void coreOpenPreservesUnsignedModeAndStateBeforeEffectsInFirstInstalledCode() throws Exception {
+        for (var backend : List.of("ast", "bytecode"))
+            try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST)) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var module = OriginalStdioFixtures.module(List.of("open"));
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+                    var entry = program.entryTarget("open"); var stdio = Language.currentState().getStdio();
+                    int flags = (int) (stdio.flagConstant(OriginalStdioOp.O_WRONLY) | stdio.flagConstant(OriginalStdioOp.O_CREAT)
+                        | stdio.flagConstant(OriginalStdioOp.O_EXCL));
+                    // Word32# uses a negative JVM int; signed widening would reject this mode before creation.
+                    int mode = 0x8000_0180;
+                    var observedDirectory = Files.createDirectories(directory.resolve(backend).resolve("native/child")).getParent();
+                    Files.createSymbolicLink(observedDirectory.getParent().resolve("link"), observedDirectory.resolve("child"));
+                    // Kernel link/.. resolution must reach native/, rather than a lexically normalized parent.
+                    var prefix = (observedDirectory.getParent() + "/link/../n").getBytes(StandardCharsets.UTF_8);
+                    for (boolean compiled : new boolean[] {false, true}) {
+                        var terminated = Arrays.copyOf(prefix, prefix.length + 3);
+                        // Darwin filesystems reject invalid UTF-8 names; Linux also checks their raw identity.
+                        int suffix = "Linux".equals(System.getProperty("os.name")) ? 0xfe : 'a';
+                        terminated[prefix.length] = (byte) (suffix + (compiled ? 1 : 0)); terminated[terminated.length - 1] = -1;
+                        // NUL must hide the trailing invalid byte on both platforms.
+                        var address = ManagedAddress.fromByteArray(terminated);
+                        var active = targets(entry);
+                        if (compiled) for (var target : active) {
+                            target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target);
+                        }
+                        long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        var result = callScalarTestTarget(entry, new Object[] {0L, address, flags, mode, thc.runtime.Unit.INSTANCE});
+                        int fd = assertInstanceOf(Integer.class, result); assertTrue(fd >= 0, "Core open must create the requested file");
+                        try {
+                            if (compiled) {
+                                assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,
+                                    "The first call after compilation must execute installed code");
+                                for (var target : active) valid(target);
+                            }
+                            byte[] content = {37, (byte) (compiled ? 2 : 1)};
+                            assertEquals(content.length, stdio.write(fd, ManagedAddress.fromByteArray(content), content.length));
+                        } finally { assertEquals(0L, stdio.close(fd)); }
+                        released(language);
+                    }
+                    // Unix directory-stream Paths retain raw bytes; never reconstruct these names from String.
+                    List<Path> names;
+                    try (var entries = Files.list(observedDirectory)) { names = entries.filter(Files::isRegularFile).toList(); }
+                    assertEquals(2, names.size()); assertNotEquals(names.get(0), names.get(1));
+                    var contents = new HashSet<String>(); var rawNames = new HashSet<String>();
+                    for (var name : names) {
+                        contents.add(hex(Files.readAllBytes(name)));
+                        String raw = name.toUri().getRawPath(); rawNames.add(raw.substring(raw.lastIndexOf('/') + 1));
+                    }
+                    assertEquals("Linux".equals(System.getProperty("os.name")) ? Set.of("n%FE", "n%FF") : Set.of("na", "nb"), rawNames);
+                    assertEquals(Set.of("2501", "2502"), contents, "Both raw names must denote independent native files");
+                    var absent = directory.resolve(backend + "-bad-state");
+                    var address = ManagedAddress.fromByteArray((absent + "\0").getBytes(StandardCharsets.UTF_8));
+                    assertEquals(-1L, stdio.close(-1)); long errno = stdio.errno();
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(entry, new Object[] {0L, address, flags, mode, 9L}));
+                    assertFalse(Files.exists(absent), "Malformed State must fail before native creation");
+                    assertEquals(errno, stdio.errno(), "Malformed State must not change errno"); released(language);
+                } finally { context.leave(); }
+            }
+    }
     @Test void duplicateOperationsExecuteInFirstInstalledCodeAndValidateStateBeforeEffects() throws Exception {
         for (var backend : List.of("ast","bytecode")) try (var context = context(new ByteArrayOutputStream(),new ByteArrayOutputStream())) {
             context.initialize("thc"); context.enter();

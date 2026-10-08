@@ -28,8 +28,10 @@ export THC_LLVM_NM=/path/to/llvm/bin/llvm-nm
 ```
 
 The LLVM tool variables are optional when matching tools are on `PATH`.
-Pure Haskell acquisition does not require LLVM tools. Cabal's native build still
-uses its selected GHC and native compiler; LLVM acquisition is a separate step.
+Acquisition needs them even for a pure Haskell package: boot libraries with
+native imports, such as `ghc-internal`, are compiled to LLVM bitcode. Cabal's
+native build still uses its selected GHC and native compiler; LLVM acquisition
+is a separate step.
 Use `thc acquire` with the same build options to prepare the package without
 executing it. Add `--verify-artifacts` to `thc run` for a strict pre-launch Core
 audit and artifact-hash verification.
@@ -95,6 +97,14 @@ rewritten to `AddrRep` or passed as native heap pointers. The narrow owned-threa
 operations described in [managed thread status](thread-status.md) use exact
 nominal declaration and call-inventory admission plus context/lifetime checks.
 Ordinary library imports still use their declared Sulong linkage.
+
+GHC's floating classification helpers and `rintFloat`/`rintDouble` use ordinary
+package-declared native linkage; THC supplies no replacement arithmetic.
+[PackageNativeForeignTest](../src/test/java/thc/runtime/PackageNativeForeignTest.java)
+checks signed zeros, finite representations and special values through the shared
+Float/Double import boundary.
+This component test does not qualify full Core lowering with the exception runtime
+or the installed GHC floating/math package, including its rounding behavior.
 
 ## Pass buffers and pointers
 
