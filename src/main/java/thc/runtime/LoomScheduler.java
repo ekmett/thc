@@ -500,8 +500,7 @@ public final class LoomScheduler implements AutoCloseable {
                     // Admission and start are atomic with the shutdown snapshot.
                     bootstraps.add(bootstrap); bootstrap.start();
                 } finally { unlock(); }
-                Thread thread = await(construction, location);
-                join(bootstrap, location);
+                Thread thread = awaitConstruction(construction, bootstrap, location);
                 thread.setUncaughtExceptionHandler((_, failure) -> {
                     if (!(failure instanceof Stopped) || !stopping) failure.printStackTrace();
                 });
@@ -519,6 +518,27 @@ public final class LoomScheduler implements AutoCloseable {
                 }
             }
         } catch (ReflectiveOperationException failure) { throw new RuntimeFault("Loom thread construction failed: " + failure); }
+    }
+
+    private Thread awaitConstruction(FutureTask<Thread> construction, Thread bootstrap, Node location) {
+        if (env.getContext().isEntered()) {
+            Thread thread = await(construction, location);
+            join(bootstrap, location);
+            return thread;
+        }
+        // JVM service workers have no entered Truffle safepoint or guest HEC to release.
+        // Keep construction owned through interruption; shutdown also tracks the bootstrap.
+        boolean interrupted = false;
+        try {
+            for (;;) {
+                try {
+                    Thread thread = construction.get();
+                    bootstrap.join();
+                    return thread;
+                } catch (InterruptedException ignored) { interrupted = true; }
+                catch (ExecutionException failure) { return rethrow(failure.getCause()); }
+            }
+        } finally { if (interrupted) Thread.currentThread().interrupt(); }
     }
 
     public <T> T invoke(Node location, Callable<T> action) {
