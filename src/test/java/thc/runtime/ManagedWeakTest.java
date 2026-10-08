@@ -13,6 +13,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import thc.CoreModules;
 import thc.EntryValue;
 import thc.Json;
@@ -835,6 +836,82 @@ class ManagedWeakTest {
                 } finally { gate.tryPut(Unit.INSTANCE); Reference.reachabilityFence(key); }
             } finally { context.leave(); }
         }
+    }
+    @Test
+    void finalizerSetupFailuresPreserveUntouchedWorkAndJoinStartedCarriers() throws Exception {
+        assertAll(List.of("before-start", "guest-entry", "after-start", "callback").stream()
+            .<Executable>map(phase -> () -> {
+                try (var context = context()) {
+                    context.initialize("thc"); context.enter(); var release = new ManagedMVar();
+                    var claimThread = new AtomicReference<Thread>(); var completed = new CompletableFuture<Throwable>();
+                    try {
+                        var state = Language.currentState(); var registry = state.getWeaks(); var threads = state.getThreads();
+                        var affinity = threads.getCpuAffinity();
+                        var providerField = CpuAffinity.class.getDeclaredField("nativeAffinity"); providerField.setAccessible(true);
+                        var originalProvider = providerField.get(affinity);
+                        var failure = new CancellationException("intentional weak " + phase + " failure");
+                        var entered = new CompletableFuture<Void>(); var calls = new java.util.concurrent.atomic.AtomicInteger();
+                        var key = new Object(); var action = phase.equals("after-start") ? null : new Object();
+                        var weak = registry.make(key, new Object(), action, action == null ? null : new Object());
+                        assertEquals(1L, registry.addCallback(weak, () -> {
+                            calls.incrementAndGet(); entered.complete(null);
+                            if (phase.equals("after-start")) release.take(null);
+                            if (phase.equals("callback")) throw failure;
+                        }));
+                        var tokenField = weak.getClass().getDeclaredField("token"); tokenField.setAccessible(true);
+                        long token = tokenField.getLong(weak);
+                        var claimed = jam.vm.Weak.finalizeNow(token); assertNotNull(claimed);
+                        providerField.set(affinity, new NativeCpuAffinity() {
+                            @Override public int getCount() { return 1; }
+                            @Override public CpuAffinityMode getMode() { return CpuAffinityMode.ADVISORY; }
+                            @Override public AutoCloseable bindCurrent(int index) { return null; }
+                            @Override public AutoCloseable resetCurrent() {
+                                boolean launcher = Thread.currentThread() == claimThread.get();
+                                if (phase.equals("before-start") && launcher || phase.equals("guest-entry") && !launcher)
+                                    throw failure;
+                                return phase.equals("after-start") && launcher ? () -> { throw failure; } : null;
+                            }
+                        });
+                        Thread carrier = null;
+                        try {
+                            carrier = Thread.ofVirtual().start(() -> {
+                                claimThread.set(Thread.currentThread()); Throwable outcome = null;
+                                try { claimed.run(); } catch (Throwable caught) { outcome = caught; }
+                                finally { jam.vm.Weak.complete(token); }
+                                completed.complete(outcome);
+                            });
+                            if (phase.equals("after-start")) {
+                                awaitOwnedFreeTask(entered);
+                                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                                while (carrier.getState() != Thread.State.WAITING && !completed.isDone()
+                                        && carrier.getState() != Thread.State.TERMINATED && System.nanoTime() < deadline) {
+                                    TruffleSafepoint.poll(null); Thread.yield();
+                                }
+                                assertEquals(Thread.State.WAITING, carrier.getState(), "Claim owner is joining the held real carrier");
+                                assertFalse(completed.isDone(), "A thrown affinity restore must still join the started carrier");
+                                assertEquals(0L, registry.finalize(weak).getFlag(), "Begun cleanup cannot be claimed again");
+                                assertEquals(1, calls.get()); release.tryPut(Unit.INSTANCE);
+                            }
+                            awaitOwnedFreeTask(completed);
+                            assertSame(phase.equals("callback") ? null : failure, completed.getNow(null));
+                            boolean untouched = phase.equals("before-start") || phase.equals("guest-entry");
+                            if (untouched) {
+                                assertEquals(0, calls.get());
+                                assertSame(failure, assertThrows(CancellationException.class, () -> registry.dereference(weak)));
+                                assertSame(action, registry.finalize(weak).getValue(), "Unentered cleanup remains explicitly settleable");
+                            } else assertEquals(0L, registry.finalize(weak).getFlag());
+                            assertEquals(1, calls.get()); assertEquals(0L, registry.finalize(weak).getFlag());
+                            assertEquals(1, calls.get()); Reference.reachabilityFence(key);
+                        } finally {
+                            release.tryPut(Unit.INSTANCE);
+                            try {
+                                if (carrier != null) TruffleSafepoint.setBlockedThreadInterruptible(null, Thread::join, carrier);
+                                else jam.vm.Weak.complete(token);
+                            } finally { providerField.set(affinity, originalProvider); }
+                        }
+                    } finally { release.tryPut(Unit.INSTANCE); context.leave(); }
+                }
+            }));
     }
     @Test
     void explicitCallbacksRunNewestFirstAfterDeathOutsideTheRegistryLock() {

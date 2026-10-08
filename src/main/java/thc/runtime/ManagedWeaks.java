@@ -8,9 +8,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 import java.util.ArrayDeque;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import jam.vm.Weak;
 import thc.Language;
@@ -22,21 +20,36 @@ public final class ManagedWeaks {
         final ManagedWeaks owner;
         WeakReference<Object> key;
         long token;
+        Handle previous, next;
         boolean bootstrap, retired;
         Handle(ManagedWeaks owner) { this.owner = owner; }
     }
+    /** Claimed work may transfer to the context only after an unentered failure. */
+    private abstract static class Work implements Runnable {
+        final Handle handle;
+        Work nextFailed;
+        Throwable failure;
+        Work(Handle handle) { this.handle = handle; }
+        abstract Finalizer release();
+    }
     // The finalizer deliberately has no edge to this payload: claiming F must not retain V.
     private record Payload(Object value, Finalizer finalizer) { }
-    private static final class Finalizer implements Runnable {
-        final Handle handle;
+    private static final class Finalizer extends Work {
+        boolean begun;
+        Throwable entryFailure;
         final Object action, runner;
         final CallTarget root;
         final ArrayDeque<Runnable> callbacks = new ArrayDeque<>();
         Finalizer(Handle handle, Object action, Object runner, CallTarget root) {
-            this.handle = handle; this.action = action; this.runner = runner; this.root = root;
+            super(handle); this.action = action; this.runner = runner; this.root = root;
         }
+        @Override Finalizer release() { return this; }
         void callbacks() {
-            try { for (Runnable callback; (callback = callbacks.pollFirst()) != null;) callback.run(); }
+            try {
+                for (Runnable callback; (callback = callbacks.pollFirst()) != null;) {
+                    begun = true; callback.run();
+                }
+            }
             finally { callbacks.clear(); }
         }
         // Weak.pump() may be called by another host client. Returning means the real
@@ -44,16 +57,13 @@ public final class ManagedWeaks {
         @Override public void run() { handle.owner.run(this); }
     }
     /** Only the conditional/native finalizer root owns these handoff captures. */
-    private static final class Bootstrap implements Runnable {
-        final Handle handle;
+    private static final class Bootstrap extends Work {
         Object key, value;
         Finalizer finalizer;
-        Bootstrap nextFailed;
-        Throwable failure;
         Bootstrap(Handle handle, Object key, Object value, Finalizer finalizer) {
-            this.handle = handle; this.key = key; this.value = value; this.finalizer = finalizer;
+            super(handle); this.key = key; this.value = value; this.finalizer = finalizer;
         }
-        Finalizer release() {
+        @Override Finalizer release() {
             Finalizer result = finalizer;
             key = null; value = null; finalizer = null;
             return result;
@@ -62,13 +72,13 @@ public final class ManagedWeaks {
             Finalizer result;
             try { result = handle.owner.handoff(this); }
             catch (Throwable failure) {
-                GuestThreadOps.reportHostFailure(handle.owner.state, failure);
+                reportFailure(handle.owner.state, failure);
                 throw propagate(failure);
             }
             if (result != null) result.run();
         }
     }
-    /** A host-only drainer: neither one blocked guest nor thread construction stalls other contexts. */
+    /** Independent claim carriers keep normal dispatch out of guest waits. */
     private static final class Drainer {
         static final Thread THREAD = Thread.ofPlatform().daemon().name("THC weak finalizers").start(() -> {
             var token = new long[1];
@@ -85,14 +95,21 @@ public final class ManagedWeaks {
                         finally { Weak.complete(claimed); }
                     });
                 } catch (Throwable failure) {
-                    if (finalizer instanceof Bootstrap bootstrap) {
-                        bootstrap.handle.owner.failed(bootstrap, failure);
+                    if (finalizer instanceof Work work) {
+                        work.handle.owner.failed(work, failure);
                         Weak.complete(claimed);
-                        GuestThreadOps.reportHostFailure(bootstrap.handle.owner.state, failure);
-                        continue;
+                        reportFailure(work.handle.owner.state, failure);
+                    } else {
+                        // ponytail: foreign dispatch failure runs inline and may
+                        // block this pump; a foreign owner can supply its own pump.
+                        try { finalizer.run(); }
+                        catch (Throwable caught) {
+                            try {
+                                var current = Thread.currentThread();
+                                current.getUncaughtExceptionHandler().uncaughtException(current, caught);
+                            } catch (Throwable ignored) { }
+                        } finally { Weak.complete(claimed); }
                     }
-                    Weak.complete(claimed);
-                    throw failure;
                 }
             }
         });
@@ -102,10 +119,10 @@ public final class ManagedWeaks {
     private final Language.State state;
     private final Language language;
     // No context root points at active K, V or F. Membership follows the logical lifetime.
-    private final HashSet<Handle> live = new HashSet<>();
+    private Handle live;
     // Failed installation is unfinished work, not evidence of key death. Explicit
     // finalize/close settles it; normal active handles never reach these captures.
-    private Bootstrap failedBootstraps;
+    private Work failedWork;
     private boolean stopping, closed;
     private int running;
 
@@ -132,13 +149,9 @@ public final class ManagedWeaks {
             action == null ? null : new ForkActionRoot(language, null, true, 2).getCallTarget());
         // Never force K, V or F. Jam's conditional association is the only root of this payload.
         install(handle, referent, value, finalizer);
-        try { live.add(handle); }
-        catch (Throwable failure) {
-            Runnable claimed = Weak.finalizeNow(handle.token);
-            if (claimed instanceof Bootstrap bootstrap) bootstrap.release();
-            if (claimed != null) Weak.complete(handle.token);
-            throw failure;
-        }
+        handle.next = live;
+        if (live != null) live.previous = handle;
+        live = handle;
         Reference.reachabilityFence(key);
         return handle;
     }
@@ -165,23 +178,30 @@ public final class ManagedWeaks {
         Reference.reachabilityFence(key);
     }
     private void retire(Handle handle) {
-        handle.retired = true; handle.bootstrap = false; live.remove(handle); notifyAll();
+        if (!handle.retired) {
+            if (handle.previous == null) { if (live == handle) live = handle.next; }
+            else handle.previous.next = handle.next;
+            if (handle.next != null) handle.next.previous = handle.previous;
+            handle.previous = null; handle.next = null; handle.retired = true;
+        }
+        handle.bootstrap = false; notifyAll();
     }
-    private synchronized void failed(Bootstrap bootstrap, Throwable failure) {
-        if (closed) { bootstrap.release(); retire(bootstrap.handle); return; }
+    private synchronized void failed(Work work, Throwable failure) {
+        if (closed) { work.release(); retire(work.handle); return; }
+        if (work instanceof Finalizer) retire(work.handle);
         // ponytail: linear failed-work search; index only if exceptional backlog
         // matters. Retention itself must not allocate after OOME.
-        bootstrap.failure = failure;
-        bootstrap.nextFailed = failedBootstraps;
-        failedBootstraps = bootstrap;
+        work.failure = failure;
+        work.nextFailed = failedWork;
+        failedWork = work;
         notifyAll();
     }
-    private Bootstrap failure(Handle handle, boolean remove) {
-        Bootstrap previous = null;
-        for (Bootstrap current = failedBootstraps; current != null; current = current.nextFailed) {
+    private Work failure(Handle handle, boolean remove) {
+        Work previous = null;
+        for (Work current = failedWork; current != null; current = current.nextFailed) {
             if (current.handle == handle) {
                 if (remove) {
-                    if (previous == null) failedBootstraps = current.nextFailed;
+                    if (previous == null) failedWork = current.nextFailed;
                     else previous.nextFailed = current.nextFailed;
                     current.nextFailed = null;
                 }
@@ -334,22 +354,45 @@ public final class ManagedWeaks {
             running++;
         }
         boolean interrupted = false;
+        Thread child = null;
+        Throwable failure = null;
         try {
             state.admitGuestConcurrency();
             var threads = state.getThreads();
             // Construction can block entering Truffle. Never hold the admission monitor here.
-            Thread child = threads.newThread(state.getEnv(), () -> execute(finalizer), null, null);
+            child = threads.newThread(state.getEnv(), () -> execute(finalizer), null, null);
+            var handler = child.getUncaughtExceptionHandler();
+            child.setUncaughtExceptionHandler((thread, caught) -> {
+                if (!finalizer.begun) finalizer.entryFailure = caught;
+                if (handler != null) handler.uncaughtException(thread, caught);
+            });
             synchronized (this) {
                 if (stopping) return;
                 threads.startThread(child);
             }
-            for (;;) {
-                try { child.join(); break; }
-                catch (InterruptedException ignored) { interrupted = true; }
+        } catch (Throwable caught) { failure = caught; }
+        finally {
+            // startThread can throw restoring affinity AFTER Thread.start succeeds.
+            // A started carrier owns the claim until actual Java termination.
+            if (child != null && child.getState() != Thread.State.NEW) {
+                for (;;) {
+                    try { child.join(); break; }
+                    catch (InterruptedException ignored) { interrupted = true; }
+                }
             }
-        } finally {
-            synchronized (this) { running--; notifyAll(); }
+            synchronized (this) {
+                if (!finalizer.begun) {
+                    Throwable unentered = failure == null ? finalizer.entryFailure : failure;
+                    if (unentered != null) failed(finalizer, unentered);
+                }
+                running--; notifyAll();
+            }
             if (interrupted) Thread.currentThread().interrupt();
+        }
+        if (failure == null) failure = finalizer.entryFailure;
+        if (failure != null) {
+            reportFailure(state, failure);
+            throw propagate(failure);
         }
     }
     private void execute(Finalizer finalizer) {
@@ -362,14 +405,20 @@ public final class ManagedWeaks {
             threads.enterCurrent(MaskingState.UNMASKED, true, true, null);
             registered = true;
             if (!threads.isLoom()) affinity = threads.getCpuAffinity().resetCurrent();
+            Object[] arguments = finalizer.action == null ? null : new Object[]{finalizer.runner, finalizer.action};
             finalizer.callbacks();
-            if (finalizer.action != null) finalizer.root.call(finalizer.runner, finalizer.action);
+            if (arguments != null) {
+                finalizer.begun = true;
+                finalizer.root.call(arguments);
+            }
         } catch (UncaughtForkAsync uncaught) {
             outcome = GuestThreadStatus.DIED;
             uncaught.request.acknowledge();
+            if (!finalizer.begun) failure = uncaught;
         } catch (AsyncDelivery uncaught) {
             outcome = GuestThreadStatus.DIED;
             uncaught.getRequest().acknowledge();
+            if (!finalizer.begun) failure = uncaught;
         } catch (Throwable caught) {
             failure = caught;
             outcome = GuestThreadStatus.uncaught(caught);
@@ -380,9 +429,16 @@ public final class ManagedWeaks {
             catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
         }
         if (failure != null) {
-            GuestThreadOps.reportHostFailure(state, failure);
+            if (!finalizer.begun) { finalizer.entryFailure = failure; return; }
+            reportFailure(state, failure);
             throw propagate(failure);
         }
+    }
+    private static void reportFailure(Language.State state, Throwable failure) {
+        // Reporting may allocate too. The original failure is already retained or
+        // propagated; a secondary reporting failure must not kill the shared pump.
+        try { GuestThreadOps.reportHostFailure(state, failure); }
+        catch (Throwable ignored) { }
     }
     private static Throwable cleanupFailure(Throwable failure, Throwable cleanup) {
         if (failure == null) return cleanup;
@@ -411,7 +467,6 @@ public final class ManagedWeaks {
     public synchronized void requestStop() { stopping = true; notifyAll(); }
     /** Called after the guest join, before any native provider is disposed. */
     public void close() {
-        ArrayList<Handle> abandoned;
         boolean interrupted = false;
         synchronized (this) {
             stopping = true;
@@ -419,17 +474,20 @@ public final class ManagedWeaks {
                 try { wait(); } catch (InterruptedException ignored) { interrupted = true; }
             }
             closed = true;
-            abandoned = new ArrayList<>(live); live.clear();
-            while (failedBootstraps != null) {
-                var failed = failedBootstraps; failedBootstraps = failed.nextFailed;
+            while (failedWork != null) {
+                var failed = failedWork; failedWork = failed.nextFailed;
                 failed.nextFailed = null; retire(failed.handle); failed.release();
             }
             notifyAll();
         }
         try {
-            for (var handle : abandoned) {
-                long token = handle.token;
-                synchronized (this) { retire(handle); }
+            for (;;) {
+                long token;
+                synchronized (this) {
+                    if (live == null) break;
+                    var handle = live;
+                    token = handle.token; retire(handle);
+                }
                 Runnable claimed = Weak.finalizeNow(token);
                 if (claimed instanceof Bootstrap bootstrap) bootstrap.release();
                 if (claimed != null) Weak.complete(token);
