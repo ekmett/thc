@@ -8,6 +8,7 @@ import com.oracle.truffle.api.nodes.Node;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import jam.vm.Weak;
 import thc.Language;
@@ -27,11 +28,14 @@ public final class ManagedWeaks {
         final Handle handle;
         final Object action, runner;
         final CallTarget root;
-        final ArrayList<Runnable> callbacks = new ArrayList<>();
+        final ArrayDeque<Runnable> callbacks = new ArrayDeque<>();
         Finalizer(Handle handle, Object action, Object runner, CallTarget root) {
             this.handle = handle; this.action = action; this.runner = runner; this.root = root;
         }
-        void callbacks() { for (var callback : callbacks) callback.run(); }
+        void callbacks() {
+            try { for (Runnable callback; (callback = callbacks.pollFirst()) != null;) callback.run(); }
+            finally { callbacks.clear(); }
+        }
         // Weak.pump() may be called by another host client. Returning means the real
         // carrier has terminated, including cancellation before its Runnable entered.
         @Override public void run() { handle.owner.run(this); }
@@ -119,7 +123,7 @@ public final class ManagedWeaks {
         if (payload == null) return 0L;
         requireThreads();
         // RTS prepends. Native dereference roots the payload across the mutation.
-        payload.finalizer().callbacks.add(0, java.util.Objects.requireNonNull(callback));
+        payload.finalizer().callbacks.addFirst(java.util.Objects.requireNonNull(callback));
         Reference.reachabilityFence(payload);
         return 1L;
     }
