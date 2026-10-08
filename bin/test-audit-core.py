@@ -745,7 +745,7 @@ def io_main_fixture(prefix=2):
     if prefix:
         expression = ['app', expression, [[*lit(i), dict(rep=LONG)] for i in range(prefix)],
                       [False] * prefix, False, False, dict(rep=CLOSURE)]
-    root = dict(bind('root', expression), type='IO ()', rep=CLOSURE)
+    root = dict(bind('root', expression), type='IO ()', arity=1, rep=CLOSURE)
     constructors = [dict(id='StateUnit', kind='unboxed-tuple', arity=2,
                          fieldReps=[None, None], strictFields=[False, False], fieldLifted=[None, None]),
                     dict(id=unit_id, kind='boxed', arity=0, fieldReps=[], strictFields=[], fieldLifted=[])]
@@ -824,7 +824,7 @@ class IoMainAuditTest(unittest.TestCase):
         module['bindings'][1]['expr'][1][-1]['rep'] = tuple_rep()
         self.rejects_boundary(module)
 
-    def test_saturation_extra_formals_unknown_targets_and_alias_cycles_reject(self):
+    def test_known_invalid_shapes_and_missing_targets_reject(self):
         for count in (0, 1, 3, 4):
             with self.subTest(supplied=count):
                 module = io_main_fixture()
@@ -834,14 +834,16 @@ class IoMainAuditTest(unittest.TestCase):
                 self.rejects_boundary(module)
         module = io_main_fixture()
         module['bindings'][0]['expr'][1] = [*var('unknown'), dict(rep=CLOSURE)]
-        self.rejects_boundary(module)
-        module = io_main_fixture()
-        module['bindings'][1]['expr'] = [*var('root'), dict(rep=CLOSURE)]
-        self.rejects_boundary(module)
+        self.assertFalse(self.audit(module)['accepted'])
 
-    def test_pap_keeps_exact_input_result_and_declared_main_checks(self):
-        mutations = [lambda m: m['bindings'][0].update(type='IO Int'),
-                     lambda m: m['bindings'][1]['expr'][1][-1].update(rep=LONG),
+    def test_lifted_answers_do_not_depend_on_display_type(self):
+        for spelling in ('IO Int', 'IO (Int -> Int)', None):
+            module = io_main_fixture()
+            module['bindings'][0]['type'] = spelling
+            self.assertTrue(self.audit(module)['accepted'])
+
+    def test_pap_keeps_exact_input_and_result_checks(self):
+        mutations = [lambda m: m['bindings'][1]['expr'][1][-1].update(rep=LONG),
                      lambda m: m['bindings'][1]['expr'][3].update(resultRep=REFERENCE),
                      lambda m: m['bindings'][1]['expr'][3].update(resultRep=tuple_rep(REFERENCE)),
                      lambda m: m['bindings'][1]['expr'][3].update(resultRep=tuple_rep(LONG, REFERENCE)),

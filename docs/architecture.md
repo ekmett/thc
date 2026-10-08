@@ -23,7 +23,7 @@ code for hot guest functions.
    an IO action. Haskell code runs from Core, not native GHC objects.
 
 `thc acquire` stops after publishing the package manifest. `thc run` also
-launches `Main.main :: IO ()`; acquisition alone does not establish runtime
+launches the GHC-selected `IO a` action; acquisition alone does not establish runtime
 support. See [build and run](driver.md), [Cabal integration](cabal.md), and
 [GHC library Core](ghc-core.md) for setup and limits.
 

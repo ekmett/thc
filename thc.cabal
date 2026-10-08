@@ -420,7 +420,6 @@ extra-source-files:
   t/fixtures/compiler/LazyIOCallbackNative.hs
   src/driver/cbits/target-layout.c
   etc/ghc/9.14.1/windows-ghc-internal.json
-  src/driver/WindowsRunMain.hs
   t/fixtures/compiler/OriginalStackAudit.hs
   t/fixtures/compiler/OriginalStackAuditNative.hs
   t/fixtures/compiler/OriginalStackDecoder.hs

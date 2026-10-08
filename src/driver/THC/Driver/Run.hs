@@ -166,15 +166,13 @@ runResolvedPackage opts working target prepareRuntime = do
   let windows = os == "mingw32"
       launcher = if windows then "thc.bat" else "thc"
       exporter = thcRoot </> "bin" </> if windows then "export-core.ps1" else "export-core.sh"
-      hostEntrySource = thcRoot </> "src/driver/WindowsRunMain.hs"
-      entry = if windows then "main:THC.WindowsRunMain.thcRunMain" else "main:Main.main"
+      entry = "main::Main.main"
   runtime <- maybe (pure (thcRoot </> "build/install/thc/bin" </> launcher)) makeAbsolute (runRuntime opts)
   python <- maybe (if windows then "python" else "python3") id <$> lookupEnv "THC_PYTHON"
   let output = packageRoot </> dist </> "thc-run" </> selectedName
       core = output </> "core"
       objects = output </> "ghc"
   ensureFile exporter
-  when windows (ensureFile hostEntrySource)
   when (runVerifyArtifacts opts) $ ensureFile (thcRoot </> "bin/audit-core.py")
   ensureFile runtime
   createDirectoryIfMissing True core
@@ -197,14 +195,13 @@ runResolvedPackage opts working target prepareRuntime = do
       -- GHC's optimizer and plugin active under -fno-code, including source
       -- notes, without sending source filenames through its assembler.
       exportArgs = ["-hide-all-packages", "-no-user-package-db", "-package-env", "-",
-                    "-fplugin-opt=THC.Plugin:closure=" ++ (if windows then "thcRunMain" else "main"),
+                    "-fplugin-opt=THC.Plugin:closure=main",
                     "-fplugin-opt=THC.Plugin:foreign-import-provenance",
                     "-fplugin-opt=THC.Plugin:foreign-export-associations",
                     "-fplugin-opt=THC.Plugin:foreign-export-registration"] ++
                    packages ++ concatMap (\directory -> ["-i" ++ directory]) dirs ++
                    extensions ++ cpp ++ hcOptions GHC info ++ supportOptions ++
-                   ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source] ++
-                   [hostEntrySource | windows]
+                   ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source]
   if windows
     then do
       -- Windows PowerShell -File consumes a lone "-" and splits colon-bearing

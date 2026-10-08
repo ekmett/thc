@@ -9,7 +9,9 @@ set(pap_objects "${pap_out}/native/Main.hi" "${pap_out}/native/Main.o"
 foreach(stage pre post)
   list(APPEND pap_outputs "${pap_out}/${stage}/core/IoMainPapAudit.cbd"
     "${pap_out}/${stage}/core/THC.InterfaceClosure.cbd"
-    "${pap_out}/${stage}/goodMain-audit.json" "${pap_out}/${stage}/badMain-audit.json")
+    "${pap_out}/${stage}/goodMain-audit.json" "${pap_out}/${stage}/badMain-audit.json"
+    "${pap_out}/${stage}/nonUnitMain-audit.json" "${pap_out}/${stage}/unitBottomMain-audit.json"
+    "${pap_out}/${stage}/functionMain-audit.json" "${pap_out}/${stage}/lazyMain-audit.json")
   list(APPEND pap_objects "${pap_out}/${stage}/ghc/IoMainPapAudit.hi" "${pap_out}/${stage}/ghc/IoMainPapAudit.o")
 endforeach()
 add_custom_command(OUTPUT ${pap_outputs} BYPRODUCTS ${pap_objects}

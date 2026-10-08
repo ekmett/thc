@@ -120,14 +120,16 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
     assertEqual "native console output" "hello\n" (out nativeResult)
     assertEqual "THC console output" (out nativeResult) (out console)
 
-    writeText source "module Main where\nmain :: IO Int\nmain = pure 42\n"
-    wrongResult <- invoke Nothing
-    assertFailure wrongResult
-    assertNoStdout wrongResult
-    wrongAudit <- readJson (exported </> "audit.json")
-    assertBool "IO Int rejected" (not $ bool $ field wrongAudit "accepted")
-    assertBool "correct boundary code" $ any
-      ((== "io-main-boundary") . string . (`field` "code")) (objects wrongAudit "issues")
+    cabalText <- readText (package </> "run-pure.cabal")
+    writeText (package </> "run-pure.cabal") (cabalText ++ "  ghc-options: -main-is Main.start\n")
+    writeText source "module Main where\nmain :: IO ()\nmain = error \"wrong entry\"\nstart :: IO Int\nstart = pure (error \"unused\")\n"
+    selected <- invoke Nothing
+    assertSuccess selected
+    assertNoStdout selected
+    selectedAudit <- readJson (exported </> "audit.json")
+    assertBool "selected IO Int answer accepted" (bool $ field selectedAudit "accepted")
+    selectedNative <- executable
+    assertSuccess =<< runExe env package Nothing 60 selectedNative []
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM predicate values = or <$> mapM predicate values

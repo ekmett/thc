@@ -84,7 +84,7 @@ class AcquiredPolyglotDemoTest {
                 var program = owner.getCoreUnitPrograms().getFirst();
                 var bindings = program.signatureBindings(entry);
                 var selected = bindings.stream().filter(binding -> entry.equals(binding.get("id"))).findFirst().orElseThrow();
-                var result = CoreRepresentations.ioUnitMainResult(selected, bindings);
+                var result = CoreRepresentations.ioMainResult(selected, bindings);
                 var target = new IoMainRoot(language, result).getCallTarget();
                 var action = program.entryValue(entry);
                 for (int index = 0; index < 3; index++) run(output, target, action, program, owner);

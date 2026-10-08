@@ -26,6 +26,7 @@ class ExecutableLifecycleTest {
         ActionRoot(Language language, TupleShape shape, DataValue unitValue, Runnable effect) {
             super(language, new FrameLayout().build());
             this.shape = shape; this.unitValue = unitValue; this.effect = effect;
+            configureInputProofs(List.of(shape.getProof().getComponents().getFirst()));
             configureTupleResult(shape);
         }
         @Override public long bloom(VirtualFrame frame) { return 0L; }

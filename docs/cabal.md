@@ -38,7 +38,7 @@ Use `--project-dir` or `--project-file` to select another project, and
 Cabal handles package flags, CPP, generated modules and dependencies. Setup
 programs, preprocessors and Template Haskell run under native GHC. THC exports
 the selected component and dependency Core using Cabal's actual unit IDs and
-compiler configuration, then runs the accepted `Main.main :: IO ()` on Graal.
+compiler configuration, then runs the GHC-selected `IO a` action on Graal.
 Two instances of one package remain distinct when Cabal assigns different units.
 
 Ordinary runs validate code as it is loaded. Add `--verify-artifacts` to request

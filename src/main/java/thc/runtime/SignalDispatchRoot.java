@@ -28,7 +28,7 @@ public final class SignalDispatchRoot extends ContextRoot {
             new CoreRepresentation(CoreKind.VOID, true, true, List.of(), null, null, null, null, null),
             new CoreRepresentation(CoreKind.DATA, false, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null)), null, null, null, null);
         shape = new TupleShape(result, language);
-        dispatch = new TupleDispatch(new IoUnitDestination(shape, language), new Metrics(false), 3, false);
+        dispatch = new TupleDispatch(new IoResultDestination(shape, language, true), new Metrics(false), 3, false);
     }
     /** The service boxes these arguments even when the guest dispatcher ignores them. */
     static void prepareLayouts(ExecutableProgram program) {

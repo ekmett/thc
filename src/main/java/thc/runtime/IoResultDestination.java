@@ -7,26 +7,29 @@ import com.oracle.truffle.api.nodes.Node;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/** Consumes the host IO tuple and releases its loan before any lifted-field force. */
-public final class IoUnitDestination extends TupleDestination {
+/** Authenticates and releases the IO tuple; executable answers are discarded lazily. */
+public final class IoResultDestination extends TupleDestination {
     private final Language language;
-    public IoUnitDestination(TupleShape shape, Language language) { super(shape); this.language = language; }
+    private final boolean retainAnswer;
+    public IoResultDestination(TupleShape shape, Language language, boolean retainAnswer) {
+        super(shape); this.language = language; this.retainAnswer = retainAnswer;
+    }
     @Override public void consume(VirtualFrame frame, Node node, Object result) { consumeFrom(frame, node, result, getShape()); }
     @Override protected void consumeFrom(VirtualFrame frame, Node node, Object result, TupleShape shape) {
         AsyncContinuations.publicResult(result, node);
-        Object raw;
+        Object raw = null;
         if (result == TupleComplete.INSTANCE) {
             TupleResultPool pool = language.getHandoffState().get().getResults();
             HandoffStorage storage = pool.completed();
             try {
                 if (storage.getLayout() != shape.getLayout()) throw fault("IO main returned the wrong tuple layout");
-                raw = shape.getLayout().getObject(storage, 0);
+                if (retainAnswer) raw = shape.getLayout().getObject(storage, 0);
             } finally { pool.releaseChecked(storage, getShape().getLayout()); }
         } else {
             if (!(result instanceof HandoffStorage storage)) throw fault("IO main returned no tuple");
             if (storage.getLayout() != shape.getLayout()) throw fault("IO main returned the wrong tuple layout");
-            raw = shape.getLayout().getObject(storage, 0);
+            if (retainAnswer) raw = shape.getLayout().getObject(storage, 0);
         }
-        frame.setObject(FrameLayout.TAIL_RESULT, raw);
+        if (retainAnswer) frame.setObject(FrameLayout.TAIL_RESULT, raw);
     }
 }

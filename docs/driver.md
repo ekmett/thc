@@ -202,7 +202,9 @@ eagerly. Guest forks, signal-handler installation and different-origin public
 entries enable it automatically. The admission contract is described in
 [asynchronous exceptions](async-exceptions.md).
 
-Both library providers run GHC's generated `main::Main.main` and, on normal
+Both library providers run GHC's generated `main::Main.main`, preserving Cabal's
+`-main-is` selection. Any lifted result of the selected `IO a` action is discarded
+without forcing it; exceptions raised by the action still propagate. On normal
 completion, `flushStdHandles` in the same program. Relative guest file paths use
 the launch working directory; `--project-dir` does not change it.
 

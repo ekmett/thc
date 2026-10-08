@@ -2950,7 +2950,7 @@ class Audit:
             self.issue('malformed-expression', owner, path, str(error))
 
     def io_main_contract(self, key, expression, formals, result):
-        """Only GHC's erased IO () state transformer may cross this host boundary."""
+        """Admit the erased IO state transformer and discard its lifted answer."""
         def remaining_binders(expr, seen=frozenset()):
             if not isinstance(expr, list) or not expr:
                 return None
@@ -2964,22 +2964,29 @@ class Audit:
                 # infer a returned function's signature after saturation.
                 if original is not None and len(expr[2]) < len(original):
                     return original[len(expr[2]):]
+                # Known saturation returning an unboxed result cannot produce an IO action.
+                result = self.known_result(expr[1])
+                if original is not None and isinstance(result, dict) and (result.get('aggregate') is not None or result.get('primReps') != ['BoxedRep (Just Lifted)']):
+                    return []
             return None
         remaining = remaining_binders(expression)
+        # A shared action thunk exposes its input/result proof only after forcing
+        # its head; IoMainRoot authenticates that real closure before applying it.
+        binding = self.bindings[key]
+        if remaining is None and binding.get('rep', {}).get('primReps') == ['BoxedRep (Just Lifted)']:
+            return
         binder = remaining[0] if isinstance(remaining, list) and len(remaining) == 1 else None
         state = formals[0] if isinstance(formals, list) and len(formals) == 1 else None
         components = result.get('components') if isinstance(result, dict) and result.get('aggregate') == 'unboxed-tuple' else None
         state_result = components[0] if isinstance(components, list) and len(components) == 2 else None
-        unit_result = components[1] if isinstance(components, list) and len(components) == 2 else None
-        if (self.bindings[key].get('type') != 'IO ()' or
-                not isinstance(result, dict) or result.get('kind') != 'unknown' or
+        answer_result = components[1] if isinstance(components, list) and len(components) == 2 else None
+        if (not isinstance(result, dict) or result.get('kind') != 'unknown' or
                 result.get('primReps') != ['BoxedRep (Just Lifted)'] or
                 not isinstance(binder, dict) or binder.get('type') != 'State# RealWorld' or
                 not isinstance(state, dict) or state.get('kind') != 'void' or state.get('primReps') != [] or
                 not isinstance(state_result, dict) or state_result.get('kind') != 'void' or state_result.get('primReps') != [] or
-                not isinstance(unit_result, dict) or unit_result.get('primReps') != ['BoxedRep (Just Lifted)'] or
-                unit_result.get('kind') not in ('data', 'object')):
-            self.issue('io-main-boundary', key, '/entry', 'requires IO () with State# RealWorld -> (# State#, () #)')
+                not isinstance(answer_result, dict) or answer_result.get('primReps') != ['BoxedRep (Just Lifted)']):
+            self.issue('io-main-boundary', key, '/entry', 'requires State# RealWorld -> (# State#, lifted answer #)')
 
     def run(self, entries, io_main=False):
         # Executable shutdown is another exact IO () root in the same package
@@ -3188,7 +3195,7 @@ def main():
     parser.add_argument('--module-list', action='append', type=Path, default=[], help='Read an exact newline-delimited module manifest; relative paths are relative to the manifest')
     parser.add_argument('--package-manifest', type=Path, help='Validate exact GHC-unit Core modules, including ZIP bundles, before combining with any loose consumer modules')
     parser.add_argument('--entry', action='append', required=True, help='Exact global id or unambiguous occurrence name; repeatable')
-    parser.add_argument('--io-main', action='store_true', help='Validate the exact IO () host entry contract instead of the scalar host result')
+    parser.add_argument('--io-main', action='store_true', help='Validate the exact IO state-transformer host entry contract instead of the scalar host result')
     parser.add_argument('--capabilities', type=Path, default=Path(__file__).with_name('core-capabilities.json'))
     parser.add_argument('--output', type=Path, help='Atomically publish the complete JSON report here (otherwise stdout)')
     ownership = parser.add_mutually_exclusive_group()

@@ -30,7 +30,7 @@ runtime. Start with `executionContext` and `loadManagedExports` when embedding T
   interning and other mutable services. These are context state, not executable
   nodes or Haskell data constructors.
 - **Host entrypoints and diagnostics.** Managed foreign exports expose checked
-  scalar signatures through polyglot members. Typed Core calls and executable `IO ()` have distinct contracts;
+  scalar signatures through polyglot members. Typed Core calls and executable `IO a` have distinct contracts;
   public runtime classes are not a substitute for the checked host boundary.
 
 ## Package thc.runtime

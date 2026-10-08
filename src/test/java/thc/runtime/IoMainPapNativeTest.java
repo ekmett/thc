@@ -96,11 +96,11 @@ class IoMainPapNativeTest {
                 assertEquals(record.get("sha256"), actual, "Stale IO-main PAP evidence: " + path);
             }
         }
-        assertEquals(List.of("goodMain\tcompleted", "badMain\tthrows"), Files.readAllLines(folder.resolve("oracle.tsv")));
+        assertEquals(List.of("goodMain\tcompleted", "badMain\tthrows", "nonUnitMain\tcompleted", "unitBottomMain\tcompleted", "functionMain\tcompleted", "lazyMain\tcompleted"), Files.readAllLines(folder.resolve("oracle.tsv")));
     }
     @Test void genuinePreAndPostTidyPapsPassTheStrictIoAudit() throws Exception {
         assertEquals(true, read(folder.resolve("provenance.json")).get("accepted"));
-        for (var stage : List.of("pre", "post")) for (var name : List.of("goodMain", "badMain")) {
+        for (var stage : List.of("pre", "post")) for (var name : List.of("goodMain", "badMain", "nonUnitMain", "unitBottomMain", "functionMain", "lazyMain")) {
             var report = read(folder.resolve(stage + "/" + name + "-audit.json"));
             assertEquals(true, report.get("accepted"), stage + "/" + name + ": " + report.get("issues")); assertEquals(List.of(), report.get("missingGlobals"));
         }
@@ -136,7 +136,7 @@ class IoMainPapNativeTest {
     }
     @ParameterizedTest @CsvSource({"pre, ast", "post, ast", "pre, bytecode", "post, bytecode"})
     void forgedRemainingStateAndResultMetadataStayRejected(String stage, String backend) throws Exception {
-        for (var mutation : List.of("state-type", "state-rep", "state-result", "unit-result", "under-applied", "saturated", "entry-type")) {
+        for (var mutation : List.of("state-type", "state-rep", "state-result", "unit-result", "under-applied", "saturated")) {
             var modules = modules(stage); var lam = worker(modules); var formals = (List<Map<String, Object>>) lam.get(1);
             var result = (Map<String, Object>) ((Map<String, Object>) lam.getLast()).get("resultRep"); var components = (List<Object>) result.get("components");
             switch (mutation) {
@@ -144,7 +144,6 @@ class IoMainPapNativeTest {
                 case "state-rep" -> formals.getLast().put("rep", formals.getFirst().get("rep"));
                 case "state-result" -> { components.set(0, formals.getFirst().get("rep")); result.put("primReps", List.of("IntRep", "BoxedRep (Just Lifted)")); }
                 case "unit-result" -> { components.set(1, formals.getFirst().get("rep")); result.put("primReps", List.of("IntRep")); }
-                case "entry-type" -> named(bindings(modules), prefix + "goodMain").put("type", "IO Int");
                 default -> {
                     var app = pap(modules); var arguments = (List<Object>) app.get(2); var lifted = (List<Object>) app.get(3);
                     if (mutation.equals("under-applied")) { arguments.remove(1); lifted.remove(1); }
@@ -154,31 +153,48 @@ class IoMainPapNativeTest {
             try (var context = context()) {
                 var error = assertThrows(PolyglotException.class, () -> context.eval("thc", request(modules, "goodMain", backend)), stage + "/" + backend + "/" + mutation);
                 var message = Objects.toString(error.getMessage(), "");
-                assertTrue(message.contains("IO main") || message.contains("requires main :: IO ()"), stage + "/" + backend + "/" + mutation + ": " + error.getMessage());
+                assertTrue(message.contains("IO main"), stage + "/" + backend + "/" + mutation + ": " + error.getMessage());
             }
         }
     }
-    private int replace(Object value) {
-        int replaced = 0;
-        if (value instanceof List<?> list) {
-            var node = (List<Object>) list;
-            if (node.size() >= 2 && "con".equals(node.get(0)) && "ghc-internal:GHC.Internal.Tuple.()".equals(node.get(1))) {
-                node.set(1, prefix + "WrongEffect"); replaced++;
-            } else for (var child : node) replaced += replace(child);
-        } else if (value instanceof Map<?, ?> map) for (var child : map.values()) replaced += replace(child);
-        return replaced;
+    @ParameterizedTest @CsvSource({"pre, ast", "post, ast", "pre, bytecode", "post, bytecode"})
+    void deferredActionsAuthenticateTheirActualClosureBeforeEntering(String stage, String backend) throws Exception {
+        for (var malformed : List.of("arity", "result")) {
+            var modules = modules(stage);
+            var binding = named(bindings(modules), prefix + "lazyMain");
+            Object body;
+            if (malformed.equals("arity")) body = List.of("var", prefix + "worker", Map.of("rep", binding.get("rep")));
+            else {
+                var lam = worker(modules);
+                var formal = ((List<Map<String,Object>>) lam.get(1)).getLast();
+                var tuple = (Map<String,Object>) ((Map<String,Object>) lam.getLast()).get("resultRep");
+                var answer = ((List<?>) tuple.get("components")).getLast();
+                body = List.of("lam", List.of(formal),
+                    List.of("con", "ghc-internal:GHC.Internal.Tuple.()", 0, Map.of("rep", answer)),
+                    Map.of("rep", binding.get("rep"), "resultRep", answer));
+            }
+            // A let keeps admission unresolved, as it can be for a genuine lazy IO head.
+            var local = Map.of("id", "malformed-action", "name", "malformed-action", "lifted", true,
+                "rep", binding.get("rep"), "arity", malformed.equals("arity") ? 3 : 1, "expr", body);
+            binding.put("expr", List.of("let", false, List.of(local),
+                List.of("var", "malformed-action", Map.of("rep", binding.get("rep"))), Map.of("rep", binding.get("rep"))));
+            try (var context = context()) {
+                var action = context.eval("thc", request(modules, "lazyMain", backend));
+                assertThrows(PolyglotException.class, () -> action.invokeMember("runIO"));
+            }
+        }
     }
     @ParameterizedTest @CsvSource({"pre, ast", "post, ast", "pre, bytecode", "post, bytecode"})
-    void returningAnotherBoxedConstructorDoesNotMasqueradeAsUnit(String stage, String backend) throws Exception {
-        var modules = modules(stage); int replaced = replace(worker(modules));
-        assertEquals(1, replaced, "One real successful tuple result is the negative control");
+    void executableAnswersAreDiscardedWithoutForcing(String stage, String backend) throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var action = context.eval("thc", request(modules, "goodMain", backend));
-                var failure = assertThrows(PolyglotException.class, () -> action.invokeMember("runIO"));
-                assertTrue(Objects.toString(failure.getMessage(), "").contains("IO main did not return boxed unit"), failure.getMessage()); released(language);
+                for (var name : List.of("unitBottomMain", "nonUnitMain", "functionMain", "lazyMain")) {
+                    var action = context.eval("thc", request(stage, name, backend));
+                    assertTrue(action.invokeMember("runIO").asBoolean(), name);
+                    released(language);
+                }
             } finally { context.leave(); }
         }
     }

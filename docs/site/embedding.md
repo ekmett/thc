@@ -219,7 +219,7 @@ consumer module. Omit that input when no support package is needed. Deferred
 file reads remain authorized by the host request builder; guest requests cannot
 forge file paths or change artifact-verification policy.
 
-For an accepted standalone `IO ()` entry, the JVM launcher accepts:
+For an accepted standalone `IO a` entry, the JVM launcher accepts:
 
 ```sh
 build/install/thc/bin/thc \
@@ -233,11 +233,15 @@ artifact hashing. Normal loading checks the artifact framing and accessed
 records without scanning every binding body. Loading an entry does not establish
 support for every cold binding; the separate execution audit checks that scope.
 
-## Execute `IO ()`
+## Execute `IO a`
 
 The [Cabal driver](../driver.md) prepares and audits the executable closure,
-then uses the separate `ioMain = true` entry contract. A loaded IO action has a
-`runIO` member; invoke it and check its Boolean completion result. Do not call
+then uses the separate `ioMain = true` entry contract. Admission checks the
+erased state-transformer signature when statically known. A lazy action head
+is checked using its actual closure input and result proofs when entered. A loaded IO action has a
+`runIO` member; invoke it and check its Boolean completion result. The action's
+returned lifted answer is discarded without forcing it, including a bottom or
+function value. Exceptions raised while running the action still propagate. Do not call
 that action through the scalar `execute(Long)` convention. Full executable
 launches also supply their distinct shutdown entry; a standalone IO action
 does not imply Handle flushing or general executable lifecycle support.

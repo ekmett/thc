@@ -10,7 +10,7 @@
 # Build status: Value review only; admission still requires explicit inputs and single-
 #   owner outputs.
 # Detailed file inputs/outputs: docs/fixture-inputs.log, entry 112.
-"""Genuine optimized IO () PAPs, checked native effects, and strict IO audits."""
+"""Genuine optimized IO PAPs and lazy heads, checked native effects, and strict IO audits."""
 import argparse
 from datetime import datetime, timezone
 import hashlib
@@ -25,10 +25,11 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/io-main-pap'
 FIXTURES = [ROOT / 't/fixtures/compiler' / name for name in
             ('IoMainPapAudit.hs', 'IoMainPapNative.hs')]
-ENTRIES = ['goodMain', 'badMain']
+PAP_ENTRIES = ['goodMain', 'badMain']
+ENTRIES = PAP_ENTRIES + ['nonUnitMain', 'unitBottomMain', 'functionMain', 'lazyMain']
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
 PREFIX = 'main:IoMainPapAudit.'
-EXPECTED_ROWS = [['goodMain', 'completed'], ['badMain', 'throws']]
+EXPECTED_ROWS = [[name, 'throws' if name == 'badMain' else 'completed'] for name in ENTRIES]
 
 
 def check(condition, message):
@@ -54,7 +55,7 @@ def inventory(stage, modules):
     check(module['ghc'] == '9.14.1' and module['boundary'] == STAGES[stage], 'Wrong GHC/Core boundary')
     bindings = {b['id']: b for _, m in modules for b in m['bindings']}
     coverage = []
-    for name, flag in zip(ENTRIES, ('0', '1')):
+    for name, flag in zip(PAP_ENTRIES, ('0', '1')):
         entry = bindings[PREFIX + name]
         check(entry['type'] == 'IO ()' and entry['arity'] == 1, f'{stage}/{name}: not IO ()')
         expr, aliases = entry['expr'], []
@@ -162,7 +163,7 @@ def main():
             report = json.loads((OUT / stage / (name + '-audit.json')).read_text())
             check(report['accepted'], f'Strict IO audit rejected {stage}/{name}: {report["issues"]}; missing={report["missingGlobals"]}')
     check(evidence['accepted'], 'Strict IO audit rejected: ' + '\n'.join(evidence['rejections']))
-    print('IO-main PAP: 2 checked native actions, exact two-argument PAPs, strict IO audits at both Core boundaries')
+    print('IO-main PAP: 6 checked native actions, exact two-argument PAPs, strict IO audits at both Core boundaries')
 
 
 if __name__ == '__main__':

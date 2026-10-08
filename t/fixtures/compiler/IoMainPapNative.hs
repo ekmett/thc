@@ -17,9 +17,9 @@ import System.Exit (exitFailure)
 
 -- This driver is native-only; none of the printing or exception library enters
 -- the exported guest closure. Do not inspect the deliberately opaque payload.
-check :: String -> Bool -> IO () -> IO ()
+check :: String -> Bool -> IO a -> IO ()
 check name expectFailure action = do
-  result <- E.try action :: IO (Either E.SomeException ())
+  result <- E.try (action >> pure ()) :: IO (Either E.SomeException ())
   case result of
     Left _ | expectFailure -> putStrLn (name ++ "\tthrows")
     Right () | not expectFailure -> putStrLn (name ++ "\tcompleted")
@@ -29,3 +29,7 @@ main :: IO ()
 main = do
   check "goodMain" False P.goodMain
   check "badMain" True P.badMain
+  check "nonUnitMain" False P.nonUnitMain
+  check "unitBottomMain" False P.unitBottomMain
+  check "functionMain" False P.functionMain
+  check "lazyMain" False P.lazyMain

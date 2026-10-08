@@ -20,6 +20,12 @@ The tables distinguish unsupported behavior from intentional target choices
 and performance-only hints. Linked implementation guides supply detail and
 test commands.
 
+## Executable IO actions
+
+Executable `IO a` entries validate the erased RealWorld state-transformer tuple
+and discard its lifted answer without forcing it, as GHC does. This includes
+returned bottoms and functions; exceptions raised by the action still propagate.
+
 ## Narrow Core literals
 
 Narrow literal tags preserve their signed or unsigned values when representation

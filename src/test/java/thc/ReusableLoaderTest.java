@@ -286,7 +286,7 @@ class ReusableLoaderTest {
                     assertTrue(target.isValidLastTier()); assertFalse(target.wasExecuted());
                 }
                 assertFalse(((com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("other")).isValidLastTier());
-                var result = thc.runtime.CoreRepresentations.ioUnitMainResult(definitions.getFirst(), definitions);
+                var result = thc.runtime.CoreRepresentations.ioMainResult(definitions.getFirst(), definitions);
                 System.setProperty("thc.requireCachedCode", "true"); System.setProperty("thc.requireCompiledCode", "true");
                 var raw = new EntryValue(program, "entry", 1, null, result, language, "stop", result, false, null, null, code);
                 var action = context.asValue(raw);

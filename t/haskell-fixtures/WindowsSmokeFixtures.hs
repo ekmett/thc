@@ -368,7 +368,7 @@ prepareWindowsDriver root = do
         ["src/driver/THC/Driver" </> path | path <- drivers, takeExtension path == ".hs"] ++
         ["t/haskell-fixtures/WindowsSmokeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs",
-         "bin/export-core.ps1", "src/compiler/interface/Main.hs", "etc/ghc/9.14.1/windows-ghc-internal.json", "src/driver/WindowsRunMain.hs",
+         "bin/export-core.ps1", "src/compiler/interface/Main.hs", "etc/ghc/9.14.1/windows-ghc-internal.json",
          "bin/windows-common.ps1", "bin/windows.ps1", "thc.cabal"]
   sourceHashes <- hashes root sources
   exports <- fmap concat $ forM supportManifests $ \manifest -> do

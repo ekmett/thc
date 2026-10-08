@@ -465,12 +465,12 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         var byId = singleOrNull(bindings, binding -> entry.equals(binding.get("id")));
         var selected = byId == null ? single(bindings, binding -> entry.equals(binding.get("name"))) : byId;
         var expression = (List<Object>) selected.get("expr");
-        var ioResult = Boolean.TRUE.equals(input.get("ioMain")) ? CoreRepresentations.ioUnitMainResult(selected, bindings) : null;
+        var ioResult = Boolean.TRUE.equals(input.get("ioMain")) ? CoreRepresentations.ioMainResult(selected, bindings) : null;
         CoreRepresentation shutdownResult = null;
         if (shutdownEntry != null) {
             var shutdown = singleOrNull(bindings, binding -> shutdownEntry.equals(binding.get("id")));
             if (shutdown == null) throw new IllegalArgumentException("Missing exact executable shutdown entry: " + shutdownEntry);
-            shutdownResult = CoreRepresentations.ioUnitMainResult(shutdown, bindings);
+            shutdownResult = CoreRepresentations.ioMainResult(shutdown, bindings);
         }
         List<CoreRepresentation> hostInputs = null;
         CoreRepresentation hostResult = null;

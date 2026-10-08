@@ -3386,8 +3386,8 @@ Producer: bin/prepare-io-main-pap.py; consumer: thc.runtime.IoMainPapNativeTest.
 IN t/fixtures/compiler/IoMainPapAudit.hs, IoMainPapNative.hs, producer/shared tools/data/GHC.
 Under build/io-main-pap/:
   <pre|post>/core/{IoMainPapAudit,THC.InterfaceClosure}.cbd and stage/ghc/:
-    IN source/goodMain,badMain closure roots/exporter; exact CBD inventory checked.
-  stage/<goodMain|badMain>-audit.json: IN CBD pair/in-process auditor --io-main.
+    IN source/goodMain,badMain,nonUnitMain,unitBottomMain,functionMain,lazyMain closure roots/exporter; exact CBD inventory checked.
+  stage/<goodMain|badMain|nonUnitMain|unitBottomMain|functionMain|lazyMain>-audit.json: IN CBD pair/in-process auditor --io-main.
   native/io-main-pap-oracle and intermediates: IN native/audit sources/GHC.
   oracle.tsv, native-stderr.txt: IN binary; completion/exception observations.
   provenance.json: IN sources/CBDs/audits/binary/observations; old receipt removed;

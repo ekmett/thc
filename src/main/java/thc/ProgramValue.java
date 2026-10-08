@@ -43,11 +43,11 @@ public final class ProgramValue implements TruffleObject {
             var bindings = program.signatureBindings(view.entry());
             var selected = bindings.getFirst(); // signatureBindings puts the selected identity first.
             var expression = (List<Object>) selected.get("expr");
-            var io = view.ioMain() ? CoreRepresentations.ioUnitMainResult(selected, bindings) : null;
+            var io = view.ioMain() ? CoreRepresentations.ioMainResult(selected, bindings) : null;
             CoreRepresentation shutdown = null;
             if (view.shutdown() != null) {
                 var definitions = program.signatureBindings(view.shutdown());
-                shutdown = CoreRepresentations.ioUnitMainResult(definitions.getFirst(), definitions);
+                shutdown = CoreRepresentations.ioMainResult(definitions.getFirst(), definitions);
             }
             List<CoreRepresentation> inputs = null;
             CoreRepresentation result = null;

@@ -57,12 +57,12 @@ public final class CoreRepresentations {
         }
     }
     private record FunctionBinders(List<Map<String, Object>> inputs, CoreRepresentation result) {}
-    private static FunctionBinders knownFunctionBinders(List<?> expression, List<Map<String, Object>> bindings) {
+    private static FunctionBinders knownFunctionBinders(List<?> expression, List<Map<String, Object>> bindings, boolean ioEntry) {
         Map<String, Map<String, Object>> globals = new LinkedHashMap<>();
         for (var binding : bindings) globals.put((String) binding.get("id"), binding);
-        return resolveBinders(expression, Set.of(), globals);
+        return resolveBinders(expression, Set.of(), globals, ioEntry);
     }
-    private static FunctionBinders resolveBinders(List<?> expr, Set<String> seen, Map<String, Map<String, Object>> globals) {
+    private static FunctionBinders resolveBinders(List<?> expr, Set<String> seen, Map<String, Map<String, Object>> globals, boolean ioEntry) {
         Object tag = at(expr, 0);
         if ("lam".equals(tag)) return new FunctionBinders((List<Map<String, Object>>) expr.get(1), lambdaResult(expr));
         if ("var".equals(tag)) {
@@ -71,19 +71,21 @@ public final class CoreRepresentations {
             var binding = globals.get(id);
             if (binding == null || !(binding.get("expr") instanceof List<?> body)) return null;
             var next = new HashSet<>(seen); next.add(id);
-            return resolveBinders((List<Object>) body, next, globals);
+            return resolveBinders((List<Object>) body, next, globals, ioEntry);
         }
         if ("app".equals(tag)) {
-            var signature = resolveBinders((List<Object>) expr.get(1), seen, globals);
+            var signature = resolveBinders((List<Object>) expr.get(1), seen, globals, ioEntry);
             if (signature == null) return null;
             int supplied = ((List<?>) expr.get(2)).size();
-            return supplied < signature.inputs.size() ? new FunctionBinders(
-                new ArrayList<>(signature.inputs.subList(supplied, signature.inputs.size())), signature.result) : null;
+            if (supplied < signature.inputs.size()) return new FunctionBinders(
+                new ArrayList<>(signature.inputs.subList(supplied, signature.inputs.size())), signature.result);
+            // A saturated unboxed result is definitely not another IO action.
+            return ioEntry && !signature.result.hasBoxedPointer() ? new FunctionBinders(List.of(), signature.result) : null;
         }
         return null;
     }
     public static CoreFunctionSignature knownFunctionSignature(List<?> expression, List<Map<String, Object>> bindings) {
-        var signature = knownFunctionBinders(expression, bindings);
+        var signature = knownFunctionBinders(expression, bindings, false);
         if (signature == null) return null;
         List<CoreRepresentation> inputs = new ArrayList<>();
         for (var formal : signature.inputs) inputs.add(binder(formal));
@@ -93,11 +95,17 @@ public final class CoreRepresentations {
         var signature = knownFunctionSignature(expression, bindings);
         return signature == null ? null : signature.result();
     }
-    public static CoreRepresentation ioUnitMainResult(Map<String, ?> binding, List<Map<String, Object>> bindings) {
-        if (!"IO ()".equals(binding.get("type"))) throw new UnsupportedCore("THC run requires main :: IO ()");
+    public static CoreRepresentation ioMainResult(Map<String, ?> binding, List<Map<String, Object>> bindings) {
         if (!(binding.get("expr") instanceof List<?> expression)) throw new UnsupportedCore("IO main lacks Core expression");
-        var signature = knownFunctionBinders((List<Object>) expression, bindings);
-        if (signature == null) throw new UnsupportedCore("IO main lacks an exact state-transformer signature");
+        var signature = knownFunctionBinders((List<Object>) expression, bindings, true);
+        if (signature == null) {
+            // An IO newtype may be a shared thunk; authenticate its closure after forcing the action head.
+            if (!List.of("BoxedRep (Just Lifted)").equals(binder(binding).getPrimReps()))
+                throw new UnsupportedCore("IO main lacks an exact state-transformer signature");
+            return new CoreRepresentation(CoreKind.UNKNOWN, false, true, List.of("BoxedRep (Just Lifted)"), List.of(
+                new CoreRepresentation(CoreKind.VOID, true, true, List.of()),
+                new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep (Just Lifted)"))));
+        }
         var formals = signature.inputs;
         var result = signature.result;
         if (formals.size() != 1 || !"State# RealWorld".equals(formals.getFirst().get("type")))
@@ -109,9 +117,8 @@ public final class CoreRepresentations {
         var fields = result.getComponents();
         if (result.getKind() != CoreKind.UNKNOWN || fields == null || fields.size() != 2 || !List.of("BoxedRep (Just Lifted)").equals(result.getPrimReps()) ||
                 fields.get(0).getKind() != CoreKind.VOID || !List.of().equals(fields.get(0).getPrimReps()) ||
-                !List.of("BoxedRep (Just Lifted)").equals(fields.get(1).getPrimReps()) ||
-                fields.get(1).getKind() != CoreKind.DATA && fields.get(1).getKind() != CoreKind.OBJECT)
-            throw new UnsupportedCore("IO main requires the exact (# State#, () #) result");
+                !List.of("BoxedRep (Just Lifted)").equals(fields.get(1).getPrimReps()))
+            throw new UnsupportedCore("IO main requires the exact (# State#, lifted answer #) result");
         TupleShape.validate(result);
         return result;
     }

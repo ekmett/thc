@@ -115,7 +115,7 @@ otherwise its sole buildable runnable component. Explicit `PACKAGE:exe:NAME`,
 `PACKAGE:test:NAME` and `PACKAGE:bench:NAME` targets work; tests must use the
 `exitcode-stdio-1.0` interface. Use `--project-dir` or `--project-file` to select
 another project. The command builds with Cabal, exports GHC Core, and executes
-an accepted `Main.main :: IO ()` in THC. Use `cabal run thc -- --help` for the
+the GHC-selected `IO a` action in THC. Use `cabal run thc -- --help` for the
 command-line options. The [driver guide](docs/driver.md)
 has the options and integration check. `thc acquire [TARGET] [FLAGS]` uses the
 same acquisition path but stops before auditing or executing the guest; a

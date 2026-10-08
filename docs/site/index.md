@@ -35,7 +35,7 @@ thc run my-program --thc-root /absolute/path/to/thc
 
 `thc acquire [TARGET] [FLAGS]` produces a package manifest without auditing or
 executing the guest. `thc run [TARGET] [FLAGS] [-- ARG...]` builds and executes
-`Main.main :: IO ()`. Add `--verify-artifacts` for artifact verification and the
+the GHC-selected `IO a` action. Add `--verify-artifacts` for artifact verification and the
 pre-launch dependency audit.
 Targets use Cabal's syntax, including `my-package:bench:my-benchmark` and
 `my-package:test:my-test`. With no target, Cabal selects the current package's

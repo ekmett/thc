@@ -10,7 +10,7 @@
 -- Portability : GHC-specific primitive types and operations
 --
 -- Compiler fixture for io main pap audit Core and metadata.
-module IoMainPapAudit (goodMain, badMain) where
+module IoMainPapAudit (goodMain, badMain, nonUnitMain, unitBottomMain, functionMain, lazyMain) where
 
 import GHC.Exts
 import GHC.IO (IO(..))
@@ -43,3 +43,26 @@ goodMain = IO (worker 41# 0#)
 
 badMain :: IO ()
 badMain = IO (worker 41# 1#)
+
+-- Run the same checked effects, then return a lifted answer without demanding it.
+{-# OPAQUE resultWorker #-}
+resultWorker :: a -> State# RealWorld -> (# State# RealWorld, a #)
+resultWorker answer state = case worker 41# 0# state of
+  (# next, _ #) -> (# next, answer #)
+
+nonUnitMain :: IO Int
+nonUnitMain = IO (resultWorker (I# 42#))
+
+unitBottomMain :: IO ()
+unitBottomMain = IO (resultWorker (raise# WrongEffect))
+
+functionMain :: IO (Int -> Int)
+functionMain = IO (resultWorker (\value -> value))
+
+-- Opaque saturation retains a genuine shared thunk producing an IO action.
+{-# OPAQUE hideAction #-}
+hideAction :: IO a -> IO a
+hideAction action = action
+
+lazyMain :: IO ()
+lazyMain = hideAction unitBottomMain

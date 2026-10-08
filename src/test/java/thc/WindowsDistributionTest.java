@@ -125,7 +125,7 @@ class WindowsDistributionTest {
             List.of("bytecode", "-Dthc.diagnostics=true -Dthc.handoffSlabs=true")), environments);
     }
 
-    @Test void genuineHaskellHostEntryPreservesTheThunkAndStrictIoSignature() throws Exception {
+    @Test void genuineGhcGeneratedEntryPreservesTheSelectedActionAndIoSignature() throws Exception {
         var receipt = verifiedReceipt("build/windows-driver/provenance.json");
         var manifests = (List<String>) receipt.get("supportManifests");
         var audited = (List<String>) receipt.get("auditedManifests");
@@ -134,19 +134,17 @@ class WindowsDistributionTest {
         for (var manifest : manifests) {
             var output = root.resolve(manifest).getParent().getParent();
             var original = (List<Map<String, Object>>) CoreCbdFixtures.read(output.resolve("core/Main.cbd")).get("bindings");
-            var host = (List<Map<String, Object>>) CoreCbdFixtures.read(output.resolve("core/THC.WindowsRunMain.cbd")).get("bindings");
             var main = single(original, "id", "main:Main.main");
             assertEquals(0L, main.get("arity"), "The actual no-interface-pragmas main remains a thunk");
-            assertEquals("IO ()", main.get("type"));
+            var entry = single(original, "id", "main::Main.main");
             var bindings = new ArrayList<>(original);
-            bindings.addAll(host);
-            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.ioUnitMainResult(main, bindings));
-            var entry = single(host, "id", "main:THC.WindowsRunMain.thcRunMain");
-            var result = CoreRepresentations.ioUnitMainResult(entry, bindings);
+            try (var coreFiles = Files.list(output.resolve("core"))) {
+                for (var core : coreFiles.filter(path -> path.getFileName().toString().endsWith(".cbd")).toList())
+                    if (!core.getFileName().toString().equals("Main.cbd"))
+                        bindings.addAll((List<Map<String, Object>>) CoreCbdFixtures.read(core).get("bindings"));
+            }
+            var result = CoreRepresentations.ioMainResult(entry, bindings);
             assertEquals(2, result.getComponents().size());
-            var invalid = new LinkedHashMap<>(entry);
-            invalid.put("type", "IO Int");
-            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.ioUnitMainResult(invalid, bindings));
             if (audited.contains(manifest)) {
                 var audit = document(output.resolve("audit.json"));
                 assertEquals(true, audit.get("accepted"));
