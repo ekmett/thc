@@ -9,6 +9,49 @@ Build the driver with
 `cabal build exe:thc`; from the THC checkout, invoke it with `cabal run thc -- ...`.
 See the [driver guide](driver.md) for commands, toolchain setup and examples.
 
+## A first program
+
+After building THC (see the [README](../README.md)), create a package outside the
+checkout with one executable. Use `base >= 4.22 && < 4.23`, the version shipped
+with GHC 9.14.1.
+
+```cabal
+-- hello.cabal
+cabal-version: 3.0
+name: hello
+version: 0.1.0.0
+build-type: Simple
+
+executable hello
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+```
+
+```haskell
+-- app/Main.hs
+module Main (main) where
+
+main :: IO ()
+main = do
+  putStrLn "Hello from Haskell on Truffle/Graal!"
+  print (sum [1 .. 100 :: Int])
+```
+
+From the package directory, run the driver built in the THC checkout (find it
+with `cabal list-bin exe:thc` there):
+
+```sh
+cd hello
+"$(cd /path/to/thc && cabal list-bin exe:thc)" run --thc-root /path/to/thc
+```
+
+or, from the THC checkout, `cabal run thc -- run hello --project-dir /path/to/hello
+--thc-root "$PWD"` (the explicit `hello` target is required there). The first run
+also acquires Core for the bundled libraries, which takes longer. It prints the
+greeting and `5050`; build products go to `dist-thc/` in the package.
+
 ## Select a component
 
 `run` targets follow Cabal syntax: `PACKAGE:exe:NAME`, `PACKAGE:test:NAME`, or
