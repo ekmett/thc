@@ -14,9 +14,9 @@ check_hash() {
     actual=$(sha256sum "$1")
     [[ "${actual%% *}" == "$2" ]] || { echo "Pinned builder input hash mismatch: $1" >&2; exit 1; }
 }
-check_hash "$builder_dir/svm.src.zip" b10b638d654121fd60923fa86d10f17aaaa82ecd3c48628be885c2b83e006ee0
-check_hash "$builder_dir/svm.jar" 7558a5c20e347c0aa5af411472c76c908d15b2601d029b1a0b7d8ed15f5e086c
-check_hash "$builder_dir/svm-foreign.jar" f8ef0370427f17982d9b329326e0b37b9e0539208a556c75b2c9be6f1d410e78
+check_hash "$builder_dir/svm.src.zip" bfcc90034b5fb54fc1c3edd04162622e5c5a38cb46efa3b062b5bd629caf430a
+check_hash "$builder_dir/svm.jar" 46d446993dd94c0854a041c5e5536d568831f540cc7b8886a5eb5bdd8d047677
+check_hash "$builder_dir/svm-foreign.jar" dacad674b70b682b10acec82dc8405b5b4a11701f4a4cd1ce3226770a74f87f1
 work_dir=$(mktemp -d "$output_dir/work.XXXXXX")
 mkdir -p "$work_dir/templates" "$work_dir/foreign" "$work_dir/builder" "$work_dir/builder-compiled" "$work_dir/tools"
 foreign_module=org.graalvm.nativeimage.foreign

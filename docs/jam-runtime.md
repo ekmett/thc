@@ -13,9 +13,9 @@ no language resolver callback or additional interface for this design.
 The ordinary `jam.vm.Lifted` value protocol is supplied by the unchanged source
 from Jam commit `92a0cbcda6b9413dc2df3b2a6e327f06d90ea94b` in
 [`nih/pinned/jam-lifted`](../nih/pinned/jam-lifted/README.md), compiled with THC.
-The current provider predates this interface. This supplemental compile input
-adds no native API and does not replace `jam.vm.Weak` or its bridge. It can be
-removed when the pinned provider includes it. See
+The Linux provider includes this interface; the macOS and Windows pins predate
+it. This supplemental compile input adds no native API and does not replace
+`jam.vm.Weak` or its bridge. It can be removed when all pinned providers include it. See
 [nonforcing value resolution](thunk-updates.md#nonforcing-lifted-values).
 
 ## Toolchain ownership
@@ -23,13 +23,13 @@ removed when the pinned provider includes it. See
 The VM, Graal compiler, SubstrateVM, `jam.vm.Weak` API and native collector
 libraries form one versioned dependency. `etc/jam-graalvm.json` records the
 producer revision, upstream source pins, transport digest and unpacked package
-identities. A release/version string alone does not establish compatibility.
+identities for each platform. A release/version string alone does not establish compatibility.
 
 The upstream owner is now [ekmett/jam](https://github.com/ekmett/jam), including
-its managed-runtime sources under `vm/`. The current pin consumes the complete
-JVM and Native Image toolchain from the retained release
-`vm-2026.10.07-a7ebfc52`. Source, archive and installation identities move
-together. Native adapter filenames use `jam-vm`; runtime library manifests
+its managed-runtime sources under `vm/`. Linux consumes the complete release-flavor
+JVM and Native Image toolchain from `vm-2026.10.08-8042f8bf`. macOS and Windows
+retain the fastdebug preview `vm-2026.10.07-a7ebfc52`. Source, archive and
+installation identities move together within each platform. Native adapter filenames use `jam-vm`; runtime library manifests
 determine deployment membership. The release assets preserve the qualified
 producer bytes beyond temporary CI artifact retention.
 Ordinary builds consume a prebuilt package through `JAVA_HOME`; they do not
@@ -93,9 +93,9 @@ registration. Dead associations are classified before finalizer rescue.
 Resurrecting a key does not revive its retired registration. Dead registration
 metadata must be reclaimable without making old tokens valid again; collection
 and idle polling costs must not grow with all registrations since process startup.
-The currently pinned JAM adapter retains and scans those dead records. The
-combined supplier candidate described below reuses retired slots with generation
-tokens and keeps active scans separate from historical capacity. Registration
+The Linux release reuses retired slots with generation tokens and keeps active
+scans separate from historical capacity. The older macOS and Windows adapters
+still retain and scan dead records. Registration
 metadata failure returns to Java as an allocation failure without publishing a
 partial association. This does not cover arbitrary collector allocation failure.
 Finalizer state retains its actual captures, without an invented reference to the
@@ -206,19 +206,18 @@ it has no source, CBD, GHC or JDK dependency at execution time. The original GHC
 finalizer runner is included by the shared Core dependency selector. This check
 does not extend the JVM first-compiled-call evidence to Native Image.
 
-The same unchanged executable also passes with the combined Jam Native Image
-component candidate `2626ef4f3a69dd7e1979a8430a2d717257fdc905`: root repair,
-pinning and reusable weak-registration metadata. Its Java API, native libraries
-and single Jam builder overlay come from one verified supplier bundle. It composes
-with THC's existing two-class builder correction and the diagnostic Linux release
-provider at Jam `5deba3e`. No THC runtime change was needed for this handoff.
+The Linux release includes the supplier's root repair, pinning and reusable weak
+registration metadata. Its ordinary `NativeWeak` and `WeakThreads` JVM runs match
+their native-GHC oracles. The redirected, relocated `WeakThreads` Native Image
+still times out. Releasing unused tuple-case references fixes a demonstrated
+retention bug in both THC backends, but has not resolved this native failure.
+A successful image build is not execution qualification.
 
-This qualifies that consumer on the combined Native Image candidate; the base
-JVM was unchanged. The current production pin remains an explicitly labelled
-`fastdebug` preview. A designated versioned release package, recovery from actual
-heap exhaustion, refreshed HotSpot qualification, macOS execution and remaining
-Windows coverage are still open. Production release-flavor qualification is tracked in
-[Jam #10](https://github.com/ekmett/jam/issues/10).
+Recovery from actual heap exhaustion, macOS execution and remaining Windows
+coverage are still open. The older combined Native Image component candidate
+passed the unchanged `NativeWeak` executable, but that result does not qualify
+the complete pinned release or `WeakThreads`. Supplier release qualification is
+tracked in [Jam #10](https://github.com/ekmett/jam/issues/10).
 
 The ordinary executable runs reuse verified producer inputs, artifact hashes and
 Core audits. A separate optional `--verify-artifacts` run exceeded its time bound

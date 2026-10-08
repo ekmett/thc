@@ -14,11 +14,11 @@ check_hash() {
     actual=$(sha256sum "$1")
     [[ "${actual%% *}" == "$2" ]] || { echo "Pinned builder input hash mismatch: $1" >&2; exit 1; }
 }
-# JAM 3fe0fe9 Linux-x86_64 package, Graal source 7b025988a922a73286d1326e1eddc1ca39d3f569.
+# JAM 8042f8bf Linux-x86_64 package, Graal source 7b025988a922a73286d1326e1eddc1ca39d3f569.
 # The two patched sources are unchanged from that upstream revision.
-check_hash "$JAVA_HOME/release" 9680685261e90095cb90625e692e3ff7f2c8bf9d164147a640a0bd6547c2de56
-check_hash "$builder_dir/svm.src.zip" 7185749fcd6c646dd5ded9accf1af839e4a7d9003e44df758aa3c37402556021
-check_hash "$builder_dir/svm.jar" 5e205aead4cb63abdc00ed57822c4659fe940292b9d01fab1e1fda78f2b85ff3
+check_hash "$JAVA_HOME/release" d24492fa17446fdc4dec79b4856658d19f53459107e8ef133cf54a0fdcf2e004
+check_hash "$builder_dir/svm.src.zip" bfcc90034b5fb54fc1c3edd04162622e5c5a38cb46efa3b062b5bd629caf430a
+check_hash "$builder_dir/svm.jar" 46d446993dd94c0854a041c5e5536d568831f540cc7b8886a5eb5bdd8d047677
 work_dir=$(mktemp -d "$output_dir/work.XXXXXX")
 source_file=com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.java
 late_source=com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport.java

@@ -124,7 +124,7 @@ def generateSimdFamilies = tasks.register("generateSimdFamilies", Exec) {
     commandLine(python.get(), "bin/generate-simd-families.py", "--check")
 }
 sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
-// Upstream ordinary Java API added after the current provider; see its provenance.
+// Older platform pins need this upstream ordinary Java API; see its provenance.
 sourceSets.main { java.srcDir("nih/pinned/jam-lifted") }
 def graalVersion = "25.3.4.1"
 def stockTruffleOption = providers.gradleProperty("thc.stockTruffle").orElse("false").get()
