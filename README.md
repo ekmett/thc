@@ -167,7 +167,8 @@ application, where it can be updated again. It also passes all four combinations
 The [buffered Handle example](src/examples/standard-apps/buffered-handle/README.md)
 shows original `System.IO` finalizers flushing output and releasing file locks
 when a handle becomes unreachable. It matches GHC on Linux with bytecode/default
-and AST/dense execution. The
+and AST/dense execution. The [lazy file example](src/examples/standard-apps/lazy-file/README.md)
+shows deferred input keeping its Handle alive until the unread tail is discarded. The
 [weak document cache](src/examples/standard-apps/weak-cache/README.md) reuses lazy
 analyses while their document is live, then releases the document/report cycle
 without discarding the cache itself.
