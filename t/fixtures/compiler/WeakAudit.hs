@@ -14,7 +14,7 @@
 -- Compiler fixture for weak audit Core and metadata.
 module WeakAudit where
 
-import Control.Concurrent (MVar, newEmptyMVar, putMVar, threadDelay, tryTakeMVar)
+import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (evaluate)
 import Data.IORef (IORef, newIORef, readIORef)
 import GHC.Exts
@@ -78,25 +78,15 @@ registerAutomaticWeak input signal = do
   _ <- Weak.mkWeak key (key, ()) (Just (readWeakKey key >>= putMVar signal))
   pure ()
 
--- Collection and scheduling need not finish in one pass. A bounded sequence
--- gives both native GHC and Jam the same observable law and a visible failure.
-{-# OPAQUE awaitAutomaticWeak #-}
-awaitAutomaticWeak :: Int -> MVar Int -> IO Int
-awaitAutomaticWeak remaining signal
-  | remaining == 0 = error "automatic weak finalizer did not signal"
-  | otherwise = do
-      performGC
-      result <- tryTakeMVar signal
-      case result of
-        Just value -> pure value
-        Nothing -> threadDelay 10000 >> awaitAutomaticWeak (remaining - 1) signal
-
+-- Collect after registration's scope ends, then wait for genuine guest execution.
+-- The fixture's external deadline bounds the wait while the finalizer can run.
 {-# OPAQUE automaticWeakLaw #-}
 automaticWeakLaw :: Int -> IO Int
 automaticWeakLaw input = do
   signal <- newEmptyMVar
   registerAutomaticWeak input signal
-  awaitAutomaticWeak 2000 signal
+  performGC
+  takeMVar signal
 
 {-# OPAQUE weakAutomatic #-}
 weakAutomatic :: Int# -> Int#
