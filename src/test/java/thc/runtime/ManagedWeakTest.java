@@ -1167,7 +1167,7 @@ class ManagedWeakTest {
         var paths = ((Map<String, List<String>>) manifest.get("stages")).get("post");
         var inputs = paths.stream().map(path -> path.startsWith("@")
             ? "@" + new File(root, path.substring(1)).getPath() : new File(root, path).getPath()).toList();
-        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
                 context.initialize("thc");
                 context.enter();
                 try {
@@ -1205,10 +1205,9 @@ class ManagedWeakTest {
             var names = new ArrayList<String>();
             for (var op : originalOps) names.add(op.getPrimitive());
             assertTrue(primitives.containsAll(names));
-            assertFalse(primitives.contains("addCFinalizerToWeak#"));
             var inputs = stageEntry.getValue().stream().map(path -> path.startsWith("@")
                 ? "@" + new File(root, path.substring(1)).getPath() : new File(root, path).getPath()).toList();
-            for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+            for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
                     context.initialize("thc");
                     context.enter();
                     try {

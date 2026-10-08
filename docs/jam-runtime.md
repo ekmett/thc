@@ -17,13 +17,12 @@ producer revision, upstream source pins, transport digest and unpacked package
 identities. A release/version string alone does not establish compatibility.
 
 The upstream owner is now [ekmett/jam](https://github.com/ekmett/jam), including
-its managed-runtime sources under `vm/`. Its GraalVM CI archive contains the
-complete JVM and Native Image toolchain. THC retains its currently recorded
-package until the consolidated producer and matching runtime checks pass; then
-repository, archive and installation identities move together. The new native
-adapter filenames use `jam-vm` rather than `jam_vm`; runtime library manifests
-continue to determine deployment membership. Durable distribution must preserve
-the qualified package bytes beyond temporary CI artifact retention.
+its managed-runtime sources under `vm/`. The current pin consumes the complete
+JVM and Native Image toolchain from the retained release
+`vm-2026.10.07-a7ebfc52`. Source, archive and installation identities move
+together. Native adapter filenames use `jam-vm`; runtime library manifests
+determine deployment membership. The release assets preserve the qualified
+producer bytes beyond temporary CI artifact retention.
 Ordinary builds consume a prebuilt package through `JAVA_HOME`; they do not
 build a JDK or compiler. Toolchain caching depends on platform and package
 identity, independently of THC sources and Cabal's project file.
@@ -44,12 +43,10 @@ and maximum heap capacities. Existing THC Truffle API/runtime/Sulong patches
 remain part of the shared-host contract. The API loads from the host classloader,
 with the matching native directory selected from the running package.
 
-The initial Linux CI artifact requires glibc 2.38. The older Linux system on
-which another JAM package was built does not establish that artifact's minimum
-version. Matching macOS and Windows packages have separate recorded identities; runtime
-qualification is pending. Both macOS JAM libraries declare macOS 26 as their
-minimum deployment version. They cannot support a macOS 15 installation. Short-lived CI artifact URLs are qualification inputs; consumer
-CI needs retained, immutable package distribution before migration is published.
+The pinned Linux package requires glibc 2.38. Matching macOS and Windows
+packages have separate recorded identities; their THC runtime qualification
+is pending. The macOS package requires macOS 26 and cannot run on macOS 15.
+Consumer CI uses the retained release assets and the matching platform floors.
 
 Native Image builds select `--gc=jam`. Both image recipes also reuse the
 [two-class builder correction](../research/native-image-preparation/runtime-simulated-folds/README.md)
@@ -100,11 +97,13 @@ force guest code, allocate Java roots, or acquire a stopped mutator's monitor.
 All other objects and non-success thunk states retain identity semantics.
 The agreed upstream API shape is
 `registerIndirection(Thunk.class, "state", 2, "value")`: an exact registered
-class, volatile int state and Object representative field. This API is
-unimplemented. It is a prerequisite for both HotSpot and SubstrateVM; a forcing
-shim or create-time unwrapping cannot replace it. The real regression currently
-returns dead flag 0 despite the independently live WHNF alias in both handoff
-modes.
+class, volatile int state and Object representative field. This API is absent
+from the currently pinned package. It is a prerequisite for both HotSpot and
+SubstrateVM; a forcing
+shim or create-time unwrapping cannot replace it. The pinned package returns dead flag 0 despite an independently live WHNF
+alias. An upstream diagnostic package with this hook passes the actual Force
+regression on both backends and handoff modes. It is not a reproducible release
+pin, and the hook has not yet been qualified in a THC Native Image executable.
 
 ## Finalizer execution
 
@@ -144,11 +143,20 @@ compiled call where relevant.
 
 Linux JVM qualification includes real first-compiled calls on both THC backends
 and handoff modes. The native publication boundary has also passed its focused
-Linux tests. The focused weak integration run passed six registry checks and
-retained the failing completed-thunk regression in both handoff modes. The new
-public `System.Mem.Weak` automatic-finalizer law and its independent native GHC
-oracle have not yet executed. General weak qualification is incomplete; Native
-Image runtime qualification remains failed and parked.
+Linux tests. The pinned package passes six registry checks but fails completed-thunk
+retargeting. With the upstream diagnostic hook, 20 selected JVM checks pass
+across both handoff modes, including actual Force updates, the public
+`System.Mem.Weak` automatic-finalizer law, native-GHC composite results on the
+first compiled call, and finalizer/free borrow coordination. The public laws
+exercise both AST and bytecode backends. The producer-defined fixture graph
+supplies the original GHC runner, CBD dependencies and native oracle.
+
+These results qualify the tested Linux JVM behavior. They do not qualify the
+current release pin, macOS/Windows THC execution or Native Image. A reproducible
+producer release containing the hook and Native Image execution remain required
+before general weak support can be advertised. The diagnostic run also exposed
+excessive collection in the automatic-law polling loop; its cost is not an
+acceptable commit-CI baseline.
 
 A package startup check proves startup. A native image build proves construction.
 Neither proves general weak semantics, guest compilation or another platform.
