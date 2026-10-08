@@ -90,7 +90,7 @@ public final class PackageNativeArchives {
                 check(module.containsKey("foreign") || Objects.equals(stubs.get("source"), ""), "missing retained stubs");
             }
             if (module.containsKey("foreign")) check(Objects.equals(module.get("foreign"), p.get("expectedForeign")), "retained product differs");
-            CoreCallInventory.check(p.get("expectedCalls"), PackageNativeArchive.calls(module.get("bindings")), completeBindings);
+            CoreCallInventory.check(p.get("expectedCalls"), CoreCallInventory.mapCalls(module.get("bindings")), completeBindings);
             var binders = new HashSet<Object>();
             for (Object item : list(p.get("imports"))) {
                 var entry = record(item, "binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted");

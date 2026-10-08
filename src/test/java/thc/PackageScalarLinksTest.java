@@ -257,6 +257,19 @@ class PackageScalarLinksTest {
                 list(second, first, with(first, "argumentReps", list("IntRep", "AddrRep")))))
             assertThrows(IllegalArgumentException.class, () -> CoreCallInventory.check(expected, actual, true));
     }
+    @Test void nestedCallInventoriesRetainDuplicatesAndMalformedValuesForAdmission() throws Exception {
+        var first = map("target", "first"); var second = map("target", "second");
+        var nested = list(map("foreignCall", first, "children", list(map("foreignCall", second), map("foreignCall", first))),
+                map("foreignCall", "malformed"), map("foreignCall", null), "literal");
+        var actual = CoreCallInventory.calls(nested);
+        CoreCallInventory.check(list(second, first, first, "malformed"), actual, true);
+        CoreCallInventory.check(list(second, first, first), CoreCallInventory.mapCalls(nested), true);
+        assertThrows(IllegalArgumentException.class, () -> CoreCallInventory.check(list(first, second, "malformed"), actual, true));
+        assertThrows(IllegalArgumentException.class, () -> CoreCallInventory.check(list(first, first, first, second, "malformed"), actual, true));
+        var original = module();
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(original,
+                "bindings", list(map("foreignCall", "malformed")))));
+    }
     @Test void demandedBindingsUseOriginalInventoriesWithoutClaimingCompleteness() throws Exception {
         var base = module(); var proof = object(base, "staticForeignImports"); var call = map("target", map("unit", base.get("unit"), "symbol", "scalar_value"));
         var first = binding("first", list(call)); var second = binding("second", list(call));

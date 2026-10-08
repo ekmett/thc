@@ -8,6 +8,11 @@ continuation was captured. Supported async capture instead parks a continuation
 that a later owner can resume through the same update protocol. Blackhole
 detection and sharing remain unchanged.
 
+Ownership transitions serialize on the thunk monitor. The owner writes the
+answer, failure or saved continuation before releasing its state; readers
+acquire that state before inspecting the payload. Nonforcing weak-key resolution
+uses the same publication boundary without claiming or evaluating the thunk.
+
 Forcing a known local binding also replaces that binding's thunk reference with
 the answer. A subsequent read of the same binding can therefore skip the thunk's
 state machine. Separate aliases still reach the memoized answer through the

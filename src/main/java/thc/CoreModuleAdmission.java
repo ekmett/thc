@@ -62,7 +62,7 @@ public final class CoreModuleAdmission {
     public CoreBoxedForeignDeclarations getBoxedImports() { return boxedImports; }
     private static Map<Object,Integer> counts(List<?> calls) { var counts = new LinkedHashMap<Object,Integer>(); for (Object call : calls) counts.merge(call, 1, Integer::sum); return counts; }
     public Map<String,Object> selected(List<Map<String,Object>> bindings) {
-        var actual = PackageNativeArchive.calls(bindings); var counts = counts(actual);
+        var actual = CoreCallInventory.mapCalls(bindings); var counts = counts(actual);
         for (var inventory : inventories) for (var count : counts.entrySet()) {
             if (count.getValue() > inventory.getOrDefault(count.getKey(), 0)) throw new IllegalArgumentException("Demanded Core foreign call is absent from original inventory");
         }

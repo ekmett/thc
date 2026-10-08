@@ -19,7 +19,7 @@ final class CoreCapiProvenance {
     static Map<String, Object> supplement(Map<String, ?> input, Object binding,
             BiFunction<String, String, ForeignBitcode> resolve) {
         var calls = new LinkedHashMap<Owner, List<Object>>();
-        for (Map<?, ?> call : PackageNativeArchive.calls(binding)) {
+        for (Map<?, ?> call : CoreCallInventory.mapCalls(binding)) {
             // Newly acquired packages use the ordinary component linker. Old
             // captured clock artifacts still retain their original CAPI route.
             if (call.get("target") instanceof Map<?, ?> target && input.get("packageScalarLinks") instanceof List<?> nativeLinks

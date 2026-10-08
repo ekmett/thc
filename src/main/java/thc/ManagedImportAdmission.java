@@ -46,14 +46,6 @@ public final class ManagedImportAdmission {
         requireProof(valid, "foreign scalar carriers");
         return (List<?>) value;
     }
-    private static List<Object> calls(Object value) {
-        var result = new ArrayList<Object>();
-        if (value instanceof Map<?,?> fields) {
-            if (fields.get("foreignCall") != null) result.add(fields.get("foreignCall"));
-            for (Object child : fields.values()) result.addAll(calls(child));
-        } else if (value instanceof List<?> fields) for (Object child : fields) result.addAll(calls(child));
-        return result;
-    }
     private static Map<String,Object> scalar(Object primitive, boolean evaluated) {
         String kind = switch ((String) primitive) { case "void" -> "void"; case "AddrRep" -> "address"; case "FloatRep" -> "float"; case "DoubleRep" -> "double"; default -> "long"; };
         return Map.of("kind", kind, "primReps", Objects.equals(primitive, "void") ? List.of() : List.of(primitive), "evaluated", evaluated);
@@ -173,7 +165,7 @@ public final class ManagedImportAdmission {
             adjustor.put("arguments", List.of("AddrRep", "AddrRep", "AddrRep", "void")); adjustor.put("result", List.of("void", "AddrRep"));
             generated.put(new Target(null, "createAdjustor"), descriptor(adjustor));
         }
-        var actual = calls(module.get("bindings")); CoreCallInventory.check(proof.get("expectedCalls"), actual, completeBindings);
+        var actual = CoreCallInventory.calls(module.get("bindings")); CoreCallInventory.check(proof.get("expectedCalls"), actual, completeBindings);
         if (generated.isEmpty() && allExcluded) return null;
         requireProof(!generated.isEmpty(), "no generated CAPI or callback products");
         var admission = new ManagedImportAdmission(module, generated); admission.validateCalls(actual); return admission;

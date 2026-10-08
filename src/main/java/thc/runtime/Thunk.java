@@ -4,9 +4,16 @@ package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
 import jam.vm.Lifted;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 
 /** A shared lazy update cell; state publishes the answer and ownership release. */
 public final class Thunk implements Lifted {
+    private static final VarHandle STATE;
+    static {
+        try { STATE = MethodHandles.lookup().findVarHandle(Thunk.class, "state", int.class); }
+        catch (ReflectiveOperationException failure) { throw new ExceptionInInitializerError(failure); }
+    }
     private RootCallTarget target;
     private final boolean asynchronousExceptions;
     private CapturedFrame environment;
@@ -22,8 +29,8 @@ public final class Thunk implements Lifted {
         // The target is cleared on completion or suspension; admission still needs its policy.
         asynchronousExceptions = target.getRootNode() instanceof GuestRoot root && root.getAsynchronousExceptions();
     }
-    /** The volatile WHNF state publishes the existing answer; other states are opaque. */
-    @Override public Lifted resolve() { return state == 2 && value instanceof Lifted answer ? answer : null; }
+    /** The acquired WHNF state publishes the existing answer; other states are opaque. */
+    @Override public Lifted resolve() { return getState() == 2 && value instanceof Lifted answer ? answer : null; }
     /** Inspect an already published reference field without entering this thunk. */
     @Override public Lifted project(int field) {
         Object answer = LiftedValues.resolveBoxed(this);
@@ -34,8 +41,10 @@ public final class Thunk implements Lifted {
     public void setTarget(RootCallTarget target) { this.target = target; }
     public CapturedFrame getEnvironment() { return environment; }
     public void setEnvironment(CapturedFrame environment) { this.environment = environment; }
-    public int getState() { return state; }
-    public void setState(int state) { this.state = state; }
+    /** Acquire the answer, failure or continuation published with this state. */
+    public int getState() { return (int) STATE.getAcquire(this); }
+    /** The owner holds the monitor and writes the payload before releasing state. */
+    public void setState(int state) { STATE.setRelease(this, state); }
     public Object getValue() { return value; }
     public void setValue(Object value) { this.value = value; }
     public Thread getOwner() { return owner; }
