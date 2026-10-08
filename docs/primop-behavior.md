@@ -158,8 +158,14 @@ and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 
 Selected Linux JVM weak laws pass on the pinned Jam package in both handoff
 modes, including both backends where applicable. General qualification remains
-open: replacement-registration failure policy, native registration metadata
+open: recovery from actual heap exhaustion, native registration metadata
 lifetime, Native Image application execution and other platforms are unfinished.
+
+Successor-installation `OutOfMemoryError` retains the original cleanup obligation
+and is retried by the existing drainer without requiring the public handle.
+Publication preserves that handle; explicit finalization and context stop
+arbitrate with retries. Other failures and begun cleanup are not retried.
+
 Bootstrap captures can delay reclamation and affect other weak associations;
 there is no collection-identical GHC timing guarantee.
 

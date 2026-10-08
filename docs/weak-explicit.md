@@ -58,9 +58,9 @@ permission.
 If Java setup fails before cleanup begins, the draft retains the untouched
 callbacks and action as context-owned failed work. Dereference and callback
 attachment surface the failure; explicit finalization can settle the original
-cleanup. Begun user cleanup is never replayed. This uses the draft retention
-policy that remains under review. It does not recover from native allocation
-failures that terminate the process.
+cleanup. Begun user cleanup is never replayed. Failed guest-carrier setup remains
+explicitly settleable; it is not automatically repeated. Native allocation
+failures that terminate the process cannot be recovered in Java.
 
 The drainer also accepts other host clients' ordinary Jam callbacks. If their
 carrier cannot be launched, it invokes the claimed callback synchronously and
@@ -99,8 +99,20 @@ The logical handle remains stable through handoff. A retired bootstrap token
 cannot alone justify a dead dereference; explicit finalization, queued/running
 handoff and shutdown must arbitrate without losing the backing value or running
 the real finalizer twice. Temporary retention and additional collections are
-expected costs. Replacement failure must preserve the cleanup obligation; the
-failure recovery policy is still under review.
+expected costs.
+
+If successor installation throws `OutOfMemoryError` before publication, the
+context retains the resolved successor, original value and untouched finalizer.
+The existing drainer retries that installation with capped backoff, one due
+attempt per pump turn, even after the public weak handle is dropped. It neither
+resolves the key again nor runs cleanup as part of recovery. Successful
+publication restores the same logical handle before releasing the failed work.
+Until then, weak operations surface the first failure; explicit finalization
+can still claim the original cleanup. Explicit finalization and context stop
+cancel scheduled retries, and an already dequeued retry rechecks ownership
+before installing. Protocol, linkage and other VM failures do not enter this
+retry policy. Continued allocation failure can keep the captures retained;
+this is not a guarantee of recovery from an exhausted or terminated VM.
 
 The retained Jam package still scans dead registration records. Upstream has
 removed that repeated scan, but package adoption and metadata lifetime remain
