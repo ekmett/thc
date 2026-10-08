@@ -197,10 +197,16 @@ class ManagedWeakTest {
     }
     private Registration droppedOwnedFree(ExecutableProgram program, ReferenceQueue<Object> queue,
             ManagedAddress address, Runnable whileKeyLive) {
+        return droppedOwnedFree(program, queue, address, whileKeyLive, null);
+    }
+    private Registration droppedOwnedFree(ExecutableProgram program, ReferenceQueue<Object> queue,
+            ManagedAddress address, Runnable whileKeyLive, Runnable afterFree) {
         var key = new ManagedMutVar(Unit.INSTANCE); var value = new ManagedMutVar(key);
         var weak = ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"),
             new Object[]{0L, key, value, Unit.INSTANCE});
         var state = Language.currentState();
+        // Callbacks prepend: install the observer first so it follows the real free.
+        if (afterFree != null) assertEquals(1L, state.getWeaks().addCallback(weak, afterFree));
         assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"),
             address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
         var registration = new Registration(weak, new WeakReference<>(key, queue));
@@ -440,6 +446,7 @@ class ManagedWeakTest {
                 var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
                 var address = state.getNativeAllocations().malloc(8);
                 var queue = new ReferenceQueue<Object>(); var borrowed = new CompletableFuture<Void>();
+                var retirementRequested = new CompletableFuture<Void>();
                 var borrowerReference = new java.util.concurrent.atomic.AtomicReference<CompletableFuture<Void>>();
                 var dropped = droppedOwnedFree(program, queue, address, () -> {
                     var borrower = ownedFreeTask(state, () -> {
@@ -452,8 +459,11 @@ class ManagedWeakTest {
                     });
                     borrowerReference.set(borrower);
                     awaitOwnedFreeTask(CompletableFuture.anyOf(borrowed, borrower));
-                });
+                }, () -> retirementRequested.complete(null));
                 var borrower = borrowerReference.get(); collect(queue, dropped.referent());
+                // Collection/claim is not execution. The real free must return while
+                // the borrower is still parked, proving it did not block the only HEC.
+                awaitOwnedFreeTask(retirementRequested);
                 awaitOwnedFreeTask(ownedFreeTask(state, () -> {
                     requestGc(gc); assertDoesNotThrow(() -> address.readWord8(0));
                     assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag());
