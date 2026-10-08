@@ -4,8 +4,8 @@ THC is migrating to JAM-patched GraalVM for JVM execution and JAM-patched
 SubstrateVM for native executables. The purpose is general `System.Mem.Weak`
 semantics, including keys held by Java code and finalizers that can resurrect
 their keys. Selecting the collector alone does not implement THC weak pointers.
-The current draft uses real `jam.vm.Weak` associations and guest finalizer
-carriers. General weak support remains unqualified. THC implements
+The runtime uses real `jam.vm.Weak` associations and guest finalizer
+carriers. Linux qualification and remaining platform limits are recorded below. THC implements
 [language-level lifted weak handoff](https://github.com/ekmett/jam/issues/7)
 using ordinary weak registrations and bootstrap finalizers. The collector needs
 no language resolver callback or additional interface for this design.
@@ -27,7 +27,7 @@ identities for each platform. A release/version string alone does not establish 
 
 The upstream owner is now [ekmett/jam](https://github.com/ekmett/jam), including
 its managed-runtime sources under `vm/`. Linux consumes the complete release-flavor
-JVM and Native Image toolchain from `vm-2026.10.08-8042f8bf`. macOS and Windows
+JVM and Native Image toolchain from `vm-2026.10.08-3cb04509`. macOS and Windows
 retain the fastdebug preview `vm-2026.10.07-a7ebfc52`. Source, archive and
 installation identities move together within each platform. Native adapter filenames use `jam-vm`; runtime library manifests
 determine deployment membership. The release assets preserve the qualified
@@ -206,20 +206,22 @@ it has no source, CBD, GHC or JDK dependency at execution time. The original GHC
 finalizer runner is included by the shared Core dependency selector. This check
 does not extend the JVM first-compiled-call evidence to Native Image.
 
-The Linux release includes the supplier's root repair, pinning and reusable weak
-registration metadata. Its ordinary `NativeWeak` and `WeakThreads` JVM runs match
-their native-GHC oracles. The redirected, relocated `WeakThreads` Native Image also
-matches its complete six-line oracle with the qualified THC lifetime fixes and a
-source-verified supplier queue repair. That repair releases completed operations
-from an empty SubstrateVM queue; the retained NFI operation otherwise keeps a
-Java carrier alive. The executable covers thread observation, resurrection and
-a fresh weak lifetime, with no source, CBD, GHC or JDK runtime mounts.
+The pinned Linux release includes the supplier's root repair, pinning, reusable
+weak-registration metadata and SubstrateVM operation-queue lifetime repair.
+Twenty-three focused weak/finalizer and Loom lifecycle checks pass across both
+handoff modes on this package. Terminal MVar requests release their cell while
+preserving repeatable committed results; completed finalizer work releases its
+captures after the carrier has joined. Pending operations and failed setup
+retain the state they still own.
 
-The queue repair was applied as a verified one-class builder overlay to the
-pinned Linux release. Normal installation still needs a designated supplier
-package containing that repair; the diagnostic overlay is not a production
-acquisition path. The combined application pass does not attribute the earlier
-failure to only one of the independently demonstrated ownership defects.
+The unchanged `WeakThreads` program also matches its complete six-line native-GHC
+oracle in redirected, relocated Native Image execution. It exercises completed
+thread collection, resurrection and a fresh weak lifetime, with each finalizer
+running once. The build uses the tracked resource-copy recipe and the normal
+published Jam package. No diagnostic queue overlay is required. Execution needs
+only the executable and its declared `.jam` libraries and notices, without
+source, CBD, GHC or JDK runtime mounts. This qualifies the resource-copy profile;
+it does not establish default-intrinsics execution.
 
 Recovery from actual heap exhaustion, macOS execution and remaining Windows
 coverage are still open. The older combined Native Image component candidate
