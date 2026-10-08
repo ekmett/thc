@@ -18,11 +18,19 @@ For native Windows, use the [PowerShell build and test guide](docs/windows.md).
 It lists the required tools and current platform limits.
 
 You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16**,
-**GraalVM 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
+**GraalVM Community 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
 point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
 directory. The Gradle wrapper downloads its dependencies on the first build.
 Linux x86_64 setup includes clang and GMP development headers and libraries
 (for example, `libgmp-dev` on Debian/Ubuntu) for native package dependencies.
+Run `cabal update` once so Cabal has a package index.
+
+Use the exact GraalVM Community build from the
+[graalvm-ce-builds `graal-25.3.4.1` release](https://github.com/graalvm/graalvm-ce-builds/releases/tag/graal-25.3.4.1)
+(`graalvm-community-jdk-25i3-25.0.4.1_*_bin.tar.gz`). Other JDK 25 builds,
+including Oracle GraalVM 25.0.x, start but fail at runtime because the bundled
+Truffle 25.3.4.1 rejects their compiler version. Check `$JAVA_HOME/release` for
+`GRAALVM_VERSION="25.3.4.1"`.
 
 The JDK is stock, but THC's default distribution includes **patched Truffle API,
 runtime and Sulong JARs**. Their [patch inventory and shared-host effects](docs/truffle-patches.md)
