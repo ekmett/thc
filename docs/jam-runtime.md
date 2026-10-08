@@ -208,15 +208,24 @@ does not extend the JVM first-compiled-call evidence to Native Image.
 
 The Linux release includes the supplier's root repair, pinning and reusable weak
 registration metadata. Its ordinary `NativeWeak` and `WeakThreads` JVM runs match
-their native-GHC oracles. The redirected, relocated `WeakThreads` Native Image
-still times out. Releasing unused tuple-case references fixes a demonstrated
-retention bug in both THC backends, but has not resolved this native failure.
-A successful image build is not execution qualification.
+their native-GHC oracles. The redirected, relocated `WeakThreads` Native Image also
+matches its complete six-line oracle with the qualified THC lifetime fixes and a
+source-verified supplier queue repair. That repair releases completed operations
+from an empty SubstrateVM queue; the retained NFI operation otherwise keeps a
+Java carrier alive. The executable covers thread observation, resurrection and
+a fresh weak lifetime, with no source, CBD, GHC or JDK runtime mounts.
+
+The queue repair was applied as a verified one-class builder overlay to the
+pinned Linux release. Normal installation still needs a designated supplier
+package containing that repair; the diagnostic overlay is not a production
+acquisition path. The combined application pass does not attribute the earlier
+failure to only one of the independently demonstrated ownership defects.
 
 Recovery from actual heap exhaustion, macOS execution and remaining Windows
 coverage are still open. The older combined Native Image component candidate
-passed the unchanged `NativeWeak` executable, but that result does not qualify
-the complete pinned release or `WeakThreads`. Supplier release qualification is
+passed the unchanged `NativeWeak` executable; its evidence and the newer
+`WeakThreads` application pass do not establish all-platform qualification.
+Supplier release qualification is
 tracked in [Jam #10](https://github.com/ekmett/jam/issues/10).
 
 The ordinary executable runs reuse verified producer inputs, artifact hashes and

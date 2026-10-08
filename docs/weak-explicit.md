@@ -12,8 +12,8 @@ modes. The existing full weak IO program also matches native GHC on Linux
 JVM and in a relocated Native Image built with the diagnostic supplier candidate
 described in [acceptance evidence](jam-runtime.md#acceptance-evidence).
 General qualification remains open in
-[issue #1065](https://github.com/ekmett/thc/issues/1065): replacement failure
-policy, native registration lifetime, production package qualification and other
+[issue #1065](https://github.com/ekmett/thc/issues/1065): actual allocation-failure
+recovery, complete native lifetime and supplier-package qualification, and other
 platforms remain unfinished.
 
 For an association `K => (V, F)`, independent reachability of `K`, including an
@@ -114,10 +114,10 @@ before installing. Protocol, linkage and other VM failures do not enter this
 retry policy. Continued allocation failure can keep the captures retained;
 this is not a guarantee of recovery from an exhausted or terminated VM.
 
-The retained Jam package still scans dead registration records. Upstream has
-removed that repeated scan, but package adoption and metadata lifetime remain
-separate qualification boundaries. Neither registry checks nor collector startup
-prove those contracts.
+The pinned Linux release scans live registrations and reuses retired metadata
+slots while generation-tagged tokens keep old handles invalid. Registry capacity
+can remain at its high-water mark. Other platforms still use the preview packages
+listed in [the toolchain guide](jam-runtime.md).
 
 The existing `WeakAudit`/`WeakFixtures` producer owns the public
 `System.Mem.Weak` law with a dropped handle, value/finalizer backedges and an
@@ -147,4 +147,8 @@ See the [example commands](../src/examples/README.md).
 On the pinned Linux JVM, this example matches native GHC 9.14.1 on AST and
 bytecode in both handoff modes. Focused lifetime checks also cover platform
 workers and Loom workers/outer entries, including Java-held identity roots.
-The Native Image and other-platform qualification boundaries above still apply.
+The same program also matches the full native oracle as a redirected, relocated
+Native Image with the THC lifetime fixes and the source-verified supplier queue
+repair described in [acceptance evidence](jam-runtime.md#acceptance-evidence).
+Adopting that repair in the normal supplier package and qualifying the remaining
+platforms are still open.
