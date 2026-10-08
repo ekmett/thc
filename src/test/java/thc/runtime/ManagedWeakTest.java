@@ -864,6 +864,149 @@ class ManagedWeakTest {
             } finally { context.leave(); }
         }
     }
+    /** Inject at the existing ownership seam, without exhausting the test JVM. */
+    private Object failedSuccessor(Language language, ManagedWeaks registry, Object replacement,
+            Object value, Runnable callback, Throwable failure) throws Exception {
+        var key = new Thunk(new RootNode(language) {
+            @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Failure recovery forced a key"); }
+        }.getCallTarget(), null);
+        var weak = registry.make(key, value, null, null);
+        assertEquals(1L, registry.addCallback(weak, callback));
+        var tokenField = weak.getClass().getDeclaredField("token"); tokenField.setAccessible(true);
+        long token = tokenField.getLong(weak);
+        var bootstrap = jam.vm.Weak.finalizeNow(token); assertNotNull(bootstrap);
+        try {
+            // Successor resolution has completed, but its registration allocation failed.
+            var keyField = bootstrap.getClass().getDeclaredField("key"); keyField.setAccessible(true);
+            keyField.set(bootstrap, replacement);
+            var installing = bootstrap.getClass().getDeclaredField("installing"); installing.setAccessible(true);
+            installing.setBoolean(bootstrap, true);
+            var failed = ManagedWeaks.class.getDeclaredMethod("failed", bootstrap.getClass().getSuperclass(), Throwable.class);
+            failed.setAccessible(true);
+            synchronized (registry) {
+                failed.invoke(registry, bootstrap, failure);
+                assertSame(failure, assertThrows(failure.getClass(), () -> registry.dereference(weak)));
+                assertSame(failure, assertThrows(failure.getClass(), () -> registry.addCallback(weak, () -> fail("Failed registration accepted cleanup"))));
+            }
+        } finally { jam.vm.Weak.complete(token); }
+        Reference.reachabilityFence(key);
+        return weak;
+    }
+    private void awaitSuccessor(ManagedWeaks registry, Object weak, Object value, OutOfMemoryError failure) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        for (;;) {
+            try { assertSame(value, registry.dereference(weak).getValue()); return; }
+            catch (OutOfMemoryError caught) {
+                assertSame(failure, caught, "The original failure remains visible until publication");
+                assertTrue(System.nanoTime() < deadline, "The drainer must restore the successor without another weak API trigger");
+                Thread.sleep(10);
+            }
+        }
+    }
+    @Test
+    void allocationFailedHandoffRestoresStableHandleWithoutRunningCleanup() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = Language.currentState().getWeaks();
+                var key = new Object(); var value = new ManagedMutVar(key);
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var failure = new OutOfMemoryError("intentional successor allocation failure");
+                var weak = failedSuccessor(language, registry, key, value, calls::incrementAndGet, failure);
+                awaitSuccessor(registry, weak, value, failure);
+                assertEquals(0, calls.get(), "A live successor is not logical weak death");
+                assertEquals(1L, registry.addCallback(weak, calls::incrementAndGet));
+                assertEquals(0L, registry.finalize(weak).getFlag());
+                assertEquals(2, calls.get());
+                assertEquals(0L, registry.finalize(weak).getFlag());
+                assertEquals(2, calls.get()); Reference.reachabilityFence(key);
+            } finally { context.leave(); }
+        }
+    }
+    private WeakReference<Object> droppedFailedSuccessor(Language language, ManagedWeaks registry,
+            ReferenceQueue<Object> queue, CompletableFuture<Void> cleaned, java.util.concurrent.atomic.AtomicInteger calls) throws Exception {
+        var key = new Object();
+        failedSuccessor(language, registry, key, new ManagedMutVar(key), () -> {
+            calls.incrementAndGet(); cleaned.complete(null);
+        }, new OutOfMemoryError("intentional dropped successor allocation failure"));
+        return new WeakReference<>(key, queue);
+    }
+    @Test
+    void allocationFailedHandoffRecoversAfterThePublicHandleIsDropped() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = Language.currentState().getWeaks(); var queue = new ReferenceQueue<Object>();
+                var cleaned = new CompletableFuture<Void>(); var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var dropped = droppedFailedSuccessor(language, registry, queue, cleaned, calls);
+                collect(queue, dropped);
+                awaitOwnedFreeTask(cleaned);
+                assertEquals(1, calls.get(), "Dropped handles retain their at-most-once cleanup obligation");
+            } finally { context.leave(); }
+        }
+    }
+    private void awaitRetryClaim(Object weak) throws Exception {
+        var drainer = Class.forName("thc.runtime.ManagedWeaks$Drainer");
+        var pending = drainer.getDeclaredField("retries"); pending.setAccessible(true);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        for (;;) {
+            boolean queued = false;
+            synchronized (drainer) {
+                for (Object work = pending.get(null); work != null;) {
+                    var handle = work.getClass().getSuperclass().getDeclaredField("handle"); handle.setAccessible(true);
+                    if (handle.get(work) == weak) { queued = true; break; }
+                    var next = work.getClass().getDeclaredField("nextRetry"); next.setAccessible(true);
+                    work = next.get(work);
+                }
+            }
+            if (!queued) return;
+            assertTrue(System.nanoTime() < deadline, "The drainer must claim the scheduled retry");
+            Thread.sleep(10);
+        }
+    }
+    @Test
+    void failedHandoffRecoveryRespectsFinalizationStopAndNonAllocationFailures() throws Exception {
+        for (String outcome : List.of("finalize", "stop", "protocol")) {
+            var context = context();
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = Language.currentState().getWeaks();
+                var key = new Object(); var calls = new java.util.concurrent.atomic.AtomicInteger();
+                Throwable failure = outcome.equals("protocol") ? new LinkageError("intentional handoff protocol failure") :
+                    new OutOfMemoryError("intentional terminal handoff allocation failure");
+                Object weak;
+                synchronized (registry) {
+                    weak = failedSuccessor(language, registry, key, new Object(), calls::incrementAndGet, failure);
+                    if (!outcome.equals("protocol")) {
+                        // The pump has dequeued this retry but cannot take the owner
+                        // monitor until explicit finalization or stop has won.
+                        awaitRetryClaim(weak);
+                        if (outcome.equals("stop")) registry.requestStop();
+                        else {
+                            assertEquals(0L, registry.finalize(weak).getFlag());
+                            assertEquals(1, calls.get());
+                            assertEquals(0L, registry.finalize(weak).getFlag());
+                        }
+                    }
+                }
+                if (outcome.equals("protocol")) {
+                    var peerValue = new Object();
+                    var peerFailure = new OutOfMemoryError("intentional recoverable peer failure");
+                    var peer = failedSuccessor(language, registry, key, peerValue, () -> {}, peerFailure);
+                    awaitSuccessor(registry, peer, peerValue, peerFailure);
+                    assertSame(failure, assertThrows(LinkageError.class, () -> registry.dereference(weak)));
+                    assertEquals(0, calls.get());
+                    assertEquals(0L, registry.finalize(weak).getFlag());
+                    registry.finalize(peer);
+                }
+                assertEquals(outcome.equals("stop") ? 0 : 1, calls.get());
+                Reference.reachabilityFence(key);
+            } finally { context.leave(); context.close(); }
+        }
+    }
     @Test
     void finalizerSetupFailuresPreserveUntouchedWorkAndJoinStartedCarriers() throws Exception {
         assertAll(List.of("before-start", "guest-entry", "after-start", "callback").stream()

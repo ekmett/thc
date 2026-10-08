@@ -59,12 +59,15 @@ public final class ManagedWeaks {
     private static final class Bootstrap extends Work {
         Object key, value;
         Finalizer finalizer;
+        Bootstrap nextRetry;
+        long retryAt, retryDelay = 10_000_000L;
+        boolean installing;
         Bootstrap(Handle handle, Object key, Object value, Finalizer finalizer) {
             super(handle); this.key = key; this.value = value; this.finalizer = finalizer;
         }
         @Override Finalizer release() {
             Finalizer result = finalizer;
-            key = null; value = null; finalizer = null;
+            key = null; value = null; finalizer = null; installing = false;
             return result;
         }
         @Override public void run() {
@@ -79,9 +82,43 @@ public final class ManagedWeaks {
     }
     /** Independent claim carriers keep normal dispatch out of guest waits. */
     private static final class Drainer {
+        // These are scheduling links, not a second owner of failed work. Queue
+        // operations never acquire a context monitor; owners may cancel under theirs.
+        private static Bootstrap retries;
+        static synchronized void retry(Bootstrap work) {
+            work.retryAt = System.nanoTime() + work.retryDelay;
+            work.retryDelay = Math.min(work.retryDelay * 2, 1_000_000_000L);
+            Bootstrap previous = null, next = retries;
+            while (next != null && next.retryAt - work.retryAt <= 0) {
+                previous = next; next = next.nextRetry;
+            }
+            work.nextRetry = next;
+            if (previous == null) retries = work; else previous.nextRetry = work;
+        }
+        static synchronized void cancel(Bootstrap work) {
+            Bootstrap previous = null;
+            for (Bootstrap next = retries; next != null; next = next.nextRetry) {
+                if (next == work) {
+                    if (previous == null) retries = next.nextRetry; else previous.nextRetry = next.nextRetry;
+                    next.nextRetry = null;
+                    return;
+                }
+                previous = next;
+            }
+        }
+        private static synchronized Bootstrap due() {
+            if (retries == null || retries.retryAt - System.nanoTime() > 0) return null;
+            Bootstrap work = retries; retries = work.nextRetry; work.nextRetry = null;
+            return work;
+        }
         static final Thread THREAD = Thread.ofPlatform().daemon().name("THC weak finalizers").start(() -> {
             var token = new long[1];
             for (;;) {
+                Bootstrap retry = due();
+                if (retry != null) {
+                    Throwable failure = retry.handle.owner.retry(retry);
+                    if (failure != null) reportFailure(retry.handle.owner.state, failure);
+                }
                 Runnable finalizer = Weak.take(token);
                 if (finalizer == null) {
                     try { Thread.sleep(10); } catch (InterruptedException ignored) { }
@@ -119,8 +156,9 @@ public final class ManagedWeaks {
     private final Language language;
     // No context root points at active K, V or F. Membership follows the logical lifetime.
     private Handle live;
-    // Failed installation is unfinished work, not evidence of key death. Explicit
-    // finalize/close settles it; normal active handles never reach these captures.
+    // Failed installation is unfinished work, not evidence of key death. The
+    // drainer can restore an allocation-failed successor; finalize/close settles
+    // other failures. Normal active handles never reach these captures.
     private Work failedWork;
     private boolean stopping, closed;
     private int running;
@@ -182,6 +220,8 @@ public final class ManagedWeaks {
         work.failure = failure;
         work.nextFailed = failedWork;
         failedWork = work;
+        if (!stopping && work instanceof Bootstrap bootstrap && bootstrap.installing
+                && failure instanceof OutOfMemoryError) Drainer.retry(bootstrap);
         notifyAll();
     }
     private Work failure(Handle handle, boolean remove) {
@@ -192,6 +232,7 @@ public final class ManagedWeaks {
                     if (previous == null) failedWork = current.nextFailed;
                     else previous.nextFailed = current.nextFailed;
                     current.nextFailed = null;
+                    if (current instanceof Bootstrap bootstrap) Drainer.cancel(bootstrap);
                 }
                 return current;
             }
@@ -210,6 +251,9 @@ public final class ManagedWeaks {
                 retire(handle);
                 return bootstrap.release();
             }
+            // Once claimed, the obsolete key identity has no remaining purpose.
+            // Preserve the exact successor for an allocation-only retry.
+            bootstrap.key = replacement; bootstrap.installing = true;
             install(handle, replacement, bootstrap.value, bootstrap.finalizer);
             bootstrap.release();
             notifyAll();
@@ -218,6 +262,25 @@ public final class ManagedWeaks {
             failed(bootstrap, failure);
             throw propagate(failure);
         }
+    }
+    /** One due attempt, outside the queue monitor; never enters guest cleanup. */
+    private synchronized Throwable retry(Bootstrap bootstrap) {
+        if (stopping || bootstrap.handle.retired || failure(bootstrap.handle, false) != bootstrap) return null;
+        try {
+            install(bootstrap.handle, bootstrap.key, bootstrap.value, bootstrap.finalizer);
+        } catch (OutOfMemoryError failure) {
+            // Preserve the first exception and the same preallocated work node.
+            Drainer.retry(bootstrap);
+            return null;
+        } catch (Throwable failure) {
+            // Protocol/linkage/VM failures are not an allocation recovery policy.
+            return failure;
+        }
+        failure(bootstrap.handle, true);
+        bootstrap.failure = null;
+        bootstrap.release();
+        notifyAll();
+        return null;
     }
     private synchronized void waitHandoff(Handle handle, long token) throws InterruptedException {
         while (!closed && handle.bootstrap && handle.token == token && failure(handle, false) == null) wait();
@@ -452,12 +515,17 @@ public final class ManagedWeaks {
         return threads.liveJavaId((GuestThreadId) key);
     }
     /** Fence admission before GuestThreads stops and joins the actual carriers. */
-    public synchronized void requestStop() { stopping = true; notifyAll(); }
+    public synchronized void requestStop() {
+        stopping = true;
+        for (Work work = failedWork; work != null; work = work.nextFailed)
+            if (work instanceof Bootstrap bootstrap) Drainer.cancel(bootstrap);
+        notifyAll();
+    }
     /** Called after the guest join, before any native provider is disposed. */
     public void close() {
         boolean interrupted = false;
         synchronized (this) {
-            stopping = true;
+            requestStop();
             while (running != 0) {
                 try { wait(); } catch (InterruptedException ignored) { interrupted = true; }
             }

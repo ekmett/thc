@@ -93,10 +93,13 @@ registration. Dead associations are classified before finalizer rescue.
 Resurrecting a key does not revive its retired registration. Dead registration
 metadata must be reclaimable without making old tokens valid again; collection
 and idle polling costs must not grow with all registrations since process startup.
-The currently pinned JAM adapter retains and scans those dead records, so this
-lifetime behavior also needs an upstream correction. Finalizer state
-retains its actual captures, without an invented reference to the entire value
-payload after death.
+The currently pinned JAM adapter retains and scans those dead records. The
+combined supplier candidate described below reuses retired slots with generation
+tokens and keeps active scans separate from historical capacity. Registration
+metadata failure returns to Java as an allocation failure without publishing a
+partial association. This does not cover arbitrary collector allocation failure.
+Finalizer state retains its actual captures, without an invented reference to the
+entire value payload after death.
 
 THC's completed thunk is an indirection to its exact WHNF. Both backends can
 replace a local thunk alias with that value. A weak registration created before
@@ -115,9 +118,13 @@ to the key, value or callbacks. Install and publish the successor before releasi
 the old captures. Retiring a bootstrap token is not logical death: dereference
 and callback attachment must settle queued/running handoff, including when called
 from a pump thread or nested finalizer. Explicit finalization races with the same
-claim protocol and runs the real finalizer at most once. Failed replacement must
-preserve its cleanup obligation and report failure; its recovery policy remains
-under review.
+claim protocol and runs the real finalizer at most once. Successor-installation
+`OutOfMemoryError` preserves the resolved successor and cleanup obligation. The
+existing drainer retries installation with capped backoff, including after the
+public handle is dropped. Publication restores that same handle before releasing
+failed captures. Explicit finalization or shutdown cancels retries; real cleanup
+and non-allocation failures are not retried. Continued allocation failure may
+retain the captures; recovery from actual heap exhaustion remains unqualified.
 
 Bootstrap captures can retain the key, answer and backing value until another
 collection. This may delay finalization and affect other weak associations;
@@ -199,14 +206,19 @@ it has no source, CBD, GHC or JDK dependency at execution time. The original GHC
 finalizer runner is included by the shared Core dependency selector. This check
 does not extend the JVM first-compiled-call evidence to Native Image.
 
-That image uses the diagnostic Linux release provider at Jam `5deba3e` with the
-source-verified root-repair fix in [Jam #18](https://github.com/ekmett/jam/pull/18).
-It is functional evidence, not a production package or acceptable performance
-claim. The current pinned supplier remains an explicitly labelled `fastdebug`
-preview. Production release-flavor qualification is tracked in
-[Jam #10](https://github.com/ekmett/jam/issues/10). Replacement-failure policy,
-native registration metadata lifetime, macOS execution and remaining Windows
-coverage are still open.
+The same unchanged executable also passes with the combined Jam Native Image
+component candidate `2626ef4f3a69dd7e1979a8430a2d717257fdc905`: root repair,
+pinning and reusable weak-registration metadata. Its Java API, native libraries
+and single Jam builder overlay come from one verified supplier bundle. It composes
+with THC's existing two-class builder correction and the diagnostic Linux release
+provider at Jam `5deba3e`. No THC runtime change was needed for this handoff.
+
+This qualifies that consumer on the combined Native Image candidate; the base
+JVM was unchanged. The current production pin remains an explicitly labelled
+`fastdebug` preview. A designated versioned release package, recovery from actual
+heap exhaustion, refreshed HotSpot qualification, macOS execution and remaining
+Windows coverage are still open. Production release-flavor qualification is tracked in
+[Jam #10](https://github.com/ekmett/jam/issues/10).
 
 The ordinary executable runs reuse verified producer inputs, artifact hashes and
 Core audits. A separate optional `--verify-artifacts` run exceeded its time bound

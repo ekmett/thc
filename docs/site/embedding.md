@@ -229,6 +229,19 @@ finished. Heap state, thunks, thread identities, and native resources belong to
 that context. Do not cache guest values across closed contexts or use runtime
 carriers as a cross-context interchange format.
 
+A host-held `Value` strongly retains its underlying Haskell value. Ordinary
+weak associations and `ForeignPtr` lifetime therefore account for references
+held by Java as well as references held by guest code. The
+[host resource example](../../src/examples/README.md#a-java-host-owns-a-haskell-resource)
+keeps a buffer in a Java collection, then observes automatic cleanup after the
+collection releases it while the context stays open.
+
+Separate `loadEntry` calls currently create separate program instances. If their
+packages declare overlapping static native exports, the second load rejects the
+conflict; identical declaration text does not establish shared CAF ownership.
+A single application factory can return related operations through the existing
+tuple/function transport. General shared-program loading remains unresolved.
+
 Compilation and metrics members are development controls, not evidence that
 every reachable operation is supported. Keep diagnostic unsupported traps out
 of accepted executable runs. `loadEntry` disables that diagnostic option for

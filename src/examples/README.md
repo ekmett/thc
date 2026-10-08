@@ -43,3 +43,51 @@ updates its value from 41 to 42. Its original weak registration stays dead, and
 a fresh registration finalizes after the recovered cell is released. The example
 uses only `base`; the [weak-pointer guide](../../docs/weak-explicit.md) describes
 the lifetime rules and current platform qualification.
+
+## A Java host owns a Haskell resource
+
+[HostResource.hs](HostResource.hs) allocates an ordinary `ForeignPtr` whose
+finalizer frees its buffer and increments an independent cleanup counter.
+[HostResourceDemo.java](java/thc/HostResourceDemo.java) keeps the returned
+polyglot `Value` in a Java collection across a collection request, reads the
+buffer through Haskell's `withForeignPtr`, then clears the Java collection.
+The context and cleanup observer stay open while the finalizer runs.
+
+```text
+Retained buffer: 100
+Released buffer: 1 cleanup
+```
+
+From the repository root with the pinned toolchain, run the independent native
+reference and the embedding example:
+
+```sh
+cabal run exe:host-resource --project-dir src/examples
+bin/host-resource-demo.sh
+```
+
+The second command uses the existing package acquisition path and JVM example
+build. It needs the normal [foreign-code setup](../../docs/interface-foreign.md).
+For already acquired Core, invoke the Java example directly through Gradle:
+
+```sh
+./gradlew hostResourceDemo --args="@/absolute/path/to/packages.json UNIT:HostResource.session"
+```
+
+One application factory returns its operations through the existing logical
+tuple/function boundary. Its closures retain only the counter; the resource is
+created later and belongs only to Java's `Value` collection. The small `io`
+helper supplies the erased `State#` argument and selects the result field from
+an ordinary Core IO call. See the [embedding guide](../../docs/site/embedding.md)
+for that transport and the current limitation on separately loading entries
+whose packages declare overlapping native exports.
+
+Automatic cleanup has no fixed collection count or timing guarantee. Use
+explicit close or scoped ownership for scarce resources. The example keeps its
+context alive until cleanup is observed; retaining a `Value` cannot make it
+usable after that context closes.
+
+Checked with native GHC 9.14.1 and actual Java embedding on the Jam JVM,
+bytecode/default. The outputs match, the resource assertions pass, and the
+native reference entry passes the authoritative Core audit. No additional
+runtime implementation is used by the example.

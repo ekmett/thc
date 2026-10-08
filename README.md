@@ -156,9 +156,24 @@ and forcing through saved continuations. Load requests and ordinary executable
 launches default to async off on both backends: off speculates on a single guest
 admission origin until guest concurrency is admitted. Explicit async opt-in
 enables polling immediately. Delimited capture across STM and GC-driven deadlock detection remain unsupported.
-[Automatic weak finalization](docs/weak-explicit.md) has selected Linux and
-Windows JVM qualification; Native Image and the remaining lifecycle boundaries
-are still open.
+Jam supplies the collector support for [automatic weak finalization](docs/weak-explicit.md),
+including values and finalizers that refer back to their keys. The
+[foreign resource example](src/examples/standard-apps/foreign-resource/README.md)
+uses ordinary `ForeignPtr` APIs to keep a native buffer alive during use and run
+a Haskell cleanup action when its last owner disappears. It passes on both
+backends and handoff modes on Linux. The [weak thread example](src/examples/README.md)
+observes worker lifetime and uses a finalizer to return mutable state to the
+application, where it can be updated again. It also passes all four combinations.
+The [buffered Handle example](src/examples/standard-apps/buffered-handle/README.md)
+shows original `System.IO` finalizers flushing output and releasing file locks
+when a handle becomes unreachable. It matches GHC on Linux with bytecode/default
+and AST/dense execution. The [lazy file example](src/examples/standard-apps/lazy-file/README.md)
+shows deferred input keeping its Handle alive until the unread tail is discarded. The
+[weak document cache](src/examples/standard-apps/weak-cache/README.md) reuses lazy
+analyses while their document is live, then releases the document/report cycle
+without discarding the cache itself.
+The [Jam runtime guide](docs/jam-runtime.md) records the wider JVM/Native Image
+evidence and the remaining production and platform qualification.
 
 The public [`thc:runtime` API](docs/runtime-services.md) exposes permissions,
 thread and affinity observations, memory/GC statistics and structured tracing.
