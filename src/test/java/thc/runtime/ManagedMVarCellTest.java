@@ -236,7 +236,7 @@ class ManagedMVarCellTest {
 
     @Test void interruptionBeforeRegistrationAndCancellationOfAnUnsubmittedTokenAreSafe() throws Exception {
         var cell = new ManagedMVar();
-        var request = cell.new Request(ManagedMVar.Operation.TAKE, null, null);
+        var request = new ManagedMVar.Request(cell, ManagedMVar.Operation.TAKE, null, null);
         Thread.currentThread().interrupt();
         try { assertThrows(InterruptedException.class, request::await); }
         finally { Thread.interrupted(); }
@@ -247,7 +247,7 @@ class ManagedMVarCellTest {
         assertTrue(cell.tryPut(value));
         assertSame(value, request.await()); assertSame(value, request.await());
         assertTrue(cell.isEmpty());
-        var abandoned = cell.new Request(ManagedMVar.Operation.PUT, new Object(), null);
+        var abandoned = new ManagedMVar.Request(cell, ManagedMVar.Operation.PUT, new Object(), null);
         assertTrue(abandoned.cancel());
         assertNull(abandoned.pendingPutValue());
         assertThrows(CancellationException.class, abandoned::await);
