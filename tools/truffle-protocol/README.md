@@ -23,10 +23,28 @@ populate observed-target caches or write specialization bits. Exact scalar
 case/tuple locals and constructor fields use their declared physical carriers;
 unknown carriers retain the generic path.
 
+## Virtual-thread mount carrier lookup
+
+`mount-carrier-lookup.patch` makes the existing generated module implement
+`Supplier<Thread>` for the classpath-isolated carrier lookup. The supplier is
+instantiated during JavaLangSupport setup after the existing qualified exports
+are installed. Mount callbacks then use ordinary interface/static calls, avoiding
+MethodHandle threshold customization that can initialize classes or suspend
+inside a callback. This changes the shared classpath runtime for all languages;
+the named-module direct path and other MethodHandles remain unchanged.
+
+`compileCarrierLookupApi` compiles only the pinned `JDKSupport` source with
+source/target 17 and its upstream JDK-internal compiler exports. These are build
+inputs, not application launch flags. The existing root classes still compile
+with `--release 17`. The distinct API artifact adds `carrier1` to its suffix and
+retains the original module descriptors, multi-release entries and unrelated
+classes. Stock selection retains the upstream carrier lookup.
+
 ## Materializable root declaration
 
 `./gradlew materializableApiJar` compiles the patched `RootNode`, `NodeAccessor`
-and `ContinuationRootNode` sources. The distinct API jar retains every unrelated upstream
+and `ContinuationRootNode` sources, alongside the separately compiled carrier
+lookup owner. The distinct API jar retains every unrelated upstream
 class, resource, service, module descriptor and multi-release entry byte-for-byte.
 `verifyMaterializableApiSelection` checks that preservation and the runtime
 classpath. THC's optional declarations also compile against the stock API,
