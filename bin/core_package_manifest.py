@@ -513,10 +513,15 @@ def managed_import_stubs(module):
 
 
 def native_archive_calls(value):
-    if isinstance(value, dict):
-        return ([value['foreignCall']] if 'foreignCall' in value else []) + sum((native_archive_calls(v) for v in value.values()), [])
-    if isinstance(value, list): return sum((native_archive_calls(v) for v in value), [])
-    return []
+    calls, pending = [], [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, dict):
+            if 'foreignCall' in current: calls.append(current['foreignCall'])
+            pending.extend(reversed(current.values()))
+        elif isinstance(current, list):
+            pending.extend(reversed(current))
+    return calls
 
 
 
@@ -672,13 +677,12 @@ def package_native_archive(module):
     return archive
 
 
-def native_archive_blocks(module, binding, archive):
+def native_archive_blocks(module, binding, archive, owned_call):
     if archive['unclassifiedReason'] is not None or archive['unresolvedSymbols']: return True
     return any(isinstance(call, dict) and isinstance(call.get('target'), dict) and
-        not context_owned_rts_call(call) and
         call['target'].get('unit') == module['unit'] and any(
             call['target'].get('symbol') == emitted['symbol'] and call.get('convention') == emitted['convention'] and
-            call.get('safety') == emitted['safety'] for emitted in archive['unsupportedImports'])
+            call.get('safety') == emitted['safety'] for emitted in archive['unsupportedImports']) and not owned_call(call)
         for call in native_archive_calls(binding))
 
 
@@ -696,11 +700,6 @@ def _core_native_overrides():
         raise ValueError('Ambiguous Core native override capability profile')
     return profile['calls']
 
-
-def context_owned_rts_call(call):
-    """Select existing owned handlers; their full live validators still run."""
-    return core_original_foreign.context_owned_rts_call(call) or any(
-        _same_json_value(call, expected) for expected in _core_native_overrides())
 
 
 def _core_native_import(entry, calls):

@@ -8,6 +8,12 @@ These declarations alone do not enable complete decoding or remote capture.
 """
 
 import re
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 
 STACK_CLONE = 'stg_cloneMyStackzh'
 PROCESS_OPERATIONS = {
@@ -445,19 +451,75 @@ def operation(target, declared=None):
             if isinstance(unit, str) else OPERATIONS[symbol])
 
 
-def context_owned_rts_call(call):
-    """The original RTS identity subset selected before package C in Java.
 
-    This is selection only: the existing operation validator still checks the
-    descriptor, operands and capabilities. Ordinary library names are excluded.
+class ForeignOwnership:
+    """One cold batch through the selected runtime's actual operation selector.
+
+    Ownership only chooses a validator; it never grants native execution or
+    replaces that validator's ABI, head, operand or provenance checks.
     """
-    target = call.get('target', {}) if isinstance(call, dict) else {}
-    return target.get('unit') == 'ghc-internal' and target.get('symbol') in (
-        STACK_CLONE, *STACK_INFO, 'hs_free_stable_ptr', 'rts_setMainThread',
-        'rtsSupportsBoundThreads', 'stg_getThreadAllocationCounterzh',
-        'rts_getThreadId', 'eq_thread', 'cmp_thread', 'shutdownHaskellAndExit',
-        'shutdownHaskellAndSignal', 'reportStackOverflow', 'reportHeapOverflow',
-        'errorBelch2', 'debugBelch2')
+    @staticmethod
+    def key(call):
+        target = call.get('target') if isinstance(call, dict) else None
+        if not isinstance(target, dict) or not isinstance(target.get('symbol'), str):
+            return None
+        return json.dumps(target, sort_keys=True, separators=(',', ':'))
+
+    def __init__(self, calls, runtime=None, command_file=None):
+        selected = {}
+        for call in calls:
+            key = self.key(call)
+            if key is not None: selected.setdefault(key, call)
+        self.owners, self.provenance = {}, None
+        if not selected: return
+        command_file = command_file or (os.environ.get('THC_FOREIGN_OWNERSHIP') if runtime is None else None)
+        if command_file:
+            prepared = Path(command_file).resolve()
+            if not prepared.is_file():
+                raise ValueError('Missing prepared foreign ownership command: ' + str(prepared) +
+                    '; run ./gradlew foreignOwnershipCommand explicitly')
+            command = json.loads(prepared.read_text())['command']
+            if not isinstance(command, list) or not command or any(not isinstance(arg, str) for arg in command):
+                raise ValueError('Invalid prepared foreign ownership command')
+            producer = dict(path=str(prepared), sha256=hashlib.sha256(prepared.read_bytes()).hexdigest())
+        else:
+            executable = Path(runtime or os.environ.get('THC_RUNTIME') or
+                Path(__file__).resolve().parents[1] / 'build/install/thc/bin' /
+                ('thc.bat' if os.name == 'nt' else 'thc')).resolve()
+            if not executable.is_file():
+                raise ValueError('Foreign ownership classification requires a built runtime: ' + str(executable) +
+                    '; build the runtime explicitly or supply --runtime / --ownership-command')
+            command = [str(executable), '--classify-foreign-calls']
+            producer = dict(path=str(executable), sha256=hashlib.sha256(executable.read_bytes()).hexdigest())
+        request = json.dumps(list(selected.values()), ensure_ascii=True, allow_nan=False).encode('ascii')
+        result = subprocess.run(command, input=request, stdout=subprocess.PIPE, stderr=sys.stderr, check=False)
+        if result.returncode:
+            raise ValueError('Foreign ownership classifier failed with exit ' + str(result.returncode) + ': ' + str(command))
+        response = json.loads(result.stdout)
+        if (not isinstance(response, dict) or response.get('schema') != 1 or
+                not isinstance(response.get('runtime'), dict)):
+            raise ValueError('Invalid foreign ownership classifier response')
+        identity = response['runtime']
+        if (identity.get('algorithm') not in ('sha256', 'sha256-path-manifest-v1') or
+                not isinstance(identity.get('path'), str) or
+                not isinstance(identity.get('sha256'), str) or not re.fullmatch('[0-9a-f]{64}', identity['sha256'])):
+            raise ValueError('Foreign ownership classifier did not identify its runtime')
+        owners = response.get('owners')
+        if (not isinstance(owners, list) or len(owners) != len(selected) or
+                any(owner is not None and (not isinstance(owner, str) or not owner) for owner in owners)):
+            raise ValueError('Invalid foreign ownership classifier response')
+        self.owners = dict(zip(selected, owners))
+        self.provenance = dict(command=command, requests=len(selected),
+            producer=producer, runtime=identity,
+            requestSha256=hashlib.sha256(request).hexdigest(),
+            responseSha256=hashlib.sha256(result.stdout).hexdigest())
+
+    def __call__(self, call):
+        key = self.key(call)
+        if key is None: return False
+        if key not in self.owners:
+            raise ValueError('Foreign ownership was not classified in the audit batch: ' + key)
+        return self.owners[key] is not None
 
 
 def boxed_owned_call(call):

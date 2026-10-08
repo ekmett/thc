@@ -301,7 +301,7 @@ endforeach()
 # not inferred from the deterministic composite.
 audited_fixture(weak-explicit WeakAudit
   SOURCES t/fixtures/compiler/WeakAudit.hs
-  DEPENDS "${weak_support}/packages.json" "${weak_support}/manifest.json"
+  DEPENDS "${weak_support}/packages.json" "${weak_support}/manifest.json" "${ownership_command}"
   OBJECT_DIRS native pre/ghc post/ghc
   BYPRODUCTS pre/core/THC.InterfaceClosure.cbd post/core/THC.InterfaceClosure.cbd
   OUTPUTS manifest.json NativeWeak.hs oracle.tsv native/weak-oracle native/inputs.txt ${weak_logs}

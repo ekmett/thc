@@ -27,7 +27,7 @@ public final class PackageNativeArchive {
             for (var emitted : excluded) if (Objects.equals(target.get("symbol"), emitted.get("symbol")) &&
                     Objects.equals(call.get("convention"), emitted.get("convention")) &&
                     Objects.equals(call.get("safety"), emitted.get("safety")) &&
-                    CoreForeignOverride.select(Map.of("foreignCall", call)) == null) return true;
+                    CoreForeignOverride.owner(Map.of("foreignCall", call)) == null) return true;
         }
         return false;
     }

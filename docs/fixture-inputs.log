@@ -18,6 +18,12 @@ Shared exporter/auditor inputs (where consumed):
   bin/core_original_foreign.py. Audits consume bin/audit-core.py, imported core_*
   modules, bin/core-capabilities.json, scalar-primop-signatures.json,
   src/test/resources/thc/polyglot-abi.json and bin/simd-families.json.
+  Package-aware audits additionally consume the selected runtime classifier,
+  prepared explicitly by foreignOwnershipCommand or an installed THC launcher.
+  Reports record its actual class/JAR digest; CMake declares the compile-only
+  producer for weak-explicit and the two Python audit checks. Pure audits do not
+  need it. Standalone package-aware producers pass THC_FOREIGN_OWNERSHIP or
+  THC_RUNTIME; no auditor imports implicitly build or launch a JVM.
   GHC/GHC_PKG/CABAL/THC_COMPACT and inherited tool/configuration environments select
   these tools. Export flags and pre/post stage options are separate inputs.
 

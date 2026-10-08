@@ -153,7 +153,52 @@ public final class Main {
         }
     }
 
+    // Report the actual selector code source, including every compiled class it
+    // can consult. This cold audit path never initializes a guest context.
+    private static Map<String, String> foreignOwnershipRuntime() throws java.io.IOException {
+        try {
+            var source = java.nio.file.Path.of(thc.runtime.CoreForeignOverride.class.getProtectionDomain()
+                .getCodeSource().getLocation().toURI());
+            var digest = java.security.MessageDigest.getInstance("SHA-256");
+            boolean directory = java.nio.file.Files.isDirectory(source);
+            if (directory) {
+                try (var paths = java.nio.file.Files.walk(source)) {
+                    for (var path : paths.filter(java.nio.file.Files::isRegularFile).sorted().toList()) {
+                        var fileDigest = java.security.MessageDigest.getInstance("SHA-256");
+                        try (var input = new java.security.DigestInputStream(java.nio.file.Files.newInputStream(path), fileDigest)) {
+                            input.transferTo(java.io.OutputStream.nullOutputStream());
+                        }
+                        digest.update((HexFormat.of().formatHex(fileDigest.digest()) + "  " +
+                            source.relativize(path).toString().replace('\\', '/') + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                }
+            } else {
+                try (var input = new java.security.DigestInputStream(java.nio.file.Files.newInputStream(source), digest)) {
+                    input.transferTo(java.io.OutputStream.nullOutputStream());
+                }
+            }
+            return new TreeMap<>(Map.of("path", source.toString(), "algorithm", directory ? "sha256-path-manifest-v1" : "sha256",
+                "sha256", HexFormat.of().formatHex(digest.digest())));
+        } catch (java.net.URISyntaxException | java.security.NoSuchAlgorithmException failure) {
+            throw new IllegalStateException("Cannot identify the foreign ownership runtime", failure);
+        }
+    }
+
     public static void launch(String[] arguments) {
+        if (arguments.length == 1 && arguments[0].equals("--classify-foreign-calls")) {
+            // Cold audit routing only. Selected operations still validate the full
+            // ABI, foreign head and operands before any guest execution.
+            try {
+                Object input = Json.parse(new String(System.in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                require(input instanceof List<?>, "Foreign ownership requires a JSON array of call descriptors");
+                var owners = new ArrayList<String>();
+                for (Object call : (List<?>) input) {
+                    owners.add(thc.runtime.CoreForeignOverride.owner(Collections.singletonMap("foreignCall", call)));
+                }
+                System.out.println(Json.stringify(new TreeMap<>(Map.of("schema", 1, "runtime", foreignOwnershipRuntime(), "owners", owners))));
+            } catch (java.io.IOException failure) { throw new java.io.UncheckedIOException(failure); }
+            return;
+        }
         var withVerification = launcherArtifactVerification(arguments);
         String[] args = withVerification.arguments();
         boolean verifyArtifacts = withVerification.verifyArtifacts();

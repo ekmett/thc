@@ -624,9 +624,11 @@ class _StreamReport(dict):
 
 
 class Audit:
-    def __init__(self, modules, capabilities, foreign_exception_bridge_unit=None, *, store=None):
+    def __init__(self, modules, capabilities, foreign_exception_bridge_unit=None, *, store=None, runtime=None, ownership_command=None):
         self.cap = capabilities
         self.store = store
+        self._foreign_descriptors = {}
+        self._archive_candidates = []
         self.bindings = store.bindings if store is not None else {}
         self.constructors = _InputRecords(store, 'constructors') if store is not None else {}
         self.sources = store.sources if store is not None else {}
@@ -658,6 +660,21 @@ class Audit:
         for source, module in modules:
             self._register_module(source, module)
             del module  # Drop the full AST before parsing the next module.
+        # Ingestion already reads each module. Classify its distinct foreign
+        # identities once, after the complete package-link inventory is known.
+        required = set(self.package_scalar_links)
+        required.update(unit for _, _, unit, _, _ in self._archive_candidates)
+        self.foreign_ownership = core_original_foreign.ForeignOwnership(
+            (call for call in self._foreign_descriptors.values()
+             if isinstance(call['target'].get('unit'), str) and call['target']['unit'] in required),
+            runtime, ownership_command)
+        for source, detail, unit, archive, key in self._archive_candidates:
+            if core_package_manifest.native_archive_blocks(dict(unit=unit), dict(self.bindings[key]), archive,
+                    self.foreign_ownership):
+                self.archive_bindings[key] = (source, detail)
+        del self._archive_candidates, self._foreign_descriptors
+        if store is not None and self.foreign_ownership.provenance is not None:
+            store.put_record('input-provenance', 'foreign-ownership', self.foreign_ownership.provenance)
         for name in self.provided_modules if store is not None else sorted(self.provided_modules):
             if name not in self.complete_modules:
                 self.issue('module-format', None, name, 'Interface closure lacks its exact complete provided module')
@@ -772,6 +789,9 @@ class Audit:
                        archive or
                        'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
         for binding in module.get('bindings', []):
+            for call in core_package_manifest.native_archive_calls(binding):
+                identity = core_original_foreign.ForeignOwnership.key(call)
+                if identity is not None: self._foreign_descriptors.setdefault(identity, call)
             key = binding.get('id')
             if not isinstance(key, str):
                 self.issue('binding-id', None, source, 'Binding lacks a string id')
@@ -785,9 +805,11 @@ class Audit:
                     self.sources[key] = source
                 else:
                     self.store.put_binding(source, binding)
-                if archive and not registration and (native_archive is None or
-                        core_package_manifest.native_archive_blocks(module, binding, native_archive)):
-                    self.archive_bindings[key] = (source, archive)
+                if archive and not registration:
+                    if native_archive is None or native_archive['unclassifiedReason'] is not None or native_archive['unresolvedSymbols']:
+                        self.archive_bindings[key] = (source, archive)
+                    elif core_package_manifest.native_archive_blocks(module, binding, native_archive, lambda call: False):
+                        self._archive_candidates.append((source, archive, module['unit'], native_archive, key))
         for constructor in module.get('constructors', []):
             key = constructor.get('id')
             if not isinstance(key, str):
@@ -1514,7 +1536,7 @@ class Audit:
         package_link = self.package_scalar_links.get(target.get('unit')) if isinstance(target, dict) else None
         # JavaScript in a mixed native unit uses its full descriptor check below.
         if (package_link is not None and call.get('convention') in ('ccall', 'capi') and
-                call.get('intrinsic') != 'javascript-v1' and not core_package_manifest.context_owned_rts_call(call)):
+                call.get('intrinsic') != 'javascript-v1' and not self.foreign_ownership(call)):
             try:
                 head = self.expression_rep(function)
                 if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or not function[1] or
@@ -3033,7 +3055,7 @@ class Audit:
                     runtimeExternals=[dict(id=key, uses=[edge for edge in self.edges if edge['dependency'] == key])
                                       for key in sorted((set(self.cap.get('externalBindings', [])) - self.bindings.keys()) & {edge['dependency'] for edge in self.edges})],
                     primitives=[dict(name=k, expectedArity=self.cap['primitives'].get(k), uses=v) for k, v in sorted(self.primitives.items())],
-                    foreignCalls=self.foreign_calls,
+                    foreignOwnership=self.foreign_ownership.provenance, foreignCalls=self.foreign_calls,
                     constructors=[dict(id=k, metadata=self.constructors.get(k), uses=v) for k, v in sorted(self.used_constructors.items())],
                     literals=[v for _, v in sorted(self.literals.items())], issues=self.issues,
                     unresolvedNativeSymbols=self.unresolved_native_symbols,
@@ -3084,7 +3106,7 @@ class Audit:
             runtimeExternals=_StreamArray(runtime_externals),
             primitives=_StreamArray(lambda: (dict(name=key, expectedArity=self.cap['primitives'].get(key), uses=events('primitives', key))
                 for key in store.event_groups('primitives'))),
-            foreignCalls=events('foreign'),
+            foreignOwnership=self.foreign_ownership.provenance, foreignCalls=events('foreign'),
             constructors=_StreamArray(lambda: (dict(id=key, metadata=self.constructors.get(key), uses=events('constructors', key))
                 for key in store.event_groups('constructors'))),
             literals=_StreamArray(literals), issues=_StreamArray(issues),
@@ -3119,7 +3141,7 @@ def _input_modules(package_manifest, files, store=None, manifest_identity=None):
         del module
 
 
-def _audit_inputs(package_manifest, files, capabilities, store=None):
+def _audit_inputs(package_manifest, files, capabilities, store=None, runtime=None, ownership_command=None):
     # Read the selected unit from the same validated manifest snapshot that
     # supplies the modules. Peeking retains only the current module, never the
     # stream, and keeps manifest diagnostics before module-registration issues.
@@ -3129,7 +3151,7 @@ def _audit_inputs(package_manifest, files, capabilities, store=None):
         bridge_unit = identity.get('manifest', {}).get('foreignExceptionBridgeUnit')
         inputs = chain(() if first is None else (first,), modules)
         del first
-        return Audit(inputs, capabilities, bridge_unit, store=store)
+        return Audit(inputs, capabilities, bridge_unit, store=store, runtime=runtime, ownership_command=ownership_command)
 
 
 def _tool_provenance(capabilities, capability_bytes):
@@ -3169,6 +3191,9 @@ def main():
     parser.add_argument('--io-main', action='store_true', help='Validate the exact IO () host entry contract instead of the scalar host result')
     parser.add_argument('--capabilities', type=Path, default=Path(__file__).with_name('core-capabilities.json'))
     parser.add_argument('--output', type=Path, help='Atomically publish the complete JSON report here (otherwise stdout)')
+    ownership = parser.add_mutually_exclusive_group()
+    ownership.add_argument('--ownership-command', type=Path, help='Explicit command JSON prepared by ./gradlew foreignOwnershipCommand (or THC_FOREIGN_OWNERSHIP)')
+    ownership.add_argument('--runtime', type=Path, help='Matching built THC launcher for one cold foreign-ownership batch (default THC_RUNTIME or build/install/thc/bin/thc)')
     storage = parser.add_mutually_exclusive_group()
     storage.add_argument('--store', type=Path, help='Fresh SQLite working catalogue; existing paths are never reused')
     storage.add_argument('--eager', action='store_true', help='Use the original in-memory path for small-input equivalence checks')
@@ -3192,7 +3217,7 @@ def main():
         capability_bytes = args.capabilities.read_bytes()
         capabilities = json.loads(capability_bytes.decode('utf-8'))
         if args.eager:
-            report = _audit_inputs(args.package_manifest, files, capabilities).run(args.entry, io_main=args.io_main)
+            report = _audit_inputs(args.package_manifest, files, capabilities, runtime=args.runtime, ownership_command=args.ownership_command).run(args.entry, io_main=args.io_main)
             _emit_report(report, args.output)
         else:
             if args.store is not None:
@@ -3208,7 +3233,7 @@ def main():
                 looseModules=[str(path) for path in files])
             with AuditStore(store_path, provenance) as store:
                 print('Audit working catalogue: ' + str(store_path), file=sys.stderr)
-                auditor = _audit_inputs(args.package_manifest, files, capabilities, store)
+                auditor = _audit_inputs(args.package_manifest, files, capabilities, store, args.runtime, args.ownership_command)
                 store.checkpoint('walking')
                 report = auditor.run(args.entry, io_main=args.io_main)
                 store.checkpoint('walked')

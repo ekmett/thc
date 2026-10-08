@@ -50,6 +50,15 @@ list(APPEND fixture_env "GHC_PACKAGE_PATH=${ghc_db}"
 include(cmake/ScalarFixtures.cmake)
 include(cmake/CoreFixtures.cmake)
 include(cmake/ArrayFixtures.cmake)
+# The cold ownership selector compiles Java only; it never depends on fixtures.
+# The two Gradle preparation targets share this checkout's single writer pool.
+set_property(GLOBAL APPEND PROPERTY JOB_POOLS gradle=1)
+set(ownership_command "${PROJECT_SOURCE_DIR}/build/foreign-ownership.json")
+add_custom_target(prepare-foreign-ownership
+  COMMAND ./gradlew --daemon "--max-workers=${THC_BUILD_JOBS}" foreignOwnershipCommand
+  BYPRODUCTS "${ownership_command}"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" JOB_POOL gradle VERBATIM)
+list(APPEND fixture_env "THC_FOREIGN_OWNERSHIP=${ownership_command}")
 include(cmake/AuditedFixtures.cmake)
 include(cmake/ApiFixtures.cmake)
 include(cmake/NativeFixtures.cmake)

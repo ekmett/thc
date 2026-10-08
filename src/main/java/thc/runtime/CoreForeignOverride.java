@@ -164,6 +164,16 @@ public enum CoreForeignOverride {
         }
     }
 
+    /** Canonical ownership for archive routing and cold audits, never ABI admission. */
+    public static String owner(Object metadata) {
+        var operation = select(metadata);
+        if (operation != null) return operation.name();
+        if (!(metadata instanceof Map<?, ?> meta) || !(meta.get("foreignCall") instanceof Map<?, ?> call) ||
+                !(call.get("target") instanceof Map<?, ?> target)) return null;
+        var dynamic = CoreDynamicForeign.select(target);
+        return dynamic == null ? null : dynamic.name();
+    }
+
     public static CoreForeignOverride select(Object metadata) {
         if (!(metadata instanceof Map<?, ?> meta) || !(meta.get("foreignCall") instanceof Map<?, ?> call) ||
                 !(call.get("target") instanceof Map<?, ?> target) || !(target.get("symbol") instanceof String symbol)) return null;

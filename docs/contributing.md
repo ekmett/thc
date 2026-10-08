@@ -72,6 +72,26 @@ require complete installed Core; `THC_INSTALLED_CORE_GHC`,
 `THC_INSTALLED_CORE_GHC_PKG` and `THC_INSTALLED_CORE_GHC_SOURCE` select its compiler,
 package tool and configured GHC sources when needed.
 
+Package-aware Core audits ask the matching runtime's `CoreForeignOverride.owner`
+which static or dynamic operations own THC state, then keep the auditor's ABI, head, operand and
+archive-provenance checks. `thc run --verify-artifacts` passes its selected
+runtime automatically. A standalone audit can pass `--runtime /path/to/thc`
+(or `THC_RUNTIME`). For fixture preparation before an installed distribution
+exists, prepare only the Java classifier:
+
+```sh
+./gradlew foreignOwnershipCommand
+export THC_FOREIGN_OWNERSHIP="$PWD/build/foreign-ownership.json"
+```
+
+`bin/audit-core.py --ownership-command` accepts the same command file explicitly.
+The CMake graph declares this producer for `weak-explicit` and the two Python
+audit checks. Other standalone package-aware producers require the same explicit
+preparation. Pure audits do not launch it. Each audit batches its distinct
+foreign identities into one cold process without starting a guest context;
+reports record the actual runtime class/JAR digest and request/response hashes.
+The auditor never builds a missing runtime or acquires libraries.
+
 `bin/try.sh --handoff-modes` compares the Core corpus against native GHC;
 `bin/try-libraries.sh` checks library examples. The full-Core foreign-exception lane is quarantined during dependency repair;
 `make foreign-exception-test-modes` stops before preparation. Its intended inputs
