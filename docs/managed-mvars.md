@@ -49,8 +49,10 @@ Both backends use these requests for
 an uncommitted request and saves a retry at the guest continuation cut.
 [Managed weak registrations](weak-explicit.md) allow raw `MVar#` keys to own
 lazy values and finalizers. An otherwise unrooted value-to-key cycle can collect;
-a retained request keeps its cell and conditional values alive even after
-cancellation. Explicit finalization and context close detach these values.
+a pending request keeps its cell and conditional values alive. Cancellation or
+commitment releases the request's cell reference. A committed request retains
+its result for safepoint retries, including any cell referenced by that result.
+Explicit finalization and context close detach conditional values.
 
 With Jam, `addMVarFinalizer` can execute its Haskell cleanup automatically when
 the cell becomes unreachable. Attached C callbacks follow the same general weak

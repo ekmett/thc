@@ -30,11 +30,11 @@ public final class ManagedMVar {
     @TruffleBoundary(transferToInterpreterOnException = false)
     public Object take(Node node) { return take(node, false); }
     @TruffleBoundary(transferToInterpreterOnException = false)
-    public Object take(Node node, boolean async) { return awaitAt(new Request(Operation.TAKE, null, async ? node : null), node); }
+    public Object take(Node node, boolean async) { return awaitAt(new Request(this, Operation.TAKE, null, async ? node : null), node); }
     @TruffleBoundary public Object read(Node node) { return read(node, false); }
-    @TruffleBoundary public Object read(Node node, boolean async) { return awaitAt(new Request(Operation.READ, null, async ? node : null), node); }
+    @TruffleBoundary public Object read(Node node, boolean async) { return awaitAt(new Request(this, Operation.READ, null, async ? node : null), node); }
     @TruffleBoundary public void put(Object value, Node node) { put(value, node, false); }
-    @TruffleBoundary public void put(Object value, Node node, boolean async) { awaitAt(new Request(Operation.PUT, value, async ? node : null), node); }
+    @TruffleBoundary public void put(Object value, Node node, boolean async) { awaitAt(new Request(this, Operation.PUT, value, async ? node : null), node); }
     private Object awaitAt(Request request, Node node) {
         try {
             // Harmless safepoint interruptions retry the callback, not registration.
@@ -88,18 +88,21 @@ public final class ManagedMVar {
         @Override public String toString() { return "PendingCounts(takers=" + takers + ", readers=" + readers + ", putters=" + putters + ")"; }
     }
     /** Stable request identity is also the seam for deterministic protocol tests. */
-    public final class Request {
+    public static final class Request {
+        private ManagedMVar cell;
+        private final ReentrantLock lock;
+        private final Condition completed;
         private final Operation operation;
         private final Node checkpoint;
-        private final Condition completed = lock.newCondition();
         private RequestState status = RequestState.PENDING;
         private boolean submitted;
         private boolean queued;
         private Object offeredValue;
         private Object result;
-        public Request(Operation operation) { this(operation, null); }
-        public Request(Operation operation, Object offered) { this(operation, offered, null); }
-        public Request(Operation operation, Object offered, Node checkpoint) {
+        public Request(ManagedMVar cell, Operation operation) { this(cell, operation, null); }
+        public Request(ManagedMVar cell, Operation operation, Object offered) { this(cell, operation, offered, null); }
+        public Request(ManagedMVar cell, Operation operation, Object offered, Node checkpoint) {
+            this.cell = java.util.Objects.requireNonNull(cell); lock = cell.lock; completed = lock.newCondition();
             this.operation = java.util.Objects.requireNonNull(operation); offeredValue = offered; this.checkpoint = checkpoint;
         }
         public RequestState getState() { lock.lock(); try { return status; } finally { lock.unlock(); } }
@@ -110,9 +113,9 @@ public final class ManagedMVar {
             if (submitted || status != RequestState.PENDING) return;
             submitted = true;
             switch (operation) {
-                case TAKE -> { if (full) commitLocked(takeLocked()); else enqueueLocked(takers); }
-                case READ -> { if (full) commitLocked(value); else enqueueLocked(readers); }
-                case PUT -> { if (full) enqueueLocked(putters); else { putLocked(offeredValue); commitLocked(null); } }
+                case TAKE -> { if (cell.full) commitLocked(cell.takeLocked()); else enqueueLocked(cell.takers); }
+                case READ -> { if (cell.full) commitLocked(cell.value); else enqueueLocked(cell.readers); }
+                case PUT -> { if (cell.full) enqueueLocked(cell.putters); else { cell.putLocked(offeredValue); commitLocked(null); } }
             }
         }
         private void enqueueLocked(ArrayDeque<Request> queue) { queue.addLast(this); queued = true; }
@@ -122,7 +125,8 @@ public final class ManagedMVar {
         public void commitLocked(Object value) {
             check(lock.isHeldByCurrentThread() && status == RequestState.PENDING);
             result = value; offeredValue = null; queued = false; status = RequestState.COMMITTED;
-            completed.signalAll();
+            // Safepoint retries need the cached result and lock, not the completed cell.
+            cell = null; completed.signalAll();
         }
         /** InterruptedException leaves this same request queued at the same position. */
         public Object await() throws InterruptedException {
@@ -155,11 +159,11 @@ public final class ManagedMVar {
             try {
                 if (status != RequestState.PENDING) return false;
                 if (queued) {
-                    var queue = switch (operation) { case TAKE -> takers; case READ -> readers; case PUT -> putters; };
+                    var queue = switch (operation) { case TAKE -> cell.takers; case READ -> cell.readers; case PUT -> cell.putters; };
                     check(queue.remove(this));
                 }
                 queued = false; offeredValue = null; result = null; status = RequestState.CANCELLED;
-                completed.signalAll();
+                cell = null; completed.signalAll();
                 return true;
             } finally { lock.unlock(); }
         }
@@ -168,13 +172,13 @@ public final class ManagedMVar {
     }
     // Direct tests register without entering a Truffle context. Production registers interruptibly in await.
     public Request beginTake() {
-        lock.lock(); try { var request = new Request(Operation.TAKE); request.submitLocked(); return request; } finally { lock.unlock(); }
+        lock.lock(); try { var request = new Request(this, Operation.TAKE); request.submitLocked(); return request; } finally { lock.unlock(); }
     }
     public Request beginRead() {
-        lock.lock(); try { var request = new Request(Operation.READ); request.submitLocked(); return request; } finally { lock.unlock(); }
+        lock.lock(); try { var request = new Request(this, Operation.READ); request.submitLocked(); return request; } finally { lock.unlock(); }
     }
     public Request beginPut(Object value) {
-        lock.lock(); try { var request = new Request(Operation.PUT, value); request.submitLocked(); return request; } finally { lock.unlock(); }
+        lock.lock(); try { var request = new Request(this, Operation.PUT, value); request.submitLocked(); return request; } finally { lock.unlock(); }
     }
     public PendingCounts pendingCounts() {
         lock.lock(); try { return new PendingCounts(takers.size(), readers.size(), putters.size()); } finally { lock.unlock(); }

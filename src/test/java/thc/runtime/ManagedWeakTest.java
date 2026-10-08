@@ -319,7 +319,7 @@ class ManagedWeakTest {
         }
     }
     @Test
-    void ownedFreeWaitsForRetainedMVarRequestsBeforeRetiringCollectedKeys() throws Exception {
+    void ownedFreeWaitsForPendingMVarRequestsButNotCancelledTokens() throws Exception {
         for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
             context.initialize("thc"); context.enter();
             var state = Language.currentState(); var threads = state.getThreads();
@@ -332,6 +332,9 @@ class ManagedWeakTest {
                 var key = new ManagedMVar(); var request = key.beginRead(); var value = new ManagedMutVar(key);
                 var weak = ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"),
                     new Object[]{0L, key, value, Unit.INSTANCE});
+                var retired = new CompletableFuture<Void>();
+                // Callbacks prepend, so this observer runs after the native free.
+                assertEquals(1L, registry.addCallback(weak, () -> retired.complete(null)));
                 assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
                 var queue = new ReferenceQueue<Object>(); var keyReference = new WeakReference<Object>(key, queue);
                 var valueReference = new WeakReference<>(value); key = null; value = null;
@@ -339,12 +342,12 @@ class ManagedWeakTest {
                 assertNotNull(keyReference.get(), "A pending request owns its MVar and native lifetime");
                 assertSame(valueReference.get(), registry.dereference(weak).getValue());
                 assertEquals(73L, address.readWord8(0)); assertTrue(request.cancel());
-                collect(queue, gcWitness(queue)); requestGc(gc);
-                assertNotNull(keyReference.get(), "A retained cancelled request still owns its MVar");
-                assertSame(valueReference.get(), registry.dereference(weak).getValue());
-                assertEquals(73L, address.readWord8(0)); Reference.reachabilityFence(request); request = null;
-                assertDoesNotThrow(() -> collect(queue, keyReference), backend + " MVar key");
+                assertDoesNotThrow(() -> collect(queue, keyReference), backend + " cancelled MVar key");
+                assertEquals(ManagedMVar.RequestState.CANCELLED, request.getState());
+                assertThrows(CancellationException.class, request::await);
+                Reference.reachabilityFence(request);
                 assertNull(valueReference.get()); assertEquals(0L, registry.dereference(weak).getFlag()); requestGc(gc);
+                awaitOwnedFreeTask(retired);
                 assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
                 assertEquals(0L, registry.finalize(weak).getFlag()); requestGc(gc);
                 assertThrows(RuntimeFault.class, () -> allocations.free(address));
@@ -770,7 +773,7 @@ class ManagedWeakTest {
         }
     }
     @Test
-    void retainedMVarRequestKeepsConditionalValueAliveUntilRequestIsDropped() throws Exception {
+    void pendingMVarRequestOwnsConditionalValueButCancelledTokenReleasesCell() throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -783,15 +786,31 @@ class ManagedWeakTest {
                 assertNotNull(keyReference.get()); assertNotNull(valueReference.get());
                 assertSame(valueReference.get(), registry.dereference(weak).getValue());
                 assertTrue(request.cancel());
-                collect(queue, gcWitness(queue));
-                assertNotNull(keyReference.get(), "Even a cancelled retained request still owns its MVar");
-                assertSame(valueReference.get(), registry.dereference(weak).getValue());
-                Reference.reachabilityFence(request); request = null;
                 collect(queue, keyReference);
+                assertEquals(ManagedMVar.RequestState.CANCELLED, request.getState());
+                assertThrows(CancellationException.class, request::await);
+                Reference.reachabilityFence(request);
                 assertNull(valueReference.get()); assertEquals(0L, registry.dereference(weak).getFlag());
                 assertEquals(0L, registry.finalize(weak).getFlag());
             } finally { context.leave(); }
         }
+    }
+    @Test
+    void committedMVarRequestReleasesCellButKeepsItsRepeatableResult() throws Exception {
+        var cell = new ManagedMVar(); var request = cell.beginTake();
+        var value = new Object(); var valueReference = new WeakReference<>(value);
+        var queue = new ReferenceQueue<Object>(); var cellReference = new WeakReference<Object>(cell, queue);
+        assertTrue(cell.tryPut(value)); cell = null; value = null;
+        collect(queue, cellReference);
+        assertEquals(ManagedMVar.RequestState.COMMITTED, request.getState());
+        assertFalse(request.cancel());
+        assertNotNull(valueReference.get(), "A committed result is still owned for safepoint retries");
+        assertSame(valueReference.get(), request.await());
+        Thread.currentThread().interrupt();
+        try { assertThrows(InterruptedException.class, request::await); }
+        finally { Thread.interrupted(); }
+        assertSame(valueReference.get(), request.await());
+        Reference.reachabilityFence(request);
     }
     @Test
     void explicitFinalizationPreservesValuesAndCallbackOrder() throws Exception {
