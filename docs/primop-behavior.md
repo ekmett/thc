@@ -156,11 +156,12 @@ and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 | `finalizeWeak#` | Atomically retires the association, runs admitted C callbacks newest first outside the registry lock, and returns the exact reusable Haskell action to the caller. Returning rather than running that action is intentional GHC behavior. Automatic claims run on real guest carriers through the original GHC wrapper; completion follows actual termination or proven abandonment. Context close abandons outstanding claims before disposing native providers. |
 | `addCFinalizerToWeak#` | Accepts source-certified callbacks: zero calls `f(object)`, every nonzero flag calls `f(environment, object)`. Typed package declarations and exact rooted native definitions must agree on the ABI; arguments retain ordinary typed transport and native borrowing. Unknown labels reject. Reserved `free` requires zero flag and checked owned bases; busy borrows/free/realloc defer retirement through the existing nonblocking latch. Adding a callback does not promote conditional key/value reachability. Guest thread permission is required. See [C finalizers](c-finalizers.md). |
 
-General `System.Mem.Weak` support is not qualified. Six focused registry checks
-passed, while completed-thunk key retargeting fails in both handoff modes; the
-new genuine automatic Haskell fixture is pending. Upstream dead-record
-reclamation is also unresolved. Native Image qualification remains failed and
-parked. These limits apply to the draft behavior above.
+General `System.Mem.Weak` support is not qualified. Completed-thunk logical-key
+retargeting fails with the retained release in both handoff modes. Public Haskell
+automatic-finalizer laws have executed on a diagnostic provider, but that does
+not qualify the release or the required general Lifted resolution protocol.
+Registration metadata lifetime and Native Image application execution also
+remain qualification requirements. These limits apply to the draft above.
 
 `makeStableName#` uses a weak identity map and does not retain its referent.
 Stable pointers intentionally

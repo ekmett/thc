@@ -5,11 +5,10 @@ SubstrateVM for native executables. The purpose is general `System.Mem.Weak`
 semantics, including keys held by Java code and finalizers that can resurrect
 their keys. Selecting the collector alone does not implement THC weak pointers.
 The current draft uses real `jam.vm.Weak` associations and guest finalizer
-carriers. Linux diagnostic qualification passes public Haskell automatic
-finalization and completed-thunk key retargeting. The retained release still
-lacks the required key hook and registration-lifetime correction; a qualified
-replacement package and THC Native Image execution remain prerequisites for
-advertising general weak support.
+carriers. General weak support remains incomplete: the retained release lacks
+collector-safe, language-owned normalization of lifted references. THC must
+implement the [Lifted contract](https://github.com/ekmett/jam/blob/main/docs/vm/lifted-tracing.md)
+on both JVM and Native Image before logical weak-key reachability is correct.
 
 ## Toolchain ownership
 
@@ -97,15 +96,25 @@ no longer strongly referenced. The collector must resolve and retarget this
 slot before reclaiming the wrapper. Resolution must not mark the representative,
 force guest code, allocate Java roots, or acquire a stopped mutator's monitor.
 All other objects and non-success thunk states retain identity semantics.
-The agreed upstream API shape is
-`registerIndirection(Thunk.class, "state", 2, "value")`: an exact registered
-class, volatile int state and Object representative field. This API is absent
-from the currently pinned package. It is a prerequisite for both HotSpot and
-SubstrateVM; a forcing
-shim or create-time unwrapping cannot replace it. The pinned package returns dead flag 0 despite an independently live WHNF
-alias. An upstream diagnostic package with this hook passes the actual Force
-regression on both backends and handoff modes. It is not a reproducible release
-pin, and the hook has not yet been qualified in a THC Native Image executable.
+The required provider interface is `jam.vm.Lifted`, with language-owned
+`resolve()` and `resolveField(int)` methods. A null result means no replacement;
+both terminal values and unresolved thunks stop resolution that way. Jam must
+follow available replacements, rewrite eligible source slots and trace the
+endpoint normally. Weak-key normalization must not mark that endpoint. Selector
+contraction must release obsolete captures without evaluating the selected field.
+
+Fields eligible for replacement must admit every endpoint through their declared
+representation. A concrete Java `Thunk` reference retains wrapper identity;
+an arbitrary `Object` slot is not automatically a lifted slot. THC must map its
+existing capture, constructor, frame and array storage to this contract. Primitive,
+vector and aggregate layouts remain unchanged, as does normal CBD decoding.
+
+Jam owns verified collector entries for language-authored methods, plus slot
+rewriting, relocation and code lifetime on both VM providers. Ordinary Java
+callbacks from a GC worker are insufficient. THC owns its thunk and selector
+semantics, including an alias state distinct from terminal WHNF when the answer
+can still be a thunk. The interface is not yet implemented. A field-descriptor
+registration API cannot substitute for it.
 
 ## Finalizer execution
 
@@ -143,24 +152,19 @@ handler, suspension and shutdown before entry. Native GHC supplies independent
 Haskell expectations. Preserve both backends, both handoff modes and the first
 compiled call where relevant.
 
-Linux JVM qualification includes real first-compiled calls on both THC backends
-and handoff modes. The native publication boundary has also passed its focused
-Linux tests. The pinned package passes six registry checks but fails completed-thunk
-retargeting. With the upstream diagnostic hook, 20 selected JVM checks pass
-across both handoff modes, including actual Force updates, the public
-`System.Mem.Weak` automatic-finalizer law, native-GHC composite results on the
-first compiled call, and finalizer/free borrow coordination. The public laws
-exercise both AST and bytecode backends. The producer-defined fixture graph
-supplies the original GHC runner, CBD dependencies and native oracle.
+The existing Linux JVM checks exercise real first-compiled calls on both
+backends and handoff modes, guest finalizer execution, native callback borrowing,
+sharing, masking and resumable demand loading. Public `System.Mem.Weak` laws have
+executed against a diagnostic provider with a native-GHC oracle. Those private
+diagnostic results do not qualify the retained release or the missing Lifted
+protocol. Native Image application execution and macOS/Windows THC execution
+remain unqualified.
 
-These results qualify the tested Linux JVM behavior. They do not qualify the
-current release pin, macOS/Windows THC execution or Native Image. A reproducible
-producer release containing the hook and Native Image execution remain required
-before general weak support can be advertised. The automatic law requests one
-major collection and waits on its finalizer signal, rather than repeatedly
-collecting while the finalizer runs. Its native-GHC oracle, CBDs and audits were
-regenerated through the declared producer; the law and first-compiled composite
-then passed again on both backends and handoff modes.
+The automatic law requests one major collection and waits on its finalizer
+signal. Its native-GHC oracle, CBDs and audits come from the declared producer.
+Use that behavior check when qualifying the actual provider; do not accept a
+narrow key representation or an unimplemented collector method merely because a
+diagnostic case passed.
 
 A package startup check proves startup. A native image build proves construction.
 Neither proves general weak semantics, guest compilation or another platform.

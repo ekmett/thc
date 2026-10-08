@@ -7,8 +7,9 @@ The current draft uses real `jam.vm.Weak` associations in both interpreters.
 General `System.Mem.Weak` support is **not qualified**:
 [issue #1065](https://github.com/ekmett/thc/issues/1065) remains open. The real
 completed-thunk regression returns flag 0 while its WHNF alias remains live in
-both handoff modes. The new public Haskell automatic-finalizer fixture has not
-yet executed. Native Image qualification remains failed and parked.
+both handoff modes with the retained release. Public Haskell automatic-finalizer
+laws have executed on a diagnostic provider; those results do not qualify the
+release or general lifted-key normalization. Native Image remains unqualified.
 
 For an association `K => (V, F)`, independent reachability of `K`, including an
 ordinary Java root, retains the original lazy value and finalizer state.
@@ -65,22 +66,22 @@ the resource-lifetime contract; this does not establish reclamation of an
 abandoned, unclosed context. GC requests remain advisory and guarantee neither
 collection nor finalizer completion before returning.
 
-Two upstream boundaries remain unresolved. A successfully evaluated THC thunk
-is an indirection to its WHNF, and a weak created before evaluation must follow
-that logical key after the wrapper dies. The agreed API shape is
-`registerIndirection(Thunk.class, "state", 2, "value")`, with an exact registered
-class, volatile int state and Object representative field. It is **unimplemented**;
-no forcing shim or create-time unwrapping supplies the missing collector rule.
-Non-success thunk states retain ordinary identity semantics. The currently
-inspected Jam adapter also retains dead registration records, so metadata
-reclamation and idle polling costs still need an upstream correction.
+The remaining representation boundary is the general
+[Lifted contract](https://github.com/ekmett/jam/blob/main/docs/vm/lifted-tracing.md).
+THC supplies resolution and selector projection; Jam supplies verified collector
+entries and rewriting of eligible source slots. Normalization must follow a
+key's logical referent without marking it, forcing it or preserving its obsolete
+wrapper. It must also support a selector whose chosen field remains unevaluated.
+Non-success thunk states retain their ownership and suspension semantics.
 
-The recorded focused integration run passed six registry checks, including
-ordinary Java-held keys, conditional backedges and dropped handles. It also
-preserved the failing completed-thunk regression in both handoff modes. These
-checks do not prove public Haskell automatic execution, finalizer exception
-policy, suspension/resurrection coverage or bounded metadata reclamation. The
-existing `WeakAudit`/`WeakFixtures` producer now contains one bounded public
+The retained Jam package still scans dead registration records. Upstream has
+removed that repeated scan, but package adoption and metadata lifetime remain
+separate qualification boundaries. Neither registry checks nor collector startup
+prove those contracts.
+
+The existing `WeakAudit`/`WeakFixtures` producer owns the public
 `System.Mem.Weak` law with a dropped handle, value/finalizer backedges and an
-externally retained MVar signal, to compare with independent native GHC. Its
-execution result is pending.
+externally retained MVar signal. Native GHC supplies its independent result;
+original runtime Core, CBD dependencies and audits are explicit inputs/outputs.
+See [runtime qualification](jam-runtime.md#acceptance-evidence) for the distinction
+between diagnostic execution and supported behavior.
