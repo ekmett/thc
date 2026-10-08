@@ -462,6 +462,16 @@ public final class LoomScheduler implements AutoCloseable {
         } finally { unlock(); }
     }
 
+    void detach(GuestThreadId identity) {
+        var admission = currentAdmission();
+        acquire();
+        try {
+            if (admission.identity == identity) admission.identity = null;
+            var route = admission.route;
+            if (route != null && route.identity == identity) route.identity = null;
+        } finally { unlock(); }
+    }
+
     /** Polls yield only with a waiting competitor, at a bounded time interval. */
     @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary public void checkpoint() {
         var admission = currentAdmission();

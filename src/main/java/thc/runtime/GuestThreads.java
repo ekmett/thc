@@ -203,7 +203,7 @@ public final class GuestThreads {
     public PollState pollState(Thread thread) { return pollStates.get(thread); }
     private final HashMap<Long, GuestThread> threads = new HashMap<>();
     private long nextIdentity = 1;
-    // Weak keys release dead Java carriers; retained IDs keep their assigned capability.
+    // Platform host reentry keeps its identity; finite guest lifetimes remove their entry.
     private final WeakHashMap<Thread, GuestThreadId> identities = new WeakHashMap<>();
     // This registry retains neither the completed ThreadId# nor its Java carrier.
     private final WeakHashMap<GuestThreadId, java.lang.ref.WeakReference<GuestThreadId>> knownThreads = new WeakHashMap<>();
@@ -546,7 +546,9 @@ public final class GuestThreads {
                 }
                 else {
                     settleAllocation(target.identity); target.identity.lastOutcome = outcome;
-                    if (!closed) target.identity.status = target.identity.forked || target.identity.callback ? outcome : GuestThreadStatus.FOREIGN;
+                    if (!closed) target.identity.status = target.identity.forked || target.identity.callback || loom != null ? outcome : GuestThreadStatus.FOREIGN;
+                    if (target.identity.forked || loom != null) identities.remove(current, target.identity);
+                    if (loom != null) loom.detach(target.identity);
                     threads.remove(target.identity.logicalId);
                     if (previous.prior == null) currentSlot.remove(); else currentSlot.set(previous.prior);
                     pollState(current).current = previous.prior;
