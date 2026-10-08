@@ -51,7 +51,5 @@ execution. Strict runtime AST admission of the complete reachable Core also
 passed without executing guest bodies. Native GHC was checked on macOS; THC
 on macOS and this example as a Native Image were not checked.
 
-The optional Python prelaunch audit currently rejects the original interruptible
-open declaration when package-native metadata is present. This is a known audit
-limitation: the runtime selects its existing file-ownership operation for that
-call. The ordinary run command above retains runtime ABI and ownership checks.
+The prelaunch artifact audit also accepts the unchanged application and package
+metadata using the selected runtime's foreign-call ownership rules.
