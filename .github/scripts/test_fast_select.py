@@ -257,7 +257,7 @@ class FastSelectionTest(unittest.TestCase):
     def test_invalid_or_dirty_inventory_cannot_be_hidden_by_cadence(self):
         self.cadence_fixture(hourly=["example.OtherTest"])
         self.write("README.md", "dirty\n")
-        with self.assertRaisesRegex(select.SelectionError, "invalid selection"):
+        with self.assertRaisesRegex(select.SelectionError, "invalid selection: dirty-checkout"):
             select.select(self.repo, "", "HEAD", cadence="commit")
         with self.assertRaisesRegex(select.SelectionError, "invalid inventory"):
             select.groups(self.repo, cadence="commit")
@@ -265,7 +265,7 @@ class FastSelectionTest(unittest.TestCase):
         self.policy["cadence"]["hourlyJunit"].append("example.SmokeTest")
         self.write(select.POLICY, json.dumps(self.policy))
         self.commit()
-        with self.assertRaisesRegex(select.SelectionError, "invalid selection"):
+        with self.assertRaisesRegex(select.SelectionError, "invalid selection: invalid-selection-policy"):
             select.select(self.repo, "", "HEAD", cadence="commit")
 
     def test_nightly_smoke_or_unknown_provider_is_rejected(self):

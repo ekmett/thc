@@ -870,7 +870,9 @@ def select(repo, base_ref, head_ref, *, cadence=None):
               "dirty-checkout", "head-checkout-mismatch", "missing-head"}
     if (cadence not in ("commit", "hourly", "nightly") or not result["runnable"]
             or not inventory_complete or policy is None or any(r["code"] in unsafe for r in reasons)):
-        raise SelectionError("Cannot apply cadence to an invalid selection")
+        rejected = sorted({r["code"] for r in reasons if r["code"] in unsafe})
+        raise SelectionError("Cannot apply cadence to an invalid selection: "
+                             + (", ".join(rejected) or "cadence or inventory"))
     import fast_fixtures
     manifest, owners = fast_fixtures._manifest(repo)
     if set(owners) != set(classes):
