@@ -54,9 +54,14 @@ Nested callbacks temporarily restore running status and restore the enclosing
 foreign/blocking status on return. Loom creates a fresh virtual-thread identity
 for each outer public entry; nested entries retain it. Foreign reverse entries
 use distinct bound identities on their native origin thread in either mode.
-A forked guest thread publishes its terminal outcome when its action unwinds.
-For host carriers, termination is observed through the weak Java thread reference
-and uses the last guest outcome. Host exceptions outside guest execution do not
+A forked guest thread publishes its terminal outcome when its action unwinds;
+a Loom outer entry does so when that guest entry ends. The carrier cache and
+Loom scheduler release the completed identity even if Java retains the carrier.
+An independently retained `ThreadId` still keeps its weak registration live and
+remains comparable. `mkWeakThreadId` therefore supports observers that do not
+keep completed workers alive; see the [runnable example](../src/examples/WeakThreads.hs).
+For platform host carriers, termination is observed through the weak Java
+thread reference and uses the last guest outcome. Host exceptions outside guest execution do not
 become Haskell exceptions.
 
 The existing asynchronous mailbox remains scoped to active guest registration:

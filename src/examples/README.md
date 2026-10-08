@@ -1,7 +1,9 @@
 # Examples
 
-These programs demonstrate the public Haskell runtime APIs:
+These programs demonstrate Haskell libraries and the public runtime APIs:
 
+- [WeakThreads](WeakThreads.hs): observe a worker without owning its lifetime,
+  then recover mutable state from a finalizer and continue using it.
 - [RuntimeServices](RuntimeServices.hs): runtime information and thread services.
 - [CpuAffinity](CpuAffinity.hs): processor affinity queries and updates.
 - [PolyglotDemo](PolyglotDemo.hs): host values and calls through `THC.Polyglot`.
@@ -20,3 +22,24 @@ The JavaScript and polyglot demos have ordinary Cabal targets in
 `bin/polyglot-demo.sh` from the repository root with the complete-Core GHC
 configuration described in the polyglot guide. The scripts acquire the full
 package dependencies before loading either application.
+
+Run the standard-library weak-thread and resurrection example with native GHC:
+
+```sh
+cabal run exe:weak-threads --project-dir src/examples
+```
+
+After building THC with the pinned toolchain, run the same source through THC:
+
+```sh
+cabal run thc -- run exe:weak-threads --project-dir src/examples \
+  --thc-root "$PWD" --dist-dir "$PWD/build/weak-threads"
+```
+
+The worker returns 42. An independently retained `ThreadId` keeps its weak
+identity observable after completion; dropping it lets the observer forget the
+worker. A finalizer then returns an ordinary cell to the application, which
+updates its value from 41 to 42. Its original weak registration stays dead, and
+a fresh registration finalizes after the recovered cell is released. The example
+uses only `base`; the [weak-pointer guide](../../docs/weak-explicit.md) describes
+the lifetime rules and current platform qualification.

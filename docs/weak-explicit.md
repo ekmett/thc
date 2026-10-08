@@ -113,3 +113,24 @@ externally retained MVar signal. Native GHC supplies its independent result;
 original runtime Core, CBD dependencies and audits are explicit inputs/outputs.
 See [runtime qualification](jam-runtime.md#acceptance-evidence) for the distinction
 between tested JVM behavior and the remaining qualification boundaries.
+
+## Thread observers and resurrected state
+
+[`WeakThreads`](../src/examples/WeakThreads.hs) uses ordinary `Control.Concurrent`,
+`GHC.Conc` and `System.Mem.Weak` APIs. A running guest roots its `ThreadId#`.
+After the finite guest lifetime ends, the runtime drops its identity cache and
+scheduler references; keeping only its Java carrier does not retain the weak key.
+A guest or Java reference to the actual `ThreadId#` remains an independent root.
+Platform host reentry continues to reuse the host's identity and capability.
+
+The same program lets a finalizer return an ordinary cell through an MVar,
+updates the recovered state and installs another weak registration for it.
+The original registration remains dead; the fresh registration has its own
+lifetime and finalizer. Collection requests are advisory. The example waits for
+weak observations and finalizer signals, without assuming a number of collections.
+See the [example commands](../src/examples/README.md).
+
+On the pinned Linux JVM, this example matches native GHC 9.14.1 on AST and
+bytecode in both handoff modes. Focused lifetime checks also cover platform
+workers and Loom workers/outer entries, including Java-held identity roots.
+The Native Image and other-platform qualification boundaries above still apply.
