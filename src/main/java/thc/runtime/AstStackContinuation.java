@@ -17,6 +17,11 @@ public final class AstStackContinuation implements SavedGuestContinuation {
     @Override public Object getSourceRoot() { return sourceRoot; }
     @Override public CallSegmentSuspended getYielded() { return yielded; }
     @Override public Object getIdentity() { return this; }
+    @Override @TruffleBoundary public void discard() {
+        if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
+        if (claimed.compareAndSet(false, true)) yielded = null;
+        // The parked CallSegment remains its child's owner; this was a waiter.
+    }
     @Override @TruffleBoundary public Object continueWith(Object input) {
         if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (!claimed.compareAndSet(false, true)) throw fault("AST stack continuation was already resumed");

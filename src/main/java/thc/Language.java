@@ -366,6 +366,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         if (context == null) return;
         try { context.files.shutdownEventManagers(); }
         finally {
+            if (context.windowsNativeIo != null) context.windowsNativeIo.requestStop();
             context.signals.requestStop();
             context.weaks.requestStop();
             // LLVM calls remain permitted before hard exit unwinds all contexts; dispose is idempotent.
@@ -386,7 +387,10 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
     }
     private static Throwable finishState(State context, Throwable failure) {
         return closeOwners(failure, context.sparks::stop, context.files::shutdownEventManagers,
-            context.signals::requestStop, context.weaks::requestStop, context.threads::stopHostedThreads,
+            () -> { if (context.windowsNativeIo != null) context.windowsNativeIo.requestStop(); },
+            context.signals::requestStop, context.weaks::requestStop,
+            () -> { if (context.windowsNativeIo != null) context.windowsNativeIo.finishRequests(); },
+            context.threads::stopHostedThreads,
             context.weaks::close, context.signals::close, context.iconv::dispose);
     }
     private static Throwable disposeState(State context, Throwable failure) {

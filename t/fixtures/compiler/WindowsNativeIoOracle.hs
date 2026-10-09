@@ -10,32 +10,33 @@
 --
 -- Native GHC ABI evidence for the selected ghc-internal archive body, linked
 -- by the named Windows native fixture producer. This probe
--- does not export Core or qualify a THC guest, console or compiled call.
+-- does not export Core or qualify a THC guest, Haskell console handler or
+-- compiled call. Console transport is checked in its own hidden child console.
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE Unsafe #-}
 module Main (main) where
 
 import Control.Exception (bracket, finally)
-import Control.Monad (unless)
+import Control.Monad (forM_, unless)
 import qualified Data.ByteString as BS
 import Data.Bits ((.&.))
 import Data.Word (Word8, Word32, Word64)
 import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr, sizeOf, alloca, allocaBytesAligned, allocaArray, peek, peekArray, peekByteOff)
 import Foreign.C
-import System.Environment (getArgs)
+import System.Environment (getArgs, getExecutablePath)
 
 -- Win64 has one native calling convention; GHC rejects stdcall here. The
 -- pointer/int/wchar sizes below exclude the distinct Win32 convention.
 foreign import ccall unsafe "LoadLibraryW" loadLibrary :: CWString -> IO (Ptr ())
+foreign import ccall unsafe "GetModuleHandleW" getModuleHandle :: CWString -> IO (Ptr ())
 foreign import ccall unsafe "FreeLibrary" freeLibrary :: Ptr () -> IO CInt
 foreign import ccall unsafe "GetProcAddress" getAddress :: Ptr () -> CString -> IO (FunPtr a)
 foreign import capi unsafe "io.h _close" closeFd :: CInt -> IO CInt
 foreign import capi unsafe "io.h _dup" dupFd :: CInt -> IO CInt
 foreign import capi unsafe "io.h _dup2" dupTo :: CInt -> CInt -> IO CInt
 foreign import capi unsafe "io.h _lseek" seekFd :: CInt -> CLong -> CInt -> IO CLong
-foreign import capi unsafe "errno.h value ENOSYS" unsupportedCrt :: CInt
-foreign import capi unsafe "winsock2.h value WSAEOPNOTSUPP" unsupportedSocket :: CInt
+foreign import ccall unsafe "GenerateConsoleCtrlEvent" generateConsoleEvent :: Word32 -> Word32 -> IO CInt
 
 type Bind = CWString -> Ptr Word32 -> IO (Ptr ())
 type Acquire = Ptr () -> CInt -> CInt -> Ptr () -> IO CInt
@@ -50,6 +51,13 @@ foreign import ccall unsafe "dynamic" releaseCall :: FunPtr Release -> Release
 foreign import ccall unsafe "dynamic" unbindCall :: FunPtr Unbind -> Unbind
 foreign import ccall unsafe "dynamic" openCall :: FunPtr Open -> Open
 foreign import ccall unsafe "dynamic" abiCall :: FunPtr (IO Word64) -> IO Word64
+foreign import ccall unsafe "dynamic" consoleOpenCall :: FunPtr (Ptr Word32 -> IO (Ptr ())) -> Ptr Word32 -> IO (Ptr ())
+foreign import ccall unsafe "dynamic" consoleInstallCall :: FunPtr (Ptr () -> CInt -> Word64 -> IO Word32) -> Ptr () -> CInt -> Word64 -> IO Word32
+foreign import ccall unsafe "dynamic" consoleStopCall :: FunPtr (Ptr () -> IO Word32) -> Ptr () -> IO Word32
+foreign import ccall safe "dynamic" consoleWaitCall :: FunPtr (Ptr () -> IO Word32) -> Ptr () -> IO Word32
+foreign import ccall unsafe "dynamic" consoleTakeCall :: FunPtr (Ptr () -> Ptr () -> IO CInt) -> Ptr () -> Ptr () -> IO CInt
+foreign import ccall unsafe "dynamic" consolePendingCall :: FunPtr (Ptr () -> Word64 -> IO Word64) -> Ptr () -> Word64 -> IO Word64
+foreign import ccall safe "dynamic" consoleChildCall :: FunPtr (CWString -> CWString -> IO CInt) -> CWString -> CWString -> IO CInt
 
 require :: Bool -> String -> IO ()
 require condition message = unless condition (ioError (userError message))
@@ -68,13 +76,65 @@ symbol handle name = withCString name $ \text -> do
   require (address /= nullFunPtr) ("Missing selected native export: " ++ name)
   pure address
 
+-- | Genuine CTRL_BREAK delivery on this child's newly created console. The
+-- parent SDK launcher bounds this process only; no host/JVM handlers change.
+consoleOracle :: FilePath -> IO ()
+consoleOracle bridgePath = do
+  withLibrary bridgePath consoleQueueOracle
+  withCWString bridgePath $ \name -> do
+    image <- getModuleHandle name
+    require (image /= nullPtr) "Retired native callback code was unloaded"
+
+consoleQueueOracle :: Ptr () -> IO ()
+consoleQueueOracle bridge = do
+  open <- consoleOpenCall <$> symbol bridge "thc_windows_io_console_open"
+  install <- consoleInstallCall <$> symbol bridge "thc_windows_io_console_install"
+  wait <- consoleWaitCall <$> symbol bridge "thc_windows_io_console_wait"
+  takeEvent <- consoleTakeCall <$> symbol bridge "thc_windows_io_console_take"
+  pending <- consolePendingCall <$> symbol bridge "thc_windows_io_console_pending"
+  stop <- consoleStopCall <$> symbol bridge "thc_windows_io_console_stop"
+  close <- unbindCall <$> symbol bridge "thc_windows_io_console_close"
+  let acquire = alloca $ \errorSlot -> do
+        owner <- open errorSlot
+        errorCode <- peek errorSlot
+        require (owner /= nullPtr && errorCode == 0) "Child console ownership failed"
+        pure owner
+      retire owner = do
+        stop owner >>= \rc -> require (rc == 0) "Console handler restoration failed"
+        install owner (-4) 99 >>= \rc -> require (rc == 6) "Retired console accepted an installation"
+        close owner
+      observe owner oldGeneration newGeneration = do
+        install owner (-4) oldGeneration >>= \rc -> require (rc == 0) "Install original console generation failed"
+        generateConsoleEvent 1 0 >>= \rc -> require (rc /= 0) "Scoped CTRL_BREAK failed"
+        wait owner >>= \rc -> require (rc == 0) "Actual console callback did not queue"
+        -- Replacement cannot change an already queued event's referent.
+        install owner (-4) newGeneration >>= \rc -> require (rc == 0) "Replace console generation failed"
+        pending owner oldGeneration >>= \n -> require (n == 1) "Old queued generation was lost"
+        allocaBytesAligned 24 8 $ \event -> do
+          takeEvent owner event >>= \rc -> require (rc == 1) "Queued console event missing"
+          sequenceNumber <- peekByteOff event 0 :: IO Word64
+          generation <- peekByteOff event 8 :: IO Word64
+          code <- peekByteOff event 16 :: IO Word32
+          require (sequenceNumber == 1 && generation == oldGeneration && code == 1) "Console event ABI/identity changed"
+        pending owner oldGeneration >>= \n -> require (n == 0) "Consumed console generation remained queued"
+  -- Ownership is reusable after retirement. Sample repeated successful
+  -- lifecycles with distinct payload generations, including rejected opens;
+  -- neither success nor failure may consume a process installation budget.
+  forM_ [1 .. 64] $ \generation -> bracket acquire retire $ \owner -> do
+    alloca $ \errorSlot -> do
+      other <- open errorSlot
+      errorCode <- peek errorSlot
+      require (other == nullPtr && errorCode == 170) "Concurrent process console owner was admitted"
+    observe owner (2 * generation) (2 * generation + 1)
+
 -- | The selected package creates the descriptor. Its private native loan must
 -- retain the same file and position after the original descriptor is closed.
 main :: IO ()
 main = do
   arguments <- getArgs
   case arguments of
-    [bridgePath, packagePath, input] -> do
+    ["--console-oracle", bridgePath] -> consoleOracle bridgePath
+    [bridgePath, packagePath, input, sdkPath] -> do
       require (sizeOf (nullPtr :: Ptr ()) == 8 && sizeOf (0 :: CInt) == 4 && sizeOf (0 :: CWchar) == 2) "Expected Win64 ABI"
       BS.writeFile input (BS.pack [37, 91, 122])
       withLibrary packagePath $ \package -> withLibrary bridgePath $ \bridge -> do
@@ -85,19 +145,6 @@ main = do
         transfer <- transferCall <$> symbol bridge "thc_windows_io_transfer"
         release <- releaseCall <$> symbol bridge "thc_windows_io_release"
         unbind <- unbindCall <$> symbol bridge "thc_windows_io_unbind"
-        -- Errno ownership alone grants no descriptor or socket namespace.
-        -- Native headers independently supply the JVM control's constants.
-        require (unsupportedCrt == 40 && unsupportedSocket == 10045) "Unsupported-operation ABI differs"
-        unrelated <- alloca $ \errorSlot -> withCWString "kernelbase.dll" $ \path -> do
-          result <- bind path errorSlot
-          errorCode <- peek errorSlot
-          require (result /= nullPtr && errorCode == 0) "Actual OS errno import cannot bind"
-          pure result
-        flip finally (unbind unrelated) $ allocaBytesAligned 16 8 $ \loan -> do
-          fileError <- acquire unrelated 1 0 loan
-          require (fileError == unsupportedCrt) "Unrelated owner acquired ambient CRT descriptor"
-          socketError <- acquire unrelated 1 1 loan
-          require (socketError == unsupportedSocket) "Unrelated owner acquired ambient WinSock descriptor"
         -- HsBase's inline wrapper is exported by the native fixture without
         -- replacing it. Its actual mode_t is Word16; fs.c remains archive code.
         open <- openCall <$> symbol package "fixture_original_open"
@@ -166,5 +213,10 @@ main = do
                   contents <- peekArray 3 bytes
                   require (count == 3 && contents == [37, 91, 122]) "File fd0 read failed"
                   print ("file-fd0", fileZero, flags, count, contents)
-      putStrLn "selected-ghc-internal-native-boundary=passed"
-    _ -> ioError (userError "Usage: oracle BRIDGE_DLL SELECTED_PACKAGE_DLL INPUT")
+      executable <- getExecutablePath
+      withLibrary sdkPath $ \sdk -> do
+        launch <- consoleChildCall <$> symbol sdk "fixture_console_child"
+        rc <- withCWString executable $ \exe -> withCWString bridgePath $ \bridge -> launch exe bridge
+        require (rc == 0) ("Isolated native console child failed: " ++ show rc)
+      putStrLn "selected-ghc-internal-native-boundary=passed; isolated-console-queue=passed"
+    _ -> ioError (userError "Usage: oracle BRIDGE_DLL SELECTED_PACKAGE_DLL INPUT SDK_DLL")

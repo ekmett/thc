@@ -9,13 +9,14 @@ buildscript {
 }
 
 // One pinned Sulong artifact: declared mutable globals on all hosts, plus the
-// optional cwd lookup correction on Windows. Keep the original task names.
+// optional cwd lookup and native cleanup dependencies on Windows. Keep the original task names.
 def patchWindowsLocator = System.getProperty("os.name").startsWith("Windows")
 def windowsSulongVersion = "25.3.4.1"
-def sulongPolicyVersion = patchWindowsLocator ? "globals1-windows1" : "globals1"
+def sulongPolicyVersion = patchWindowsLocator ? "globals1-windows3" : "globals1"
 def sulongReplacedClasses = ["com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer",
     "com/oracle/truffle/llvm/initialization/InitializeSymbolsNode"]
-if (patchWindowsLocator) sulongReplacedClasses.add("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator")
+if (patchWindowsLocator) sulongReplacedClasses.addAll(["com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator",
+    "com/oracle/truffle/llvm/runtime/LLVMLanguageProvider"])
 def replacedSulongEntry = { String name -> name == "META-INF/MANIFEST.MF" ||
     sulongReplacedClasses.any { name == it + ".class" || name.startsWith(it + '\u0024') } }
 def windowsSulongSources = configurations.create("windowsSulongSources") { canBeConsumed = false; transitive = false }
@@ -35,17 +36,20 @@ def prepareWindowsSulong = tasks.register("prepareWindowsSulong", Sync) {
     from(provider { zipTree(windowsSulongSources.singleFile) })
     include("com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer.java",
         "com/oracle/truffle/llvm/initialization/InitializeSymbolsNode.java")
-    if (patchWindowsLocator) include("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java")
+    if (patchWindowsLocator) include("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java",
+        "com/oracle/truffle/llvm/runtime/LLVMLanguageProvider.java")
     into(layout.buildDirectory.dir("windows-sulong/source"))
     inputs.file("tools/sulong-globals/declared-mutability.patch")
-    if (patchWindowsLocator) inputs.file("tools/sulong-windows/optional-cwd.patch")
+    if (patchWindowsLocator) inputs.files("tools/sulong-windows/optional-cwd.patch",
+        "tools/sulong-windows/native-cleanup-dependency.patch")
     doFirst {
         requireWindowsSulongArchive(windowsSulongSources.singleFile,
             "716562a9c6cbe9201f53bc972d9eafbb1a692a9d9aebb9f177a541c5e0913f66")
     }
     doLast {
         def patches = ["tools/sulong-globals/declared-mutability.patch"]
-        if (patchWindowsLocator) patches.add("tools/sulong-windows/optional-cwd.patch")
+        if (patchWindowsLocator) patches.addAll(["tools/sulong-windows/optional-cwd.patch",
+            "tools/sulong-windows/native-cleanup-dependency.patch"])
         for (patch in patches) {
             providers.exec {
                 workingDir(destinationDir)
@@ -65,7 +69,7 @@ def compileWindowsSulong = tasks.register("compileWindowsSulong", JavaCompile) {
 }
 def windowsSulongJar = tasks.register("windowsSulongJar", Jar) {
     group = "build"
-    description = "Build pinned Sulong with declared global mutability and the Windows optional cwd search."
+    description = "Build pinned Sulong with declared global mutability and Windows lookup/cleanup boundaries."
     archiveBaseName.set("thc-llvm-language")
     archiveVersion.set("$windowsSulongVersion-$sulongPolicyVersion")
     destinationDirectory.set(layout.buildDirectory.dir("windows-sulong"))

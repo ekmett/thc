@@ -43,6 +43,7 @@ public final class CoreDataLabels extends Expr {
         return switch (symbol) {
             case "enabled_capabilities" -> ManagedAddress.enabledCapabilities(state.getThreads());
             case "RtsFlags" -> state.getCompilerRts().flagsAddress(layout);
+            case "rts_IOManagerIsWin32Native" -> WindowsNativeIo.required().modeAddress();
             case "ghc_unique_counter64", "ghc_unique_inc" -> state.getCompilerRts().address(symbol);
             default -> state.getPackageCbits().dataAddress(null, symbol);
         };

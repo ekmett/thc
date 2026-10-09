@@ -17,7 +17,7 @@ import thc.Json;
  * Identity selection is nonthrowing; the selected existing validator checks the ABI. */
 public enum CoreForeignOverride {
     STACK, STACK_INFO, STDIO, PROCESS, STABLE_FREE, SHARED_CAF, SHUTDOWN, MAIN_THREAD,
-    BOUND_THREAD, THREAD_ID, GC, RTS_EVENT, ALLOCATION_COUNTER, STRING_RTS, ENVIRONMENT,
+    BOUND_THREAD, THREAD_ID, GC, RTS_EVENT, WINDOWS_IO, ALLOCATION_COUNTER, STRING_RTS, ENVIRONMENT,
     RTS_DIAGNOSTIC, RTS_ARGUMENTS, MANAGED_FILE, SIGNAL, ALLOCATION, MEMMOVE, MEMCPY;
 
     /** A checked Core capability, never permission to ignore a raw native reference. */
@@ -118,6 +118,7 @@ public enum CoreForeignOverride {
             case SHUTDOWN -> CoreRtsShutdown.validate(metadata, arguments, flags, result);
             case GC -> CoreGcForeign.validate(metadata, arguments, flags, result);
             case RTS_EVENT -> CoreRtsEventForeign.validate(metadata, arguments, flags, result);
+            case WINDOWS_IO -> CoreWindowsIoForeign.validate(metadata, arguments, flags, result);
             case STRING_RTS -> CoreStringRtsForeign.validate(metadata, arguments, flags, result);
             case RTS_DIAGNOSTIC -> CoreRtsDiagnosticForeign.validate(metadata, arguments, flags, result);
             case RTS_ARGUMENTS -> CoreRtsArgumentsForeign.validate(metadata, arguments, flags, result);
@@ -148,6 +149,7 @@ public enum CoreForeignOverride {
                         case THREAD_ID -> CoreThreadIdForeign.validateHead(head, false);
                         case GC -> CoreGcForeign.validateHead(head, false);
                         case RTS_EVENT -> CoreRtsEventForeign.validateHead(head, false);
+                        case WINDOWS_IO -> CoreWindowsIoForeign.validateHead(head, false);
                         case STRING_RTS -> CoreStringRtsForeign.validateHead(head, false);
                         case ENVIRONMENT -> CoreEnvironmentForeign.validateHead(head, false);
                         case RTS_DIAGNOSTIC -> CoreRtsDiagnosticForeign.validateHead(head, false);
@@ -184,6 +186,7 @@ public enum CoreForeignOverride {
         for (var operation : ManagedFileOp.values())
             if (operation.getSymbol().equals(symbol)) return MANAGED_FILE;
         if (internal) {
+            if (WindowsIoOp.named(symbol) != null) return WINDOWS_IO;
             if (CoreStackForeign.CLONE.equals(symbol)) return STACK;
             if ("hs_free_stable_ptr".equals(symbol)) return STABLE_FREE;
             if ("rts_setMainThread".equals(symbol)) return MAIN_THREAD;

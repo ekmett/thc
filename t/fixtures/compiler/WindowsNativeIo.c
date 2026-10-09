@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <wchar.h>
 
 // Real SDK operations make the provider's CRT and WinSock imports observable.
 // This native ABI fixture has no Core model or replacement library functions.
@@ -91,3 +92,29 @@ cleanup:
     return error;
 }
 __declspec(dllexport) int fixture_socket_cleanup(void) { return WSACleanup(); }
+
+// A real OS console event is confined to a fresh hidden child console. Never
+// send CTRL_BREAK to the Gradle/JVM/user console or another attached process.
+__declspec(dllexport) int fixture_console_child(const wchar_t *executable, const wchar_t *bridge) {
+    if (wcschr(executable, L'"') || wcschr(bridge, L'"')) return ERROR_INVALID_PARAMETER;
+    size_t count = wcslen(executable) + wcslen(bridge) + 32;
+    wchar_t *command = calloc(count, sizeof(wchar_t));
+    if (!command) return ERROR_NOT_ENOUGH_MEMORY;
+    _snwprintf(command, count, L"\"%ls\" --console-oracle \"%ls\"", executable, bridge);
+    STARTUPINFOW startup = {0};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESHOWWINDOW;
+    startup.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION child = {0};
+    BOOL started = CreateProcessW(executable, command, NULL, NULL, FALSE,
+                                 CREATE_NEW_CONSOLE | CREATE_UNICODE_ENVIRONMENT,
+                                 NULL, NULL, &startup, &child);
+    DWORD result = started ? 0 : GetLastError();
+    free(command);
+    if (!started) return (int)result;
+    DWORD waited = WaitForSingleObject(child.hProcess, 20000);
+    if (waited == WAIT_TIMEOUT) { TerminateProcess(child.hProcess, 124); WaitForSingleObject(child.hProcess, INFINITE); }
+    if (!GetExitCodeProcess(child.hProcess, &result)) result = GetLastError();
+    CloseHandle(child.hThread); CloseHandle(child.hProcess);
+    return (int)result;
+}

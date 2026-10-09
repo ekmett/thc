@@ -1905,6 +1905,7 @@ public final class Program implements ExecutableProgram {
         var boundThreadForeign = override == CoreForeignOverride.BOUND_THREAD && CoreBoundThreadForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), false);
         var gcForeign = override == CoreForeignOverride.GC ? CoreGcForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var rtsEventForeign = override == CoreForeignOverride.RTS_EVENT ? CoreRtsEventForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var windowsIo = override == CoreForeignOverride.WINDOWS_IO ? CoreWindowsIoForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var allocationCounterForeign = override == CoreForeignOverride.ALLOCATION_COUNTER && CoreBoundThreadForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), true);
         var stringRts = override == CoreForeignOverride.STRING_RTS ? CoreStringRtsForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var environment = override == CoreForeignOverride.ENVIRONMENT ? CoreEnvironmentForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
@@ -2061,6 +2062,15 @@ public final class Program implements ExecutableProgram {
                 CoreRtsEventForeign.validateOperand(rtsEventForeign, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new RtsEventForeignExpression(rtsEventForeign, operands, tupleProof);
+        }
+        if (windowsIo != null) {
+            CoreWindowsIoForeign.validateHead(fn, defined);
+            Expr[] operands = new Expr[args.size()];
+            for (int i = 0; i < operands.length; i++) {
+                operands[i] = compile(args.get(i), scope, false);
+                CoreWindowsIoForeign.validateOperand(windowsIo, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+            }
+            return new WindowsIoExpression(windowsIo, operands, tupleProof);
         }
         if (gcForeign != null) {
             CoreGcForeign.validateHead(fn, defined);

@@ -28,6 +28,7 @@ try {
     if ($Action -in @('Build', 'Runtime', 'Test', 'DirectoryTest', 'CodePageTest')) {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
+        & "$PSScriptRoot/check-windows-launcher.ps1"
     }
     if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'NativeLinkTest', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'MallocTest', 'CheckCore')) {
         $tools = Get-ThcGhc

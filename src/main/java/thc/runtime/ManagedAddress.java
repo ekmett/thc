@@ -44,6 +44,7 @@ public final class ManagedAddress {
     private final CompilerRts compiler;
     private final PackageReturnedAddress foreign;
     private final CompilerRts rtsFlags;
+    private final WindowsNativeIo ioMode;
 
     private ManagedAddress(byte[] literalBytes, byte[] mutableBytes, long offset) {
         this(literalBytes, mutableBytes, offset, null, null, null, null, null, null, null, null, null, null);
@@ -56,7 +57,16 @@ public final class ManagedAddress {
         this.owner = owner; this.stable = stable; this.numeric = numeric; this.finalizer = finalizer;
         this.nativeOwner = nativeOwner; this.capabilities = capabilities; this.heap = heap;
         this.compiler = compiler; this.foreign = foreign; this.rtsFlags = rtsFlags;
+        this.ioMode = null;
     }
+
+    private ManagedAddress(WindowsNativeIo ioMode) {
+        literalBytes = null; mutableBytes = null; offset = 0; owner = null;
+        stable = null; numeric = null; finalizer = null; nativeOwner = null;
+        capabilities = null; heap = null; compiler = null; foreign = null; rtsFlags = null;
+        this.ioMode = ioMode;
+    }
+    static ManagedAddress windowsIoMode(WindowsNativeIo owner) { return new ManagedAddress(owner); }
 
     /** An RTS data label is never a projection of a JVM or native pointer. */
     public Long readCapabilitiesWord32(long elementOffset, int width) {
@@ -131,6 +141,7 @@ public final class ManagedAddress {
     public HeapAddresses.Handle heapHandle() { return heap; }
     public CFinalizerFunction finalizerFunction() { return finalizer; }
     private void requireBytes() {
+        if (ioMode != null) { ioMode.readModeByte(0); throw fault("Windows IO selection permits only a read-only CBool load"); }
         if (compiler != null) compiler.requireCurrent();
         if (foreign != null) foreign.requireCurrent();
         if (rtsFlags != null) { rtsFlags.requireCurrent(); throw fault("RtsFlags permits only supported read-only fields"); }
@@ -147,6 +158,7 @@ public final class ManagedAddress {
         throw fault("Native image requires static literal or runtime metadata storage");
     }
     public long toNativeBits() {
+        if (ioMode != null) { ioMode.readModeByte(0); throw fault("Windows IO selection has no numeric guest address"); }
         if (compiler != null) compiler.requireCurrent();
         if (rtsFlags != null) { rtsFlags.requireCurrent(); throw fault("RtsFlags has no numeric guest address"); }
         if (foreign != null) return foreign.bits();
@@ -205,6 +217,15 @@ public final class ManagedAddress {
         requireRange(0, count, writable);
         if (owner != null) owner.requireByteRegion(offset, count, writable);
     }
+    /** Preflight the native 64-bit pointer exchange without byte transport or
+     * mutation. Managed pointer cells must stay typed and unexposed to raw C. */
+    void requireAddressCell() {
+        requireRange(0, 8, true);
+        if (owner != null) {
+            if (owner.getAddressWidth() != 8) throw fault("Native address cell requires the 64-bit pointer ABI");
+            owner.requireAddressCell(offset);
+        } else if (nativeOwner == null && externalPointer() == null) throw fault("Addr# has no allocation-owned pointer cells");
+    }
     private long size() {
         requireBytes();
         if (nativeOwner != null) { nativeOwner.requireLive(); return nativeOwner.getSize(); }
@@ -215,6 +236,11 @@ public final class ManagedAddress {
     }
 
     public boolean sameLocation(ManagedAddress other) {
+        if (ioMode != null || other.ioMode != null) {
+            if (ioMode != null) ioMode.readModeByte(0); if (other.ioMode != null) other.ioMode.readModeByte(0);
+            if (nativeOwner != null) nativeOwner.requireLive(); if (other.nativeOwner != null) other.nativeOwner.requireLive();
+            return ioMode != null && ioMode == other.ioMode;
+        }
         if (compiler != null) compiler.requireCurrent(); if (other.compiler != null) other.compiler.requireCurrent();
         if (foreign != null) foreign.requireCurrent(); if (other.foreign != null) other.foreign.requireCurrent();
         if (rtsFlags != null || other.rtsFlags != null) {
@@ -291,6 +317,10 @@ public final class ManagedAddress {
     }
 
     public int compareWithinAllocation(ManagedAddress other) {
+        if (ioMode != null || other.ioMode != null) {
+            if (ioMode != null) ioMode.readModeByte(0); if (other.ioMode != null) other.ioMode.readModeByte(0);
+            throw fault("Windows IO selection has no address ordering");
+        }
         var address = this;
         // As with difference, traverse backing chains without recursive partial evaluation.
         while (true) {
@@ -325,6 +355,7 @@ public final class ManagedAddress {
         return Long.compare(offset, other.offset);
     }
     public ManagedAddress plus(long displacement) {
+        if (ioMode != null) { ioMode.readModeByte(displacement); return this; }
         if (rtsFlags != null) {
             rtsFlags.requireCurrent(); return displacement == 0 ? this : new ManagedAddress(null, null, displacedOffset(displacement), null, null, null, null, null, null, null, null, null, rtsFlags);
         }
@@ -399,6 +430,7 @@ public final class ManagedAddress {
     }
     public long readWord8(long displacement) { return readWord8Int(displacement); }
     public int readWord8Int(long displacement) {
+        if (ioMode != null) return ioMode.readModeByte(displacement);
         if (rtsFlags != null) return (int) rtsFlags.readFlagByte(displacedOffset(displacement));
         var pointer = externalPointer();
         if (pointer != null) return (int) pointer.read(displacement, 1);
@@ -841,6 +873,7 @@ public final class ManagedAddress {
         });
     }
     @TruffleBoundary @Override public String toString() {
+        if (ioMode != null) return "Addr#(rts_IOManagerIsWin32Native)";
         if (heap != null) return "Addr#(opaque guest heap)";
         if (stable != null) return "Addr#(opaque StablePtr)";
         if (this == NULL) return "Addr#(null)";

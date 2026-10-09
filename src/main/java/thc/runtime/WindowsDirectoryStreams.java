@@ -264,7 +264,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                 var streams = new WindowsDirectoryStreams(state);
                 state.getEnv().registerOnDispose(streams);
                 state.setWindowsDirectories(streams);
-                state.setWindowsNativeIo(new WindowsNativeIo(state, endpoints));
+                state.setWindowsNativeIo(new WindowsNativeIo(state, endpoints, profile == ContextProfile.LAUNCHER));
             } finally { context.leave(); }
             return context;
         } catch (Throwable failure) {

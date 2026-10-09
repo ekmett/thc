@@ -32,9 +32,10 @@ class CoreNativeOverrideProfileTest {
         assertEquals(Set.of("freeHaskellFunctionPtr", "getNumberOfProcessors", "setNumCapabilities",
             "getOrSetGHCConcSignalSignalHandlerStore", "getProgArgv", "setProgArgv", "getRTSStatsEnabled",
             "getRTSStats", "performGC", "performMajorGC", "performBlockingMajorGC", "lockFile", "unlockFile",
-            "lookupIPE", "reportHeapOverflow", "rts_isThreaded", "shutdownHaskellAndExit"),
+            "lookupIPE", "reportHeapOverflow", "rts_isThreaded", "shutdownHaskellAndExit",
+            "stg_asyncReadzh", "stg_asyncWritezh", "rts_InstallConsoleEvent", "rts_ConsoleHandlerDone"),
             Set.copyOf(calls.stream().map(call -> ((Map<?, ?>) call.get("target")).get("symbol")).toList()));
-        assertEquals(17, calls.size());
+        assertEquals(21, calls.size());
         for (var call : calls) {
             assertTrue(CoreForeignOverride.nativeCall(call), call.toString());
             assertTrue(CoreForeignOverride.nativeCall(with(call, "schema", 1)), "CBD/JSON integer carriers agree");

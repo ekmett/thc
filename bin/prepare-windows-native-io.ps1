@@ -60,7 +60,7 @@ try {
     Invoke-Producer 'ghc-oracle-build' $compiler @('--make','-O2','-Wall','-Werror','-dcore-lint','-dstg-lint',
         "$root/t/fixtures/compiler/WindowsNativeIoOracle.hs",'-odir',$Output,'-hidir',$Output,'-o',"$Output/windows-io-oracle.exe")
     Invoke-Producer 'ghc-oracle-run' "$Output/windows-io-oracle.exe" @(
-        "$root/build/generated/cbits/thc/cbits/windows-io.dll","$Output/windows-opening-fixture.dll","$Output/oracle-input.bin")
+        "$root/build/generated/cbits/thc/cbits/windows-io.dll","$Output/windows-opening-fixture.dll","$Output/oracle-input.bin","$Output/windows-io-fixture.dll")
     $receipt.artifacts = @('windows-io-fixture.dll','windows-opening-fixture.dll','windows-open.bc') | ForEach-Object {
         @{ path=(Join-Path $Output $_); sha256=(Get-FileHash -LiteralPath (Join-Path $Output $_)).Hash.ToLowerInvariant() }
     }

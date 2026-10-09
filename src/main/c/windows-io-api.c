@@ -208,6 +208,8 @@ __declspec(dllexport) int thc_windows_io_acquire(struct io_owner *owner, int fd,
 __declspec(dllexport) void thc_windows_io_transfer(struct io_owner *owner, const struct io_loan *loan,
                                                  int writing, unsigned count, void *buffer,
                                                  struct io_result *result) {
+    // Successful CRT EOF must not inherit an earlier console-abort code.
+    SetLastError(ERROR_SUCCESS);
     if (loan->socket ? !(writing ? owner->send != NULL : owner->recv != NULL) || !owner->socket_error
                      : !(writing ? owner->write != NULL : owner->read != NULL)) {
         result->length = -1;
@@ -242,4 +244,163 @@ __declspec(dllexport) void thc_windows_io_release(struct io_owner *owner, const 
     else owner->close((int)loan->descriptor);
     *owner->error() = error;
     SetLastError(windows_error);
+}
+
+// OS callbacks never enter Truffle or dereference a GHC StablePtr. Windows
+// supplies only the event code, not a registration generation. Ownership is
+// captured when the process-lifetime dispatcher enters the locked registry.
+struct console_event { uint64_t sequence, generation; DWORD event, reserved; };
+struct console_pending { struct console_event event; struct console_pending *next; };
+struct console_owner {
+    SRWLOCK lock;
+    HANDLE ready;
+    int action, retired;
+    DWORD failure;
+    uint64_t generation, sequence;
+    struct console_pending *head, *tail;
+};
+_Static_assert(sizeof(struct console_event) == 24, "Console event transport requires Win64 layouts");
+static SRWLOCK console_registry = SRWLOCK_INIT;
+static int console_registered;
+static struct console_owner *console_active;
+
+static BOOL WINAPI console_dispatch(DWORD event) {
+    BOOL handled = FALSE;
+    AcquireSRWLockExclusive(&console_registry);
+    struct console_owner *owner = console_active;
+    if (!owner) { ReleaseSRWLockExclusive(&console_registry); return FALSE; }
+    AcquireSRWLockExclusive(&owner->lock);
+    // Match GHC's deliberate refusal of CLOSE. DFL continues the existing JVM
+    // handler chain; IGN uses this owner's action, not NULL's inheritable
+    // process-wide ignore bit. The registry remains locked until the snapshot
+    // is queued, so stop cannot free or replace an owner under this callback.
+    if (!owner->retired && event != CTRL_CLOSE_EVENT && owner->action != -1) {
+        struct console_pending *pending = calloc(1, sizeof(*pending));
+        if (!pending) owner->failure = ERROR_NOT_ENOUGH_MEMORY;
+        else {
+            pending->event.sequence = ++owner->sequence;
+            pending->event.generation = owner->action == -4 ? owner->generation : 0;
+            pending->event.event = event;
+            if (owner->tail) owner->tail->next = pending;
+            else owner->head = pending;
+            owner->tail = pending;
+            handled = TRUE;
+        }
+        SetEvent(owner->ready);
+    }
+    ReleaseSRWLockExclusive(&owner->lock);
+    ReleaseSRWLockExclusive(&console_registry);
+    return handled;
+}
+
+__declspec(dllexport) void *thc_windows_io_console_open(DWORD *error) {
+    struct console_owner *owner = NULL;
+    *error = 0;
+    AcquireSRWLockExclusive(&console_registry);
+    if (console_active) *error = ERROR_BUSY;
+    else {
+        owner = calloc(1, sizeof(*owner));
+        if (!owner) *error = ERROR_NOT_ENOUGH_MEMORY;
+        else {
+            InitializeSRWLock(&owner->lock);
+            owner->action = -1;
+            owner->ready = CreateEventW(NULL, TRUE, FALSE, NULL);
+            if (!owner->ready) *error = GetLastError();
+            else if (!console_registered) {
+                HMODULE image = NULL;
+                // Windows does not document an unregister-joins guarantee.
+                // Keep the sole dispatcher and its code valid until process
+                // exit; detached owners themselves are reclaimable.
+                if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                                       (LPCWSTR)(uintptr_t)console_dispatch, &image) ||
+                    !SetConsoleCtrlHandler(console_dispatch, TRUE)) *error = GetLastError();
+                else console_registered = 1;
+            }
+            if (*error) {
+                if (owner->ready) CloseHandle(owner->ready);
+                free(owner); owner = NULL;
+            } else console_active = owner;
+        }
+    }
+    ReleaseSRWLockExclusive(&console_registry);
+    return owner;
+}
+
+__declspec(dllexport) DWORD thc_windows_io_console_install(struct console_owner *owner, int action, uint64_t generation) {
+    DWORD error = 0;
+    AcquireSRWLockExclusive(&owner->lock);
+    if (owner->retired) error = ERROR_INVALID_HANDLE;
+    else if ((action != -1 && action != -2 && action != -4) || (action == -4 && !generation)) error = ERROR_INVALID_PARAMETER;
+    else { owner->action = action; owner->generation = generation; }
+    ReleaseSRWLockExclusive(&owner->lock);
+    return error;
+}
+
+__declspec(dllexport) uint64_t thc_windows_io_console_sequence(struct console_owner *owner) {
+    AcquireSRWLockShared(&owner->lock);
+    uint64_t sequence = owner->sequence;
+    ReleaseSRWLockShared(&owner->lock);
+    return sequence;
+}
+
+__declspec(dllexport) uint64_t thc_windows_io_console_pending(struct console_owner *owner, uint64_t generation) {
+    uint64_t count = 0;
+    AcquireSRWLockShared(&owner->lock);
+    for (struct console_pending *entry = owner->head; entry; entry = entry->next)
+        if (entry->event.generation == generation) ++count;
+    ReleaseSRWLockShared(&owner->lock);
+    return count;
+}
+
+// Poll/drain on a physical reader; only this reader waits on the OS event.
+// Return 1 event, 0 explicit wake/retirement, negative native failure.
+__declspec(dllexport) int thc_windows_io_console_take(struct console_owner *owner, struct console_event *event) {
+    int result = 0;
+    AcquireSRWLockExclusive(&owner->lock);
+    if (owner->failure) result = -(int)owner->failure;
+    else if (!owner->retired && owner->head) {
+        struct console_pending *entry = owner->head;
+        *event = entry->event;
+        owner->head = entry->next;
+        if (!owner->head) owner->tail = NULL;
+        free(entry); result = 1;
+    }
+    if (!owner->head && !owner->retired) ResetEvent(owner->ready);
+    ReleaseSRWLockExclusive(&owner->lock);
+    return result;
+}
+__declspec(dllexport) DWORD thc_windows_io_console_wait(struct console_owner *owner) {
+    DWORD result = WaitForSingleObject(owner->ready, INFINITE);
+    return result == WAIT_OBJECT_0 ? 0 : GetLastError();
+}
+__declspec(dllexport) void thc_windows_io_console_wake(struct console_owner *owner) { SetEvent(owner->ready); }
+
+// Detach under the same lock used by dispatcher entry. A callback already
+// observed is finished with its owner before stop returns; an unobserved OS
+// event has no earlier owner identity. The reader's HANDLE remains valid until
+// close after its native wait has ended. External console reassociation APIs,
+// which reset the handler table, are not part of this helper's owned API.
+__declspec(dllexport) DWORD thc_windows_io_console_stop(struct console_owner *owner) {
+    AcquireSRWLockExclusive(&console_registry);
+    AcquireSRWLockExclusive(&owner->lock);
+    if (!owner->retired) {
+        owner->retired = 1;
+        if (console_active == owner) console_active = NULL;
+        SetEvent(owner->ready);
+    }
+    ReleaseSRWLockExclusive(&owner->lock);
+    ReleaseSRWLockExclusive(&console_registry);
+    return 0;
+}
+__declspec(dllexport) void thc_windows_io_console_close(struct console_owner *owner) {
+    // Stop must precede close. No callbacks use the HANDLE after retirement.
+    AcquireSRWLockExclusive(&owner->lock);
+    while (owner->head) {
+        struct console_pending *entry = owner->head;
+        owner->head = entry->next; free(entry);
+    }
+    owner->tail = NULL;
+    if (owner->ready) { CloseHandle(owner->ready); owner->ready = NULL; }
+    ReleaseSRWLockExclusive(&owner->lock);
+    free(owner);
 }
