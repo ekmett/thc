@@ -33,6 +33,7 @@ above: incompatible Graal and Truffle compiler versions can disable runtime
 compilation and leave execution in the interpreter.
 Linux x86_64 setup includes clang and GMP development headers and libraries
 (for example, `libgmp-dev` on Debian/Ubuntu) for native package dependencies.
+Run `cabal update` once so Cabal has a package index.
 
 `thc run` also needs LLVM 18's `clang`, `llvm-link`, `opt` and `llvm-nm`, even
 for pure Haskell programs: acquisition compiles the native imports of boot
