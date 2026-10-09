@@ -1,13 +1,27 @@
 # thc
 
-[![Build](https://github.com/ekmett/thc/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/ekmett/thc/actions/workflows/build.yml)
-[![docs: haddock+javadoc](https://img.shields.io/badge/docs-haddock%2Bjavadoc-blue?style=flat)](https://ekmett.github.io/thc/)
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/w/ekmett/thc?style=flat)](https://github.com/ekmett/thc/activity)
+<!-- badges:start -->
+[![build](https://img.shields.io/github/actions/workflow/status/ekmett/thc/build.yml?branch=main&style=flat&label=build&logo=githubactions&logoColor=white)](https://github.com/ekmett/thc/actions/workflows/build.yml?query=branch%3Amain)
+[![docs build](https://img.shields.io/github/actions/workflow/status/ekmett/thc/docs.yml?branch=main&style=flat&label=docs+build&logo=githubactions&logoColor=white)](https://github.com/ekmett/thc/actions/workflows/docs.yml?query=branch%3Amain)
+[![issues](https://img.shields.io/github/issues/ekmett/thc?style=flat&label=issues&color=007ec6&logo=github&logoColor=white)](https://github.com/ekmett/thc/issues)
+[![commits](https://img.shields.io/github/commit-activity/w/ekmett/thc?style=flat&label=commits&color=007ec6&logo=github&logoColor=white)](https://github.com/ekmett/thc/activity)
 
-![Haskell 9.14.1](https://img.shields.io/badge/Haskell-9.14.1-5e5086?style=flat&logo=haskell&logoColor=white)
-![Gradle 9.7.1](https://img.shields.io/badge/Gradle-9.7.1-02303A?style=flat&logo=gradle&logoColor=white)
-![C++ 26](https://img.shields.io/badge/C%2B%2B-26-00599C?style=flat&logo=c%2B%2B&logoColor=white)
-![Java GraalVM 25.3.4.1](https://img.shields.io/badge/Java-GraalVM%2025.3.4.1-ED8B00?style=flat&logo=openjdk&logoColor=white)
+[![CMake: 3.24+](https://img.shields.io/static/v1?label=CMake&message=3.24%2B&color=064F8C&style=flat&logo=cmake&logoColor=white)](CMakeLists.txt)
+[![Haskell](https://img.shields.io/static/v1?label=&message=Haskell&color=5e5086&style=flat&logo=haskell&logoColor=white)](thc.cabal)
+[![GHC: 9.14.1](https://img.shields.io/static/v1?label=GHC&message=9.14.1&color=5e5086&style=flat&logo=haskell&logoColor=white)](thc.cabal)
+[![Cabal: 3.16](https://img.shields.io/static/v1?label=Cabal&message=3.16&color=5e5086&style=flat&logo=haskell&logoColor=white)](README.md)
+[![Java: 25](https://img.shields.io/static/v1?label=Java&message=25&color=b66a13&style=flat&logo=openjdk&logoColor=white)](README.md)
+[![GraalVM: 25.3.4.1](https://img.shields.io/static/v1?label=GraalVM&message=25.3.4.1&color=b66a13&style=flat&logo=openjdk&logoColor=white)](etc/jam-graalvm.json)
+[![Gradle: 9.7.1](https://img.shields.io/static/v1?label=Gradle&message=9.7.1&color=02303A&style=flat&logo=gradle&logoColor=white)](nih/gradle/wrapper/gradle-wrapper.properties)
+
+[![OS: Linux · macOS · Windows](https://img.shields.io/static/v1?label=OS&message=Linux+%C2%B7+macOS+%C2%B7+Windows&color=64748b&style=flat)](README.md)
+[![CPU: x86-64 · ARM64](https://img.shields.io/static/v1?label=CPU&message=x86-64+%C2%B7+ARM64&color=64748b&style=flat)](docs/jam-runtime.md)
+
+[![license: UPL-1.0 AND BSD-3-Clause](https://img.shields.io/static/v1?label=license&message=UPL-1.0+AND+BSD-3-Clause&color=007ec6&style=flat)](LICENSE)
+[![Contributor Covenant: 2.0](https://img.shields.io/static/v1?label=Contributor+Covenant&message=2.0&color=007ec6&style=flat&logo=contributorcovenant&logoColor=white)](CODE_OF_CONDUCT.md)
+
+[![docs: read](https://img.shields.io/static/v1?label=docs&message=read&color=007ec6&style=flat)](https://ekmett.github.io/thc/)
+<!-- badges:end -->
 
 Haskell on Truffle/Graal.
 
