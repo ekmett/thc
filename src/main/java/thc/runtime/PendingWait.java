@@ -18,7 +18,13 @@ public final class PendingWait extends AbstractTruffleException implements Inter
     final long generation;
     final MaskingState mask;
     volatile boolean rescued;
-    private java.util.ArrayList<Thunk> updates;
+    private static final class Update {
+        final Thunk thunk;
+        Object continuation;
+        Update(Thunk thunk, Object continuation) { this.thunk = thunk; this.continuation = continuation; }
+    }
+    private final RuntimeFault terminalFailure = new RuntimeFault("Suspended guest evaluator terminated");
+    private java.util.ArrayList<Update> updates;
     private volatile boolean abandoned;
     PendingWait(Operation operation, GuestThreads.GuestThread owner, MaskingState mask, Node node) {
         super("Internal guest pending-operation suspension", null, 0, node);
@@ -32,21 +38,29 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         GuestThreads.GuestThread owner = GuestThreads.suspendingCurrent(node);
         return owner == null ? null : new PendingWait(operation, owner, SynchronousMasking.current(node), node);
     }
-    synchronized void retainUpdate(Thunk thunk) {
-        if (abandoned) throw new RuntimeFault("Suspended guest evaluator terminated");
+    synchronized void retainUpdate(Thunk thunk, Object continuation) {
+        if (abandoned) throw terminalFailure;
         if (updates == null) updates = new java.util.ArrayList<>();
-        for (Thunk update : updates) if (update == thunk) return;
-        updates.add(thunk);
+        for (int i = 0; i < updates.size(); ++i) {
+            Update update = updates.get(i);
+            if (update.thunk == thunk) { update.continuation = continuation; return; }
+        }
+        updates.add(new Update(thunk, continuation));
     }
     /** Host terminal cleanup cannot leave an independently retained shared update waiting for a dead evaluator. */
     void abandon() {
-        java.util.ArrayList<Thunk> pending;
+        java.util.ArrayList<Update> pending;
         synchronized (this) { abandoned = true; pending = updates; updates = null; }
         if (pending == null) return;
-        for (Thunk thunk : pending) synchronized (thunk.getMonitor()) {
-            if (thunk.getState() == 5 && of(thunk.getValue()) == this) {
-                thunk.setValue(new RuntimeFault("Suspended guest evaluator terminated"));
-                thunk.setTarget(null); thunk.setEnvironment(null); thunk.setOwner(null); thunk.setState(3); thunk.notifyUpdate();
+        // Obligations and failure were allocated before native arm could fail; terminal publication allocates nothing.
+        for (int i = 0; i < pending.size(); ++i) {
+            Update update = pending.get(i);
+            Thunk thunk = update.thunk;
+            synchronized (thunk.getMonitor()) {
+                if (thunk.getState() == 5 && thunk.getValue() == update.continuation) {
+                    thunk.setValue(terminalFailure);
+                    thunk.setTarget(null); thunk.setEnvironment(null); thunk.setOwner(null); thunk.setState(3); thunk.notifyUpdate();
+                }
             }
         }
     }
@@ -54,7 +68,7 @@ public final class PendingWait extends AbstractTruffleException implements Inter
     public Object resume() {
         boolean captured = false;
         try {
-            if (abandoned) throw new RuntimeFault("Suspended guest evaluator terminated");
+            if (abandoned) throw terminalFailure;
             return operation.resume();
         }
         catch (PendingWait cut) { captured = true; throw cut; }

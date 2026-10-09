@@ -56,7 +56,7 @@ public final class Thunk implements Lifted {
     /** Caller holds this thunk's monitor. Once contended, retain every later wakeup. */
     void notifyUpdate() {
         if (hasWaited) notifyAll();
-        if (demandWaiters != null) for (Force.DemandWait waiter : demandWaiters) waiter.changedLocked();
+        if (demandWaiters != null) for (int i = 0; i < demandWaiters.size(); ++i) demandWaiters.get(i).changedLocked();
     }
     // One stable monitor per thunk, with no additional lock allocation.
     public Object getMonitor() { return this; }

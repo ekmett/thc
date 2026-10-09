@@ -686,7 +686,7 @@ public final class Force extends Node {
         try {
             synchronized (thunk.getMonitor()) {
                 PendingWait pending = PendingWait.of(continuation);
-                if (pending != null) pending.retainUpdate(thunk);
+                if (pending != null) pending.retainUpdate(thunk, continuation.getIdentity());
                 thunk.setValue(continuation.getIdentity()); thunk.setTarget(null); thunk.setEnvironment(null);
                 thunk.setOwner(null); thunk.setState(5); thunk.notifyUpdate();
             }
