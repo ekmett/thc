@@ -45,7 +45,8 @@ jobs:
             .gradle-user-home/caches
             .gradle-user-home/wrapper
             .gradle
-          key: docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-${{ hashFiles('thc.cabal', 'cabal.project', 'build.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-${{ github.sha }}
+          key: docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-${{ hashFiles('thc.cabal', 'cabal.project', 'build.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}
+          # Reuse one snapshot per dependency/toolchain identity, not one per commit.
           # Cabal and Gradle validate restored inputs; make docs regenerates this revision.
           restore-keys: |
             docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-${{ hashFiles('thc.cabal', 'cabal.project', 'build.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-
