@@ -83,7 +83,7 @@ class WindowsSulongLibraryLookupTest {
     private PackageScalarCall originalOpen(Language.State owner) throws Exception {
         var directory = Path.of(System.getProperty("thc.projectRoot"), "build/generated/test-cbits");
         var bitcode = Files.readAllBytes(directory.resolve("windows-open.bc"));
-        var dll = Files.readAllBytes(directory.resolve("windows-io-fixture.dll"));
+        var dll = Files.readAllBytes(directory.resolve("windows-opening-fixture.dll"));
         var signature = new PackageScalarSignature("__hscore_open", "thc_windows_fixture_open",
             List.of("AddrRep", "Int32Rep", "Word16Rep"), "Int32Rep", "ccall", "safe");
         // JVM linkage model, not fabricated executable Core. The named producer
@@ -107,7 +107,10 @@ class WindowsSulongLibraryLookupTest {
                 var call = originalOpen(owner);
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var open = new Open(language, call).getCallTarget();
-                var selected = SymbolLookup.libraryLookup(owner.getPackageCbits().windowsIoImage(), arena);
+                // Seek/close controls come from the companion SDK fixture,
+                // never from extra producer roots in the opening component.
+                var selected = SymbolLookup.libraryLookup(Path.of(System.getProperty("thc.projectRoot"),
+                    "build/generated/test-cbits/windows-io-fixture.dll"), arena);
                 int fd = (int) open.call(nativeWide(filename), 0x8302); // SDK O_RDWR|O_CREAT|O_TRUNC|O_BINARY
                 assertTrue(fd >= 0);
                 try {
@@ -130,6 +133,8 @@ class WindowsSulongLibraryLookupTest {
                     assertEquals(0, io.transfer(fd, false, 0, ManagedAddress.nullAddress(), false).length());
                 } finally { assertEquals(0, sdk(selected, "close", new MemoryLayout[]{JAVA_INT}, fd)); }
                 assertEquals(9, owner.getWindowsNativeIo().transfer(fd, false, 0, ManagedAddress.nullAddress(), false).error());
+                assertEquals(10045, owner.getWindowsNativeIo().transfer(-1, true, 0, ManagedAddress.nullAddress(), false).error(),
+                    "an opening-only component must not borrow unrelated ambient WinSock imports");
                 owner.getStdio().setErrno(71);
                 assertEquals(-1, (int) open.call(nativeWide("absent/" + filename), 0x8000));
                 assertEquals(2, owner.getStdio().errno(), "actual selected maperrno must replace the guest seed");
@@ -277,8 +282,15 @@ class WindowsSulongLibraryLookupTest {
             var library = SymbolLookup.libraryLookup(image, arena);
             var error = arena.allocate(JAVA_INT);
             var wrong = (MemorySegment) WindowsNativeIo.Api.bind.invokeExact(wide(arena, "kernelbase.dll"), error);
-            assertEquals(0, wrong.address(), "an unrelated OS module must not become a CRT/WinSock provider");
-            assertEquals(13, error.get(JAVA_INT, 0));
+            assertNotEquals(0, wrong.address(), "the OS module imports errno, but owns no descriptor operations");
+            assertEquals(0, error.get(JAVA_INT, 0));
+            try {
+                var loan = arena.allocate(16, 8);
+                assertEquals(40, (int) WindowsNativeIo.Api.acquire.invokeExact(wrong, 1, 0, loan),
+                    "unrelated errno ownership must not borrow an ambient CRT descriptor table");
+                assertEquals(10045, (int) WindowsNativeIo.Api.acquire.invokeExact(wrong, 1, 1, loan),
+                    "unrelated errno ownership must not borrow ambient WinSock imports");
+            } finally { WindowsNativeIo.Api.unbind.invokeExact(wrong); }
             var owner = (MemorySegment) WindowsNativeIo.Api.bind.invokeExact(wide(arena, image.toString()), error);
             assertNotEquals(0, owner.address(), "selected import binding failed with " + error.get(JAVA_INT, 0));
             try {
@@ -368,7 +380,8 @@ class WindowsSulongLibraryLookupTest {
                 assertThrows(SecurityException.class, () -> io.transfer(1, false, 0, ManagedAddress.nullAddress(), true));
                 assertThrows(SecurityException.class, () -> io.transfer(2, false, 0, ManagedAddress.nullAddress(), true));
                 try (var arena = Arena.ofConfined()) {
-                    var selected = SymbolLookup.libraryLookup(owner.getPackageCbits().windowsIoImage(), arena);
+                    var selected = SymbolLookup.libraryLookup(Path.of(System.getProperty("thc.projectRoot"),
+                        "build/generated/test-cbits/windows-io-fixture.dll"), arena);
                     int alias = sdk(selected, "dup", new MemoryLayout[]{JAVA_INT}, 0);
                     assertTrue(alias >= 3);
                     try { assertThrows(SecurityException.class, () -> io.transfer(alias, false, 0, ManagedAddress.nullAddress(), false)); }

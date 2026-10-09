@@ -63,13 +63,15 @@ class FastRunnerTest(unittest.TestCase):
         changed = dict(mode="narrow", runnable=True, changedPaths=["bin/core-package-manifest.py"],
                        base="a" * 40, head="b" * 40, reasons=[],
                        affected=dict(python=["bin/test-core-package-manifest.py"], haskell=[], junit=[]))
-        manifest = {"groups": {"runtime": {"cmakeTarget": "fixture-runtime", "requires": []}}}
+        manifest = {"groups": {"runtime": {"cmakeTarget": "fixture-runtime", "requires": []},
+                               "windows": {"gradleTask": "compileWindowsIoFixture", "requires": []}}}
         with patch.object(fast_select, "select", return_value=changed), \
-             patch.object(fast_select, "group_selection", return_value={"junit": {"classes": ["RuntimeTest"]}}), \
-             patch.object(ci.fixtures, "_manifest", return_value=(manifest, {"RuntimeTest": "runtime"})):
+             patch.object(fast_select, "group_selection", return_value={"junit": {"classes": ["RuntimeTest", "WindowsTest"]}}), \
+             patch.object(ci.fixtures, "_manifest", return_value=(manifest, {"RuntimeTest": "runtime", "WindowsTest": "windows"})):
             plan = ci.commit_plan(self.root, "HEAD~1", "HEAD")
             self.assertEqual([dict(path="bin/test-core-package-manifest.py", optimized=True)], plan["python"])
             self.assertEqual(["fixture-runtime"], plan["fixtures"])
+            self.assertEqual(["compileWindowsIoFixture"], plan["gradleFixtures"])
             self.assertFalse(plan["protocol"])
             self.assertEqual([], plan["haskell"])
             changed["mode"] = "full"

@@ -1060,7 +1060,10 @@ def commit_plan(root, base, head):
     return {"python": scripts, "haskell": suites, "primops": "primop-tools" in suites,
             "protocol": full or any(path.startswith(("tools/truffle-protocol/", "src/gradle/materializable-api",
                                                      "src/gradle/protocol-runtime")) for path in paths),
-            "fixtures": [manifest["groups"][name]["cmakeTarget"] for name in groups],
+            "fixtures": [manifest["groups"][name]["cmakeTarget"] for name in groups
+                         if manifest["groups"][name].get("cmakeTarget")],
+            "gradleFixtures": [manifest["groups"][name]["gradleTask"] for name in groups
+                               if manifest["groups"][name].get("gradleTask")],
             "selection": {key: changed[key] for key in ("mode", "base", "head", "reasons", "affected")}}
 
 

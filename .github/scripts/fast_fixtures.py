@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Select explicit CMake fixture targets; Ninja owns file freshness."""
+"""Select owned CMake fixtures and independent native Windows Gradle resources."""
 
 import argparse
 import json
@@ -50,6 +50,10 @@ def _manifest(root):
                 any(system not in ("Linux", "Darwin", "Windows") for system in systems) or
                 len(systems) != len(set(systems))):
             raise ValueError(f"Invalid CI platforms: {group_id}")
+        if "gradleTask" in group and (not isinstance(group["gradleTask"], str)
+                or not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", group["gradleTask"])
+                or group.get("cmakeTarget") or group.get("quarantined") or systems != ["Windows"]):
+            raise ValueError(f"Invalid native Windows Gradle fixture: {group_id}")
         checks = group.get("ciChecks", [])
         if not isinstance(checks, list) or any(not isinstance(check, dict) or check.get("platform") != "Linux" for check in checks):
             raise ValueError(f"Invalid CI checks: {group_id}")
@@ -113,13 +117,26 @@ def prepare_cmake(root, selection, run):
     if blocked:
         raise ValueError("Quarantined tests cannot run: " + ", ".join(sorted(blocked)))
     groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None})
-    pending = [name for name in groups if not manifest["groups"][name].get("cmakeTarget")]
+    pending = [name for name in groups if not (manifest["groups"][name].get("cmakeTarget")
+                                              or manifest["groups"][name].get("gradleTask"))]
     if pending:
         raise ValueError("Fixture file rules are not yet migrated: " + ", ".join(pending)
                          + "; see docs/fixture-inputs.log. No legacy preparation was run.")
-    targets = [manifest["groups"][name]["cmakeTarget"] for name in groups]
+    targets = [manifest["groups"][name]["cmakeTarget"] for name in groups
+               if manifest["groups"][name].get("cmakeTarget")]
     build_cmake_targets(targets, run)
-    return {"mode": "cmake", "targets": targets}
+    result = {"mode": "cmake", "targets": targets}
+    gradle_targets = [manifest["groups"][name]["gradleTask"] for name in groups
+                     if manifest["groups"][name].get("gradleTask")]
+    if gradle_targets:
+        result["mode"] = "cmake+gradle" if targets else "gradle"
+        result["gradleTargets"] = gradle_targets
+        # Native Windows resources belong to Gradle; do not bootstrap the
+        # macOS/Linux exporter graph for an independent Windows ABI control.
+        if os.name == "nt":
+            run("fixture-gradle-build", ["cmd", "/c", "gradlew.bat", "--no-daemon",
+                                         "--max-workers=1", *gradle_targets])
+    return result
 
 
 def build_cmake_targets(targets, run):

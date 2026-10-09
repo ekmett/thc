@@ -10,7 +10,7 @@
 #include <string.h>
 
 // This is the THC-owned RTS boundary, not a second implementation of libc.
-// CRT calls bind to the selected package DLL's resolved imports. Never use
+// CRT calls bind to the selected package DLL's actual errno provider. Never use
 // the bridge's allocator CRT, the JVM's default lookup, or an assumed fd table.
 typedef int *(__cdecl *errno_fn)(void);
 typedef int (__cdecl *read_fn)(int, void *, unsigned);
@@ -74,6 +74,15 @@ static void *imported(HMODULE module, const char *name) {
     return NULL;
 }
 
+// A package need not import every operation this boundary can perform.
+// Resolve within its actual CRT, rejecting a conflicting resolved import if
+// present. Missing operations are checked by their owning operation below.
+static void *crt_operation(HMODULE package, HMODULE crt, const char *name) {
+    void *operation = (void *)(uintptr_t)GetProcAddress(crt, name);
+    void *selected = imported(package, name);
+    return selected && selected != operation ? NULL : operation;
+}
+
 __declspec(dllexport) void *thc_windows_io_bind(const wchar_t *loaded_package, DWORD *error) {
     HMODULE package = NULL, crt = NULL;
     *error = 0;
@@ -82,8 +91,6 @@ __declspec(dllexport) void *thc_windows_io_bind(const wchar_t *loaded_package, D
     if (!owner) { FreeLibrary(package); *error = ERROR_NOT_ENOUGH_MEMORY; return NULL; }
     owner->package = package;
     owner->error = (errno_fn)imported(package, "_errno");
-    owner->read = (read_fn)imported(package, "_read");
-    owner->write = (write_fn)imported(package, "_write");
     owner->recv = (recv_fn)imported(package, "recv");
     owner->send = (send_fn)imported(package, "send");
     owner->socket_error = (socket_error_fn)imported(package, "WSAGetLastError");
@@ -91,18 +98,16 @@ __declspec(dllexport) void *thc_windows_io_bind(const wchar_t *loaded_package, D
     // GHC's bundled MinGW has the Win10 declaration but no import-library
     // entry. Resolve the OS operation from its existing fixed system module.
     owner->compare = (compare_fn)GetProcAddress(GetModuleHandleW(L"kernelbase.dll"), "CompareObjectHandles");
-    if (!owner->error || !owner->read || !owner->write || !owner->recv || !owner->send ||
-        !owner->socket_error || !owner->socket_close || !owner->compare ||
+    if (!owner->error ||
         !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                            (LPCWSTR)(uintptr_t)owner->error, &crt)) goto mismatch;
     // The package's CRT owner supplies acquisition and retirement too.
-    owner->duplicate = (dup_fn)GetProcAddress(crt, "_dup");
-    owner->close = (close_fn)GetProcAddress(crt, "_close");
-    owner->handle = (handle_fn)GetProcAddress(crt, "_get_osfhandle");
-    owner->local_validation = (local_validation_fn)GetProcAddress(crt, "_set_thread_local_invalid_parameter_handler");
-    if (!owner->duplicate || !owner->close || !owner->handle || !owner->local_validation ||
-        (void *)(uintptr_t)GetProcAddress(crt, "_read") != (void *)(uintptr_t)owner->read ||
-        (void *)(uintptr_t)GetProcAddress(crt, "_write") != (void *)(uintptr_t)owner->write) goto mismatch;
+    owner->read = (read_fn)crt_operation(package, crt, "_read");
+    owner->write = (write_fn)crt_operation(package, crt, "_write");
+    owner->duplicate = (dup_fn)crt_operation(package, crt, "_dup");
+    owner->close = (close_fn)crt_operation(package, crt, "_close");
+    owner->handle = (handle_fn)crt_operation(package, crt, "_get_osfhandle");
+    owner->local_validation = (local_validation_fn)crt_operation(package, crt, "_set_thread_local_invalid_parameter_handler");
     // Retain the endpoint objects as well as the package. Re-reading a retired
     // GetStdHandle value could mistake a reused kernel handle for stdin.
     const DWORD endpoints[] = {STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE};
@@ -172,6 +177,7 @@ __declspec(dllexport) int thc_windows_io_acquire(struct io_owner *owner, int fd,
     loan->socket = socket != 0;
     loan->standard_endpoints = 0;
     if (loan->socket) {
+        if (!owner->socket_close || !owner->socket_error) return WSAEOPNOTSUPP;
         WSAPROTOCOL_INFOW protocol;
         SOCKET original = (SOCKET)(uintptr_t)(uint32_t)fd;
         if (WSADuplicateSocketW(original, GetCurrentProcessId(), &protocol)) return WSAGetLastError();
@@ -181,6 +187,8 @@ __declspec(dllexport) int thc_windows_io_acquire(struct io_owner *owner, int fd,
         loan->descriptor = (uintptr_t)copy;
     } else {
         if (fd < 0) return EBADF;
+        if (!owner->duplicate || !owner->close || !owner->handle || !owner->local_validation || !owner->compare)
+            return ENOSYS;
         int error;
         int copy = duplicate(owner, fd, &error);
         if (copy < 0) return error;
@@ -200,6 +208,14 @@ __declspec(dllexport) int thc_windows_io_acquire(struct io_owner *owner, int fd,
 __declspec(dllexport) void thc_windows_io_transfer(struct io_owner *owner, const struct io_loan *loan,
                                                  int writing, unsigned count, void *buffer,
                                                  struct io_result *result) {
+    if (loan->socket ? !(writing ? owner->send != NULL : owner->recv != NULL) || !owner->socket_error
+                     : !(writing ? owner->write != NULL : owner->read != NULL)) {
+        result->length = -1;
+        result->error = loan->socket ? WSAEOPNOTSUPP : ENOSYS;
+        result->windows_error = ERROR_PROC_NOT_FOUND;
+        result->console_abort = 0;
+        return;
+    }
     if (loan->socket) {
         result->length = writing ? owner->send((SOCKET)loan->descriptor, buffer, (int)count, 0)
                                  : owner->recv((SOCKET)loan->descriptor, buffer, (int)count, 0);

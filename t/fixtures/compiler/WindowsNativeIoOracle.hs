@@ -34,6 +34,8 @@ foreign import capi unsafe "io.h _close" closeFd :: CInt -> IO CInt
 foreign import capi unsafe "io.h _dup" dupFd :: CInt -> IO CInt
 foreign import capi unsafe "io.h _dup2" dupTo :: CInt -> CInt -> IO CInt
 foreign import capi unsafe "io.h _lseek" seekFd :: CInt -> CLong -> CInt -> IO CLong
+foreign import capi unsafe "errno.h value ENOSYS" unsupportedCrt :: CInt
+foreign import capi unsafe "winsock2.h value WSAEOPNOTSUPP" unsupportedSocket :: CInt
 
 type Bind = CWString -> Ptr Word32 -> IO (Ptr ())
 type Acquire = Ptr () -> CInt -> CInt -> Ptr () -> IO CInt
@@ -83,6 +85,19 @@ main = do
         transfer <- transferCall <$> symbol bridge "thc_windows_io_transfer"
         release <- releaseCall <$> symbol bridge "thc_windows_io_release"
         unbind <- unbindCall <$> symbol bridge "thc_windows_io_unbind"
+        -- Errno ownership alone grants no descriptor or socket namespace.
+        -- Native headers independently supply the JVM control's constants.
+        require (unsupportedCrt == 40 && unsupportedSocket == 10045) "Unsupported-operation ABI differs"
+        unrelated <- alloca $ \errorSlot -> withCWString "kernelbase.dll" $ \path -> do
+          result <- bind path errorSlot
+          errorCode <- peek errorSlot
+          require (result /= nullPtr && errorCode == 0) "Actual OS errno import cannot bind"
+          pure result
+        flip finally (unbind unrelated) $ allocaBytesAligned 16 8 $ \loan -> do
+          fileError <- acquire unrelated 1 0 loan
+          require (fileError == unsupportedCrt) "Unrelated owner acquired ambient CRT descriptor"
+          socketError <- acquire unrelated 1 1 loan
+          require (socketError == unsupportedSocket) "Unrelated owner acquired ambient WinSock descriptor"
         -- HsBase's inline wrapper is exported by the native fixture without
         -- replacing it. Its actual mode_t is Word16; fs.c remains archive code.
         open <- openCall <$> symbol package "fixture_original_open"

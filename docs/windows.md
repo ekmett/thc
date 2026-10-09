@@ -631,17 +631,26 @@ The Windows loader suite also checks the native descriptor transfer boundary:
     testDense --tests thc.runtime.WindowsSulongLibraryLookupTest --continue
 ~~~
 
-The named `compileWindowsIoFixture` prerequisite uses pinned native GHC 9.14.1
+The `windows-native-io` fixture group selects `compileWindowsIoFixture` only
+for this owning class, including direct Gradle selectors. Its generated DLLs,
+bitcode and receipt are consuming test inputs; unrelated selectors do not
+prepare this fixture or acquire its GHC toolchain. The prerequisite uses pinned native GHC 9.14.1
 to link the installed `ghc-internal` header's original opening body and archive;
 it does not rebuild installed packages. `THC_CLANG` builds its SDK operations
-and the MSVC-targeted Sulong transport. Its native GHC oracle checks the actual
+and the MSVC-targeted Sulong transport. An opening-only DLL links the same
+original archive with its registered native dependencies, without SDK transfer
+or RTS roots. The producer verifies its actual PE imports retain `_errno` and
+omit `_read`, `_write` and the four WinSock transfer imports. Its native GHC oracle checks the actual
 ABI, reads after closing the original descriptor, and distinguishes a file
 opened into vacant fd0 from a duplicate of stdin. Commands, exit statuses,
 compiler/archive hashes and artifact hashes are retained in
 `build/generated/test-cbits/windows-io-receipt.json` beside the producer logs.
 Its SDK operations exercise real files, pipes and loopback sockets.
-The runtime boundary binds the selected DLL's resolved CRT
-and WinSock imports, acquires private descriptor loans, and captures transfer
+The runtime boundary binds the selected DLL's actual `_errno` provider and
+resolves CRT operations within that provider, rejecting conflicting imports.
+Opening does not require unrelated transfer imports. Descriptor acquisition
+and transfers check their own required CRT or selected WinSock operations.
+The boundary acquires private descriptor loans and captures transfer
 errors before Java readmission. Closed descriptors return `EBADF`; recovery
 scopes the documented CRT validation callback to `_dup` and restores the exact
 previous thread-local handler. The regression also checks that the global

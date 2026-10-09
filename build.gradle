@@ -1222,7 +1222,7 @@ def compileCbits = tasks.register("compileCbits", Exec) {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
 tasks.processResources { dependsOn(compileCbits) }
 
-def windowsIoFixture = tasks.register("compileWindowsIoFixture", Exec) {
+tasks.register("compileWindowsIoFixture", Exec) {
     dependsOn(compileCbits)
     onlyIf { windowsHost }
     inputs.files("t/fixtures/compiler/WindowsNativeIo.c", "t/fixtures/compiler/WindowsNativeOpen.c",
@@ -1236,7 +1236,30 @@ def windowsIoFixture = tasks.register("compileWindowsIoFixture", Exec) {
         "-NoLogo", "-NoProfile", "-File", "bin/prepare-windows-native-io.ps1",
         "-Output", output.get().asFile)
 }
-tasks.withType(Test).configureEach { dependsOn(windowsIoFixture) }
+// The inventory owns producer selection and consuming artifacts together.
+// Evaluate filters after --tests and specialized task filters are configured.
+def matchesFixtureClass = { patterns, className ->
+    patterns.empty || patterns.any { pattern ->
+        [className, className.tokenize('.').last()].any { candidate ->
+            if (!pattern.contains('*')) return pattern == candidate || pattern.startsWith(candidate + '.')
+            def prefix = pattern.substring(0, pattern.indexOf('*'))
+            candidate.startsWith(prefix) || prefix.startsWith(candidate + '.')
+        }
+    }
+}
+tasks.withType(Test).configureEach { testTask ->
+    def selectedGroups = {
+        if (!windowsHost || testTask.testClassesDirs.files.intersect(sourceSets.test.output.classesDirs.files).empty) return []
+        fixtureGroups.values().findAll { group -> group.gradleTask && group.junit.any { name ->
+            matchesFixtureClass(testTask.filter.includePatterns, name) &&
+                matchesFixtureClass(testTask.filter.commandLineIncludePatterns, name) &&
+                !testTask.filter.excludePatterns.contains(name)
+        } }
+    }
+    dependsOn { selectedGroups().collect { it.gradleTask } }
+    inputs.files(provider { selectedGroups().collectMany { it.outputs }.collect { file(it) } })
+        .withPropertyName("selectedNativeFixtures")
+}
 
 // Exact-width byte/short atomics, which JDK segment handles do not implement.
 def compileNativeAtomics = tasks.register("compileNativeAtomics") {
