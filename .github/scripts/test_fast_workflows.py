@@ -317,6 +317,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
 
     def test_full_build_reports_independent_groups_and_never_prepares_every_fixture(self):
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
+        self.assertIn("permissions:\n  contents: read\n  actions: read\n", grouped)
         for filename in ("hourly.yml", "intensive.yml"):
             workflow = (WORKFLOW.parent / filename).read_text()
             self.assertEqual(2, workflow.count("uses: ./.github/workflows/test-groups.yml"))
