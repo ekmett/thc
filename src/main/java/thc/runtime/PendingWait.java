@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -65,7 +66,8 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         }
     }
     boolean abandoned() { return abandoned; }
-    public Object resume() {
+    /** Resume the host wait protocol; callers continue guest execution after it returns. */
+    @TruffleBoundary public Object resume() {
         boolean captured = false;
         try {
             if (abandoned) throw terminalFailure;
@@ -75,7 +77,8 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         finally { if (!captured && owner.wait == this) owner.wait = null; }
     }
     void wake() { owner.waitReady = true; GuestThreads.wakeSuspended(owner); }
-    static PendingWait of(Object value) {
+    /** Inspect saved host wait carriers without forcing or continuing guest code. */
+    @TruffleBoundary static PendingWait of(Object value) {
         var seen = new java.util.IdentityHashMap<Object, Boolean>();
         for (;;) {
             if (value != null && seen.put(value, Boolean.TRUE) != null) throw new RuntimeFault("Suspended guest dependency cycle");

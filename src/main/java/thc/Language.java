@@ -576,7 +576,8 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         boolean diagnostic = Boolean.TRUE.equals(input.get("diagnosticUnsupported"));
         require(!ioMain || !diagnostic, "IO main requires strict unsupported-Core rejection");
         return new RootNode(this) {
-            @Override public Object execute(VirtualFrame frame) {
+            @Override public Object execute(VirtualFrame frame) { return instantiate(); }
+            @TruffleBoundary private Object instantiate() {
                 var owner = currentState(this);
                 var program = new CoreUnitProgram(Language.this, directory, input, entry, backend, async, owner);
                 try {

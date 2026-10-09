@@ -42,30 +42,32 @@ public final class DelimitedActionSite extends Node {
             case AstTailYield tail -> tail.getContinuation();
             case null, default -> SavedGuestContinuations.savedGuestContinuation(result);
         };
-        Object answer;
-        if (saved == null) answer = result;
-        else {
-            RootCallTarget target = switch (result) {
-                case TailYield tail -> tail.getTarget();
-                case AstTailYield tail -> tail.getTarget();
-                case null, default -> expectedTarget;
-            };
-            if (target != null) {
-                if (!(saved.getSourceRoot() instanceof GuestRoot root)) throw fault("Non-guest delimited invocation cut");
-                if (!root.isSelf(target)) throw fault("Delimited invocation returned an unrelated continuation");
-                if (shape != null && !root.hasTupleResult(shape)) throw fault("Delimited invocation changed its tuple result shape");
-            }
-            AsyncRequest request = saved.asyncRequest();
-            if (request != null) throw new AsyncDelivery(request, this);
-            if (!AsyncContinuations.isYieldMarker(saved.getYielded())) throw fault("Unsupported delimited invocation cut");
-            // Pending operations leave the invocation; only genuine stack spills are drained here.
-            if (PendingWait.of(saved) != null) return AstControl.completeCallback(this, result, target, shape, false);
-            answer = force.drainStack(saved, shape, true, false, invocationMetrics);
-            if (PendingWait.of(answer) != null) throw AstControl.captureCompletion(this,
-                SavedGuestContinuations.savedGuestContinuation(answer), shape);
-            DelimitedControl.asyncResult(answer, this);
-        }
+        Object answer = saved == null ? result : finishSuspended(result, saved, shape, expectedTarget, invocationMetrics);
         return shape == null ? answer : ownedTupleResult(answer, shape);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Object finishSuspended(Object result, SavedGuestContinuation saved, TupleShape shape,
+                                   RootCallTarget expectedTarget, Metrics invocationMetrics) {
+        RootCallTarget target = switch (result) {
+            case TailYield tail -> tail.getTarget();
+            case AstTailYield tail -> tail.getTarget();
+            case null, default -> expectedTarget;
+        };
+        if (target != null) {
+            if (!(saved.getSourceRoot() instanceof GuestRoot root)) throw fault("Non-guest delimited invocation cut");
+            if (!root.isSelf(target)) throw fault("Delimited invocation returned an unrelated continuation");
+            if (shape != null && !root.hasTupleResult(shape)) throw fault("Delimited invocation changed its tuple result shape");
+        }
+        AsyncRequest request = saved.asyncRequest();
+        if (request != null) throw new AsyncDelivery(request, this);
+        if (!AsyncContinuations.isYieldMarker(saved.getYielded())) throw fault("Unsupported delimited invocation cut");
+        // Pending operations leave the invocation; only genuine stack spills are drained here.
+        if (PendingWait.of(saved) != null) return AstControl.completeCallback(this, result, target, shape, false);
+        Object answer = force.drainStack(saved, shape, true, false, invocationMetrics);
+        if (PendingWait.of(answer) != null) throw AstControl.captureCompletion(this,
+            SavedGuestContinuations.savedGuestContinuation(answer), shape);
+        DelimitedControl.asyncResult(answer, this);
+        return answer;
     }
     public Object captured(VirtualFrame frame, TupleShape shape, Supplier<Object> body) {
         try { return body.get(); }

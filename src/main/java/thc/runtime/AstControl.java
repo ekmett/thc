@@ -28,14 +28,17 @@ public final class AstControl {
         ResumeChild(Object child, Node node) { this.child = child; this.node = node; }
         @Override public Object resume(VirtualFrame frame, Object input) { return resumeChild(child, node, input, this); }
     }
+    @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureChild(Node node, ThunkSuspended suspended) {
         return new AstCapture(suspended, SynchronousMasking.current(node))
             .append(new ResumeChild(suspended.getThunk(), node));
     }
+    @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureForce(Node node, Force force, Object value, PendingWait wait) {
         RetryForce retry = new RetryForce(node, force, value); retry.wait = wait;
         return new AstCapture(wait, SynchronousMasking.current(node)).append(retry);
     }
+    @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureChild(Node node, CallSegmentSuspended suspended) {
         return new AstCapture(suspended, SynchronousMasking.current(node))
             .append(new ResumeChild(suspended.getSegment(), node));
@@ -128,6 +131,7 @@ public final class AstControl {
         throw captureCompletion(node, saved, tupleShape != null ? tupleShape : root.getTupleResult());
     }
     /** The private completion already owns this exact checked chain and local result shape; its source may be a caller frame. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureCompletion(Node node, SavedGuestContinuation saved, TupleShape shape) {
         if (!(saved.getSourceRoot() instanceof GuestRoot) || !AsyncContinuations.isYieldMarker(saved.getYielded()))
             throw fault("Invalid owned completion continuation");

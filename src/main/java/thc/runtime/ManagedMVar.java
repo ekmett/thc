@@ -27,17 +27,16 @@ public final class ManagedMVar {
         throw new RuntimeFault("Expected managed MVar#");
     }
     private static void check(boolean condition) { if (!condition) throw new IllegalStateException("Check failed."); }
-    @TruffleBoundary(transferToInterpreterOnException = false)
     public Object take(Node node) { return take(node, false); }
-    @TruffleBoundary(transferToInterpreterOnException = false)
     public Object take(Node node, boolean async) { return take(node, async, null); }
+    @TruffleBoundary(transferToInterpreterOnException = false)
     Object take(Node node, boolean async, Object blocked) { return awaitAt(new Request(this, Operation.TAKE, null, async ? node : null, blocked), node); }
-    @TruffleBoundary public Object read(Node node) { return read(node, false); }
-    @TruffleBoundary public Object read(Node node, boolean async) { return read(node, async, null); }
-    Object read(Node node, boolean async, Object blocked) { return awaitAt(new Request(this, Operation.READ, null, async ? node : null, blocked), node); }
-    @TruffleBoundary public void put(Object value, Node node) { put(value, node, false); }
-    @TruffleBoundary public void put(Object value, Node node, boolean async) { put(value, node, async, null); }
-    void put(Object value, Node node, boolean async, Object blocked) { awaitAt(new Request(this, Operation.PUT, value, async ? node : null, blocked), node); }
+    public Object read(Node node) { return read(node, false); }
+    public Object read(Node node, boolean async) { return read(node, async, null); }
+    @TruffleBoundary Object read(Node node, boolean async, Object blocked) { return awaitAt(new Request(this, Operation.READ, null, async ? node : null, blocked), node); }
+    public void put(Object value, Node node) { put(value, node, false); }
+    public void put(Object value, Node node, boolean async) { put(value, node, async, null); }
+    @TruffleBoundary void put(Object value, Node node, boolean async, Object blocked) { awaitAt(new Request(this, Operation.PUT, value, async ? node : null, blocked), node); }
     static Object awaitAt(Request request, Node node) {
         boolean captured = false;
         try {

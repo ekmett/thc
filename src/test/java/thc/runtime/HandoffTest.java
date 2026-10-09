@@ -90,6 +90,41 @@ class HandoffTest {
             var objectValue = new Object(); layout.copyIn(input, new Object[]{4_000_000_000L, objectValue, Long.MIN_VALUE}); state.getArguments().release(input); assertEquals(0, state.getArguments().getDepth()); assertEquals(1, independentPool.getDepth()); assertTrue(output.getLive()); var again = state.getArguments().acquire(layout); assertSame(input, again); assertNull(layout.getObject(again, 1)); layout.copyIn(again, new Object[]{7L, new Object(), 9L}); assertEquals(7L, layout.getLong(again, 0)); state.getArguments().release(again); independentPool.release(output); assertReleased(state);
         });
     }
+    @Test void firstInstalledDynamicLayoutsClearReferencesAndReleaseLoans() throws Exception {
+        withLanguage(false, language -> {
+            var layouts = List.of(language.getHandoffLayouts().intern(List.of()),
+                    language.getHandoffLayouts().intern(List.of("IntRep", "BoxedRep (Just Lifted)", "DoubleRep", "AddrRep")),
+                    language.getHandoffLayouts().intern(List.of("BoxedRep (Just Lifted)", "WordRep", "BoxedRep (Just Unlifted)")));
+            var pool = new HandoffPool();
+            var releaser = new RootNode(language) {
+                int dynamicEntries;
+                int compiledReleases;
+                @Override public Object execute(VirtualFrame frame) {
+                    var layout = (HandoffLayout) frame.getArguments()[0];
+                    if (CompilerDirectives.inCompiledCode() && !CompilerDirectives.isPartialEvaluationConstant(layout)) dynamicEntries++;
+                    pool.release((HandoffStorage) frame.getArguments()[1], layout);
+                    if (CompilerDirectives.inCompiledCode()) compiledReleases++;
+                    return Unit.INSTANCE;
+                }
+            };
+            var target = releaser.getCallTarget();
+            target.getClass().getMethod("ensureInitialized").invoke(target);
+            ThreadInventoryCoreEvidence.install(List.of(target));
+            assertTrue(ThreadInventoryCoreEvidence.valid(target), "Install before the first release; no warmup");
+            var address = ManagedAddress.fromByteArray(new byte[]{11});
+            Object[][] values = {new Object[0], {Long.MIN_VALUE, new Object(), Double.longBitsToDouble(0x7ff8000000001234L), address},
+                    {new Object(), Long.MAX_VALUE, new Object()}};
+            for (int n = 0; n < layouts.size(); n++) {
+                var layout = layouts.get(n); var storage = pool.acquire(layout); layout.copyIn(storage, values[n]);
+                int entries = releaser.dynamicEntries, releases = releaser.compiledReleases;
+                target.call(layout, storage);
+                assertEquals(entries + 1, releaser.dynamicEntries, "The first installed call must use a runtime layout");
+                assertEquals(releases + 1, releaser.compiledReleases);
+                assertTrue(ThreadInventoryCoreEvidence.valid(target));
+                assertEquals(0, pool.getDepth()); assertEquals(0, pool.retainedReferences()); assertFalse(storage.getLive());
+            }
+        });
+    }
     @Test void nestedNonTailCallsKeepDistinctResultsAcrossCompilationAndReuse() throws Exception {
         withLanguage(language -> {
             var body = choose(prim("<=#", v("n"), n(0)), n(3_000_000_017L), prim("+#", call("worker", prim("-#", v("n"), n(1))), v("n"))); var data = module(List.of(binding("worker", body), binding("entry", prim("+#", call("worker", v("n")), n(7)))));

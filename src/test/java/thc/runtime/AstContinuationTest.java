@@ -39,7 +39,12 @@ class AstContinuationTest {
         var lazyMvar = new LinkedHashMap<>(mvarRep); lazyMvar.put("evaluated", false);
         var parameters = list(map("id", "cell", "name", "cell", "lifted", false, "coercion", false, "rep", unevaluatedCell ? lazyMvar : mvarRep), map("id", "state", "name", "state", "lifted", false, "coercion", false, "rep", stateRep));
         var lambda = list("lam", parameters, body, map("resultRep", nestedTuple ? nestedTupleRep : wrongCaseResult || casePayload ? dataRep : caseLiteral ? longRep : tupleRep, "entryStrict", list(strict, false)));
-        return map("bindings", list(map("id", "direct", "name", "direct", "lifted", true, "expr", lambda)), "instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2), map("id", "Outer", "name", "Outer", "kind", "unboxed-tuple", "arity", 2)));
+        // Deliberate bottom models only the declared lazy dependency for continuation
+        // transport. src/examples/BlockedOwners.hs supplies the genuine GHC/native oracle.
+        var blocked = map("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+                "type", "SomeException", "lifted", true, "arity", 0, "rep", dataRep,
+                "expr", list("var", CoreBlockedExceptions.MVAR, map("rep", dataRep)));
+        return map("bindings", list(map("id", "direct", "name", "direct", "lifted", true, "expr", lambda), blocked), "instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2), map("id", "Outer", "name", "Outer", "kind", "unboxed-tuple", "arity", 2)));
     }
     @ParameterizedTest @ValueSource(strings = {"ast-tail", "ast-suffix", "bytecode-tail", "bytecode-suffix"})
     void tupleCallerCapturesItsFirstCompiledAsyncRequestAndResumesWithoutReplay(String mode) throws Exception {
@@ -214,9 +219,11 @@ class AstContinuationTest {
         var loop = map("id", "loop", "name", "loop", "lifted", true, "rep", closure, "joinValueArity", 1, "joinResultRep", nestedTupleRep,
                 "expr", list("lam", list(map("id", "remaining", "lifted", false, "rep", longRep)), step, map("rep", closure, "resultRep", nestedTupleRep)));
         var entry = list("app", list("var", "loop", map("rep", closure)), list(list("var", "count", map("rep", longRep))), list(false), false, false, map("rep", nestedTupleRep));
-        module.put("bindings", list(map("id", "direct", "name", "direct", "lifted", true,
+        var bindings = new ArrayList<>((List<Map<String, Object>>) module.get("bindings"));
+        bindings.set(0, map("id", "direct", "name", "direct", "lifted", true,
                 "expr", list("lam", list(map("id", "cell", "lifted", false, "rep", mvarRep), map("id", "count", "lifted", false, "rep", longRep)),
-                        list("let", true, list(loop), entry, map("rep", nestedTupleRep)), map("resultRep", nestedTupleRep)))));
+                        list("let", true, list(loop), entry, map("rep", nestedTupleRep)), map("resultRep", nestedTupleRep))));
+        module.put("bindings", bindings);
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {

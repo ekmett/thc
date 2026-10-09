@@ -1,4 +1,4 @@
-# Declared mutable Sulong globals
+# Sulong global mutability and initialization
 
 The pinned Sulong `LLVMGlobalContainer` speculates that a single-context global
 is constant for its first few writes. A compiled C read-modify-write can therefore
@@ -12,12 +12,21 @@ reads and writes remain compilable and do not create constant assumptions.
 Readonly globals retain upstream speculation. The no-argument constructor,
 including its use for thread-local globals, retains the upstream policy.
 
-Only those two upstream classes are changed. Global initialization values,
+The global-mutability patch changes those two classes. Global initialization values,
 managed pointer carriers, native conversion, disposal, context ownership and
 synchronization are unchanged. There are no extra guest calls, write-count
 warmups, forced native conversions or compilation/inlining exclusions. This does
 not change the first-write policy for TLS or claim arbitrary racy C accesses are
 safe.
+
+`initialization-latch.patch` marks `LoadModulesNode.hasInitialised` as
+compilation final. The root-owned latch changes from false to true only after
+transferring to the interpreter and adopting its initialization child. This lets
+a cold compilation deoptimize before calling the null child, and later
+compilations specialize the latch and populated child together. The generated
+child still looks up the current context and its separate initialization state;
+context state is not marked compilation final. Initialization order, invalidation
+and synchronization are preserved for every LLVM consumer on the shared host.
 
 The existing `src/gradle/windows-sulong.gradle` task names now build one pinned
 artifact on every host. Windows additionally applies its existing optional-cwd
