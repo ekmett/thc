@@ -123,7 +123,13 @@ public final class GlobalBinding {
             force = null; segment = null;
         }
         Object execute() {
-            if (demanded == null) return force.executeInitialization(segment);
+            if (demanded == null) {
+                Object result = force.executeInitialization(segment);
+                TupleShape shape = segment.getTupleShape();
+                // Call results use typed transport; a vector global stores the raw vector.
+                return shape != null && shape.getProof().isVector()
+                    ? shape.getLayout().getObject((HandoffStorage) result, 0) : result;
+            }
             // Native provider tasks and the program's own cells retain execution sharing.
             demanded.initializeNative(owner);
             demanded.initializeGlobals();

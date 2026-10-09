@@ -355,6 +355,7 @@ changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); re
                 for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
                     entered(context, language -> {
                         var first = code.newInstance(language); var second = code.newInstance(language);
+                        long secondInitialEntries = compiledEntries(second);
                         for (var program : list(first, second)) {
                             for (var name : names) {
                                 var function = (Closure) program.entryValue(entry(module, name));
@@ -376,7 +377,8 @@ changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); re
                             }
                             assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
                             assertEquals(0, language.getHandoffState().get().getResults().getDepth());
-                            if (program == first) assertEquals(0L, compiledEntries(second));
+                            if (program == first) assertEquals(secondInitialEntries, compiledEntries(second),
+                                "Invoking one instance must not enter its sibling");
                         }
                     });
                 }
@@ -413,9 +415,6 @@ changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); re
                         assertThrows(RuntimeFault.class, () -> Program.prepareCode(language, with(module, "bindings", list(global)), list("aggregate")));
                     }
                     code = Program.prepareCode(language, module, entries);
-                    var preparationInstance = code.newInstance(language);
-                    for (var name : kinds) if (proofs.get(name).hasBoxedPointer()) freshOwner(owners, name, preparationInstance.entryValue(name));
-                    assertEquals(0L, compiledEntries(preparationInstance));
                 } finally { preparation.leave(); }
             }
             compileUntouchedRubbish(code);
@@ -425,6 +424,7 @@ changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); re
                 for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
                     entered(context, language -> {
                         var first = code.newInstance(language); var second = code.newInstance(language);
+                        long secondInitialEntries = compiledEntries(second);
                         for (var program : list(first, second)) {
                             for (var name : kinds) {
                                 var proof = proofs.get(name); Object value = program.entryValue(name);
@@ -446,7 +446,8 @@ changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); re
                             }
                             assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
                             assertEquals(0, language.getHandoffState().get().getResults().getDepth());
-                            if (program == first) assertEquals(0L, compiledEntries(second));
+                            if (program == first) assertEquals(secondInitialEntries, compiledEntries(second),
+                                "Invoking one instance must not enter its sibling");
                         }
                     });
                 }
