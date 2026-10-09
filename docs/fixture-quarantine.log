@@ -47,9 +47,9 @@ Unrelated directory members change consumed inputs or make generation fail:
   stable-pointers (084): both original and shared-CAF exports require exact
     output-directory inventories. Unrelated CBDs must not prevent regeneration;
     replace both listings with their declared pairs before readmission.
-  compiled-thunk-retention (097): boxed-array producer consumes every stage CBD;
-    its grouped consumers include the floating fixture. Split useful independent
-    coverage before admitting it separately.
+  compiled-thunk-retention (097): floating preparation remains quarantined.
+    The independent four-root boxed-array product is admitted as boxed-arrays;
+    it consumes only its named CBD pair per stage.
   array-slices (123): consumes every stage CBD and also rewrites shared coverage.
 
 Published directories are cleared as part of the recipe:

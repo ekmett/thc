@@ -953,13 +953,20 @@
         "thc.cabal"
       ]
     },
+    "boxed-arrays": {
+      "cmakeTarget": "fixture-boxed-arrays",
+      "junit": ["thc.runtime.BoxedArrayTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-boxed-arrays.py"]}],
+      "outputs": ["build/boxed-arrays"],
+      "sources": ["bin/prepare-boxed-arrays.py", "t/fixtures/compiler/BoxedArrayAudit.hs"]
+    },
     "compiled-thunk-retention": {
       "requires": ["compact-model"],
       "quarantined": true,
-      "junit": ["thc.runtime.BoxedArrayTest", "thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-boxed-arrays.py"]}, {"argv": ["python3", "bin/prepare-floating-audit.py"]}],
-      "outputs": ["build/boxed-arrays", "build/floating"],
-      "sources": ["bin/prepare-boxed-arrays.py", "bin/prepare-floating-audit.py", "t/fixtures/compiler/BoxedArrayAudit.hs", "t/fixtures/compiler/FloatingAudit.hs", "t/fixtures/compiler/FloatingAuditNative.hs"]
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-floating-audit.py"]}],
+      "outputs": ["build/floating"],
+      "sources": ["bin/prepare-floating-audit.py", "t/fixtures/compiler/FloatingAudit.hs", "t/fixtures/compiler/FloatingAuditNative.hs"]
     },
     "original-stack": {
       "quarantined": true,

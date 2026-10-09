@@ -1745,11 +1745,11 @@
       "python": []
     },
     "bin/prepare-boxed-arrays.py": {
-      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
+      "junit": ["thc.runtime.BoxedArrayTest"],
       "python": []
     },
     "t/fixtures/compiler/BoxedArrayAudit.hs": {
-      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
+      "junit": ["thc.runtime.BoxedArrayTest"],
       "python": []
     },
     "bin/prepare-floating-audit.py": {

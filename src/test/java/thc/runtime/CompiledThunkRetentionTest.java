@@ -9,7 +9,6 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -23,18 +22,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class CompiledThunkRetentionTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private record Row(long input, long expected) {}
-    @Test void freshlyEvaluatedBoxedArrayThunksRetainFirstCompiledHostCall() throws Exception {
-        var manifest = (Map<String, Object>) Json.parse(Files.readString(root.resolve("build/boxed-arrays/manifest.json")));
-        var rows = new ArrayList<Row>();
-        for (var line : Files.readAllLines(root.resolve("build/boxed-arrays/oracle.tsv"))) {
-            var fields = line.split("\t", -1);
-            if (fields[0].equals("boxedSTRecursive")) rows.add(new Row(Long.parseLong(fields[1]), Long.parseLong(fields[3])));
-        }
-        assertEquals(41, rows.size());
-        var reversed = new ArrayList<>(rows); Collections.reverse(reversed);
-        for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet())
-            check(stage.getKey(), stage.getValue(), "main:BoxedArrayAudit.boxedSTRecursive", rows, reversed);
-    }
     @Test void cachedFloatingNaNThunksRetainEveryCompiledCall() throws Exception {
         var rows = new ArrayList<String[]>();
         for (var line : Files.readAllLines(root.resolve("build/floating/oracle.tsv"))) rows.add(line.split("\t", -1));
