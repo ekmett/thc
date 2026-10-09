@@ -10,12 +10,8 @@ carriers. Linux qualification and remaining platform limits are recorded below. 
 using ordinary weak registrations and bootstrap finalizers. The collector needs
 no language resolver callback or additional interface for this design.
 
-The ordinary `jam.vm.Lifted` value protocol is supplied by the unchanged source
-from Jam commit `92a0cbcda6b9413dc2df3b2a6e327f06d90ea94b` in
-[`nih/pinned/jam-lifted`](../nih/pinned/jam-lifted/README.md), compiled with THC.
-The Linux and Windows providers include this interface; the macOS pin predates
-it. This supplemental compile input adds no native API and does not replace
-`jam.vm.Weak` or its bridge. It can be removed when all pinned providers include it. See
+All pinned providers supply the ordinary `jam.vm.Lifted` value protocol.
+THC uses that API directly. See
 [nonforcing value resolution](thunk-updates.md#nonforcing-lifted-values).
 
 ## Toolchain ownership
@@ -27,8 +23,9 @@ identities for each platform. A release/version string alone does not establish 
 
 The upstream owner is now [ekmett/jam](https://github.com/ekmett/jam), including
 its managed-runtime sources under `vm/`. Linux and Windows consume the complete release-flavor
-JVM and Native Image toolchain from `vm-2026.10.08-3cb04509`. macOS
-retains the fastdebug preview `vm-2026.10.07-a7ebfc52`. Source, archive and
+JVM and Native Image toolchain from `vm-2026.10.08-3cb04509`. macOS consumes
+the release-flavor preview `vm-2026.10.08-50b08881-macos15`, qualified locally
+on macOS 15.5. Source, archive and
 installation identities move together within each platform. Native adapter filenames use `jam-vm`; runtime library manifests
 determine deployment membership. The release assets preserve the qualified
 producer bytes beyond temporary CI artifact retention.
@@ -54,8 +51,9 @@ with the matching native directory selected from the running package.
 
 The pinned Linux package requires glibc 2.38. Matching macOS and Windows
 packages have separate recorded identities. Windows has the bounded JVM
-weak-bootstrap evidence below; macOS THC execution remains unqualified.
-The macOS package requires macOS 26 and cannot run on macOS 15.
+weak-bootstrap evidence below. The macOS arm64 package requires macOS 15.5;
+its selected JVM checks pass on that version. THC Native Image execution on
+macOS remains unqualified.
 Consumer CI uses the retained release assets and the matching platform floors.
 
 Native Image builds select `--gc=jam`. Both image recipes also reuse the
@@ -93,9 +91,8 @@ registration. Dead associations are classified before finalizer rescue.
 Resurrecting a key does not revive its retired registration. Dead registration
 metadata must be reclaimable without making old tokens valid again; collection
 and idle polling costs must not grow with all registrations since process startup.
-The Linux release reuses retired slots with generation tokens and keeps active
-scans separate from historical capacity. The older macOS adapter
-still retains and scans dead records. Registration
+The pinned releases reuse retired slots with generation tokens and keep active
+scans separate from historical capacity. Registration
 metadata failure returns to Java as an allocation failure without publishing a
 partial association. This does not cover arbitrary collector allocation failure.
 Finalizer state retains its actual captures, without an invented reference to the
@@ -228,8 +225,14 @@ uses indexed access and an emptiness check, avoiding generic collection traversa
 in the runtime compilation graph. The user-facing driver and `native-runtime`
 wrapper still default to resource-copy.
 
-Recovery from actual heap exhaustion, macOS execution and remaining Windows
-coverage are still open. The older combined Native Image component candidate
+On macOS 15.5 arm64, 36 selected JVM checks pass: 18 per handoff mode, with
+no failures or skips. They cover weak handoff and threaded thunk behavior,
+including first compiled calls on both backends. Toolchain verification and the
+installed launcher use the exact published package. This reuses the package's
+local qualification; it is not a macOS CI or THC Native Image result.
+
+Recovery from actual heap exhaustion, macOS THC Native Image execution and
+remaining Windows coverage are still open. The older combined Native Image component candidate
 passed the unchanged `NativeWeak` executable; its evidence and the newer
 `WeakThreads` application pass do not establish all-platform qualification.
 Supplier release qualification is
