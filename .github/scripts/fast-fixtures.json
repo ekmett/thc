@@ -954,6 +954,7 @@
       ]
     },
     "boxed-arrays": {
+      "ciPlatforms": ["Linux", "Darwin"],
       "cmakeTarget": "fixture-boxed-arrays",
       "junit": ["thc.runtime.BoxedArrayTest"],
       "commands": [{"argv": ["python3", "bin/prepare-boxed-arrays.py"]}],
