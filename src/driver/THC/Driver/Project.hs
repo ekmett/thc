@@ -266,7 +266,7 @@ prepareWindowsRuntimeWithVerification verify policy source repository selectedCo
       _ -> fail "Windows plugin plan has no unique installed ghc-internal unit"
     (prepared, wired) <- wiredGhcInternal context root policy source (unitId internal)
     let selectedContext = context { contextCoreView =
-          if policy == "required" then Just prepared else contextCoreView context }
+          if policy == "required" || source /= Nothing then Just prepared else contextCoreView context }
     -- The genuine source bundle owns wired Core, while Cabal dependencies name
     -- its selected installed registration. Preserve that empty registration
     -- record, as installedRecords does; otherwise the sidecar reacquires the
@@ -1276,9 +1276,12 @@ wiredGhcInternal context root policy source registeredUnit = do
   native <- prepareInterfaceHelper context root
   original <- case source of
     Nothing -> pure native
-    Just path -> configuredView native path
+    Just path -> do
+      (selected, proof) <- configuredSourceView native path
+      atomicJson (contextNative context </> "configured-source-proof.json") proof
+      pure selected
   registered <- discoverInstalled original registeredUnit
-  prepared <- if policy == "pinned" then preparePinnedInterfaces (contextCache context)
+  prepared <- if policy == "pinned" && source == Nothing then preparePinnedInterfaces (contextCache context)
       (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context)
       original [registered]
     else case source of

@@ -72,6 +72,8 @@ runTests arguments = do
       [InstalledForeignTests.tests, InstalledForeignTests.viewTests env]
     ["--installed-foreign-source-only"] -> pure
       [InstalledForeignTests.tests, InstalledForeignTests.viewTests env, InstalledForeignTests.sourceTests env]
+    ["--configured-source-view-only"] -> pure
+      [InstalledForeignTests.tests, InstalledForeignTests.viewTests env, InstalledForeignTests.configuredSourceViewTests env]
     ["--installed-hydration-only"] -> pure [InstalledHydrationTests.tests]
     ["--core-index-only"] -> pure [CoreIndexTests.tests, CoreSymbolsTests.tests env]
     ["--bundle-selection-only"] -> pure [BundleSelectionTests.tests env]

@@ -11,24 +11,26 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for installed foreign.
-module InstalledForeignTests (tests, viewTests, sourceTests) where
+module InstalledForeignTests (tests, viewTests, sourceTests, configuredSourceViewTests) where
 
 import Control.Exception (bracket)
 import Control.Monad (foldM, forM, forM_, when)
 import qualified Crypto.Hash.SHA256 as SHA
-import Data.Aeson (Value(..), object, (.=))
+import Data.Aeson (Value(..), encode, object, (.=))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf, sort)
 import Distribution.InstalledPackageInfo (parseInstalledPackageInfo, showInstalledPackageInfo)
+import Distribution.Pretty (prettyShow)
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import GHC.Fingerprint (getFileHash)
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing, doesFileExist,
   copyFile, removeFile, removePathForcibly)
 import System.Environment (getEnv, lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeDirectory, replaceExtension, addTrailingPathSeparator)
+import System.FilePath ((</>), takeDirectory, takeFileName, replaceExtension, addTrailingPathSeparator)
 import System.IO (openTempFile, hClose)
 import System.IO.Error (tryIOError)
 import qualified System.Info as Host
@@ -37,7 +39,7 @@ import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
 import THC.Compact.Module (readModuleValue)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign (missingForeignProof, createView, viewContext, observeProbeInterfaces,
-  retainedUsageFiles, verifyUsageFiles, matchUsageFiles, ForeignCompiler(..), prepareForeignInterfaces, configuredView)
+  retainedUsageFiles, verifyUsageFiles, matchUsageFiles, ForeignCompiler(..), prepareForeignInterfaces, configuredView, configuredSourceView, validateRegisteredLibrary)
 import THC.Driver.NativeDependencies (configuredSourceBuild)
 import TestSupport (Env(..), runExe, assertSuccess, assertContains, out, field, string, array, readJson)
 
@@ -114,8 +116,9 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
       assertBool "introducing a CPP dependency during regeneration must reject"
         (not (matchUsageFiles ("/source/ghcversion.h", "/installed/ghcversion.h") [] []
           [("/source/new-header.h", "changed")]))
-  , TestCase $ forM_ ["C:\\configured source\\rts\\include\\ghcversion.h",
-                     "\\\\server\\configured source\\rts\\include\\ghcversion.h"] $ \path -> do
+  , TestCase $ forM_ (["C:\\configured source\\rts\\include\\ghcversion.h",
+                      "\\\\server\\configured source\\rts\\include\\ghcversion.h"] ++
+                     [path | Host.os == "mingw32", path <- [".\\include\\header.h", "..\\dist\\build\\autogen\\cabal_macros.h"]]) $ \path -> do
       let retained = unlines ["Self-Recomp", "  src hash: 999feb32988468f8fe569d95fc0f673f",
             "  usages: [import  -/  ghc-internal:GHC.Internal.Base 012345",
             "           addDependentFile \"" ++ path ++ "\" 012345]",
@@ -140,6 +143,33 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
     posix = "GHC.Internal.System.Posix.Internals"
     verified = object ["status" .= ("verified" :: String)]
     rejected message result = assertBool message (case result of Left _ -> True; Right _ -> False)
+
+-- | Independently qualify the explicitly selected retained Windows source
+-- provider, without recompiling its nominal modules or boot-library closure.
+configuredSourceViewTests :: Env -> Test
+configuredSourceViewTests env = TestLabel "configured source keeps real native owner and complete provenance" $ TestCase $ do
+  source <- getEnv "THC_TEST_GHC_SOURCE"
+  metadata <- readJson (source </> "inputs.json")
+  ghc <- getEnv "GHC"
+  pkg <- getEnv "GHC_PKG"
+  helper <- getEnv "THC_TEST_INTERFACE_HELPER"
+  native <- installedContext ghc pkg helper [] (field metadata "compiler")
+  rejected <- tryIOError (configuredSourceView
+    native { installedCompiler = object ["platform" .= ("incorrect" :: String)] } source)
+  case rejected of
+    Left problem -> assertContains "differs from selected compiler/ABI" (show problem)
+    Right _ -> assertFailure "configured source accepted a different compiler/ABI"
+  (selected, proof) <- configuredSourceView native source
+  canonical <- canonicalizePath source
+  assertEqual "qualified source retains its genuine native owner" (Just canonical) (installedSource selected)
+  createDirectoryIfMissing True (scratch env)
+  BL.writeFile (scratch env </> "configured-source-proof.json") (encode proof)
+  (_, registrationInfo) <- either (fail . show) pure
+    (parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack (string (field metadata "registration")))))
+  unit <- discoverInstalled selected (prettyShow (Package.installedUnitId registrationInfo))
+  core <- readOriginal selected unit "GHC.Internal.TopHandler"
+  assertEqual "actual retained interface has complete Core"
+    (String "GHC.Internal.TopHandler") (field core "module")
 
 -- Explicit opt-in: this needs an intact matching configured GHC tree and the
 -- real published plugin/helper, not the synthetic decision controls above.
@@ -291,12 +321,14 @@ sourceTests env = TestLabel "original configured-source foreign provenance" $ Te
        ("System.Posix.Env.PosixString", [("unsetenv", "HsUnix.h", "unsafe")]),
        ("System.Posix.IO.Common", [("openat", "HsUnix.h", "unsafe")]),
        (directoryModule, [("fchmodat", "sys/stat.h", "safe"), ("fstatat", "sys/stat.h", "safe")])]
-    readOriginal context unit name = do
-      path <- maybe (fail ("missing original interface: " ++ name)) pure (lookup name (installedInterfaces unit))
-      (status, bytes, _) <- boundedInterfaceProcess (installedHelper context)
-        (helperCommand context unit (name, path))
-      assertEqual (name ++ " has complete retained Core") ExitSuccess status
-      either fail pure (readModuleValue bytes)
+
+readOriginal :: InstalledContext -> InstalledUnit -> String -> IO Value
+readOriginal context unit name = do
+  path <- maybe (fail ("missing original interface: " ++ name)) pure (lookup name (installedInterfaces unit))
+  (status, bytes, _) <- boundedInterfaceProcess (installedHelper context)
+    (helperCommand context unit (name, path))
+  assertEqual (name ++ " has complete retained Core") ExitSuccess status
+  either fail pure (readModuleValue bytes)
 
 -- Exercise the actual ghc-pkg view against the selected installation. This
 -- performs no compilation and gives thin stock interfaces no runtime admission.
@@ -321,6 +353,20 @@ viewTests env = TestLabel "acquisition view preserves native registration" $ Tes
     selected <- discoverInstalled (viewContext context view) identifier
     before <- parsed (registration original)
     after <- parsed (registration selected)
+    when (Host.os == "mingw32") $ do
+      (libraryDirectory, archive) <- case (Package.hsLibraries before, Package.libraryDirs before) of
+        ([name], path:_) -> pure (path, path </> ("lib" ++ name ++ ".a"))
+        _ -> fail "view test needs the selected genuine native archive"
+      expected <- canonicalizePath archive
+      actual <- validateRegisteredLibrary VanillaInterfaces before
+        (libraryDirectory </> "." </> takeFileName archive)
+      assertEqual "registered library identity survives path aliases" expected actual
+      let unregistered = directory </> "not-a-registered-archive"
+      writeFile unregistered "not an archive"
+      rejected <- tryIOError (validateRegisteredLibrary VanillaInterfaces before unregistered)
+      case rejected of
+        Left problem -> assertContains "does not resolve to the recorded library" (show problem)
+        Right _ -> assertFailure "native registration accepted an unrelated file"
     assertEqual "only interface directories change" before
       after { Package.importDirs = Package.importDirs before }
     if Host.os == "mingw32" then do

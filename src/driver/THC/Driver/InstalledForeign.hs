@@ -13,8 +13,8 @@
 -- An acquisition-only view of genuine recompiled interfaces. Native compilation
 -- always retains the caller's compiler, package database and installed libraries.
 module THC.Driver.InstalledForeign
-  ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext, configuredView
-  , observeProbeInterfaces, retainedUsageFiles, verifyUsageFiles, matchUsageFiles ) where
+  ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext, configuredView, configuredSourceView
+  , observeProbeInterfaces, retainedUsageFiles, verifyUsageFiles, matchUsageFiles, validateRegisteredLibrary ) where
 
 import Control.Monad (filterM, forM, forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -55,6 +55,7 @@ import System.IO.Error (tryIOError)
 import qualified System.Info as Host
 import THC.Driver.Lock (withLock)
 import System.Process (proc, CreateProcess(..), readCreateProcessWithExitCode)
+import Text.Read (readEither)
 import THC.Driver.Installed
 import THC.Driver.NativeDependencies (configuredSourceBuild)
 import THC.Compact.Module (readModuleMetadata)
@@ -364,9 +365,7 @@ configuredRecipe producer context unit root names = do
     (packageGlobalArguments context ++ ["--package-db", foreignPluginDb producer,
      "--ipid", "describe", foreignPluginUnit producer]) Nothing
   plugin <- parseRegistration pluginDescription
-  libraryMatches <- filterM doesFileExist (registeredLibraries way plugin)
-  check (foreignRegisteredLibrary producer `elem` libraryMatches && length libraryMatches == 1)
-    "THC plugin registration does not resolve to the recorded library for its selected way"
+  _ <- validateRegisteredLibrary way plugin (foreignRegisteredLibrary producer)
   -- GHC records dynamically loaded plugin dependencies as UsageFiles too. Only
   -- those exact registered library paths may be additional producer inputs;
   -- accepting every .so (or ignoring every non-.h) would hide a new CPP include.
@@ -401,6 +400,16 @@ registeredLibraries way info = nub
     directories = if way == VanillaInterfaces then Package.libraryDirsStatic info ++ Package.libraryDirs info
       else Package.libraryDynDirs info
     suffix = if way == VanillaInterfaces then ".a" else "-ghc9.14.1.so"
+
+-- | Require the recorded library to be the unique actual registered product.
+-- Canonicalize both sides: Cabal may register a checkout junction while the
+-- selected archive is recorded through that junction's resolved directory.
+validateRegisteredLibrary :: InterfaceWay -> Package.InstalledPackageInfo -> FilePath -> IO FilePath
+validateRegisteredLibrary way registered recorded = do
+  paths <- nub <$> (mapM canonicalizePath =<< filterM doesFileExist (registeredLibraries way registered))
+  actual <- canonicalizePath recorded
+  check (paths == [actual]) "THC plugin registration does not resolve to the recorded library for its selected way"
+  pure actual
 
 compileOriginal :: ForeignCompiler -> Recipe -> FilePath -> String -> IO ()
 compileOriginal producer recipe destination name = do
@@ -510,6 +519,63 @@ configuredView context source = do
       "configured source view changed native registration or ABI fields"
   pure selected
 
+-- | Validate a retained Windows source provider against its real configured
+-- unit, current compiler/settings/graph, and original source/CPP fingerprints.
+-- Return the consumed observations for ordinary acquisition provenance.
+configuredSourceView :: InstalledContext -> FilePath -> IO (InstalledContext, Value)
+configuredSourceView context source = do
+  root <- canonicalizePath source
+  actualSettings <- either fail pure . readEither =<< command (installedGhc context) ["--info"] Nothing
+  selected <- configuredView context root
+  inputs <- readJson (root </> "inputs.json")
+  check (member "compiler" inputs == Just (installedCompiler context))
+    "configured source provider differs from selected compiler/ABI"
+  retainedSettings <- field inputs "settings" :: IO [(String, String)]
+  check (retainedSettings == actualSettings) "configured source provider changed selected GHC settings"
+  registered <- field inputs "registration" >>= parseRegistration
+  let identifier = prettyShow (Package.installedUnitId registered)
+  unit <- discoverInstalled selected identifier
+  configuration <- configuredSourceBuild root registered
+  expected <- canonicalizePath (root </> "dist")
+  check (configuration == Just (expected, False)) "configured source provider lost its native owner"
+  lbi <- getPersistBuildConfig Nothing (makeSymbolicPath expected)
+  component <- case allComponentsInBuildOrder lbi of
+    [value] -> pure value
+    _ -> fail "configured source provider has multiple components"
+  compilerId <- field (installedCompiler context) "id" :: IO String
+  platform <- field (installedCompiler context) "platform" :: IO String
+  check (prettyShow (Compiler.compilerId (compiler lbi)) == compilerId &&
+    prettyShow (hostPlatform lbi) == platform &&
+    componentUnitId component == Package.installedUnitId registered &&
+    sort (map fst (componentPackageDeps component)) == sort (Package.depends registered))
+    "configured source provider changed compiler/unit/dependency identities"
+  (owner, modules) <- either fail pure . readEither =<< readFile (root </> "complete")
+  let inventory = sort (filter (/= "GHC.Internal.Prim") (map fst (installedInterfaces unit)))
+  check (owner == identifier && sort modules == inventory) "configured source provider has an incomplete inventory"
+  graphValue <- readJson (root </> "source-graph.json")
+  graph <- case fromJSON graphValue of
+    Success nodes -> pure (nodes :: [Value])
+    Error problem -> fail problem
+  nodes <- forM graph $ \node -> (,,) <$> field node "module" <*> field node "source" <*> field node "boot"
+  check (sort [name | (name, _, False) <- nodes] == inventory)
+    "configured source graph differs from installed module inventory"
+  observedGraph <- command (installedHelper context)
+    ["--source-graph", installedLibdir context, root </> "source-graph-request.json"] (Just (root </> "source"))
+  actualGraph <- either fail pure (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack observedGraph)))
+  check (actualGraph == graphValue) "current helper changed the retained compilation source graph"
+  observations <- forM [(name, path) | (name, path, False) <- nodes] $ \(name, path) -> do
+    interface <- maybe (fail "configured source graph lacks its interface") pure (lookup name (installedInterfaces unit))
+    let sourceFile = if isAbsolute path then path else root </> "source" </> path
+    description <- command (installedGhc context) ["--show-iface", interface] Nothing
+    digest <- show <$> getFileHash sourceFile
+    check ([fingerprint | line <- lines description, ["src", "hash:", fingerprint] <- [words line]] == [digest])
+      ("configured source differs from retained interface: " ++ name)
+    retained <- either (fail . (("configured source " ++ name ++ ": ") ++)) pure (retainedUsageFiles description)
+    cpp <- verifyUsageFiles (root </> "source") retained
+    pure (sourceFile, digest, cpp)
+  pure (selected { installedSource = Just root },
+    object ["root" .= root, "inputs" .= inputs, "sourceObservations" .= observations])
+
 validateView :: InstalledContext -> InstalledUnit -> [(String, Value)] -> IO ()
 validateView context original needed = do
   selected <- discoverInstalled context (registeredId original)
@@ -592,6 +658,7 @@ retainedUsageFiles description = do
     -- GHC pretty-prints Windows FilePaths verbatim, not as Haskell string
     -- literals: reads would interpret \t/\r or reject other backslashes.
     quotedPath value@('"':body) = case break (== '"') body of
+      (path, '"':rest) | Host.os == "mingw32" -> [(path, rest)]
       (path@(drive:':':'\\':_), '"':rest) | isAlpha drive -> [(path, rest)]
       (path@('\\':'\\':_), '"':rest) -> [(path, rest)]
       _ -> reads value

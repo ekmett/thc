@@ -127,8 +127,6 @@ runResolvedPackage opts working target prepareRuntime = do
   unless (not (null (runThcRoot opts))) $ fail "run requires --thc-root DIR"
   unless (runInstalledCore opts `elem` ["pinned", "required"]) $
     fail "the Windows simple-package backend requires pinned or required installed Core"
-  unless (runGhcSource opts == Nothing || runInstalledCore opts == "required") $
-    fail "--ghc-source requires --installed-core required on Windows"
   launchEnvironment <- runtimeDebugEnvironment os opts =<< getEnvironment
   (cabalFile, lbi) <- configurePackage (runPlan opts) target
   let packageRoot = takeDirectory cabalFile

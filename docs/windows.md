@@ -605,6 +605,17 @@ fall back to pinned sources. The default `pinned` policy and its compilation-key
 dependencies are unchanged. This propagation alone does not qualify canonical
 entry execution or remove the Windows deep-path copy limit.
 
+On Windows, `--installed-core pinned --ghc-source DIR` instead retains the
+explicitly selected, completed `ghc-internal` producer and lets ordinary pinned
+acquisition build missing dependencies. Selection validates its real Cabal unit,
+compiler/settings, complete source graph and each compiled source/CPP fingerprint;
+the current helper must reproduce the same graph. Acquisition records those
+observations in `configured-source-proof.json`. It does not rebuild the supplied
+bootstrap or change an old compilation key. Dependencies that load the exporter
+still bind its actual archive; stale plugin-dependent interfaces are rejected.
+Plugin registration compares canonical archive identities, so a checkout
+junction and its resolved directory select the same actual library.
+
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.
@@ -617,6 +628,11 @@ entry execution or remove the Windows deep-path copy limit.
   expressions are evaluated. An accepted audit does not certify their native
   availability. The optional Libdw backend is unsupported by THC; retain missing
   symbol errors when those paths execute and do not restore retired overrides.
+- Full canonical `runMainIO` acquisition can complete while its runtime audit
+  rejects Windows `stg_asyncReadzh`/`stg_asyncWritezh` scheduler entries and the
+  unlinked `rts_IOManagerIsWin32Native` data label. These are RTS state boundaries;
+  ordinary C linkage does not implement them. Keep the failed audit and do not
+  claim canonical effect, exception or compiled execution from acquired Core.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.
