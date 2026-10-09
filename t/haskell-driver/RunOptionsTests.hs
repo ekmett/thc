@@ -27,7 +27,20 @@ import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeEntryArgum
 
 tests :: Env -> Test
 tests env = TestLabel "driver options and target selection" $ TestList
-  [ TestLabel "completion uses real parser options without building" $ TestCase $ do
+  [ TestLabel "installed unit export has explicit construction inputs" $ TestCase $ do
+      help <- run env (root env) Nothing 30 ["export-installed-unit", "--help"]
+      assertSuccess help
+      assertContains "Declared dependencies remain references" (out help)
+      forM_ [["export-installed-unit"], ["export-installed-unit", "one", "two"],
+             ["export-installed-unit", "one", "--dist-dir", "unused"]] $ \arguments -> do
+        invalid <- run env (root env) Nothing 30 arguments
+        assertFailure invalid
+        assertContains "Usage: thc export-installed-unit UNIT" (err invalid)
+      completed <- run env (root env) Nothing 30
+        ["--bash-completion", "2", "thc", "export-installed-unit", "--package-"]
+      assertSuccess completed
+      assertEqual "actual DB stack option" "--package-db\n" (out completed)
+  , TestLabel "completion uses real parser options without building" $ TestCase $ do
       let complete index words' = run env (root env) Nothing 30 ("--bash-completion" : show (index :: Int) : words')
       roots <- complete 1 ["thc", "acq"]
       assertSuccess roots

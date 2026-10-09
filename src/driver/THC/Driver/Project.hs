@@ -16,7 +16,7 @@
 -- Plan project components and acquire reproducible, dependency-closed Core bundles.
 module THC.Driver.Project
   ( runProject, acquireProject, buildTargetsProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
-  , prepareInstalledBundle, prepareInstalledBundleWithVerification, installedRecords
+  , exportInstalledUnit, prepareInstalledBundle, prepareInstalledBundleWithVerification, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
   , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
   , selectedPackageTool, componentCoreRecords
@@ -1029,6 +1029,28 @@ installedBundleRecipeIdentity = object
       let bytes = SHA.hash (BL.toStrict (encode records))
       lift (concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value)
             (BS.unpack bytes)))
+
+-- | Publish one exact registered unit from complete retained Core. Declared
+-- dependencies remain references; this does not acquire a runnable closure.
+-- Input interfaces/databases are read-only. Only output/cache are writable.
+exportInstalledUnit :: InstalledContext -> String -> FilePath -> FilePath -> FilePath -> IO ()
+exportInstalledUnit context identifier layout output cache = do
+  requireFile (installedHelper context)
+  requireFile layout
+  registrationUnit <- discoverInstalled context identifier
+  -- Discovery fails before output creation for a missing requested unit.
+  createDirectoryIfMissing True output
+  withLock (output </> "export.lock") $ do
+    acquired <- prepareInstalledBundle cache (output </> "staging") layout context registrationUnit
+    artifact <- either (\missing -> fail
+      ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
+       " (" ++ missingInterface missing ++ "). Build the registered unit with -fwrite-if-simplified-core.")) pure acquired
+    let records = installedRecords registrationUnit artifact
+    bridge <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules True records
+    published <- mapM (publishCoreUnit output True) records
+    atomicJson (output </> "packages.json") (object ["format" .= ("thc-core-packages" :: String),
+      "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
+      "foreignExceptionBridgeUnit" .= bridge, "units" .= published])
 
 -- The probe retains complete installed source/native identities. A successful
 -- selection receipt can then avoid reopening an unchanged archive; explicit

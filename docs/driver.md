@@ -220,6 +220,29 @@ construction; supply its published package manifest, including the exact
 exception bridge unit. A plugin registration alone supplies no runtime Core.
 Do not rewrite `plan.json` or copy an arbitrary user's Core cache.
 
+When Cabal has already installed the runtime with its final unit ID and
+`-fwrite-if-simplified-core`, export that exact registered unit during construction:
+
+```sh
+thc export-installed-unit "$RUNTIME_UNIT" \
+  --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
+  --interface-helper "$BUILT_INTERFACE" --package-db "$FINAL_DB" \
+  --target-layout "$THC_SOURCE/src/driver/cbits/target-layout.c" \
+  --cache-dir "$CONSTRUCTION_CACHE" --dist-dir "$CONSTRUCTION_OUTPUT"
+```
+
+This command uses the selected GHC's normal global database plus the additional
+`--package-db` stack in the supplied order. It checks genuine registrations and
+retained interfaces, assembles native provenance using the ordinary installed
+acquisition path, and publishes `packages.json` with per-module CBD in the output
+directory. It preserves exact declared dependency IDs; it does not export a
+recursive application closure, reacquire boot Core, run Cabal or rebuild missing
+Core. Missing retained Core is an error. Compiler, package tool, helper, layout,
+cache and output are all explicit required inputs; source and databases remain
+read-only. Native tool selection uses the existing `THC_CLANG`, `THC_LLVM_LINK`,
+`THC_LLVM_OPT`, `THC_LLVM_NM` and `THC_LLVM_OBJCOPY` environment variables, with
+`SDKROOT` for an explicitly selected macOS SDK.
+
 After installing the generated JVM distribution, publish the producer boundary:
 
 ```sh
