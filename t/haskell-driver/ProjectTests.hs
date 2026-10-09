@@ -204,7 +204,7 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
       assertNoStdout rejected
       published <- doesFileExist (output </> "packages.json")
       assertBool "CLI rejects runtime options before acquisition" (not published)
-    notProject <- run env base Nothing 30
+    notProject <- runPreparation env base
       ["acquire", "--project-dir", base, "fail-frontier", "--thc-root", thcRoot env]
     assertFailure notProject
     assertContains "Cabal runnable target selection failed" (err notProject)
