@@ -10,6 +10,7 @@ public final class AsyncRequest {
     final long targetId;
     final Thread target;
     private final Object payload;
+    GuestThreads.GuestThread recipient;
     final boolean forceSelf;
     private final Object monitor = new Object();
     private volatile AsyncRequestState state = AsyncRequestState.PENDING;
@@ -35,7 +36,7 @@ public final class AsyncRequest {
     @TruffleBoundary public boolean cancel() { return owner.finish(this, AsyncRequestState.CANCELLED); }
     @TruffleBoundary public boolean fail() { return fail(null); }
     @TruffleBoundary public boolean fail(Throwable cause) { return owner.finish(this, AsyncRequestState.FAILED, cause); }
-    public void finish(AsyncRequestState next) { transition(next); }
+    public void finish(AsyncRequestState next) { transition(next); recipient = null; }
     /** Blocking send completion is interruptible and revokes only an unclaimed request. */
     @TruffleBoundary public AsyncRequestState await(Node node) {
         try {

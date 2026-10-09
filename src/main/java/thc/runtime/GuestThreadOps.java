@@ -66,46 +66,8 @@ public final class GuestThreadOps {
         // Only the waiting parent owns this result, never the retained carrier task.
         // The terminal marker also rejects publication after the parent abandons its wait.
         AtomicReference<Object> registration = new AtomicReference<>();
-        Thread child = threads.newThread(state.getEnv(), () -> {
-            boolean registered = false;
-            boolean registrationCompleted = false;
-            GuestThreadStatus outcome = GuestThreadStatus.FINISHED;
-            AutoCloseable affinity = null;
-            Throwable failure = null;
-            try {
-                try {
-                    threads.enterCurrent(inheritedMask, true, asyncEnabled, capability);
-                    registered = true;
-                    if (!threads.isLoom()) affinity = capability == null ? threads.getCpuAffinity().resetCurrent() : threads.getCpuAffinity().bindCurrent(threads.currentIdentity().getCapability());
-                    GuestThreadId current = threads.currentIdentity();
-                    if (!threads.isLoom()) current.setAffinityApplied(capability != null && affinity != null);
-                    registration.compareAndSet(null, current);
-                    registrationCompleted = true;
-                    ready.countDown();
-                    root.call(action);
-                } catch (UncaughtForkAsync uncaught) {
-                    outcome = GuestThreadStatus.DIED;
-                    uncaught.request.acknowledge();
-                } catch (AsyncDelivery uncaught) {
-                    outcome = GuestThreadStatus.DIED;
-                    uncaught.getRequest().acknowledge();
-                }
-            } catch (Throwable caught) {
-                failure = caught;
-                outcome = GuestThreadStatus.uncaught(caught);
-                if (!registered) registration.compareAndSet(null, caught);
-            } finally {
-                if (!registered) ready.countDown();
-                try { if (registered) threads.leaveCurrent(outcome); }
-                catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
-                try { if (affinity != null) affinity.close(); }
-                catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
-            }
-            if (failure != null) {
-                if (registrationCompleted) reportHostFailure(state, failure);
-                GuestThreadOps.<RuntimeException, Object>rethrow(failure);
-            }
-        }, capability, node);
+        Thread child = threads.newThread(state.getEnv(),
+            new ForkRunner(state, root, action, inheritedMask, asyncEnabled, capability, ready, registration), capability, node);
         var handler = child.getUncaughtExceptionHandler();
         child.setUncaughtExceptionHandler((thread, failure) -> {
             // This includes failure after enterCurrent but before identity publication.
@@ -125,6 +87,72 @@ public final class GuestThreadOps {
             if (!(result instanceof GuestThreadId identity)) throw RuntimeFault.fault("fork# child did not publish its ThreadId#");
             return identity;
         } finally { registration.set(CONSUMED_REGISTRATION); }
+    }
+
+    /** Each execute activation returns before neutral wait; the task consumes its initial action. */
+    private static final class ForkRunner implements Runnable {
+        private final Language.State state;
+        private final com.oracle.truffle.api.RootCallTarget root;
+        private Object initial;
+        private final MaskingState inheritedMask;
+        private final boolean async;
+        private final Long capability;
+        private final CountDownLatch ready;
+        private final AtomicReference<Object> registration;
+        private final GuestWakePort port = new GuestWakePort();
+        private AutoCloseable affinity;
+        private boolean registered, published;
+        ForkRunner(Language.State state, com.oracle.truffle.api.RootCallTarget root, Object action,
+                MaskingState mask, boolean async, Long capability, CountDownLatch ready, AtomicReference<Object> registration) {
+            this.state = state; this.root = root; initial = action; inheritedMask = mask;
+            this.async = async; this.capability = capability; this.ready = ready; this.registration = registration;
+        }
+        private void initialize() throws Exception {
+            GuestThreads threads = state.getThreads();
+            threads.enterCurrent(inheritedMask, true, async, capability); registered = true;
+            if (!threads.isLoom()) affinity = capability == null ? threads.getCpuAffinity().resetCurrent() :
+                threads.getCpuAffinity().bindCurrent(threads.currentIdentity().getCapability());
+            GuestThreadId identity = threads.currentIdentity();
+            if (!threads.isLoom()) identity.setAffinityApplied(capability != null && affinity != null);
+            threads.installSuspensionBoundary(port);
+            registration.compareAndSet(null, identity); published = true; ready.countDown();
+        }
+        private boolean execute() {
+            GuestThreads threads = state.getThreads();
+            GuestThreads.GuestThread resumed = port.peek();
+            Object work;
+            if (resumed != null) { threads.resumeSuspended(resumed); port.take(); work = resumed.work; resumed.work = null; }
+            else { work = initial; initial = null; }
+            try { root.call(work); return true; }
+            catch (ForkSuspension cut) { threads.suspendCurrent(cut.work, cut.wait); return false; }
+        }
+        @Override public void run() {
+            GuestThreads threads = state.getThreads();
+            GuestThreadStatus outcome = GuestThreadStatus.FINISHED;
+            Throwable failure = null;
+            try {
+                initialize();
+                for (;;) { if (execute()) break; port.await(); }
+            } catch (UncaughtForkAsync uncaught) {
+                outcome = GuestThreadStatus.DIED; uncaught.request.acknowledge();
+            } catch (AsyncDelivery uncaught) {
+                outcome = GuestThreadStatus.DIED; uncaught.getRequest().acknowledge();
+            } catch (Throwable caught) {
+                failure = caught; outcome = GuestThreadStatus.uncaught(caught);
+                if (!registered) registration.compareAndSet(null, caught);
+            } finally {
+                initial = null;
+                if (!registered) ready.countDown();
+                try { if (registered) { threads.recoverSuspended(port); threads.leaveCurrent(outcome); } }
+                catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
+                try { if (affinity != null) affinity.close(); }
+                catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
+            }
+            if (failure != null) {
+                if (published) reportHostFailure(state, failure);
+                GuestThreadOps.<RuntimeException, Object>rethrow(failure);
+            }
+        }
     }
 
     /** A language-owned thread cannot cancel its non-creator TruffleContext. */

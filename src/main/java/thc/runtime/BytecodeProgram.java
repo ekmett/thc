@@ -1248,6 +1248,10 @@ public final class BytecodeProgram implements ExecutableProgram {
     /** Blocking operands are evaluated once; only their uncommitted request is retried. */
     private void emitBlockingRequest(Emission e, List<Expression> operands, boolean result,
             Consumer<List<BytecodeLocal>> operation) {
+        emitBlockingRequest(e, operands, result, (values, pending) -> operation.accept(values));
+    }
+    private void emitBlockingRequest(Emission e, List<Expression> operands, boolean result,
+            java.util.function.BiConsumer<List<BytecodeLocal>, BytecodeLocal> operation) {
         var b = e.builder;
         b.beginBlock();
         var values = new ArrayList<BytecodeLocal>();
@@ -1257,30 +1261,40 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.beginStaticStoreObject(local); operands.get(i).emit(e); b.endStaticStoreObject();
             values.add(local);
         }
-        emitOwnerWaitRetry(e, () -> operation.accept(values));
+        emitOwnerWaitRetry(e, pending -> operation.accept(values, pending));
         if (result) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
         b.endBlock();
     }
 
     /** Retry only an uncommitted request; the producer/local operand stays saved. */
     private void emitOwnerWaitRetry(Emission e, Runnable attempt) {
-        if (!enableAsync) { attempt.run(); return; }
+        emitOwnerWaitRetry(e, pending -> {
+            e.builder.beginResumePendingWait(); e.builder.emitStaticLoadObject(pending); e.builder.endResumePendingWait();
+            attempt.run();
+        });
+    }
+    private void emitOwnerWaitRetry(Emission e, Consumer<BytecodeLocal> attempt) {
+        if (!enableAsync) { attempt.accept(null); return; }
         var b = e.builder;
         b.beginBlock();
         var complete = b.createLabel();
-        var request = b.createLocal("owner wait async request", FrameSlotKind.Object);
+        var request = b.createLocal("owner wait cut", FrameSlotKind.Object);
+        var pending = b.createLocal("retained pending operation", FrameSlotKind.Object);
+        b.beginStaticStoreObject(pending); b.emitLoadNull(); b.endStaticStoreObject();
         var active = b.createLocal("owner wait logical mask", FrameSlotKind.Object);
         var discard = b.createLocal("owner wait resume value", FrameSlotKind.Object);
         b.beginWhile(); b.emitLoadConstant(true); b.beginBlock();
         b.beginTryCatch();
         b.beginBlock();
-        attempt.run();
+        attempt.accept(pending);
         b.emitBranch(complete);
         b.endBlock();
         b.beginBlock();
         b.beginStaticStoreObject(request);
         b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly();
         b.endStaticStoreObject();
+        b.beginStaticStoreObject(pending); b.beginRetainPendingWait();
+        b.emitStaticLoadObject(request); b.endRetainPendingWait(); b.endStaticStoreObject();
         b.beginStaticStoreObject(active); b.emitCurrentMask(); b.endStaticStoreObject();
         b.beginStaticStoreObject(discard);
         b.beginReenterCallMask();
@@ -7666,7 +7680,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                         b.beginInvokeSTM(operation, slots, metrics, true); b.emitStaticLoadObject(values.get(0));
                         if (values.size() == 3) b.emitStaticLoadObject(values.get(1)); else b.emitLoadNull();
                         if (nested != null) b.emitReadGlobal(nested); else b.emitLoadNull();
-                        b.emitStaticLoadObject(values.getLast()); b.endInvokeSTM();
+                        b.emitStaticLoadObject(values.getLast());
+                        if (operation == STMOp.ATOMICALLY) b.emitReadGlobal(globals.get(CoreBlockedExceptions.STM)); else b.emitLoadNull();
+                        b.endInvokeSTM();
                         b.beginBlock();
                         b.beginStaticStoreObject(suspended);
                         b.beginSTMScopeSuspension(); b.emitLoadException(); b.endSTMScopeSuspension();
@@ -7683,7 +7699,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                         b.beginInvokeSTM(operation, slots, metrics, enableAsync); operands.get(0).emit(e);
                         if (operands.size() == 3) operands.get(1).emit(e); else b.emitLoadNull();
                         if (nested != null) b.emitReadGlobal(nested); else b.emitLoadNull();
-                        operands.getLast().emit(e); b.endInvokeSTM();
+                        operands.getLast().emit(e);
+                        if (operation == STMOp.ATOMICALLY) b.emitReadGlobal(globals.get(CoreBlockedExceptions.STM)); else b.emitLoadNull();
+                        b.endInvokeSTM();
                     }
                 } else {
                     b.beginTVarAccess(operation, destination.get(0));
@@ -7702,9 +7720,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             operation.validate(loweredProofs(operands), flags, tupleProof);
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
-                if (enableAsync && (operation == MVarOp.TAKE || operation == MVarOp.READ)) emitBlockingRequest(e, operands, false, values -> {
+                if (enableAsync && (operation == MVarOp.TAKE || operation == MVarOp.READ)) emitBlockingRequest(e, operands, false, (values, pending) -> {
                     b.beginReadMVar(destination.get(0), operation == MVarOp.TAKE, true);
-                    for (var value : values) b.emitStaticLoadObject(value); b.endReadMVar();
+                    for (var value : values) b.emitStaticLoadObject(value); b.emitStaticLoadObject(pending); b.emitReadGlobal(globals.get(CoreBlockedExceptions.MVAR)); b.endReadMVar();
                 });
                 else {
                     switch (operation) {
@@ -7716,6 +7734,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                         default -> throw new IllegalStateException("Not a tuple MVar operation");
                     }
                     for (var operand : operands) operand.emit(e);
+                    if (operation == MVarOp.TAKE || operation == MVarOp.READ) { b.emitLoadNull(); b.emitReadGlobal(globals.get(CoreBlockedExceptions.MVAR)); }
                     switch (operation) {
                         case NEW -> b.endNewMVar(); case TAKE, READ -> b.endReadMVar();
                         case TRY_TAKE, TRY_READ -> b.endTryReadMVar(); case TRY_PUT -> b.endTryPutMVar(); case IS_EMPTY -> b.endIsEmptyMVar();
@@ -7725,10 +7744,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
             return new ProvenExpression(e -> {
                 var b = e.builder;
-                if (enableAsync && operation == MVarOp.PUT) emitBlockingRequest(e, operands, true, values -> {
-                    b.beginPutMVar(true); for (var value : values) b.emitStaticLoadObject(value); b.endPutMVar();
+                if (enableAsync && operation == MVarOp.PUT) emitBlockingRequest(e, operands, true, (values, pending) -> {
+                    b.beginPutMVar(true); for (var value : values) b.emitStaticLoadObject(value); b.emitStaticLoadObject(pending); b.emitReadGlobal(globals.get(CoreBlockedExceptions.MVAR)); b.endPutMVar();
                 });
-                else { b.beginPutMVar(false); for (var operand : operands) operand.emit(e); b.endPutMVar(); }
+                else { b.beginPutMVar(false); for (var operand : operands) operand.emit(e); b.emitLoadNull(); b.emitReadGlobal(globals.get(CoreBlockedExceptions.MVAR)); b.endPutMVar(); }
             }, evaluatedProof(tupleProof, true));
         }
         if (CompactImageOp.named(name) != null) {

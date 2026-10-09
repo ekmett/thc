@@ -11,11 +11,14 @@ public final class ManagedMVars {
     private ManagedMVars() {}
 
     public static Expr expression(MVarOp operation, CoreRepresentation proof, Expr[] operands, boolean async) {
+        return expression(operation, proof, operands, async, null);
+    }
+    public static Expr expression(MVarOp operation, CoreRepresentation proof, Expr[] operands, boolean async, Expr blocked) {
         Expr expression = switch (operation) {
             case NEW -> new New(operands[0]);
-            case TAKE, READ -> new Read(operands[0], operands[1], operation == MVarOp.TAKE, async);
+            case TAKE, READ -> new Read(operands[0], operands[1], operation == MVarOp.TAKE, async, blocked);
             case TRY_TAKE, TRY_READ -> new TryRead(operands[0], operands[1], operation == MVarOp.TRY_TAKE);
-            case PUT -> new Put(operands[0], operands[1], operands[2], async);
+            case PUT -> new Put(operands[0], operands[1], operands[2], async, blocked);
             case TRY_PUT -> new TryPut(operands[0], operands[1], operands[2]);
             case IS_EMPTY -> new IsEmpty(operands[0], operands[1]);
         };
@@ -40,11 +43,14 @@ public final class ManagedMVars {
         @Child private Expr cell;
         @Child private Expr state;
         private final boolean remove, async;
-        Read(Expr cell, Expr state, boolean remove, boolean async) {
-            this.cell = cell; this.state = state; this.remove = remove; this.async = async;
+        @Child private Expr blocked;
+        Read(Expr cell, Expr state, boolean remove, boolean async, Expr blocked) {
+            this.cell = cell; this.state = state; this.remove = remove; this.async = async; this.blocked = blocked;
         }
+        private Object blocked(VirtualFrame frame) { return blocked == null ? null : blocked.execute(frame); }
         private static final class Resume implements AstResumeStep {
             private final Read node;
+            private PendingWait wait;
             private final ManagedMVar reference;
             private final int[] slots;
             private final int offset;
@@ -54,8 +60,10 @@ public final class ManagedMVars {
             @Override public Object resume(VirtualFrame frame, Object input) {
                 if (input != Unit.INSTANCE) throw fault("Invalid AST MVar read resume value");
                 Object value;
-                try { value = node.remove ? reference.take(node, true) : reference.read(node, true); }
+                try { value = wait != null ? wait.resume() : node.remove ? reference.take(node, true, node.blocked(frame)) : reference.read(node, true, node.blocked(frame)); }
+                catch (PendingWait cut) { wait = cut; throw new AstCapture(cut, SynchronousMasking.current(node)).append(this); }
                 catch (AsyncBlocked blocked) {
+                    wait = null;
                     throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(this);
                 }
                 FrameAccess.write(frame, slots[offset], value);
@@ -66,7 +74,11 @@ public final class ManagedMVars {
             var reference = ManagedMVar.require(cell.execute(frame));
             TupleResults.requireVoidCarrier(state.execute(frame));
             Object value;
-            try { value = remove ? reference.take(this, async) : reference.read(this, async); }
+            try { value = remove ? reference.take(this, async, blocked(frame)) : reference.read(this, async, blocked(frame)); }
+            catch (PendingWait cut) {
+                Resume resume = new Resume(this, reference, slots, offset); resume.wait = cut;
+                throw new AstCapture(cut, SynchronousMasking.current(this)).append(resume);
+            }
             catch (AsyncBlocked blocked) {
                 throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(this))
                     .append(new Resume(this, reference, slots, offset));
@@ -95,11 +107,14 @@ public final class ManagedMVars {
         @Child private Expr value;
         @Child private Expr state;
         private final boolean async;
-        Put(Expr cell, Expr value, Expr state, boolean async) {
-            this.cell = cell; this.value = value; this.state = state; this.async = async;
+        @Child private Expr blocked;
+        Put(Expr cell, Expr value, Expr state, boolean async, Expr blocked) {
+            this.cell = cell; this.value = value; this.state = state; this.async = async; this.blocked = blocked;
         }
+        private Object blocked(VirtualFrame frame) { return blocked == null ? null : blocked.execute(frame); }
         private static final class Resume implements AstResumeStep {
             private final Put node;
+            private PendingWait wait;
             private final ManagedMVar reference;
             private final Object stored;
             Resume(Put node, ManagedMVar reference, Object stored) {
@@ -107,8 +122,10 @@ public final class ManagedMVars {
             }
             @Override public Object resume(VirtualFrame frame, Object input) {
                 if (input != Unit.INSTANCE) throw fault("Invalid AST MVar put resume value");
-                try { reference.put(stored, node, true); }
+                try { if (wait != null) wait.resume(); else reference.put(stored, node, true, node.blocked(frame)); }
+                catch (PendingWait cut) { wait = cut; throw new AstCapture(cut, SynchronousMasking.current(node)).append(this); }
                 catch (AsyncBlocked blocked) {
+                    wait = null;
                     throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(this);
                 }
                 return Unit.INSTANCE;
@@ -118,7 +135,11 @@ public final class ManagedMVars {
             var reference = ManagedMVar.require(cell.execute(frame));
             var stored = value.execute(frame);
             TupleResults.requireVoidCarrier(state.execute(frame));
-            try { reference.put(stored, this, async); }
+            try { reference.put(stored, this, async, blocked(frame)); }
+            catch (PendingWait cut) {
+                Resume resume = new Resume(this, reference, stored); resume.wait = cut;
+                throw new AstCapture(cut, SynchronousMasking.current(this)).append(resume);
+            }
             catch (AsyncBlocked blocked) {
                 throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(this))
                     .append(new Resume(this, reference, stored));

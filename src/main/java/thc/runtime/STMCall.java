@@ -29,7 +29,7 @@ public final class STMCall extends Node {
         synchronousOther = new TupleDispatch(destination, metrics, operation == STMOp.CATCH ? 2 : 1, false);
     }
     boolean captures() { return async || AstControl.captures(this); }
-    public Object execute(VirtualFrame frame, Object action, Object alternative, Object nested) {
+    public Object execute(VirtualFrame frame, Object action, Object alternative, Object nested, Object blocked) {
         var stm = Language.currentState(this).stm;
         var mask = async ? SynchronousMasking.current(this) : null;
         var annotations = async ? StackAnnotations.current(this) : null;
@@ -37,7 +37,7 @@ public final class STMCall extends Node {
             return switch (operation) {
                 case ATOMICALLY -> {
                     if (stm.hasTransaction()) throw new GuestException(nested, this);
-                    yield atomic(frame, action, null, null, null);
+                    yield atomic(frame, action, blocked, null, null, null);
                 }
                 case OR_ELSE, CATCH -> choice(frame, action, alternative, null, null);
                 default -> throw new IllegalStateException("Not an STM callback: " + operation);
@@ -72,7 +72,7 @@ public final class STMCall extends Node {
         }
     }
 
-    private Object atomic(VirtualFrame frame, Object action, ManagedSTM.Transaction saved,
+    private Object atomic(VirtualFrame frame, Object action, Object blocked, ManagedSTM.Transaction saved,
             ArrayDeque<AstResumeStep> steps, Object input) {
         ManagedSTM stm = Language.currentState(this).stm;
         ManagedSTM.Transaction ambient = stm.currentTransaction();
@@ -88,23 +88,42 @@ public final class STMCall extends Node {
             } catch (AstCapture cut) {
                 if (cut.asyncRequest() != null) throw cut;
                 parked = true;
-                throw cut.enclose(remaining -> new AtomicResume(this, action, tx, remaining));
+                throw cut.enclose(remaining -> new AtomicResume(this, action, blocked, tx, remaining));
             } catch (STMConflict ignored) {
                 // A genuine conflict, not an internal stack cut, retries the original action.
             } catch (STMRetry ignored) {
-                stm.restore(null); stm.await(tx, this, async);
+                stm.restore(null);
+                try { stm.await(tx, this, async, blocked); }
+                catch (PendingWait wait) {
+                    // Retry discards tentative writes; resume its dependency wait, then the original atomic loop.
+                    throw new AstCapture(wait, SynchronousMasking.current(this)).append(new RetryResume(this, action, blocked, wait));
+                }
             } catch (GuestException failure) {
                 if (stm.validException(tx)) throw failure;
             } finally { if (!parked) stm.retire(tx); stm.restore(ambient); }
             saved = null; steps = null; input = null;
         }
     }
-    private record AtomicResume(STMCall site, Object action, ManagedSTM.Transaction transaction,
+    private record RetryResume(STMCall site, Object action, Object blocked, PendingWait wait) implements AstResumeStep {
+        @Override public Object resume(VirtualFrame frame, Object input) {
+            if (input != Unit.INSTANCE) throw new RuntimeFault("STM retry continuation requires Unit");
+            MaskingState mask = SynchronousMasking.current(site);
+            StackAnnotationState annotations = StackAnnotations.current(site);
+            try {
+                try { wait.resume(); }
+                catch (PendingWait cut) {
+                    throw new AstCapture(cut, mask).append(new RetryResume(site, action, blocked, cut));
+                }
+                return site.atomic(frame, action, blocked, null, null, null);
+            } catch (Throwable failure) { throw site.external(failure, mask, annotations); }
+        }
+    }
+    private record AtomicResume(STMCall site, Object action, Object blocked, ManagedSTM.Transaction transaction,
             ArrayDeque<AstResumeStep> steps) implements AstResumeStep {
         @Override public Object resume(VirtualFrame frame, Object input) {
             MaskingState mask = SynchronousMasking.current(site);
             StackAnnotationState annotations = StackAnnotations.current(site);
-            try { return site.atomic(frame, action, transaction, steps, input); }
+            try { return site.atomic(frame, action, blocked, transaction, steps, input); }
             catch (Throwable failure) { throw site.external(failure, mask, annotations); }
         }
     }

@@ -53,9 +53,14 @@ public final class AstControl {
         private final Node node;
         private final Force force;
         private final Object value;
+        private PendingWait wait;
         RetryForce(Node node, Force force, Object value) { this.node = node; this.force = force; this.value = value; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             if (input != thc.runtime.Unit.INSTANCE) throw fault("AST blackhole continuation requires Unit");
+            try { if (wait != null) wait.resume(); }
+            catch (PendingWait cut) { wait = cut; throw new AstCapture(cut, SynchronousMasking.current(node)).append(this); }
+            catch (AsyncBlocked blocked) { wait = null; throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(this); }
+            wait = null;
             return force(frame, node, force, value);
         }
     }
@@ -70,6 +75,9 @@ public final class AstControl {
             throw new AstCapture(suspended, SynchronousMasking.current(node)).append(new ResumeChild(suspended.getThunk(), node));
         } catch (CallSegmentSuspended suspended) {
             throw new AstCapture(suspended, SynchronousMasking.current(node)).append(new ResumeChild(suspended.getSegment(), node));
+        } catch (PendingWait cut) {
+            RetryForce retry = new RetryForce(node, force, value); retry.wait = cut;
+            throw new AstCapture(cut, SynchronousMasking.current(node)).append(retry);
         } catch (AsyncBlocked blocked) {
             throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(new RetryForce(node, force, value));
         }

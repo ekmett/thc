@@ -24,16 +24,34 @@ final class ForkActionRoot extends ContextRoot {
         force = new Force(new Metrics(false), asyncEnabled);
         dispatch = initialShape == null ? null : new TupleDispatch(new ForkDestination(initialShape, language), new Metrics(false), argumentCount, false);
     }
+    record Head(Object value, PendingWait wait) { Head(Object value) { this(value, null); } }
+    record Body(SavedGuestContinuation continuation, TupleShape shape) {}
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
         Object input = frame.getArguments()[0];
+        if (input instanceof Body body) {
+            Object result = force.drainStack(body.continuation(), body.shape());
+            new ForkDestination(body.shape(), language).consume(frame, this, result);
+            return Unit.INSTANCE;
+        }
+        if (input instanceof Head head) {
+            try { if (head.wait() != null) head.wait().resume(); }
+            catch (PendingWait cut) { throw new ForkSuspension(new Head(head.value(), cut), cut); }
+            catch (AsyncBlocked blocked) { throw new UncaughtForkAsync(blocked.getRequest()); }
+            input = head.value();
+        }
         Closure action;
         try { action = Applications.requireClosure(force.execute(frame, input)); }
         catch (ThunkSuspended suspended) {
             AsyncRequest request = suspended.getAsyncRequest();
-            if (request == null) throw RuntimeFault.fault("fork# action head suspended without an async request");
+            if (request == null) {
+                PendingWait wait = PendingWait.of(suspended);
+                if (wait != null) throw new ForkSuspension(new Head(suspended.getThunk()), wait);
+                throw RuntimeFault.fault("fork# action head suspended without an async request");
+            }
             throw new UncaughtForkAsync(request);
-        } catch (AsyncBlocked blocked) { throw new UncaughtForkAsync(blocked.getRequest()); }
+        } catch (PendingWait cut) { throw new ForkSuspension(new Head(input, cut), cut); }
+        catch (AsyncBlocked blocked) { throw new UncaughtForkAsync(blocked.getRequest()); }
         TupleDispatch callee = dispatch;
         if (callee == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();

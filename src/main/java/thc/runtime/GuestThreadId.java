@@ -6,6 +6,8 @@ import java.lang.ref.WeakReference;
 public final class GuestThreadId {
     final long logicalId;
     final GuestThreads owner;
+    // A retained ThreadId keeps the canonical logical lifetime and captured work alive.
+    volatile GuestThreads.GuestThread lifetime;
     volatile long capability;
     final long javaId;
     final WeakReference<Thread> carrier;

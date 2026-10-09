@@ -773,11 +773,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class ParkAsyncMask {
-        @Specialization public static AsyncRequest park(AsyncRequest request, MaskingState rootEntry,
+        @Specialization public static Object park(Object marker, MaskingState rootEntry,
                 @Bind Node node) {
+            if (!(marker instanceof AsyncRequest || marker instanceof PendingWait)) throw new IllegalStateException("Invalid pending-operation cut");
             SynchronousMasking.set(node, rootEntry);
-            return request;
+            return marker;
         }
+    }
+
+    @Operation public static final class ResumePendingWait {
+        @Specialization public static void resume(Object marker) { if (marker instanceof PendingWait wait) wait.resume(); }
+    }
+    @Operation public static final class RetainPendingWait {
+        @Specialization public static Object retain(Object marker) { return marker instanceof PendingWait ? marker : null; }
     }
 
     /** Process WAIT has saved both scalar and errno before this delivery cut. */
@@ -970,6 +978,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object capture(AbstractTruffleException failure) {
             if (failure instanceof DelimitedCut cut) return cut;
             if (failure instanceof CapturedCallSuspension captured) return captured(captured.getSegment());
+            if (failure instanceof PendingWait wait) return wait;
             if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
             if (failure instanceof STMRestart restart) return restart.getRequest();
             throw failure;
@@ -3108,12 +3117,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class InvokeSTM {
         @Specialization public static void run(VirtualFrame frame, STMOp operation,
                 BytecodeTupleSlots destination, Metrics metrics, boolean async, Object action, Object alternative,
-                Object nested, Object state,
+                Object nested, Object state, Object blocked,
                 @Bind Node node,
                 @Cached(value = "create(operation, destination, metrics, async)", neverDefault = true) STMCall call) {
             TupleResults.requireVoidCarrier(state);
             try {
-                Object result = call.execute(frame, action, alternative, nested);
+                Object result = call.execute(frame, action, alternative, nested, blocked);
                 if (call.captures()) destination.consume(frame, node, result);
             }
             catch (AstCapture cut) { throw captureSTM(frame.materialize(), destination, cut, node); }
@@ -3731,10 +3740,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = boolean.class, name = "async")
     public static final class ReadMVar {
         @Specialization public static void read(VirtualFrame frame, LocalAccessor destination, boolean remove, boolean async,
-                Object value, Object state, @Bind("$node") Node node) {
+                Object value, Object state, Object pending, Object blocked, @Bind("$node") Node node) {
             ManagedMVar cell = ManagedMVar.require(value);
             TupleResults.requireVoidCarrier(state);
-            Object result = remove ? cell.take(node, async) : cell.read(node, async);
+            Object result = pending instanceof PendingWait wait ? wait.resume() : remove ? cell.take(node, async, blocked) : cell.read(node, async, blocked);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -3756,11 +3765,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = boolean.class, name = "async")
     public static final class PutMVar {
-        @Specialization public static Object put(boolean async, Object reference, Object value, Object state,
+        @Specialization public static Object put(boolean async, Object reference, Object value, Object state, Object pending, Object blocked,
                 @Bind("$node") Node node) {
             ManagedMVar cell = ManagedMVar.require(reference);
             TupleResults.requireVoidCarrier(state);
-            cell.put(value, node, async);
+            if (pending instanceof PendingWait wait) wait.resume(); else cell.put(value, node, async, blocked);
             return thc.runtime.Unit.INSTANCE;
         }
     }
