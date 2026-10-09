@@ -70,12 +70,22 @@ image heap's 1 GiB offset. Do not carry the former 16 GiB executable heap defaul
 into this layout. Larger application heaps require collector support and actual
 workload qualification.
 
-On Linux, the produced executable requires its adjacent `.jam` directory.
-The package's `runtime-libraries.txt` names the libraries; its legal directory
-supplies the notices. The driver must validate these inputs and emitted outputs,
-include them in the deployment inventory, and preserve them when removing build
-staging. Relocation must succeed without the builder installation. This
-sidecar-dependent result is not a single-file executable.
+The currently pinned Linux package requires an adjacent `.jam` runtime directory,
+validated against its `runtime-libraries.txt` and legal notices. The driver also
+accepts the supplier's static Native Image contract: release metadata declares
+`native_image_linkage=static`, and the installed `lib/jam/native-image-libraries.txt`
+lists ordered library names whose `lib*.a` archives live under `lib/jam/static/`.
+The driver validates and records all selected archives, checks emitted
+`program.jam/linkage.txt` says `static`, and preserves legal notices in the
+published inventory. Those static `.jam` files are distribution metadata;
+the executable does not need that directory at runtime. JVM shared libraries
+continue to use `runtime-libraries.txt`. Windows retains the Microsoft dynamic
+CRT, and THC image production still admits only Linux x86-64.
+
+Static deployment acceptance requires the verified supplier package, relocated
+execution of the existing weak-thread application without runtime `.jam` files,
+and inspection of actual executable imports. The current public pin and retained
+sidecar-based image evidence do not establish that qualification.
 
 ## Reachability and identity
 

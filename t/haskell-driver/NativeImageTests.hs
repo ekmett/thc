@@ -28,7 +28,7 @@ import Data.Aeson (toJSON)
 import Data.List (isInfixOf, nub)
 import System.Directory
   ( copyFileWithMetadata, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getPermissions, listDirectory
-  , removeFile, setPermissions, executable )
+  , removeFile, removeDirectoryRecursive, removePathForcibly, setPermissions, executable )
 import System.FilePath ((</>))
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.Exit (ExitCode(..))
@@ -122,6 +122,59 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
         forM_ ["artifacts/program.jam/runtime-libraries.txt", "artifacts/program.jam/libjam-vm.so",
           "artifacts/program.jam/legal/COPYING"] $ \path ->
           assertBool "reported runtime bundle survives" (elem (toJSON (path :: String)) paths)
+    , TestLabel "static archive inputs publish metadata without runtime sidecars" $ TestCase $ withProducer $ \root output manifest -> do
+        staticProvider root
+        buildNativeImage root output "static" manifest
+        result <- readJson (output </> "completion.json")
+        assertEqual "declared linkage" (toJSON ("static" :: String)) (field result "jamLinkage")
+        let artifacts = array (field result "artifacts")
+            paths = map (`field` "path") artifacts
+            inputs = array (field result "jamRuntimeInputs")
+        forM_ ["artifacts/program.jam/linkage.txt", "artifacts/program.jam/legal/COPYING"] $ \path ->
+          assertBool "metadata and legal notices survive publication" (toJSON (path :: String) `elem` paths)
+        assertBool "JVM shared runtime is not deployed" (toJSON ("artifacts/program.jam/libjam-vm.so" :: String) `notElem` paths)
+        assertEqual "manifest, full ordered archives and legal input identities"
+          (map (toJSON . (root </>)) ["jdk/lib/jam/native-image-libraries.txt", "jdk/lib/jam/static/libjam-vm-static.a",
+            "jdk/lib/jam/static/libwork.a", "jdk/lib/jam/static/libc++.a", "jdk/lib/jam/static/lib_abi-2.0.a", "jdk/legal/jam-vm/COPYING"])
+          (map (`field` "path") inputs)
+        assertEqual "only legal input has an emitted counterpart" 1 (length [input | input <- inputs, field input "output" /= toJSON (Nothing :: Maybe String)])
+        removeDirectoryRecursive (output </> "artifacts/program.jam")
+        (status, stdout, diagnostic) <- readProcessWithExitCode (output </> "artifacts/program") [] ""
+        assertEqual ("execution without Jam runtime directory: " ++ diagnostic) ExitSuccess status
+        assertEqual "C boundary witness stdout" "" stdout
+    , TestLabel "static provider and output contract rejects invalid inputs" $ TestCase $ withProducer $ \root output manifest -> do
+        forM_ ["empty", "duplicate", "wrong-first", "escape", "missing-archive", "thin-archive", "symlink-archive", "directory-manifest", "dangling-manifest"] $ \mode -> do
+          staticProvider root
+          let jdk = root </> "jdk"
+              archive = jdk </> "lib/jam/static/libwork.a"
+              declaration = jdk </> "lib/jam/native-image-libraries.txt"
+          case mode of
+            "empty" -> writeText declaration ""
+            "duplicate" -> writeText declaration "jam-vm-static\njam-vm-static\n"
+            "wrong-first" -> writeText declaration "work\njam-vm-static\n"
+            "escape" -> writeText declaration "jam-vm-static\n../work\n"
+            "missing-archive" -> removeFile archive
+            "thin-archive" -> writeText archive "!<thin>\n"
+            "directory-manifest" -> removeFile declaration >> createDirectoryIfMissing True declaration
+            "dangling-manifest" -> do
+              removeFile declaration
+              (status, _, diagnostic) <- readProcessWithExitCode "ln" ["-s", "absent", declaration] ""
+              assertEqual diagnostic ExitSuccess status
+            "symlink-archive" -> do
+              removeFile archive
+              (status, _, diagnostic) <- readProcessWithExitCode "ln" ["-s", root </> "witness.so", archive] ""
+              assertEqual diagnostic ExitSuccess status
+            _ -> assertFailure mode
+          expectFailure "native image" (validateNativeImage root)
+          expectFailure "native image" (buildNativeImage root output "invalid-static" manifest)
+          assertBool "invalid static input has no completion" . not =<< doesFileExist (output </> "completion.json")
+        staticProvider root
+        forM_ ["jam-static-missing-linkage", "jam-static-wrong-linkage", "jam-missing-legal", "jam-notice-mismatch",
+          "jam-static-archive-change", "jam-static-manifest-change"] $ \mode -> do
+          staticProvider root
+          withEnvironment [("THC_TEST_NATIVE_MODE", mode)] $
+            expectFailure "native image" (buildNativeImage root output "invalid-static" manifest)
+          assertBool "invalid static output has no completion" . not =<< doesFileExist (output </> "completion.json")
     , TestLabel "zero exit cannot bless missing or invalid artifacts" $ TestCase $ withProducer $ \root output manifest ->
         forM_ ["missing", "invalid", "not-executable", "bad-sidecar", "report-missing", "escape", "symlink-escape", "bad-report",
                "jam-missing-manifest", "jam-missing-library", "jam-escape-manifest", "jam-duplicate-manifest",
@@ -205,7 +258,11 @@ withProducer action = withScratch $ \scratch -> do
     , "cp \"$THC_TEST_NATIVE_ELF\" \"$3/program\""
     , "cp \"$THC_TEST_NATIVE_LIBRARY\" \"$3/libproducer-witness.bin\""
     , "mkdir -p \"$3/program.jam\""
-    , "cp \"$JAVA_HOME/lib/jam/runtime-libraries.txt\" \"$JAVA_HOME/lib/jam/libjam-vm.so\" \"$3/program.jam/\""
+    , "if test -f \"$JAVA_HOME/lib/jam/native-image-libraries.txt\"; then"
+    , " printf 'static\\n' > \"$3/program.jam/linkage.txt\""
+    , "else"
+    , " cp \"$JAVA_HOME/lib/jam/runtime-libraries.txt\" \"$JAVA_HOME/lib/jam/libjam-vm.so\" \"$3/program.jam/\""
+    , "fi"
     , "cp -R \"$JAVA_HOME/legal/jam-vm\" \"$3/program.jam/legal\""
     , "mkdir -p \"$3/diagnostics/nested\""
     , "printf payload > \"$3/diagnostics/nested/resource.txt\""
@@ -219,6 +276,10 @@ withProducer action = withScratch $ \scratch -> do
     , " symlink-escape) printf outside > \"$3/../escape-data\"; ln -s ../escape-data \"$3/escape-link\"; printf '{\"executables\":[\"program\"],\"language_resources\":[\"escape-link\"]}' > \"$3/build-artifacts.json\" ;;"
     , " bad-report) printf '{\"executables\":null}' > \"$3/build-artifacts.json\" ;;"
     , " reported-jam) printf '{\"executables\":[\"program\"],\"shared_libraries\":[\"libproducer-witness.bin\"],\"language_resources\":[\"diagnostics\",\"program.jam\"]}' > \"$3/build-artifacts.json\" ;;"
+    , " jam-static-missing-linkage) rm \"$3/program.jam/linkage.txt\" ;;"
+    , " jam-static-wrong-linkage) printf shared > \"$3/program.jam/linkage.txt\" ;;"
+    , " jam-static-archive-change) printf changed >> \"$JAVA_HOME/lib/jam/static/libwork.a\" ;;"
+    , " jam-static-manifest-change) printf 'jam-vm-static\\n' > \"$JAVA_HOME/lib/jam/native-image-libraries.txt\" ;;"
     , " jam-missing-manifest) rm \"$3/program.jam/runtime-libraries.txt\" ;;"
     , " jam-missing-library) rm \"$3/program.jam/libjam-vm.so\" ;;"
     , " jam-escape-manifest) printf '../escape.so\\n' > \"$3/program.jam/runtime-libraries.txt\" ;;"
@@ -240,3 +301,14 @@ withProducer action = withScratch $ \scratch -> do
       withEnvironment [("JAVA_HOME", jdk), ("THC_LLVM_READOBJ", root </> "readobj"),
         ("THC_TEST_NATIVE_MODE", "success"), ("THC_TEST_NATIVE_ELF", elf),
         ("THC_TEST_NATIVE_LIBRARY", library)] $ action root output manifest
+
+staticProvider :: FilePath -> IO ()
+staticProvider root = do
+  let directory = root </> "jdk/lib/jam"
+  -- Keep the shared JVM provider present: its existence must not select it for images.
+  removePathForcibly (directory </> "static")
+  createDirectoryIfMissing True (directory </> "static")
+  removePathForcibly (directory </> "native-image-libraries.txt")
+  writeText (directory </> "native-image-libraries.txt") "jam-vm-static\nwork\nc++\n_abi-2.0\n"
+  forM_ ["jam-vm-static", "work", "c++", "_abi-2.0"] $ \name ->
+    writeText (directory </> "static" </> ("lib" ++ name ++ ".a")) "!<arch>\n"
