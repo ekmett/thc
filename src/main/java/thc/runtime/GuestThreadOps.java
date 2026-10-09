@@ -143,7 +143,10 @@ public final class GuestThreadOps {
             } finally {
                 initial = null;
                 if (!registered) ready.countDown();
-                try { if (registered) { threads.recoverSuspended(port); threads.leaveCurrent(outcome); } }
+                try { if (registered) {
+                    try { threads.recoverSuspended(port); }
+                    finally { threads.leaveCurrent(outcome); }
+                } }
                 catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
                 try { if (affinity != null) affinity.close(); }
                 catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }

@@ -161,6 +161,7 @@ public final class GuestThreads {
         volatile boolean waitReady;
         GuestWakePort wakePort;
         volatile WaitRegistration registration;
+        boolean guestDetached;
         Object work;
         MaskingState parkedMask;
         StackAnnotationState parkedAnnotations;
@@ -224,12 +225,15 @@ public final class GuestThreads {
     public PollState pollState(Thread thread) { return pollStates.get(thread); }
     private final HashMap<Long, GuestThread> threads = new HashMap<>();
     private final HashMap<Long, WaitRegistration> dormant = new HashMap<>();
+    // A masked rearm can publish a new ticket while the old native claim still needs completion.
+    private final HashMap<Long, WaitRegistration> retiring = new HashMap<>();
     private static final class WaitRegistration {
         final long identity, generation;
         final GuestWakePort port;
         final WeakReference<GuestThread> lookup;
         volatile long ticket;
         GuestThread claimed;
+        volatile boolean terminal;
         WaitRegistration(GuestThread owner) {
             identity = owner.identity.logicalId; generation = owner.wait.generation;
             port = owner.wakePort; lookup = new WeakReference<>(owner);
@@ -238,6 +242,7 @@ public final class GuestThreads {
     private Thread rescueService;
     private volatile boolean stoppingRescue;
     private long observedCandidateEpoch = -1;
+    private volatile boolean retryTerminalCleanup;
     private GuestThread findThread(long id) {
         GuestThread active = threads.get(id);
         WaitRegistration registration = active == null ? dormant.get(id) : null;
@@ -271,22 +276,23 @@ public final class GuestThreads {
     }
     private void scanCandidates() {
         long epoch = Candidate.epoch();
-        if (epoch == observedCandidateEpoch && epoch != Long.MAX_VALUE) return;
+        if (epoch == observedCandidateEpoch && epoch != Long.MAX_VALUE && !retryTerminalCleanup) return;
         List<WaitRegistration> registrations;
-        synchronized (this) { registrations = List.copyOf(dormant.values()); }
+        synchronized (this) { registrations = new ArrayList<>(dormant.values()); registrations.addAll(retiring.values()); }
         for (WaitRegistration registration : registrations) {
             if (registration.ticket == 0) continue;
             GuestThread selected;
             synchronized (registration) {
                 selected = registration.claimed;
                 if (selected == null) {
-                    selected = (GuestThread) Candidate.poll(registration.ticket, registration.generation);
+                    selected = (GuestThread) (registration.terminal ? Candidate.disarm(registration.ticket, registration.generation) :
+                        Candidate.poll(registration.ticket, registration.generation));
                     if (selected != null) registration.claimed = selected;
                 }
             }
             if (selected == null) continue;
             synchronized (selected) {
-                if (selected.registration == registration) {
+                if (selected.registration == registration && !registration.terminal) {
                     if (!selected.waitReady && selected.wait.mask == MaskingState.MASKED_UNINTERRUPTIBLE) {
                         // The mask defers rescue; reserve the replacement before releasing this claim.
                         armSuspended(selected);
@@ -297,14 +303,24 @@ public final class GuestThreads {
                 }
                 Candidate.complete(registration.ticket, registration.generation);
                 synchronized (registration) { registration.claimed = null; }
+                synchronized (this) { retiring.remove(registration.ticket, registration); }
+                if (registration.terminal) {
+                    synchronized (this) { dormant.remove(registration.identity, registration); }
+                    if (selected.registration == registration) selected.registration = null;
+                    registration.port.take();
+                }
             }
         }
+        synchronized (this) { retryTerminalCleanup = dormant.values().stream().anyMatch(item -> item.terminal); }
         observedCandidateEpoch = epoch;
     }
     private void armSuspended(GuestThread owner) {
         WaitRegistration registration = new WaitRegistration(owner);
         WaitRegistration previous = owner.registration;
-        synchronized (this) { dormant.put(owner.identity.logicalId, registration); }
+        synchronized (this) {
+            dormant.put(owner.identity.logicalId, registration);
+            if (previous != null) retiring.put(previous.ticket, previous);
+        }
         try {
             registration.ticket = Candidate.arm(owner, registration.generation);
             owner.registration = registration;
@@ -312,27 +328,31 @@ public final class GuestThreads {
         } catch (Throwable failure) {
             synchronized (this) {
                 if (previous == null) dormant.remove(owner.identity.logicalId, registration);
-                else dormant.put(owner.identity.logicalId, previous);
+                else { dormant.put(owner.identity.logicalId, previous); retiring.remove(previous.ticket, previous); }
             }
             throw failure;
         }
     }
     static void wakeSuspended(GuestThread owner) {
-        synchronized (owner) {
-            WaitRegistration registration = owner.registration;
-            if (registration == null) return; // The attached execution root still owns publication.
-            GuestThread acquired;
-            synchronized (registration) {
-                acquired = registration.claimed;
-                if (acquired == null) {
-                    acquired = (GuestThread) Candidate.disarm(registration.ticket, registration.generation);
-                    if (acquired != null) registration.claimed = acquired;
-                }
+        // Commit publishes a real runnable root under its operation lock; native claim can follow outside it.
+        owner.wakePort.deliver(owner);
+    }
+    private void claimRunnable(GuestThread owner) {
+        WaitRegistration registration = owner.registration;
+        if (registration == null) return;
+        synchronized (registration) {
+            if (registration.claimed == null)
+                registration.claimed = (GuestThread) Candidate.disarm(registration.ticket, registration.generation);
+        }
+    }
+    private void completeRunnable(GuestThread owner) {
+        WaitRegistration registration = owner.registration;
+        if (registration == null) return;
+        synchronized (registration) {
+            if (registration.claimed != null) {
+                Candidate.complete(registration.ticket, registration.generation);
+                registration.claimed = null;
             }
-            if (acquired == null) return; // The rescue claimant retains and transfers the same owner.
-            registration.port.deliver(acquired);
-            Candidate.complete(registration.ticket, registration.generation);
-            synchronized (registration) { registration.claimed = null; }
         }
     }
     /** Publication precedes root removal; this method itself returns before neutral park. */
@@ -348,20 +368,25 @@ public final class GuestThreads {
             owner.work = work; owner.parkedMask = maskingState.get();
             owner.parkedAnnotations = StackAnnotations.current(null);
             owner.parkedStack = pollState(owner.thread).astStack;
+            AstStackScope neutralStack = new AstStackScope();
             armSuspended(owner);
-            // Guest roots and typed argument/result loans have unwound before this transition.
-            leaveGuestPermission(); pauseAllocation(owner.identity);
-            if (loom != null) { owner.wakePort.admission = loom.suspendGuest(); loom.detach(owner.identity); }
-            synchronized (this) {
-                threads.remove(owner.identity.logicalId, owner); identities.remove(owner.thread, owner.identity);
-                var poll = pollState(owner.thread); poll.current = null; poll.astStack = new AstStackScope();
-            }
-            currentSlot.remove(); activeIdentity.remove(); maskingState.remove();
-            StackAnnotations.set(null, StackAnnotationState.EMPTY);
-            owner.identity.status = wait.operation.status();
-            if (owner.waitReady || owner.pending && wait.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
-                owner.waitReady = true; wakeSuspended(owner);
-            }
+            var safepoint = com.oracle.truffle.api.TruffleSafepoint.getCurrent();
+            boolean allow = safepoint.setAllowSideEffects(false);
+            try {
+                // Guest roots and typed argument/result loans have unwound before this transition.
+                leaveGuestPermission(); owner.guestDetached = true; pauseAllocation(owner.identity);
+                if (loom != null) { owner.wakePort.admission = loom.suspendGuest(); loom.detach(owner.identity); }
+                synchronized (this) {
+                    threads.remove(owner.identity.logicalId, owner); identities.remove(owner.thread, owner.identity);
+                    var poll = pollState(owner.thread); poll.current = null; poll.astStack = neutralStack;
+                }
+                currentSlot.remove(); activeIdentity.remove(); maskingState.remove();
+                StackAnnotations.set(null, StackAnnotationState.EMPTY);
+                owner.identity.status = wait.operation.status();
+                if (owner.waitReady || owner.pending && wait.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
+                    owner.waitReady = true; wakeSuspended(owner);
+                }
+            } finally { safepoint.setAllowSideEffects(allow); }
         }
         Reference.reachabilityFence(owner);
     }
@@ -369,43 +394,65 @@ public final class GuestThreads {
         if (owner.thread != Thread.currentThread() || currentSlot.get() != null)
             throw fault("Suspended guest resumed on another carrier");
         synchronized (owner) {
+            claimRunnable(owner);
+            // Admission can block and be cancelled. Keep the wake port's ordinary owner root until it succeeds.
             if (loom != null) {
                 loom.resumeGuest(owner.wakePort.admission, null); owner.wakePort.admission = null; loom.attach(owner.identity);
             }
-            synchronized (this) {
-                dormant.remove(owner.identity.logicalId, owner.registration);
-                threads.put(owner.identity.logicalId, owner); identities.put(owner.thread, owner.identity);
-                var poll = pollState(owner.thread); poll.current = owner; poll.astStack = owner.parkedStack;
-            }
+            restoreSuspended(owner);
+            completeRunnable(owner);
+            synchronized (this) { dormant.remove(owner.identity.logicalId, owner.registration); }
             owner.registration = null;
-            currentSlot.set(owner); activeIdentity.set(owner.identity); maskingState.set(owner.parkedMask);
-            StackAnnotations.set(null, owner.parkedAnnotations);
-            owner.parkedStack = null; owner.parkedAnnotations = null; owner.parkedMask = null;
-            enterGuestPermission(); resumeAllocation(owner.identity); owner.identity.status = GuestThreadStatus.RUNNING;
         }
+    }
+    /** Restore logical cleanup ownership without requiring a cancelled carrier to readmit guest execution. */
+    private void restoreSuspended(GuestThread owner) {
+        var safepoint = com.oracle.truffle.api.TruffleSafepoint.getCurrent();
+        boolean allow = safepoint.setAllowSideEffects(false);
+        try {
+            synchronized (this) {
+                threads.put(owner.identity.logicalId, owner); identities.put(owner.thread, owner.identity);
+                var poll = pollState(owner.thread); poll.current = owner;
+                if (owner.parkedStack != null) poll.astStack = owner.parkedStack;
+            }
+            currentSlot.set(owner); activeIdentity.set(owner.identity);
+            if (owner.parkedMask != null) maskingState.set(owner.parkedMask);
+            if (owner.parkedAnnotations != null) StackAnnotations.set(null, owner.parkedAnnotations);
+            if (owner.guestDetached) { enterGuestPermission(); owner.guestDetached = false; }
+            if (owner.identity.allocationSuspended) resumeAllocation(owner.identity);
+            owner.parkedStack = null; owner.parkedAnnotations = null; owner.parkedMask = null;
+            owner.identity.status = GuestThreadStatus.RUNNING;
+        } finally { safepoint.setAllowSideEffects(allow); }
     }
     /** Cancellation/shutdown deliberately reacquires ownership before ordinary terminal cleanup. */
     void recoverSuspended(GuestWakePort port) {
         GuestThread owner = currentSlot.get();
         if (owner == null) {
-            WaitRegistration registration;
-            synchronized (this) { registration = dormant.values().stream().filter(item -> item.port == port).findFirst().orElse(null); }
-            if (registration != null) {
-                owner = registration.lookup.get();
-                if (owner != null) { wakeSuspended(owner); port.take(); resumeSuspended(owner); }
+            owner = port.peek();
+            if (owner == null) {
+                WaitRegistration registration;
+                synchronized (this) { registration = dormant.values().stream().filter(item -> item.port == port).findFirst().orElse(null); }
+                if (registration != null) owner = registration.lookup.get();
             }
         }
-        if (owner != null) {
-            synchronized (owner) {
-                WaitRegistration registration = owner.registration;
+        if (owner == null) return;
+        synchronized (owner) {
+            restoreSuspended(owner);
+            port.admission = null;
+            WaitRegistration registration = owner.registration;
+            try {
                 if (registration != null) {
-                    GuestThread acquired = (GuestThread) Candidate.disarm(registration.ticket, registration.generation);
-                    if (acquired != null) Candidate.complete(registration.ticket, registration.generation);
+                    // A failed native release remains rooted and is retried by the infrastructure service.
+                    port.deliver(owner);
+                    synchronized (this) { registration.terminal = true; retryTerminalCleanup = true; }
+                    claimRunnable(owner); completeRunnable(owner);
                     synchronized (this) { dormant.remove(owner.identity.logicalId, registration); }
                     owner.registration = null;
                 }
+                port.take();
+            } finally {
+                if (owner.wait != null) { owner.wait.operation.cancel(); owner.wait = null; }
             }
-            if (owner.wait != null) { owner.wait.operation.cancel(); owner.wait = null; }
         }
     }
 

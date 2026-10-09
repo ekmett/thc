@@ -104,13 +104,13 @@ public final class STMCall extends Node {
             saved = null; steps = null; input = null;
         }
     }
-    private record RetryResume(STMCall site, Object action, Object blocked, PendingWait wait) implements AstResumeStep {
+    private record RetryResume(STMCall site, Object action, Object blocked, PendingWait pending) implements AstResumeStep {
         @Override public Object resume(VirtualFrame frame, Object input) {
             if (input != Unit.INSTANCE) throw new RuntimeFault("STM retry continuation requires Unit");
             MaskingState mask = SynchronousMasking.current(site);
             StackAnnotationState annotations = StackAnnotations.current(site);
             try {
-                try { wait.resume(); }
+                try { pending.resume(); }
                 catch (PendingWait cut) {
                     throw new AstCapture(cut, mask).append(new RetryResume(site, action, blocked, cut));
                 }

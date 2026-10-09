@@ -8,7 +8,7 @@ public final class SavedGuestContinuations {
     // Resolve production carriers before guest compilation, so the first cold
     // suspension cannot invalidate HotSpot's class-hierarchy assumptions.
     private static final Class<?>[] CARRIER_TYPES = {
-        AstContinuation.class, AstStackContinuation.class, AstTailAnchor.class,
+        AstContinuation.class, AstStackContinuation.class, AstTailAnchor.class, Force.DriverWait.class,
         BytecodeContinuations.BytecodeSavedContinuation.class
     };
     private SavedGuestContinuations() {}

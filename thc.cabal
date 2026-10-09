@@ -479,6 +479,7 @@ extra-source-files:
   docs/interface-foreign.md
   docs/cpu-affinity-api.md
   docs/runtime-services.md
+  src/examples/BlockedOwners.hs
   src/examples/CpuAffinity.hs
   src/examples/RuntimeServices.hs
   src/examples/JavaScriptDemo.hs

@@ -24,7 +24,7 @@ final class ForkActionRoot extends ContextRoot {
         force = new Force(new Metrics(false), asyncEnabled);
         dispatch = initialShape == null ? null : new TupleDispatch(new ForkDestination(initialShape, language), new Metrics(false), argumentCount, false);
     }
-    record Head(Object value, PendingWait wait) { Head(Object value) { this(value, null); } }
+    record Head(Object value, PendingWait pending) { Head(Object value) { this(value, null); } }
     record Body(SavedGuestContinuation continuation, TupleShape shape) {}
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
@@ -35,7 +35,7 @@ final class ForkActionRoot extends ContextRoot {
             return Unit.INSTANCE;
         }
         if (input instanceof Head head) {
-            try { if (head.wait() != null) head.wait().resume(); }
+            try { if (head.pending() != null) head.pending().resume(); }
             catch (PendingWait cut) { throw new ForkSuspension(new Head(head.value(), cut), cut); }
             catch (AsyncBlocked blocked) { throw new UncaughtForkAsync(blocked.getRequest()); }
             input = head.value();

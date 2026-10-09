@@ -388,7 +388,7 @@ public final class Force extends Node {
             }
         }
     }
-    private static final class DriverWait implements SavedGuestContinuation {
+    static final class DriverWait implements SavedGuestContinuation {
         private final Force force;
         private final GuestRoot root;
         private final CallSegment segment;
