@@ -4,10 +4,10 @@
 [![docs: haddock+javadoc](https://img.shields.io/badge/docs-haddock%2Bjavadoc-blue?style=flat)](https://ekmett.github.io/thc/)
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/w/ekmett/thc?style=flat)](https://github.com/ekmett/thc/activity)
 
-![Haskell](https://img.shields.io/badge/Haskell-%235e5086.svg?style=for-the-badge&logo=haskell&logoColor=white)
-![Gradle](https://img.shields.io/badge/Gradle-%2302303A.svg?style=for-the-badge&logo=Gradle&logoColor=white)
-![C++](https://img.shields.io/badge/C%2B%2B-00599C?style=flat&logo=c%2B%2B&logoColor=white)
-![Java](https://img.shields.io/badge/Java-ED8B00?style=flat&logo=openjdk&logoColor=white)
+![Haskell 9.14.1](https://img.shields.io/badge/Haskell-9.14.1-5e5086?style=flat&logo=haskell&logoColor=white)
+![Gradle 9.7.1](https://img.shields.io/badge/Gradle-9.7.1-02303A?style=flat&logo=gradle&logoColor=white)
+![C++ 26](https://img.shields.io/badge/C%2B%2B-26-00599C?style=flat&logo=c%2B%2B&logoColor=white)
+![Java GraalVM 25.3.4.1](https://img.shields.io/badge/Java-GraalVM%2025.3.4.1-ED8B00?style=flat&logo=openjdk&logoColor=white)
 
 Haskell on Truffle/Graal.
 
