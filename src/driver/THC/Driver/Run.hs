@@ -57,7 +57,7 @@ data RunOptions = RunOptions
   , runArguments :: [String]
   }
 
--- | Locate the source/build tree containing this executable, including when
+-- | Locate the installed producer or source/build tree containing this executable, including when
 -- launched through a symlink or from another Cabal project. An explicit root
 -- supports drivers copied outside their build tree.
 resolveThcRoot :: FilePath -> IO FilePath
@@ -73,7 +73,8 @@ resolveThcRoot supplied
     search executable directory = do
       hasPackage <- doesFileExist (directory </> "thc.cabal")
       hasCompiler <- doesFileExist (directory </> "bin/build-compiler.sh")
-      if hasPackage && hasCompiler then pure directory
+      installed <- doesFileExist (directory </> "installed-producer.json")
+      if installed || (hasPackage && hasCompiler) then pure directory
         else if takeDirectory directory == directory
           then fail ("Cannot locate THC source/build root from " ++ executable ++
                      "; use --thc-root DIR when the driver is installed separately")

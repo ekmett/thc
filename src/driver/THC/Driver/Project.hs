@@ -111,11 +111,12 @@ data InstalledBundle = InstalledBundle
 
 -- Installed acquisition keeps its ordinary CBD return type. Only the selected
 -- project source can instead be a checked, not-yet-converted interface unit.
-data InstalledSource = InstalledCBD InstalledBundle | InstalledInterfaces String Value
+data InstalledSource = InstalledCBD InstalledBundle | InstalledInterfaces String Value | InstalledSupport String Value
 
 installedSourceOwner :: InstalledSource -> String
 installedSourceOwner (InstalledCBD artifact) = installedOwner artifact
 installedSourceOwner (InstalledInterfaces owner _) = owner
+installedSourceOwner (InstalledSupport owner _) = owner
 
 data BundleReceipt = PlainBundle | TargetLayoutBundle | PinnedSourceBundle
   deriving Show
@@ -348,7 +349,9 @@ buildProject action opts target = do
       projectOptions = cabalProjectOptions opts
   thcRoot <- canonicalizePath (runThcRoot opts)
   when (buildsNativeImages action) $ validateNativeImage thcRoot
-  runtime <- maybe (pure (thcRoot </> "build/install/thc/bin/thc")) makeAbsolute (runRuntime opts)
+  producer <- installedProducer thcRoot
+  defaultRuntime <- maybe (pure (thcRoot </> "build/install/thc/bin/thc")) (`field` "runtime") producer
+  runtime <- maybe (pure defaultRuntime) makeAbsolute (runRuntime opts)
   when (action == RunGuest) $ do
     requireFile runtime
     when (runVerifyArtifacts opts) $ requireFile (thcRoot </> "bin/audit-core.py")
@@ -362,27 +365,31 @@ buildProject action opts target = do
       -- Plugin publication and interface preparation share Cabal's build tree.
       -- Pass the same selected invocation paths, including wrappers, to both.
       overrides = [("GHC", compiler), ("GHC_PKG", packageTool)]
-  requireFile buildPlugin
   inherited <- getEnvironment
   launchEnvironment <- runtimeDebugEnvironment Host.os opts inherited
   let environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
   -- Cabal can build thc's executable without building its library. Publish the
   -- actual Cabal plugin registration before consulting the plugin manifest.
-  let tools = thcRoot </> "build/compiler"
-  createDirectoryIfMissing True tools
-  (pluginDb, pluginUnit, pluginLibrary, registeredLibrary) <-
-    withLock (tools </> "cabal-tools.lock") $ do
-      runCommandWithEnv True buildPlugin [] thcRoot (Just environment)
-      plugin <- readJson (tools </> "plugin.json")
-      schema <- field plugin "schema" :: IO Int
-      require (schema == 1) "unsupported THC plugin manifest"
-      pluginDb <- field plugin "packageDb"
-      pluginUnit <- field plugin "unitId"
-      pluginLibrary <- field plugin "sharedLibrary"
-      registeredLibrary <- field plugin "cabalSharedLibrary"
-      requireFile pluginLibrary
-      requireDirectory pluginDb
-      pure (pluginDb, pluginUnit, pluginLibrary, registeredLibrary)
+  plugin <- case producer of
+    Just installed -> do
+      runCommandWithEnv True "python3" ["-B", thcRoot </> "bin/plugin.py", "--root", thcRoot,
+        "--check-installed", "--ghc", compiler, "--ghc-pkg", packageTool] thcRoot (Just environment)
+      pure installed
+    Nothing -> do
+      requireFile buildPlugin
+      let tools = thcRoot </> "build/compiler"
+      createDirectoryIfMissing True tools
+      withLock (tools </> "cabal-tools.lock") $ do
+        runCommandWithEnv True buildPlugin [] thcRoot (Just environment)
+        readJson (tools </> "plugin.json")
+  schema <- field plugin "schema" :: IO Int
+  require (schema == 1) "unsupported THC plugin manifest"
+  pluginDb <- field plugin "packageDb"
+  pluginUnit <- field plugin "unitId"
+  pluginLibrary <- field plugin "sharedLibrary"
+  registeredLibrary <- field plugin "cabalSharedLibrary"
+  requireFile pluginLibrary
+  requireDirectory pluginDb
   let requested = distDirectory flags
       requestedOutput = if isAbsolute requested then requested else project </> requested
   createDirectoryIfMissing True requestedOutput
@@ -495,10 +502,12 @@ runBuiltProject :: ProjectAction -> FilePath -> FilePath -> FilePath -> FilePath
 runBuiltProject action project working thcRoot runtime output native target projectOptions
                 pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts launchEnvironment guestArguments = do
   driver <- getExecutablePath
+  producer <- installedProducer thcRoot
+  layout <- maybe (pure (thcRoot </> "src/driver/cbits/target-layout.c")) (`field` "targetLayout") producer
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
       packageTool = maybe (takeDirectory ghc </> "ghc-pkg") id ghcPkg
-      configuration = projectOptions ++ ["--builddir", native,
+      configuration = projectOptions ++ ["--package-db=" ++ pluginDb | producer /= Nothing] ++ ["--builddir", native,
                        "--with-compiler", proxy, "--with-hc-pkg", packageTool]
   createDirectoryIfMissing True (takeDirectory proxy)
   let wrapper = "#!/bin/sh\n# compiler " ++ shaHex (BL.toStrict (encode (ghc, packageTool))) ++
@@ -522,6 +531,13 @@ runBuiltProject action project working thcRoot runtime output native target proj
     BuildTargets _ targets -> resolveBuildTargets working targets configuration selectionEnvironment native
     _ -> pure <$> resolveRunnable working target configuration selectionEnvironment native
   selectionPlan <- readJson (native </> "cache/plan.json")
+  forM_ producer $ \installed -> do
+    identity <- field installed "compiler"
+    require (jsonField identity "id" == (jsonField selectionPlan "compiler-id" :: Maybe String) &&
+      jsonField identity "abi" == (jsonField selectionPlan "compiler-abi" :: Maybe String) &&
+      jsonField identity "arch" == (jsonField selectionPlan "arch" :: Maybe String) &&
+      jsonField identity "os" == (jsonField selectionPlan "os" :: Maybe String))
+      "installed THC producer differs from Cabal's selected compiler ABI/platform"
   selectionUnits <- mapM readUnit =<< field selectionPlan "install-plan"
   let selectionById = Map.fromList [(unitId unit, unit) | unit <- selectionUnits]
   require (Map.size selectionById == length selectionUnits) "Cabal plan has duplicate unit IDs"
@@ -602,7 +618,15 @@ runBuiltProject action project working thcRoot runtime output native target proj
   capturedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
   (installed, acquiredContext, interfaceInputs) <- do
     originalContext <- prepareInterfaceHelper context thcRoot
-    let installedUnits = [unit | unit <- ordered,
+    support <- case producer of
+      Nothing -> pure []
+      Just value -> do
+        manifest <- readJson =<< field value "runtimeSupport"
+        field manifest "units"
+    let supportFor identifier = case [record | record <- support, jsonField record "id" == Just identifier] of
+          [record] -> Just record
+          _ -> Nothing
+        installedUnits = [unit | unit <- ordered,
               jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
     originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
     validateReexports originalRegistrations
@@ -610,8 +634,10 @@ runBuiltProject action project working thcRoot runtime output native target proj
       planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
       require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
         ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+    let acquisitionRegistrations = [registrationUnit | registrationUnit <- originalRegistrations,
+          supportFor (registeredId registrationUnit) == Nothing]
     helperContext <- if installedPolicy == "pinned"
-      then preparePinnedInterfaces cacheRoot pluginDb pluginUnit pluginLibrary originalContext originalRegistrations
+      then preparePinnedInterfaces cacheRoot pluginDb pluginUnit pluginLibrary originalContext acquisitionRegistrations
       else case ghcSource of
         Nothing -> pure originalContext
         Just source -> prepareForeignInterfaces
@@ -633,25 +659,29 @@ runBuiltProject action project working thcRoot runtime output native target proj
       Just selectedInstalled -> pure ([(identifier, (unit, InstalledCBD artifact)) |
         (identifier, (unit, artifact)) <- Map.toList selectedInstalled], [])
       Nothing -> do
-        registrations <- mapM (discoverInstalled helperContext . unitId) installedUnits
+        registrations <- forM installedUnits $ \unit ->
+          discoverInstalled (if supportFor (unitId unit) == Nothing then helperContext else originalContext) (unitId unit)
         validateReexports registrations
         (demandInputs, demandUnits) <- if installedPolicy == "demand"
-          then prepareInstalledDemand helperContext registrations else pure ([], Map.empty)
+          then prepareInstalledDemand helperContext [r | r <- registrations, supportFor (registeredId r) == Nothing] else pure ([], Map.empty)
+        let acquireSource registrationUnit = case Map.lookup (registeredId registrationUnit) demandUnits of
+                Just record -> do
+                  owner <- field record "id"
+                  pure (InstalledInterfaces owner record)
+                Nothing -> do
+                  result <- prepareInstalledBundleWithVerification verifyArtifacts (contextNativeTools context)
+                    cacheRoot (native </> "cache/thc/staging") layout helperContext registrationUnit
+                  either (\missing -> fail
+                    ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
+                     " (" ++ missingInterface missing ++ "). Build the libraries with -fwrite-if-simplified-core or select --installed-core pinned.")) (pure . InstalledCBD) result
         bundles <- forM registrations $ \registrationUnit -> do
           planned <- maybe (fail "installed registration not in Cabal plan") pure
             (Map.lookup (registeredId registrationUnit) byId)
           require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
             ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-          source <- case Map.lookup (registeredId registrationUnit) demandUnits of
-            Just record -> do
-              owner <- field record "id"
-              pure (InstalledInterfaces owner record)
-            Nothing -> do
-              result <- prepareInstalledBundleWithVerification verifyArtifacts (contextNativeTools context)
-                cacheRoot (native </> "cache/thc/staging") (thcRoot </> "src/driver/cbits/target-layout.c") helperContext registrationUnit
-              either (\missing -> fail
-                ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
-                 " (" ++ missingInterface missing ++ "). Build the libraries with -fwrite-if-simplified-core or select --installed-core pinned.")) (pure . InstalledCBD) result
+          source <- case supportFor (registeredId registrationUnit) of
+            Just record -> pure (InstalledSupport (registeredId registrationUnit) record)
+            Nothing -> acquireSource registrationUnit
           pure (registeredId registrationUnit, (registrationUnit, source))
         pure (bundles, demandInputs)
     let owners = map (installedSourceOwner . snd . snd) bundles
@@ -731,7 +761,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
     publish manifest (Just bridge) linked
   when (action == RunGuest) $ do
     when verifyArtifacts $
-      runCommand True "python3" ([thcRoot </> "bin/audit-core.py", "--runtime", runtime, "--package-manifest", manifest,
+      runCommand True "python3" (["-B", thcRoot </> "bin/audit-core.py", "--runtime", runtime, "--package-manifest", manifest,
                                 "--entry", entry, "--entry", shutdown] ++
                                ["--io-main", "--output", audit]) thcRoot
     -- Full-Core main and shutdown share one program and its Handle CAFs.
@@ -751,28 +781,39 @@ exceptionBridgeModules verify units = fmap concat $ forM units $ \unit -> do
   references <- optionalField unit "modules" ([] :: [Value])
   let selected = [ref | ref <- references, jsonField ref "name" `elem`
         map Just (["THC.Exception", "THC.Internal.Exception", "THC.Internal.Weak"] :: [String])]
-  if null selected then pure [] else do
-    bundle <- field unit "bundle"
-    path <- field bundle "path"
-    expected <- field bundle "sha256"
-    let request = object ["kind" .= ("exception-bridge" :: String), "bundle" .= bundle,
-          "unit" .= (jsonField unit "id" :: Maybe String), "modules" .= selected]
-    ready <- rememberSelection verify (path ++ ".bridge.json") [path] request $ do
+  if null selected then pure [] else if all (\ref -> jsonField ref "compact" /= (Nothing :: Maybe Value)) selected
+    then forM selected $ \ref -> do
+      compact <- field ref "compact"
+      path <- field compact "path"
+      expected <- field compact "sha256"
       bytes <- BS.readFile path
-      require (shaHex bytes == expected) "exception runtime bundle changed during linking"
-      entries <- either fail pure =<< decodeZip bytes
-      Just <$> forM selected (\ref -> do
-        member <- field ref "path"
-        digest <- field ref "sha256"
-        body <- maybe (fail "exception runtime bundle lacks its declared module") pure (lookup member entries)
-        require (shaHex body == digest) "exception runtime module hash mismatch"
-        value <- either fail pure (snd <$> readModuleMetadata body)
-        require (jsonField value "unit" == (jsonField unit "id" :: Maybe String) &&
-          jsonField value "module" == (jsonField ref "name" :: Maybe String))
-          "exception runtime module identity mismatch"
-        pure value)
-    maybe (fail "exception runtime metadata unavailable") pure ready
-
+      require (shaHex bytes == expected) "installed exception runtime module hash mismatch"
+      value <- either fail pure (snd <$> readModuleMetadata bytes)
+      require (jsonField value "unit" == (jsonField unit "id" :: Maybe String) &&
+        jsonField value "module" == (jsonField ref "name" :: Maybe String))
+        "installed exception runtime module identity mismatch"
+      pure value
+    else do
+      bundle <- field unit "bundle"
+      path <- field bundle "path"
+      expected <- field bundle "sha256"
+      let request = object ["kind" .= ("exception-bridge" :: String), "bundle" .= bundle,
+            "unit" .= (jsonField unit "id" :: Maybe String), "modules" .= selected]
+      ready <- rememberSelection verify (path ++ ".bridge.json") [path] request $ do
+        bytes <- BS.readFile path
+        require (shaHex bytes == expected) "exception runtime bundle changed during linking"
+        entries <- either fail pure =<< decodeZip bytes
+        Just <$> forM selected (\ref -> do
+          member <- field ref "path"
+          digest <- field ref "sha256"
+          body <- maybe (fail "exception runtime bundle lacks its declared module") pure (lookup member entries)
+          require (shaHex body == digest) "exception runtime module hash mismatch"
+          value <- either fail pure (snd <$> readModuleMetadata body)
+          require (jsonField value "unit" == (jsonField unit "id" :: Maybe String) &&
+            jsonField value "module" == (jsonField ref "name" :: Maybe String))
+            "exception runtime module identity mismatch"
+          pure value)
+      maybe (fail "exception runtime metadata unavailable") pure ready
 -- Cabal owns the sidecar's unit, configuration, dependencies and native compiler
 -- invocations. The source is the real runtime library; no rewritten package or
 -- synthetic foreign import acquires an application unit ID. All generated files
@@ -784,6 +825,12 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
   case existing of
     Just unit -> pure (unit, described)
     Nothing -> do
+      producer <- installedProducer (contextRoot context)
+      case producer of
+        Just installed -> linkInstalledRuntime context installedPolicy ghcSource registeredLibrary described installed
+        Nothing -> buildSidecar
+  where
+    buildSidecar = do
       let native = contextNative context
           root = contextRoot context
           directory = native </> "runtime-sidecar"
@@ -866,33 +913,100 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
 
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do
-  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
-  buildDirectory <- lookupEnv "THC_CABAL_BUILD_DIR"
+  producer <- installedProducer root
+  helper <- case producer of
+    Just installed -> field installed "interfaceHelper"
+    Nothing -> buildHelper
+  requireFile helper
   let ghc = contextGhc context
       pkg = maybe (takeDirectory ghc </> "ghc-pkg") id (contextGhcPkg context)
-      selection = ["exe:thc-interface", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
-        ["--disable-shared" | Host.os == "mingw32"] ++
-        ["--builddir=" ++ directory | Just directory <- [buildDirectory]]
-      tools = root </> "build/compiler"
-  createDirectoryIfMissing True tools
-  -- These tools share Cabal's root build tree with plugin publication. Release
-  -- its lock before installed-Core probing and provider work.
-  helper <- withLock (tools </> "cabal-tools.lock") $ do
-    runCommand True cabal ("build" : selection) root
-    (status, output, diagnostic) <- readCreateProcessWithExitCode
-      (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
-    require (status == ExitSuccess) ("cannot locate selected thc-interface: " ++ diagnostic)
-    helper <- case lines output of
-      [path] -> canonicalizePath path
-      _ -> fail "cabal list-bin did not return one thc-interface executable"
-    requireFile helper
-    pure helper
-  -- First slice is deliberately limited to pre-existing global registrations.
-  -- A store/source component continues to use its existing Cabal build path.
-  original <- installedContext ghc pkg helper [] (object
+  databases <- maybe (pure []) (\value -> (:[]) <$> field value "packageDb") producer
+  original <- installedContext ghc pkg helper databases (object
     ["id" .= contextCompiler context, "abi" .= contextAbi context,
      "platform" .= contextPlatform context, "way" .= (exportInterfaceWay ++ "-nonprofiling")])
   pure (maybe original id (contextCoreView context))
+  where
+  buildHelper = do
+    cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+    buildDirectory <- lookupEnv "THC_CABAL_BUILD_DIR"
+    let ghc = contextGhc context
+        pkg = maybe (takeDirectory ghc </> "ghc-pkg") id (contextGhcPkg context)
+        selection = ["exe:thc-interface", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
+          ["--disable-shared" | Host.os == "mingw32"] ++
+          ["--builddir=" ++ directory | Just directory <- [buildDirectory]]
+        tools = root </> "build/compiler"
+    createDirectoryIfMissing True tools
+    -- These tools share Cabal's root build tree with plugin publication. Release
+    -- its lock before installed-Core probing and provider work.
+    withLock (tools </> "cabal-tools.lock") $ do
+      runCommand True cabal ("build" : selection) root
+      (status, output, diagnostic) <- readCreateProcessWithExitCode
+        (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
+      require (status == ExitSuccess) ("cannot locate selected thc-interface: " ++ diagnostic)
+      helper <- case lines output of
+        [path] -> canonicalizePath path
+        _ -> fail "cabal list-bin did not return one thc-interface executable"
+      requireFile helper
+      pure helper
+
+-- The descriptor is selected by root discovery. Its products are immutable;
+-- validation never publishes a registry or falls back to a checkout build.
+installedProducer :: FilePath -> IO (Maybe Value)
+installedProducer root = do
+  let path = root </> "installed-producer.json"
+  present <- doesFileExist path
+  if not present then pure Nothing else do
+    value <- readJson path
+    require (jsonField value "format" == Just ("thc-installed-producer" :: String) &&
+      jsonField value "schema" == Just (1 :: Int)) "unsupported installed THC producer descriptor"
+    pure (Just value)
+
+linkInstalledRuntime :: ExportContext -> String -> Maybe FilePath -> FilePath -> [Value] -> Value -> IO (String, [Value])
+linkInstalledRuntime context policy source library described producer = do
+  manifest <- readJson =<< field producer "runtimeSupport"
+  layout <- field producer "targetLayout"
+  records <- field manifest "units" :: IO [Value]
+  bridge <- field manifest "foreignExceptionBridgeUnit" :: IO String
+  runtime <- case [record | record <- records, jsonField record "id" == Just bridge] of
+    [record] -> pure record
+    _ -> fail "installed runtime support must contain its genuine runtime unit"
+  dependencies <- field runtime "depends" :: IO [String]
+  original <- prepareInterfaceHelper context (contextRoot context)
+  let present = [identifier | record <- described, Just identifier <- [jsonField record "id" :: Maybe String]]
+      discover seen [] = pure seen
+      discover seen (identifier:pending)
+        | identifier `elem` present || any ((== identifier) . registeredId) seen = discover seen pending
+        | otherwise = do
+            registrationUnit <- discoverInstalled original identifier
+            discover (seen ++ [registrationUnit]) (pending ++ installedDepends registrationUnit)
+  registrations <- discover [] dependencies
+  helper <- if policy == "pinned" then
+    preparePinnedInterfaces (contextCache context) (contextPluginDb context) (contextPluginUnit context)
+      (contextPluginLibrary context) original registrations
+    else case source of
+      Nothing -> pure original
+      Just ghcSource -> prepareForeignInterfaces
+        (ForeignCompiler (contextGhc context) (contextPluginDb context) (contextPluginUnit context)
+          (contextPluginLibrary context) library (contextDriverHash context))
+        (contextCache context) ghcSource original registrations
+  acquired <- fmap concat $ forM registrations $ \originalRegistration -> do
+    registrationUnit <- discoverInstalled helper (registeredId originalRegistration)
+    require (sort (installedDepends registrationUnit) == sort (installedDepends originalRegistration))
+      "installed runtime dependency changed while preparing its Core interfaces"
+    result <- prepareInstalledBundleWithVerification (contextVerifyArtifacts context) (contextNativeTools context)
+      (contextCache context) (contextNative context </> "cache/thc/staging")
+      layout helper registrationUnit
+    bundle <- either (\failure -> fail ("installed runtime dependency lacks complete Core: " ++ show failure)) pure result
+    pure (installedRecords registrationUnit bundle)
+  let linked = described ++ acquired ++ [runtime]
+      identities = [identifier | record <- linked, Just identifier <- [jsonField record "id" :: Maybe String]]
+  require (length identities == length (nub identities)) "installed runtime collides with an existing Core owner"
+  services <- exceptionBridgeModules (contextVerifyArtifacts context) linked
+  selected <- either fail pure (foreignExceptionBridgeUnit services)
+  require (selected == Just bridge && any (\value -> jsonField value "unit" == Just bridge &&
+    jsonField value "module" == Just ("THC.Internal.Weak" :: String)) services)
+    "installed runtime lacks its genuine exception bridge or weak finalizer ABI"
+  pure (bridge, linked)
 
 -- This path adds installed bundle assembly to the pinned recipe's native/Core
 -- dependencies. Main and Run do not construct these artifacts. Keep native
@@ -1252,6 +1366,7 @@ installedNativeArtifacts directory = do
 
 installedSourceRecords :: InstalledUnit -> InstalledSource -> [Value]
 installedSourceRecords registrationUnit (InstalledCBD artifact) = installedRecords registrationUnit artifact
+installedSourceRecords _ (InstalledSupport _ record) = [record]
 installedSourceRecords registrationUnit (InstalledInterfaces owner record) =
   [object ["id" .= registeredId registrationUnit, "depends" .= installedDepends registrationUnit,
            "modules" .= ([] :: [Value])] | owner /= registeredId registrationUnit] ++ [record]

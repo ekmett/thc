@@ -31,6 +31,11 @@ IMPORT_PROFILES = ('ghc-9.14.1-thc-only-static-c-imports-v1',
 def _compact_executable():
     root = Path(__file__).resolve().parent.parent
     executable = os.environ.get('THC_COMPACT')
+    if not executable and (root / 'installed-producer.json').is_file():
+        producer = strict_json((root / 'installed-producer.json').read_text(encoding='utf-8'))
+        if producer.get('format') != 'thc-installed-producer' or producer.get('schema') != 1:
+            raise ValueError('Invalid installed THC producer descriptor')
+        executable = producer['compact']
     if not executable:
         result = subprocess.run([os.environ.get('CABAL', 'cabal'), 'list-bin', 'exe:thc-compact', '--offline',
                                  '--with-compiler=' + os.environ.get('GHC', 'ghc'),
