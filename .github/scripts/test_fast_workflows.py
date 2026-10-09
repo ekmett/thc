@@ -309,6 +309,10 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 block = workflow.split("name: " + label, 1)[1].split("\n      - ", 1)[0]
                 self.assertIn("--add-modules=jdk.incubator.vector", block)
                 self.assertIn(entry, block)
+                for option in ("-Xshare:off", "-Xms256m", "-Xmx256m", "-XX:-UseCompactObjectHeaders",
+                               "-XX:+UnlockExperimentalVMOptions", "-XX:+UseJamGC"):
+                    self.assertIn(option, block)
+                self.assertNotIn("-XX:+UseCompactObjectHeaders", block)
                 self.assertNotIn("continue-on-error", block)
 
     def test_full_build_reports_independent_groups_and_never_prepares_every_fixture(self):
