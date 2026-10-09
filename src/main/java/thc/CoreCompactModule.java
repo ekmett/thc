@@ -74,10 +74,20 @@ public final class CoreCompactModule implements AutoCloseable {
         if (!verifyArtifacts || verified) return;
         try {
             var facts = metadata();
-            var bindings = new ArrayList<Map<String,Object>>();
-            // Complete verification must not retain cold bodies or their shape dictionaries.
-            var verifier = new CoreCompactRecords(file, artifact.sha256());
-            file.verifyBindingOffsets(offset -> bindings.add(decodeBinding(verifier, offset)));
+            var offsets = new ArrayList<Long>();
+            // Check every cold record even when its module has no foreign declarations.
+            // Each decode has a short-lived shape dictionary; complete verification never retains all bodies.
+            file.verifyBindingOffsets(offset -> {
+                decodeBinding(new CoreCompactRecords(file, artifact.sha256()), offset);
+                offsets.add(offset);
+            });
+            // Existing admissions see the complete inventory and preserve occurrence multiplicity.
+            var bindings = new AbstractList<Map<String,Object>>() {
+                @Override public int size() { return offsets.size(); }
+                @Override public Map<String,Object> get(int index) {
+                    return decodeBinding(new CoreCompactRecords(file, artifact.sha256()), offsets.get(index));
+                }
+            };
             var original = new LinkedHashMap<>(facts); original.put("bindings", bindings);
             CoreForeignArtifacts.INSTANCE.validateArchive(original, true);
             CoreModules.admission(original, null);
