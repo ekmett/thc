@@ -15,6 +15,7 @@
 _Static_assert(sizeof(int) == 4 && sizeof(void *) == 8 && sizeof(SOCKET) == 8, "Win64 fixture ABI");
 __declspec(dllexport) int fixture_open(const wchar_t *path) { return _wopen(path, _O_CREAT | _O_TRUNC | _O_RDWR | _O_BINARY, _S_IREAD | _S_IWRITE); }
 __declspec(dllexport) int fixture_close(int fd) { return _close(fd); }
+__declspec(dllexport) int fixture_dup(int fd) { return _dup(fd); }
 __declspec(dllexport) int fixture_seek(int fd) { return _lseek(fd, 0, SEEK_SET); }
 __declspec(dllexport) int fixture_read(int fd, void *bytes, unsigned count) { return _read(fd, bytes, count); }
 __declspec(dllexport) int fixture_write(int fd, const void *bytes, unsigned count) { return _write(fd, bytes, count); }

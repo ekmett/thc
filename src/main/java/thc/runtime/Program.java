@@ -1890,11 +1890,13 @@ public final class Program implements ExecutableProgram {
         var cpuAffinity = CoreCpuAffinity.validate(expr, defined || scope.joins.containsKey(at(fn, 1)));
         var runtimeService = CoreRuntimeServices.validate(expr, defined || scope.joins.containsKey(at(fn, 1)));
         var override = CoreForeignOverride.select(metadata);
-        var packageScalar = override == null && cpuAffinity == null && runtimeService == null ?
+        var stdioCandidate = override == CoreForeignOverride.STDIO ? CoreOriginalStdio.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var nativeOpening = CoreOriginalStdio.windowsOpening(stdioCandidate, metadata, argumentMetadata(args), flags, metadataRepresentation(expr), packageScalarLinks);
+        var packageScalar = nativeOpening != null ? nativeOpening : override == null && cpuAffinity == null && runtimeService == null ?
             CorePackageScalarForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), packageScalarLinks) : null;
         var stackClone = override == CoreForeignOverride.STACK && CoreStackForeign.validate(metadata, argumentMetadata(args), flags);
         var stackInfo = override == CoreForeignOverride.STACK_INFO ? CoreStackInfoForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
-        var originalStdio = override == CoreForeignOverride.STDIO ? CoreOriginalStdio.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var originalStdio = nativeOpening == null ? stdioCandidate : null;
         var originalProcess = override == CoreForeignOverride.PROCESS ? CoreProcessForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var stableFree = override == CoreForeignOverride.STABLE_FREE && CoreStablePointers.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var sharedCAF = override == CoreForeignOverride.SHARED_CAF ? CoreSharedCAFStores.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;

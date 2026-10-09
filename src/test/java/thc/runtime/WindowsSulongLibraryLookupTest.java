@@ -27,6 +27,9 @@ import thc.Language;
 import thc.Main;
 import thc.PackageScalarLink;
 import thc.PackageScalarSignature;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static java.lang.foreign.ValueLayout.*;
@@ -60,6 +63,89 @@ class WindowsSulongLibraryLookupTest {
         Buffer(Language language, PackageScalarCall call) { super(language); access = new PackageScalarAccess(call); }
         @Override public Object execute(VirtualFrame frame) {
             return access.executeAddress(new Object[0], thc.runtime.Unit.INSTANCE);
+        }
+    }
+    private static final class Open extends RootNode {
+        @Child private PackageScalarAccess access;
+        Open(Language language, PackageScalarCall call) { super(language); access = new PackageScalarAccess(call); }
+        @Override public Object execute(VirtualFrame frame) {
+            return access.executeInt(new Object[]{frame.getArguments()[0], frame.getArguments()[1], (short) 0x180}, thc.runtime.Unit.INSTANCE);
+        }
+    }
+    private static ManagedAddress nativeWide(String value) {
+        var address = ManagedAddress.fromAllocation(ManagedAllocation.nativeMutable((value.length() + 1L) * 2, 8));
+        for (int i = 0; i < value.length(); i++) {
+            address.writeWord8(i * 2L, value.charAt(i) & 255);
+            address.writeWord8(i * 2L + 1, value.charAt(i) >>> 8);
+        }
+        return address;
+    }
+    private PackageScalarCall originalOpen(Language.State owner) throws Exception {
+        var directory = Path.of(System.getProperty("thc.projectRoot"), "build/generated/test-cbits");
+        var bitcode = Files.readAllBytes(directory.resolve("windows-open.bc"));
+        var dll = Files.readAllBytes(directory.resolve("windows-io-fixture.dll"));
+        var signature = new PackageScalarSignature("__hscore_open", "thc_windows_fixture_open",
+            List.of("AddrRep", "Int32Rep", "Word16Rep"), "Int32Rep", "ccall", "safe");
+        // JVM linkage model, not fabricated executable Core. The named producer
+        // checks the actual package header/archive and links its original body.
+        var link = new PackageScalarLink("ghc-internal", "x86_64-pc-windows-msvc19.33.0",
+            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(dll)),
+            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bitcode)),
+            bitcode, List.of(signature), "llvm-bitcode", Set.of(), dll);
+        owner.getPackageCbits().link(link);
+        return new PackageScalarCall(link, signature);
+    }
+    /** A real pinned HsBase open and selected CRT transfer under the fixed
+     * factory. This is positive Java SAFE/ABI evidence, not a compiled Core call. */
+    @Test void originalWindowsOpenUsesContextCwdAndRealNativeDescriptors() throws Throwable {
+        var processCwd = Path.of("").toAbsolutePath();
+        String filename = "å-文件-𐐷.bin";
+        try (var context = WindowsDirectoryStreams.createContext(ContextProfile.SYNCHRONOUS_TEST); var arena = Arena.ofConfined()) {
+            var owner = enter(context);
+            try {
+                owner.getEnv().setCurrentWorkingDirectory(owner.getEnv().getPublicTruffleFile(scratch.toString()));
+                var call = originalOpen(owner);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var open = new Open(language, call).getCallTarget();
+                var selected = SymbolLookup.libraryLookup(owner.getPackageCbits().windowsIoImage(), arena);
+                int fd = (int) open.call(nativeWide(filename), 0x8302); // SDK O_RDWR|O_CREAT|O_TRUNC|O_BINARY
+                assertTrue(fd >= 0);
+                try {
+                    assertTrue(Files.exists(scratch.resolve(filename)));
+                    assertEquals(processCwd, Path.of("").toAbsolutePath());
+                    var bytes = ManagedAddress.fromAllocation(ManagedAllocation.nativeMutable(3, 8));
+                    bytes.copyFromByteArray(new byte[]{37, 91, 122}, 0, 3);
+                    var io = owner.getWindowsNativeIo();
+                    var write = io.transfer(fd, false, 3, bytes, true);
+                    assertEquals(3, write.length()); assertEquals(0, write.error()); assertFalse(write.consoleAbort());
+                    assertEquals(0, sdk(selected, "seek", new MemoryLayout[]{JAVA_INT}, fd));
+                    bytes.fill(3, 0);
+                    var read = io.transfer(fd, false, 2, bytes, false);
+                    assertEquals(2, read.length()); assertEquals(0, read.error()); assertFalse(read.consoleAbort());
+                    var actual = new byte[3]; bytes.copyToByteArray(actual, 0, 3);
+                    assertArrayEquals(new byte[]{37, 91, 0}, actual);
+                    assertEquals(1, io.transfer(fd, false, 3, bytes, false).length());
+                    assertEquals(122, bytes.readWord8(0));
+                    assertEquals(0, io.transfer(fd, false, 3, bytes, false).length());
+                    assertEquals(0, io.transfer(fd, false, 0, ManagedAddress.nullAddress(), false).length());
+                } finally { assertEquals(0, sdk(selected, "close", new MemoryLayout[]{JAVA_INT}, fd)); }
+                assertEquals(9, owner.getWindowsNativeIo().transfer(fd, false, 0, ManagedAddress.nullAddress(), false).error());
+                owner.getStdio().setErrno(71);
+                assertEquals(-1, (int) open.call(nativeWide("absent/" + filename), 0x8000));
+                assertEquals(2, owner.getStdio().errno(), "actual selected maperrno must replace the guest seed");
+                assertNotEquals(0, owner.getWindowsCodePages().error());
+                var heap = ManagedAddress.fromByteArray(new byte[4]);
+                var failure = assertThrows(RuntimeFault.class, () -> open.call(heap, 0x8302));
+                assertTrue(failure.getMessage().contains("addressable caller-owned pathname"));
+            } finally { leave(context); }
+        }
+        try (var context = context(true)) {
+            var owner = enter(context);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var open = new Open(language, originalOpen(owner)).getCallTarget();
+                assertThrows(SecurityException.class, () -> open.call(nativeWide(scratch.resolve(filename).toString()), 0x8000));
+            } finally { leave(context); }
         }
     }
     private ManagedAddress buffer(Language.State owner) throws Exception {
@@ -264,15 +350,12 @@ class WindowsSulongLibraryLookupTest {
             } finally { WindowsNativeIo.Api.unbind.invokeExact(owner); }
         }
     }
-    @Test void fixedNativeFactoryDoesNotConfuseEmbeddingStreamsWithProcessEndpoints() {
+    @Test void fixedNativeFactoryDoesNotConfuseEmbeddingStreamsWithProcessEndpoints() throws Throwable {
         try (var context = NativeIO.createContext()) {
             var owner = enter(context);
             try {
                 var io = owner.getWindowsNativeIo();
                 assertNotNull(io);
-                assertThrows(SecurityException.class, () -> io.transfer(0, false, 0, ManagedAddress.nullAddress(), false));
-                assertThrows(SecurityException.class, () -> io.transfer(1, false, 0, ManagedAddress.nullAddress(), true));
-                assertThrows(SecurityException.class, () -> io.transfer(2, false, 0, ManagedAddress.nullAddress(), true));
                 var heap = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8, false, 8));
                 var failure = assertThrows(RuntimeFault.class, () -> io.transfer(8, false, 1, heap, false));
                 assertTrue(failure.getMessage().contains("addressable caller-owned storage"));
@@ -280,6 +363,17 @@ class WindowsSulongLibraryLookupTest {
                 assertTrue(failure.getMessage().contains("storage for a nonzero length"));
                 failure = assertThrows(RuntimeFault.class, () -> io.transfer(8, false, 0, ManagedAddress.nullAddress(), false));
                 assertTrue(failure.getMessage().contains("selected ghc-internal native component"));
+                originalOpen(owner);
+                assertThrows(SecurityException.class, () -> io.transfer(0, false, 0, ManagedAddress.nullAddress(), false));
+                assertThrows(SecurityException.class, () -> io.transfer(1, false, 0, ManagedAddress.nullAddress(), true));
+                assertThrows(SecurityException.class, () -> io.transfer(2, false, 0, ManagedAddress.nullAddress(), true));
+                try (var arena = Arena.ofConfined()) {
+                    var selected = SymbolLookup.libraryLookup(owner.getPackageCbits().windowsIoImage(), arena);
+                    int alias = sdk(selected, "dup", new MemoryLayout[]{JAVA_INT}, 0);
+                    assertTrue(alias >= 3);
+                    try { assertThrows(SecurityException.class, () -> io.transfer(alias, false, 0, ManagedAddress.nullAddress(), false)); }
+                    finally { assertEquals(0, sdk(selected, "close", new MemoryLayout[]{JAVA_INT}, alias)); }
+                }
             } finally { leave(context); }
         }
     }

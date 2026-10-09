@@ -17,6 +17,10 @@ to the five weak-bootstrap models below; other Windows checks need qualification
 on this provider. Package identities and remaining distribution
 requirements are documented in [JAM runtime integration](jam-runtime.md).
 Python 3.12+ is still needed by existing generators and strict Core audits.
+The native descriptor fixture producer requires PowerShell 7 (`pwsh`). Bootstrap
+sets `THC_POWERSHELL` to the current PowerShell 7 executable, or discovers it on
+PATH. Set that variable explicitly when selecting tools manually. The producer
+honors the selected shell's execution policy; no policy override is used.
 
 ## Select tools and build
 
@@ -486,8 +490,11 @@ argument widths. Safe calls release guest scheduling admission during native
 execution, and asynchronous delivery after the call does not repeat the
 conversion.
 
-Windows file and Handle opening remains unsupported. Ordinary imports require
-the package's native artifacts alongside its Core.
+Windows Word16 `__hscore_open` calls use the selected package's original native
+adapter and CRT descriptors under the fixed `NativeIO` factory. Relative UTF-16
+paths resolve against the context CWD. Ordinary imports require the package's
+native artifacts alongside its Core. This opening boundary does not yet qualify
+canonical Haskell Handle execution, which also needs the RTS IO manager.
 
 Messages allocated by `base_getErrorMessage` must be released with `LocalFree`.
 Aliases become invalid after release, and context disposal frees remaining
@@ -624,18 +631,28 @@ The Windows loader suite also checks the native descriptor transfer boundary:
     testDense --tests thc.runtime.WindowsSulongLibraryLookupTest --continue
 ~~~
 
-The named `compileWindowsIoFixture` prerequisite builds its own native DLL using
-the selected `THC_CLANG`. Its SDK operations exercise real files, pipes and
-loopback sockets. The runtime boundary binds the selected DLL's resolved CRT
+The named `compileWindowsIoFixture` prerequisite uses pinned native GHC 9.14.1
+to link the installed `ghc-internal` header's original opening body and archive;
+it does not rebuild installed packages. `THC_CLANG` builds its SDK operations
+and the MSVC-targeted Sulong transport. Its native GHC oracle checks the actual
+ABI, reads after closing the original descriptor, and distinguishes a file
+opened into vacant fd0 from a duplicate of stdin. Commands, exit statuses,
+compiler/archive hashes and artifact hashes are retained in
+`build/generated/test-cbits/windows-io-receipt.json` beside the producer logs.
+Its SDK operations exercise real files, pipes and loopback sockets.
+The runtime boundary binds the selected DLL's resolved CRT
 and WinSock imports, acquires private descriptor loans, and captures transfer
 errors before Java readmission. Closed descriptors return `EBADF`; recovery
 scopes the documented CRT validation callback to `_dup` and restores the exact
 previous thread-local handler. The regression also checks that the global
 handler identity survives. Generic embedding streams do not grant authority to
 the process CRT's standard endpoints; admit those explicitly through `NativeIO`.
+Endpoint authority follows the pinned kernel object rather than its descriptor
+number. The positive Java linkage check also exercises original native opening,
+context CWD, Unicode paths, SAFE transfers and selected-origin error capture.
 
 These checks qualify the native boundary ABI and loader/endpoint ownership.
-Console handler completion, genuine RTS tuple lowering and native opening still
+Console handler completion, interruptible native work and genuine RTS tuple lowering still
 need integration before canonical Windows `runMainIO` is admitted. They do not
 establish guest compiled execution.
 

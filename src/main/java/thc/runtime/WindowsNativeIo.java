@@ -39,6 +39,42 @@ public final class WindowsNativeIo implements AutoCloseable {
         if (Language.currentState(null) != context || closed) throw fault("Windows native IO belongs to another or closed context");
         if (!context.getEnv().isNativeAccessAllowed()) throw new SecurityException("Windows native IO requires native access");
     }
+    static WindowsNativeIo required() {
+        var io = Language.currentState(null).getWindowsNativeIo();
+        if (io == null) throw new SecurityException("Native Windows opening requires the fixed-filesystem NativeIO context");
+        io.current();
+        return io;
+    }
+    /** Context CWD needs an absolute UTF-16 pathname snapshot. Allocate this
+     * new object addressably; never promote the caller's existing heap alias. */
+    @TruffleBoundary ManagedAddress openingPath(ManagedAddress supplied) {
+        current();
+        if (!supplied.hasNativeIOStorage()) throw fault("Native Windows opening requires addressable caller-owned pathname storage");
+        String name = WindowsDirectoryStreams.path(context, supplied);
+        var address = ManagedAddress.fromAllocation(ManagedAllocation.nativeMutable((name.length() + 1L) * 2, 8));
+        for (int i = 0; i < name.length(); i++) {
+            address.writeWord8(i * 2L, name.charAt(i) & 255);
+            address.writeWord8(i * 2L + 1, name.charAt(i) >>> 8);
+        }
+        return address;
+    }
+    @FunctionalInterface interface NativeCall { Object invoke() throws Throwable; }
+    /** The exact package adapter supplies the open body. Its originating
+     * selected CRT supplies errno, even if another library has a different CRT. */
+    @TruffleBoundary Object invokeOpening(NativeCall call) {
+        var binding = borrow();
+        try (var arena = Arena.ofConfined()) {
+            var error = arena.allocate(8, 4);
+            Api.seedErrno.invokeExact(binding, Math.toIntExact(context.getStdio().errno()));
+            try { return call.invoke(); }
+            finally {
+                Api.captureError.invokeExact(binding, error);
+                context.getStdio().captureForeignErrno(error.get(JAVA_INT, 0));
+                context.getWindowsCodePages().lastError.set(Integer.toUnsignedLong(error.get(JAVA_INT, 4)));
+            }
+        } catch (Throwable failure) { throw propagate(failure); }
+        finally { release(); }
+    }
     private synchronized MemorySegment borrow() {
         current();
         if (owner == null) {
@@ -58,20 +94,21 @@ public final class WindowsNativeIo implements AutoCloseable {
         return owner;
     }
     private synchronized void release() { borrowers--; notifyAll(); }
-    private void descriptor(int fd, boolean socket, boolean writing) {
-        current();
-        // Socket values do not name the CRT standard endpoints.
-        if (!socket && fd >= 0 && fd <= 2) {
-            var endpoint = StandardEndpoint.values()[fd];
-            if (!endpoints.contains(endpoint) || writing == (endpoint == StandardEndpoint.INPUT))
-                throw new SecurityException("Native standard endpoint was not admitted for this operation: " + endpoint);
+    private void descriptor(MemorySegment loan, boolean writing) {
+        // Authorize the duplicated kernel object, never an integer coincidence.
+        // A file opened into a vacant fd0 is a file; dup(stdin) is still stdin.
+        int standard = loan.get(JAVA_INT, 12), allowed = 0;
+        for (var endpoint : endpoints) {
+            if (writing != (endpoint == StandardEndpoint.INPUT)) allowed |= 1 << endpoint.ordinal();
         }
+        if (standard != 0 && (standard & allowed) == 0)
+            throw new SecurityException("Native standard endpoint was not admitted for this operation");
     }
     /** Capture both results on the native origin, before SAFE readmission.
      * The private descriptor copy and caller's storage borrow survive the call;
      * native close/reuse of the original cannot redirect an acquired operation. */
     @TruffleBoundary public Result transfer(int fd, boolean socket, int count, ManagedAddress address, boolean writing) {
-        descriptor(fd, socket, writing);
+        current();
         if (count < 0) throw fault("Windows RTS transfer requires a nonnegative CInt length");
         if (address == ManagedAddress.nullAddress()) {
             if (count != 0) throw fault("Windows RTS transfer requires storage for a nonzero length");
@@ -96,6 +133,7 @@ public final class WindowsNativeIo implements AutoCloseable {
                 int error = (int) Api.acquire.invokeExact(binding, fd, socket ? 1 : 0, loan);
                 if (error != 0) return new Result(-1, error, 0, false);
                 try {
+                    descriptor(loan, writing);
                     Api.transfer.invokeExact(binding, loan, writing ? 1 : 0, count, buffer, result);
                     return new Result(result.get(JAVA_INT, 0), result.get(JAVA_INT, 4),
                         Integer.toUnsignedLong(result.get(JAVA_INT, 8)), result.get(JAVA_INT, 12) != 0);
@@ -119,7 +157,7 @@ public final class WindowsNativeIo implements AutoCloseable {
         }
     }
     static final class Api {
-        static final MethodHandle bind, unbind, acquire, transfer, release;
+        static final MethodHandle bind, unbind, acquire, transfer, release, seedErrno, captureError;
         static {
             try {
                 if (!WindowsDirectoryStreams.supportedHost()) throw fault("Windows IO requires native Win64");
@@ -149,6 +187,8 @@ public final class WindowsNativeIo implements AutoCloseable {
                 acquire = call(linker, lookup, "acquire", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS));
                 transfer = call(linker, lookup, "transfer", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS));
                 release = call(linker, lookup, "release", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
+                seedErrno = call(linker, lookup, "seed_errno", FunctionDescriptor.ofVoid(ADDRESS, JAVA_INT));
+                captureError = call(linker, lookup, "capture_error", FunctionDescriptor.ofVoid(ADDRESS, ADDRESS));
             } catch (Throwable failure) { throw new ExceptionInInitializerError(failure); }
         }
         private static MethodHandle call(Linker linker, SymbolLookup lookup, String name, FunctionDescriptor descriptor) {

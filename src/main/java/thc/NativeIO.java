@@ -12,7 +12,8 @@ import thc.runtime.WindowsDirectoryStreams;
 /** Explicit host-filesystem authority for an opt-in context. This factory owns
  * the final filesystem configuration and returns a built Context, never a
  * mutable Builder. It cannot authenticate arbitrary filesystem wrappers.
- * POSIX files require selected-ABI resources; Windows supports the original directory API. */
+ * POSIX files require selected-ABI resources; Windows supports original package
+ * opening and directory APIs. Canonical Windows Handle/RTS IO remains unqualified. */
 public final class NativeIO {
     private NativeIO() {}
     public enum StandardEndpoint { INPUT, OUTPUT, ERROR }

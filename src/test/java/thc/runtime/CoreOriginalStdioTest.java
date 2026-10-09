@@ -10,6 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import thc.PackageScalarLink;
+import thc.PackageScalarSignature;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
@@ -88,6 +92,30 @@ class CoreOriginalStdioTest {
         }
         for (var mode : List.of("Word8Rep", "Int16Rep", "Int32Rep", "Word64Rep"))
             assertThrows(RuntimeFault.class, () -> validateDeclaration(declaration("__hscore_open", "unsafe", List.of("AddrRep", "Int32Rep", mode))));
+    }
+    @Test @EnabledOnOs(OS.WINDOWS) void windowsOpeningRequiresTheActualSelectedAdapterInsteadOfLogicalFds() {
+        for (var safety : List.of("unsafe", "safe")) {
+            var metadata = declaration("__hscore_open", safety, List.of("AddrRep", "Int32Rep", "Word16Rep"));
+            var operation = validateDeclaration(metadata);
+            var actual = List.of(OriginalStdioFixtures.scalar("AddrRep", true),
+                OriginalStdioFixtures.scalar("Int32Rep", true), OriginalStdioFixtures.scalar("Word16Rep", true),
+                OriginalStdioFixtures.scalar(null, true));
+            var flags = Collections.nCopies(4, false);
+            var signature = new PackageScalarSignature("__hscore_open", "checked-adapter",
+                List.of("AddrRep", "Int32Rep", "Word16Rep"), "Int32Rep", "ccall", safety);
+            // Validation model only; no invented CBD or native execution claim.
+            for (var target : List.of("x86_64-pc-windows-msvc19.33.0", "x86_64-unknown-linux-gnu")) {
+                var link = new PackageScalarLink("ghc-internal", target, "model", "model", new byte[]{1},
+                    List.of(signature), "llvm-bitcode", Set.of(), new byte[]{1});
+                if (target.contains("windows")) {
+                    var call = CoreOriginalStdio.windowsOpening(operation, metadata, actual, flags, metadata.get("rep"), List.of(link));
+                    assertSame(link, call.getLink()); assertEquals(signature, call.getSignature());
+                } else assertThrows(RuntimeFault.class, () ->
+                    CoreOriginalStdio.windowsOpening(operation, metadata, actual, flags, metadata.get("rep"), List.of(link)));
+            }
+            assertThrows(RuntimeFault.class, () ->
+                CoreOriginalStdio.windowsOpening(operation, metadata, actual, flags, metadata.get("rep"), List.of()));
+        }
     }
     @Test void windowsWideConversionRetainsSafeAndUnsafeDeclarations() {
         var primitives = List.of("Word32Rep", "Word32Rep", "AddrRep", "Int32Rep", "AddrRep", "Int32Rep", "AddrRep", "AddrRep");

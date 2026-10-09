@@ -1223,14 +1223,18 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits"))
 tasks.processResources { dependsOn(compileCbits) }
 
 def windowsIoFixture = tasks.register("compileWindowsIoFixture", Exec) {
+    dependsOn(compileCbits)
     onlyIf { windowsHost }
-    inputs.file("t/fixtures/compiler/WindowsNativeIo.c")
-    def output = layout.buildDirectory.file("generated/test-cbits/windows-io-fixture.dll")
-    outputs.file(output)
-    doFirst { output.get().asFile.parentFile.mkdirs() }
-    commandLine(providers.environmentVariable("THC_CLANG").orElse("clang").get(),
-        "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "-shared", "-fno-builtin",
-        "t/fixtures/compiler/WindowsNativeIo.c", "-lws2_32", "-o", output.get().asFile)
+    inputs.files("t/fixtures/compiler/WindowsNativeIo.c", "t/fixtures/compiler/WindowsNativeOpen.c",
+        "t/fixtures/compiler/WindowsNativeOpenTransport.c", "t/fixtures/compiler/WindowsNativeIoOracle.hs",
+        "bin/prepare-windows-native-io.ps1")
+    def output = layout.buildDirectory.dir("generated/test-cbits")
+    outputs.dir(output)
+    // Revalidate the actual selected compiler/archive, not a stale ambient DLL.
+    outputs.upToDateWhen { false }
+    commandLine(providers.environmentVariable("THC_POWERSHELL").orElse("pwsh").get(),
+        "-NoLogo", "-NoProfile", "-File", "bin/prepare-windows-native-io.ps1",
+        "-Output", output.get().asFile)
 }
 tasks.withType(Test).configureEach { dependsOn(windowsIoFixture) }
 

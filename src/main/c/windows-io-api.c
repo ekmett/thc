@@ -27,6 +27,7 @@ typedef _invalid_parameter_handler (__cdecl *local_validation_fn)(_invalid_param
 
 struct io_owner {
     HMODULE package;
+    HANDLE standard[3];
     errno_fn error;
     read_fn read;
     write_fn write;
@@ -40,7 +41,7 @@ struct io_owner {
     compare_fn compare;
     local_validation_fn local_validation;
 };
-struct io_loan { uintptr_t descriptor; int socket, standard_input; };
+struct io_loan { uintptr_t descriptor; int socket, standard_endpoints; };
 struct io_result { int length, error; DWORD windows_error; int console_abort; };
 
 _Static_assert(sizeof(void *) == 8 && sizeof(int) == 4 && sizeof(DWORD) == 4 &&
@@ -102,9 +103,23 @@ __declspec(dllexport) void *thc_windows_io_bind(const wchar_t *loaded_package, D
     if (!owner->duplicate || !owner->close || !owner->handle || !owner->local_validation ||
         (void *)(uintptr_t)GetProcAddress(crt, "_read") != (void *)(uintptr_t)owner->read ||
         (void *)(uintptr_t)GetProcAddress(crt, "_write") != (void *)(uintptr_t)owner->write) goto mismatch;
+    // Retain the endpoint objects as well as the package. Re-reading a retired
+    // GetStdHandle value could mistake a reused kernel handle for stdin.
+    const DWORD endpoints[] = {STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE};
+    for (unsigned index = 0; index < 3; ++index) {
+        HANDLE endpoint = GetStdHandle(endpoints[index]);
+        if (endpoint && endpoint != INVALID_HANDLE_VALUE &&
+            !DuplicateHandle(GetCurrentProcess(), endpoint, GetCurrentProcess(), &owner->standard[index],
+                             0, FALSE, DUPLICATE_SAME_ACCESS) && GetLastError() != ERROR_INVALID_HANDLE) {
+            *error = GetLastError();
+            goto failed;
+        }
+    }
     return owner;
 mismatch:
     *error = ERROR_INVALID_DATA;
+failed:
+    for (unsigned index = 0; index < 3; ++index) if (owner->standard[index]) CloseHandle(owner->standard[index]);
     FreeLibrary(package);
     free(owner);
     return NULL;
@@ -136,14 +151,26 @@ static int duplicate(struct io_owner *owner, int fd, int *error) {
 }
 
 __declspec(dllexport) void thc_windows_io_unbind(struct io_owner *owner) {
+    for (unsigned index = 0; index < 3; ++index) if (owner->standard[index]) CloseHandle(owner->standard[index]);
     FreeLibrary(owner->package);
     free(owner);
+}
+
+// Ordinary selected-package calls retain their own implementation. These TLS
+// operations run on that call's native origin, before any Java reconciliation.
+__declspec(dllexport) void thc_windows_io_seed_errno(struct io_owner *owner, int error) {
+    *owner->error() = error;
+}
+__declspec(dllexport) void thc_windows_io_capture_error(struct io_owner *owner, DWORD *result) {
+    DWORD windows_error = GetLastError();
+    result[0] = (DWORD)*owner->error();
+    result[1] = windows_error;
 }
 
 __declspec(dllexport) int thc_windows_io_acquire(struct io_owner *owner, int fd, int socket,
                                               struct io_loan *loan) {
     loan->socket = socket != 0;
-    loan->standard_input = 0;
+    loan->standard_endpoints = 0;
     if (loan->socket) {
         WSAPROTOCOL_INFOW protocol;
         SOCKET original = (SOCKET)(uintptr_t)(uint32_t)fd;
@@ -160,9 +187,11 @@ __declspec(dllexport) int thc_windows_io_acquire(struct io_owner *owner, int fd,
         // Do not query a possibly closed original after duplication. The CRT
         // owns the copy, and CompareObjectHandles tests the actual kernel object.
         intptr_t handle = owner->handle(copy);
-        HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
-        loan->standard_input = handle != -1 && input && input != INVALID_HANDLE_VALUE &&
-                               owner->compare((HANDLE)handle, input);
+        for (unsigned index = 0; index < 3; ++index) {
+            HANDLE endpoint = owner->standard[index];
+            if (handle != -1 && endpoint && owner->compare((HANDLE)handle, endpoint))
+                loan->standard_endpoints |= 1 << index;
+        }
         loan->descriptor = (uintptr_t)copy;
     }
     return 0;
@@ -185,7 +214,7 @@ __declspec(dllexport) void thc_windows_io_transfer(struct io_owner *owner, const
         result->error = result->length == -1 ? error : 0;
         if (writing && result->error == EINVAL && result->windows_error == ERROR_NO_DATA)
             result->error = EPIPE;
-        result->console_abort = !writing && result->length == 0 && count != 0 && loan->standard_input &&
+        result->console_abort = !writing && result->length == 0 && count != 0 && (loan->standard_endpoints & 1) &&
                                 result->windows_error == ERROR_OPERATION_ABORTED;
     }
 }

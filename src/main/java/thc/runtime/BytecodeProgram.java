@@ -6300,11 +6300,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         var representations = argumentMetadata(args);
         var resultRepresentation = metadata == null ? null : metadata.get("rep");
         var override = CoreForeignOverride.select(metadata);
-        var packageScalar = override == null && cpuAffinity == null && runtimeService == null
+        var stdioCandidate = override == CoreForeignOverride.STDIO ? CoreOriginalStdio.validate(metadata, representations, flags, resultRepresentation) : null;
+        var nativeOpening = CoreOriginalStdio.windowsOpening(stdioCandidate, metadata, representations, flags, resultRepresentation, packageScalarLinks);
+        var packageScalar = nativeOpening != null ? nativeOpening : override == null && cpuAffinity == null && runtimeService == null
             ? CorePackageScalarForeign.validate(metadata, representations, flags, resultRepresentation, packageScalarLinks) : null;
         boolean stackClone = override == CoreForeignOverride.STACK && CoreStackForeign.validate(metadata, representations, flags);
         var stackInfo = override == CoreForeignOverride.STACK_INFO ? CoreStackInfoForeign.validate(metadata, representations, flags, resultRepresentation) : null;
-        var originalStdio = override == CoreForeignOverride.STDIO ? CoreOriginalStdio.validate(metadata, representations, flags, resultRepresentation) : null;
+        var originalStdio = nativeOpening == null ? stdioCandidate : null;
         var originalProcess = override == CoreForeignOverride.PROCESS ? CoreProcessForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         boolean stableFree = override == CoreForeignOverride.STABLE_FREE && CoreStablePointers.validate(metadata, representations, flags, resultRepresentation);
         var sharedCAF = override == CoreForeignOverride.SHARED_CAF ? CoreSharedCAFStores.validate(metadata, representations, flags, resultRepresentation) : null;

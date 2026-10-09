@@ -77,7 +77,7 @@ public final class WindowsDirectoryStreams implements Closeable {
             synchronized (owner) { return checked.get(); }
         });
     }
-    private String query(ManagedAddress path) {
+    static String path(Language.State context, ManagedAddress path) {
         return path.withNativeBorrow(() -> {
             Supplier<String> read = () -> {
                 var result = new StringBuilder();
@@ -116,7 +116,7 @@ public final class WindowsDirectoryStreams implements Closeable {
 
     @TruffleBoundary public synchronized ManagedAddress first(ManagedAddress path, ManagedAddress destination) {
         current();
-        String name = query(path);
+        String name = path(context, path);
         return output(destination, () -> {
             try (var arena = Arena.ofConfined()) {
                 var text = arena.allocate((name.length() + 1L) * 2, 2);
