@@ -617,6 +617,44 @@ still bind its actual archive; stale plugin-dependent interfaces are rejected.
 Plugin registration compares canonical archive identities, so a checkout
 junction and its resolved directory select the same actual library.
 
+The optional `windowsPackageIoTest` and `windowsPackageIoDenseTest` tasks check
+the ordinary package transport using an already acquired, original
+`GHC.Internal.IO.FD` CBD. Set `THC_WINDOWS_NATIVE_IO_CBD` to that module's CBD in
+the acquired unit; the suite verifies its native archive and component ABI.
+It opens a real temporary file through the captured `__hscore_open` declaration
+and checks zero-length reads, partial reads, EOF, read-only write failure and
+close through the captured CAPI entries, using caller-owned pinned storage.
+It does not prepare boot libraries or exercise an AST/bytecode guest program.
+
+~~~powershell
+$env:THC_WINDOWS_NATIVE_IO_CBD = 'C:\path\to\acquired\GHC.Internal.IO.FD.cbd'
+./gradlew.bat --max-workers=1 --continue windowsPackageIoTest windowsPackageIoDenseTest
+~~~
+
+`t/haskell-fixtures/WindowsFileOracle.hs` independently observes the same
+operations through native GHC:
+
+~~~powershell
+New-Item -ItemType Directory -Force build/windows-file-oracle | Out-Null
+[IO.File]::WriteAllBytes("$PWD/build/windows-file-oracle/input.bin", [byte[]]@(37,91,122))
+& $env:GHC --make -O2 -Wall -Werror -dcore-lint -dstg-lint t/haskell-fixtures/WindowsFileOracle.hs `
+    -odir build/windows-file-oracle -hidir build/windows-file-oracle -o build/windows-file-oracle/oracle.exe
+./build/windows-file-oracle/oracle.exe ./build/windows-file-oracle/input.bin
+~~~
+
+Its observation is `(0,3,[37,91,122],0,-1,9)` on
+the selected Windows toolchain. Passing these checks establishes ordinary CRT file
+transport, not RTS async IO, pipe/socket transport, console event completion,
+SAFE scheduler progress or first-compiled-call behavior. Those boundaries
+remain required before general Windows IO can be admitted.
+
+If a worker exits after `jam: create heap backing (1455)`, record the failed run
+and check system commit capacity as well as physical memory. Windows defines
+[1455 as `ERROR_COMMITMENT_LIMIT`](https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--1300-1699-).
+Reduce simultaneous builds and Gradle workers to fit the available resources;
+keep the pinned JAM runtime and test heap settings. A later passing diagnostic
+run does not qualify the failed run.
+
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.
