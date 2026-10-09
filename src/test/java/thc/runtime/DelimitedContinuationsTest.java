@@ -599,6 +599,64 @@ class DelimitedContinuationsTest {
             } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
         } finally { context.leave(); } }
     }
+    @Test void pendingImageInvocationRetainsItsCopiedFrameAndRunsItsSuffixOnce() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent(null, true, true, null);
+            threads.installSuspensionBoundary(new GuestWakePort());
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = new FrameLayout(); int slot = layout.bind("invocation prefix", FrameSlotKind.Int);
+                var original = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, layout.build()); original.setInt(slot, 0);
+                var cell = new ManagedMVar(); int[] prefixes = {0}, suffixes = {0};
+                class Owner extends GuestRoot {
+                    @Child private Force force = new Force(new Metrics(false));
+                    Owner() { super(language, new FrameLayout().build()); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) { return force.drainStack((SavedGuestContinuation) frame.getArguments()[1], null); }
+                }
+                var owner = new Owner(); owner.getCallTarget();
+                var cut = new DelimitedCut(new PromptTag(Language.currentState(owner)), null, null, MaskingState.UNMASKED, owner);
+                int[] completions = {0};
+                cut.append(original, new DelimitedStep() {
+                    public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outer) {
+                        assertEquals(0, frame.getInt(slot)); frame.setInt(slot, 1); prefixes[0]++;
+                        AstResumeStep resume = new AstResumeStep() {
+                            PendingWait pending;
+                            public Object resume(VirtualFrame saved, Object value) {
+                                assertEquals(1, saved.getInt(slot), "The active invocation lost its copied frame");
+                                try { return pending == null ? cell.take(owner, true, new Object()) : pending.resume(); }
+                                catch (PendingWait next) { pending = next; throw new AstCapture(next, SynchronousMasking.current(owner)).append(this); }
+                            }
+                        };
+                        // The old eager spill drain must stop when it discovers a real wait, then still finish this step once.
+                        throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(owner)).append(resume);
+                    }
+                    public Object finish(Object result, DelimitedActionSite site) { completions[0]++; return result; }
+                });
+                cut.append(original, (frame, input, ambient, outer) -> { suffixes[0]++; return (Long) input.get() + frame.getInt(slot); });
+                var image = new DelimitedStack(cut, null).closure(language, new Metrics(false));
+                var action = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false}, false); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) { return 0L; }
+                }.getCallTarget());
+                for (long value = 41; value < 43; value++) {
+                    Object parked = Calls.target(image.target, new Object[]{0L, action, Unit.INSTANCE});
+                    var saved = assertInstanceOf(SavedGuestContinuation.class, parked); assertNotNull(PendingWait.of(saved));
+                    assertEquals((int) value - 40, prefixes[0]); assertEquals((int) value - 41, suffixes[0]);
+                    assertEquals((int) value - 41, completions[0]);
+                    assertEquals(0, original.getInt(slot), "A parked invocation mutated the multi-shot template");
+                    assertTrue(cell.tryPut(value));
+                    assertEquals(value + 1, Calls.target(owner.getCallTarget(), new Object[]{0L, saved}));
+                    assertEquals((int) value - 40, prefixes[0]); assertEquals((int) value - 40, suffixes[0]);
+                    assertEquals((int) value - 40, completions[0]);
+                    assertEquals(0, original.getInt(slot));
+                }
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
     @Test void savedBytecodeSuffixDrainsRepeatedUnitCutsInFreshOwners() {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) { context.initialize("thc"); context.enter(); try {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = new CoreRepresentation(CoreKind.VOID, false, false, List.of(), null, null, null, null, null); var value = new CoreRepresentation(CoreKind.OBJECT, false, false, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null); var shape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, false, false, value.getPrimReps(), List.of(state, value), null, null, null, null), language); var marker = new Object(); var answer = shape.getLayout().create(); shape.getLayout().setObject(answer, 0, marker);

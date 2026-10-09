@@ -6,6 +6,7 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.lang.reflect.InvocationTargetException;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -119,6 +120,156 @@ class BlockedOwnerProtocolTest {
                 };
                 assertSame(Unit.INSTANCE, Calls.target(root.getCallTarget(), new Object[]{0L}));
             } finally { context.leave(); }
+        }
+    }
+
+    @Test void delimitedDrainDoesNotSpinAnUnreadyCapturedOperation() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var attempts = new AtomicInteger(); var ready = new java.util.concurrent.atomic.AtomicBoolean();
+                var root = new GuestRoot(language, new FrameLayout().build()) {
+                    @Child private Force force = new Force(new Metrics(false));
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        var threads = Language.currentState(this).getThreads();
+                        threads.enterCurrent(null, true, true, null);
+                        threads.installSuspensionBoundary(new GuestWakePort());
+                        try {
+                            var holder = new PendingWait[1];
+                            PendingWait.Operation operation = new PendingWait.Operation() {
+                                public Object resume() {
+                                    // A second unready entry proves spinning and fails deterministically without a timeout.
+                                    if (!ready.get()) {
+                                        if (attempts.incrementAndGet() > 1) throw new AssertionError("Delimited drain immediately reentered an unready operation");
+                                        throw holder[0];
+                                    }
+                                    return 42L;
+                                }
+                                public boolean cancel() { return true; }
+                                public boolean ready() { return ready.get(); }
+                                public GuestThreadStatus status() { return GuestThreadStatus.MVAR; }
+                            };
+                            holder[0] = PendingWait.capture(operation, this);
+                            AstResumeStep resume = new AstResumeStep() {
+                                public Object resume(VirtualFrame saved, Object input) {
+                                    try { return holder[0].resume(); }
+                                    catch (PendingWait cut) { throw new AstCapture(cut, SynchronousMasking.current(force)).append(this); }
+                                }
+                            };
+                            SavedGuestContinuation initial = new AstCapture(holder[0], SynchronousMasking.current(this))
+                                .append(resume).freeze(this, frame.materialize());
+                            Object parked = force.drainStack(initial, null, true);
+                            var continuation = assertInstanceOf(SavedGuestContinuation.class, parked);
+                            assertSame(holder[0], PendingWait.of(continuation));
+                            assertEquals(1, attempts.get());
+                            ready.set(true);
+                            assertEquals(42L, force.drainStack(continuation, null, true));
+                            return Unit.INSTANCE;
+                        } finally { threads.leaveCurrent(); }
+                    }
+                };
+                assertSame(Unit.INSTANCE, Calls.target(root.getCallTarget(), new Object[]{0L}));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void pendingDelimitedCatchRetainsMasksAnnotationsAndAWaitingHandler() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads();
+            threads.enterCurrent(null, true, true, null); threads.installSuspensionBoundary(new GuestWakePort());
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var state = new CoreRepresentation(CoreKind.VOID, false, false, List.of(), null, null, null, null, null);
+                var value = new CoreRepresentation(CoreKind.OBJECT, false, false, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
+                var shape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, false, false, value.getPrimReps(), List.of(state, value), null, null, null, null), language);
+                var bodyCell = new ManagedMVar(); var handlerCell = new ManagedMVar();
+                var payload = new Object(); var annotation = new Object();
+                var bodies = new AtomicInteger(); var handlers = new AtomicInteger();
+                class Waiting extends GuestRoot {
+                    final boolean handler;
+                    Waiting(boolean handler) {
+                        super(language, new FrameLayout().build()); this.handler = handler;
+                        configureEntry(handler ? new boolean[]{false, false} : new boolean[]{false}, false); configureTupleResult(shape);
+                    }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    private Object answer(Object result) {
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this));
+                        assertEquals(handler ? List.of() : List.of(annotation), StackAnnotations.current(this).values());
+                        var tuple = shape.getLayout().create(); shape.getLayout().setObject(tuple, 0, result); return tuple;
+                    }
+                    @Override public Object execute(VirtualFrame frame) {
+                        if (handler) { handlers.incrementAndGet(); assertSame(payload, frame.getArguments()[1]); }
+                        else bodies.incrementAndGet();
+                        try { return answer((handler ? handlerCell : bodyCell).take(this, true, payload)); }
+                        catch (PendingWait wait) {
+                            AstResumeStep resume = new AstResumeStep() {
+                                public Object resume(VirtualFrame saved, Object input) {
+                                    try { return answer(wait.resume()); }
+                                    catch (PendingWait next) { throw new AstCapture(next, SynchronousMasking.current(Waiting.this)).append(this); }
+                                    catch (AsyncBlocked delivered) { throw new AsyncDelivery(delivered.getRequest(), Waiting.this); }
+                                }
+                            };
+                            return new AstCapture(wait, SynchronousMasking.current(this)).append(resume).freeze(this, frame.materialize());
+                        }
+                    }
+                }
+                var body = new Closure(null, 1, new Waiting(false).getCallTarget());
+                var handler = new Closure(null, 2, new Waiting(true).getCallTarget());
+                class Scoped extends GuestRoot {
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    final boolean annotated;
+                    final Object action;
+                    Scoped(boolean annotated, Object action) {
+                        super(language, new FrameLayout().build()); this.annotated = annotated; this.action = action;
+                        configureEntry(new boolean[]{false}, false); configureTupleResult(shape);
+                    }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        try { return annotated ? site.annotated(frame, annotation, action, Unit.INSTANCE, shape)
+                            : site.caught(frame, action, handler, Unit.INSTANCE, shape); }
+                        catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+                    }
+                }
+                var annotated = new Closure(null, 1, new Scoped(true, body).getCallTarget());
+                var caught = new Closure(null, 1, new Scoped(false, annotated).getCallTarget());
+                var root = new GuestRoot(language, new FrameLayout().build()) {
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    @Child private Force force = new Force(new Metrics(false));
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        if (frame.getArguments().length > 1) return force.drainStack((SavedGuestContinuation) frame.getArguments()[1], shape);
+                        try {
+                            // A genuine local spill can later reach a pending operation; its completion shape is still local.
+                            return site.captured(frame, shape, () -> {
+                                throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this))
+                                    .append((saved, input) -> site.masked(saved, caught, Unit.INSTANCE, shape, MaskingState.MASKED_INTERRUPTIBLE));
+                            });
+                        } catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+                    }
+                };
+                // A local IO value's tuple need not equal its enclosing function's eventual IO Unit result.
+                var enclosingShape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, false, false, List.of(), List.of(state), null, null, null, null), language);
+                root.configureTupleResult(enclosingShape);
+                Object parked = Calls.target(root.getCallTarget(), new Object[]{0L});
+                var first = assertInstanceOf(SavedGuestContinuation.class, parked);
+                var wait = PendingWait.of(first); assertNotNull(wait); assertEquals(MaskingState.MASKED_INTERRUPTIBLE, wait.mask);
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); assertEquals(List.of(), StackAnnotations.current(root).values());
+                wait.rescued = true; // Accepted-selection model; the real collector is qualified by the ordinary application.
+                parked = Calls.target(root.getCallTarget(), new Object[]{0L, first});
+                var handlerSaved = assertInstanceOf(SavedGuestContinuation.class, parked);
+                assertNotSame(wait, PendingWait.of(handlerSaved));
+                assertEquals(1, bodies.get()); assertEquals(1, handlers.get());
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); assertEquals(List.of(), StackAnnotations.current(root).values());
+                assertTrue(handlerCell.tryPut(42L));
+                var answer = assertInstanceOf(HandoffStorage.class, Calls.target(root.getCallTarget(), new Object[]{0L, handlerSaved}));
+                assertEquals(42L, shape.getLayout().getObject(answer, 0));
+                assertEquals(1, bodies.get()); assertEquals(1, handlers.get());
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); assertEquals(List.of(), StackAnnotations.current(root).values());
+                assertTrue(bodyCell.tryPut(7L)); assertEquals(7L, bodyCell.tryTake().getValue());
+            } finally { threads.leaveCurrent(); context.leave(); }
         }
     }
 

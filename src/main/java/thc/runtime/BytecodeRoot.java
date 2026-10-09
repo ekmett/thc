@@ -3357,8 +3357,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class DelimitedOnly {
-        @Specialization public static DelimitedCut capture(AbstractTruffleException failure) {
+        @Specialization public static Object capture(AbstractTruffleException failure) {
             if (failure instanceof DelimitedCut cut) return cut;
+            if (failure instanceof CapturedCallSuspension captured) return CallSuspensionOnly.captured(captured.getSegment());
             throw failure;
         }
     }
@@ -3382,14 +3383,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object invoke(VirtualFrame frame, String name, TupleShape shape,
                 Language language, Metrics metrics, Object first, Object second, Object state,
                 @Cached(value = "create(language, metrics)", neverDefault = true) DelimitedActionSite site) {
-            return switch (name) {
+            try { return switch (name) {
                 case "annotateStack#" -> site.annotated(frame, first, second, state, shape);
                 case "prompt#" -> site.prompt(frame, first, second, state, shape);
                 case "catch#" -> site.caught(frame, first, second, state, shape);
                 case "maskAsyncExceptions#" -> site.masked(frame, first, state, shape, MaskingState.MASKED_INTERRUPTIBLE);
                 case "maskUninterruptible#" -> site.masked(frame, first, state, shape, MaskingState.MASKED_UNINTERRUPTIBLE);
                 default -> site.masked(frame, first, state, shape, MaskingState.UNMASKED);
-            };
+            }; } catch (AstCapture cut) {
+                MaskingState mask = SynchronousMasking.current(site);
+                AstContinuation saved = cut.freeze((GuestRoot) site.getRootNode(), frame.materialize());
+                throw new CapturedCallSuspension(new CallSegment(saved, mask, mask, shape));
+            }
         }
         public static DelimitedActionSite create(Language language, Metrics metrics) {
             return new DelimitedActionSite(language, metrics);

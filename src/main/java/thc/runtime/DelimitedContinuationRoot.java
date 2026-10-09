@@ -19,6 +19,7 @@ final class DelimitedContinuationRoot extends GuestRoot {
     @Override public long bloom(VirtualFrame frame) { return (Long) frame.getArguments()[0] | mask; }
     @Override public Object execute(VirtualFrame frame) {
         requireVoidCarrier(frame.getArguments()[2]);
-        return stack.resume(site, frame.materialize(), frame.getArguments()[1]);
+        try { return stack.resume(site, frame.materialize(), frame.getArguments()[1]); }
+        catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
     }
 }

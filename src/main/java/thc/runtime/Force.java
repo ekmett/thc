@@ -287,7 +287,7 @@ public final class Force extends Node {
                     };
                     outcome = answer == RETRY ? null : new ChildResume(answer, null);
                 } catch (ThunkSuspended suspension) {
-                    if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null) {
+                    if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null && PendingWait.of(suspension) == null) {
                         spilled = true; outcome = null;
                     } else if (suspension.getThunk() == current && suspension.getAsyncRequest() != null && canUnwindCaller(parked.peekLast(), drainSpills)) {
                         outcome = unwindCaller(parked.peekLast(), current, suspension.getAsyncRequest());
@@ -296,7 +296,7 @@ public final class Force extends Node {
                         throw suspension;
                     }
                 } catch (CallSegmentSuspended suspension) {
-                    if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null) {
+                    if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null && PendingWait.of(suspension) == null) {
                         spilled = true; outcome = null;
                     } else if (suspension.getSegment() == current && suspension.getAsyncRequest() != null && canUnwindCaller(parked.peekLast(), drainSpills)) {
                         outcome = unwindCaller(parked.peekLast(), current, suspension.getAsyncRequest());

@@ -7323,9 +7323,12 @@ public final class BytecodeProgram implements ExecutableProgram {
                         b.beginTryCatch(); b.beginStaticStoreObject(result); b.beginDelimitedBoundary(name, shape, language, metrics);
                         operands.get(0).emit(e); if (operands.size() == 3) operands.get(1).emit(e); else b.emitLoadNull();
                         operands.getLast().emit(e); b.endDelimitedBoundary(); b.endStaticStoreObject();
-                        b.beginBlock(); b.beginStaticStoreObject(result); beginAnnotationYield(e);
-                        b.beginDelimitedOnly(); b.emitLoadException(); b.endDelimitedOnly(); endAnnotationYield(e);
-                        b.endStaticStoreObject(); b.endBlock(); b.endTryCatch();
+                        b.beginBlock();
+                        var marker = b.createLocal("delimited boundary suspension", FrameSlotKind.Object);
+                        b.beginStaticStoreObject(marker); b.beginDelimitedOnly(); b.emitLoadException(); b.endDelimitedOnly(); b.endStaticStoreObject();
+                        b.beginStaticStoreObject(result); b.beginResumeApplication(); b.emitStaticLoadObject(marker);
+                        beginAnnotationYield(e); b.emitStaticLoadObject(marker); endAnnotationYield(e);
+                        b.endResumeApplication(); b.endStaticStoreObject(); b.endBlock(); b.endTryCatch();
                         b.beginConsumeDelimited(slots); b.emitStaticLoadObject(result); b.endConsumeDelimited(); b.endBlock();
                     }
                 }
