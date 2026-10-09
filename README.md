@@ -39,6 +39,7 @@ that information around long enough to use it.
 
 For native Windows, use the [PowerShell build and test guide](docs/windows.md).
 It lists the required tools and current platform limits.
+Linux x86-64 developers can also use the [Nix environment and OCI toolchain image](docs/nix.md).
 
 You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16**,
 **JAM-patched GraalVM 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
