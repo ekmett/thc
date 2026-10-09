@@ -273,6 +273,9 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         }
     }
     private void follow(List<Object> expression, Map<String,Map<String,Object>> selected) {
+        // Complete the selected signature spine while its preparation owner
+        // still serializes shared source dictionaries, including terminal RHSs.
+        if (expression instanceof CoreBindingBody body) expression = body.materialize();
         if (expression.isEmpty()) return;
         if (Objects.equals(expression.getFirst(), "var")) {
             String next = (String) expression.get(1);

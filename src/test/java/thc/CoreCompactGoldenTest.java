@@ -44,6 +44,42 @@ class CoreCompactGoldenTest {
         assertEquals(0, format.debug());
     }
     @SuppressWarnings("unchecked")
+    @Test void looseConsumerInventoriesKeepUnselectedBodiesCold() throws Exception {
+        var units = CoreUnitDirectory.read(Map.of("format", "thc-core-packages", "schema", 1L,
+            "ghc", "9.14.1", "units", List.of()));
+        for (String encoding : List.of("stored", "deflated", "mixed")) {
+            var path = directory.resolve("cbd-module-v1-" + encoding + ".cbd");
+            try (var sources = units.open(false)) {
+                var module = sources.consumer(path, "");
+                var bindings = (List<Map<String,Object>>) module.get("bindings");
+                assertEquals(2, bindings.size());
+                var answerBinding = bindings.stream().filter(b -> b.get("id").equals("main:CBDGolden.answer")).findFirst().orElseThrow();
+                var identityBinding = bindings.stream().filter(b -> b.get("id").equals("main:CBDGolden.identity")).findFirst().orElseThrow();
+                var answer = assertInstanceOf(CoreBindingBody.class, answerBinding.get("expr"));
+                var identity = assertInstanceOf(CoreBindingBody.class, identityBinding.get("expr"));
+                assertEquals("lit", answer.get(0));
+                assertEquals("lam", identity.get(0));
+                assertFalse(answer.isMaterialized());
+                assertFalse(identity.isMaterialized());
+                assertEquals(List.of("lit", "int", "42"), answer.subList(0, 3));
+                assertTrue(answer.isMaterialized());
+                assertFalse(identity.isMaterialized());
+                var lambdaOrigin = (CoreCompactRecords.Origin) ((Map<?,?>) identity.get(3)).get("compactOrigin");
+                var bindingOrigin = (CoreCompactRecords.Origin) identityBinding.get("compactOrigin");
+                assertEquals(bindingOrigin.getBindingOffset(), lambdaOrigin.getBindingOffset());
+                assertEquals("identity", lambdaOrigin.getDebug().name(lambdaOrigin.getBindingOffset(), 0));
+                var formal = (Map<?,?>) ((List<?>) identity.get(1)).getFirst();
+                assertEquals(List.of("var", formal.get("id")), ((List<?>) identity.get(2)).subList(0, 2));
+            }
+            CoreBindingBody closed;
+            try (var sources = units.open(false)) {
+                var bindings = (List<Map<String,Object>>) sources.consumer(path, "").get("bindings");
+                closed = assertInstanceOf(CoreBindingBody.class, bindings.getFirst().get("expr"));
+            }
+            assertThrows(IllegalStateException.class, closed::materialize);
+        }
+    }
+    @SuppressWarnings("unchecked")
     @Test void nativeProducerStoredDeflatedAndMixedGoldensKeepSelectedRecordsAndLazyDebug() throws Exception {
         var expected = (Map<String, Object>) Json.parse(Files.readString(directory.resolve("cbd-module-v1.json")));
         var expectedSection = Objects.requireNonNull(new CoreSources(expected).binding(

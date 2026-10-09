@@ -127,7 +127,9 @@ public final class CoreUnitDirectory {
                     targetLayout = candidate;
                 }
                 var bindings = new ArrayList<Map<String,Object>>();
-                file.visitBindingOffsets(offset -> bindings.add(records.binding(offset)));
+                // Full verification still decodes every RHS, including unselected
+                // malformed records. Ordinary admission retains only cold bodies.
+                file.visitBindingOffsets(offset -> bindings.add(verifyArtifacts ? records.binding(offset) : records.coldBinding(offset)));
                 result.put("bindings", bindings);
                 return result;
             } catch (Throwable failure) { return rethrow(failure); }

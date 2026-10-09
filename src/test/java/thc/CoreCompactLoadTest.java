@@ -260,6 +260,80 @@ class CoreCompactLoadTest {
             }
         }
     }
+    @Test void concurrentLooseSignatureSelectionOwnsBlobDecodingAlongsideDemand() throws Exception {
+        var paths = new ArrayList<String>();
+        for (String name : List.of("Left", "Right", "Demand")) {
+            var model = new Model(name);
+            model.function("entry", out -> {
+                if (name.equals("Demand")) out.literal(7);
+                else {
+                    out.expr(5); out.expr(1); out.text("indexWord8OffAddr#"); out.u(2);
+                    out.expr(2); out.write(12);
+                    var bytes = name.getBytes(StandardCharsets.UTF_8); out.u(bytes.length); out.writeBytes(bytes);
+                    out.literal(0); out.u(2); out.writeBytes(new byte[]{2, 0, 2, 0, 0, 0});
+                }
+            });
+            model.function("unused", out -> out.write(255));
+            model.write(name, false); paths.add(directory.resolve(name + ".cbd").toString());
+        }
+        var input = document(CoreFormatTestSupport.request(paths, "unit:Demand.entry", "ast", false, false, false));
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            var owner = Language.currentState(null); owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                try (var program = new CoreUnitProgram(language, CoreModules.unitDirectory(input), input,
+                        "unit:Demand.entry", "ast", false, owner);
+                     var pool = java.util.concurrent.Executors.newFixedThreadPool(3)) {
+                    var loaded = new ProgramValue(program, language, owner, false);
+                    var start = new java.util.concurrent.CountDownLatch(1);
+                    var futures = new ArrayList<java.util.concurrent.Future<Boolean>>();
+                    for (String name : List.of("Left", "Right", "Demand")) futures.add(pool.submit(() -> {
+                        start.await(); context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+                        try {
+                            if (name.equals("Demand")) {
+                                return Objects.equals(7L, thc.runtime.Calls.target(program.hostEntryTarget(1),
+                                    new Object[]{program.entryValue("unit:Demand.entry"), new Object[]{5L}}));
+                            }
+                            var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+                            var selected = interop.invokeMember(loaded, "entry", "unit:" + name + ".entry");
+                            return interop.asLong(interop.execute(selected, 5L)) == name.charAt(0);
+                        } finally { owner.getThreads().leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
+                    }));
+                    start.countDown();
+                    for (var future : futures) assertTrue(future.get(10, java.util.concurrent.TimeUnit.SECONDS));
+                }
+            } finally { owner.getThreads().leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
+    @Test void looseConsumersDetachSelectedBodiesAndStrictlyRejectMalformedUnselectedBodies() throws Exception {
+        fixture();
+        var paths = List.of(directory.resolve("A.cbd").toString(), directory.resolve("B.cbd").toString());
+        for (String backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
+            var entry = context.eval("thc", CoreFormatTestSupport.request(paths, "unit:A.entry", backend, false, false, false));
+            assertEquals(7L, entry.execute(0).asLong());
+            assertEquals(6L, entry.execute(5).asLong());
+            var failure = assertThrows(RuntimeException.class, () -> context.eval("thc",
+                CoreFormatTestSupport.request(paths, "unit:A.entry", backend, false, false, true)));
+            assertTrue(failure.getMessage().contains("Invalid compact Core expression tag"), failure.getMessage());
+        }
+        var request = CoreModules.selectedModules(document(NativeCache.request(paths, "unit:A.entry")), "unit:A.entry");
+        var modules = (List<Map<String,Object>>) request.get("modules");
+        var bindings = modules.stream().flatMap(m -> ((List<Map<String,Object>>) m.get("bindings")).stream()).toList();
+        assertFalse(bindings.stream().anyMatch(b -> b.get("id").equals("unit:A.untouched")));
+        CoreFileMappings.shared.evictIdleBelow(directory);
+        Files.delete(directory.resolve("A.cbd")); Files.delete(directory.resolve("B.cbd"));
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            var owner = Language.currentState(null); owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new thc.runtime.Program(language, CoreModules.merge(modules));
+                assertEquals(6L, thc.runtime.Calls.target(program.hostEntryTarget(1),
+                    new Object[]{program.entryValue("unit:A.entry"), new Object[]{5L}}));
+            } finally { owner.getThreads().leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
     @Test void explicitVerificationWalksColdBindingsOnlyWhenRequested() throws Exception {
         var path = fixture();
         for (String backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
