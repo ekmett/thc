@@ -1,6 +1,8 @@
 # thc
 
 [![Build](https://github.com/ekmett/thc/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/ekmett/thc/actions/workflows/build.yml)
+[![docs: haddock+javadoc](https://img.shields.io/badge/docs-haddock%2Bjavadoc-blue?style=flat)](https://ekmett.github.io/thc/)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/w/ekmett/thc?style=flat)](https://github.com/ekmett/thc/activity)
 
 ![Haskell](https://img.shields.io/badge/Haskell-%235e5086.svg?style=for-the-badge&logo=haskell&logoColor=white)
 ![Gradle](https://img.shields.io/badge/Gradle-%2302303A.svg?style=for-the-badge&logo=Gradle&logoColor=white)
