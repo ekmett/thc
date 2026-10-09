@@ -479,7 +479,7 @@ class CoreOwnedPackageDispatchTest(unittest.TestCase):
             with self.subTest(symbol=call['target']['symbol'], mutation='stored State carrier'):
                 self.assertTrue(self.inspect(original, dict(bound, **{f'a{len(bound)-1}': LONG})).issues)
             # Callback release has its own pre-package protocol, not this flag.
-            if call['target']['symbol'] in core_original_foreign.OPERATIONS:
+            if call['target']['symbol'] != 'freeHaskellFunctionPtr':
                 disabled = dict(CAP, managedForeignCalls=[])
                 with self.subTest(symbol=call['target']['symbol'], mutation='disabled capability'):
                     self.assertTrue(self.inspect(original, bound, disabled).issues)

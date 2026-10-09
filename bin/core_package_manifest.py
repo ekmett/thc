@@ -1006,16 +1006,18 @@ def package_scalar_link(module, validate_archive=True):
         require(binder['unit'] == unit and binder['module'] == module.get('module') and binder['namespace'] == 'value' and binder not in binders, 'import binder')
         binders.append(binder)
         convention = item['convention']
+        typ(item['declaredType']); typ(item['normalizedType'])
+        text(item['symbol'])
+        emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
+        require(item['unit'] in (None, unit) and item['normalizationRole'] == 'representational',
+                'static import owner and normalization')
+        if native and _core_native_import(item, proof['expectedCalls']):
+            continue
         require((item['header'] is None or native and isinstance(item['header'], str) and
             item['header'] and '\0' not in item['header']) and
             item['unit'] in (None, unit) and (item['isFunction'] is True or native and convention == 'capi' and item['isFunction'] is False) and
             convention in (('ccall', 'capi') if native else ('ccall',)) and item['safety'] in (('unsafe', 'safe', 'interruptible') if native else ('unsafe',)) and
             item['normalizationRole'] == 'representational', 'static supported C import')
-        typ(item['declaredType']); typ(item['normalizedType'])
-        text(item['symbol'])
-        emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
-        if native and _core_native_import(item, proof['expectedCalls']):
-            continue
         if native and text(emitted['symbol']) in javascript:
             arguments, result = emitted['arguments'], emitted['result']
             require(item['symbol'] == emitted['symbol'] and emitted['unit'] == unit and
