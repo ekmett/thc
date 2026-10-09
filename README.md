@@ -33,6 +33,8 @@ specialize.
 GHC already knows quite a lot about compiling Haskell. The intention is to keep
 that information around long enough to use it.
 
+![Turbo Haskell](assets/turbo-haskell.png)
+
 ## Build and run
 
 For native Windows, use the [PowerShell build and test guide](docs/windows.md).
