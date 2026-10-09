@@ -32,6 +32,9 @@ endif()
 find_package(Python3 3.12 REQUIRED COMPONENTS Interpreter)
 find_program(GHC NAMES ghc-9.14.1 ghc HINTS "$ENV{HOME}/.ghcup/bin" REQUIRED)
 find_program(CABAL NAMES cabal-3.16.0.0 cabal HINTS "$ENV{HOME}/.ghcup/bin" REQUIRED)
+# Command-line overrides must also name the executable file in Ninja dependencies.
+find_program(resolved_cabal NAMES "${CABAL}" REQUIRED NO_CACHE)
+set(CABAL "${resolved_cabal}")
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env --unset=GHC_PACKAGE_PATH "GHC_ENVIRONMENT=-" "GHC=${GHC}" "GHC_PKG=${GHC_PKG}"
   sh -c ". ./bin/toolchain.sh; printf '%s\\n' \"$GHC\" \"$GHC_PKG\""
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" OUTPUT_VARIABLE toolchain

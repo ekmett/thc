@@ -161,20 +161,24 @@ public final class CoreCompactRecords {
         field(cursor, result, "info", () -> info(cursor));
         return result;
     }
-    public Map<String,Object> binding(long offset) {
+    public Map<String,Object> binding(long offset) { return binding(offset, false); }
+    /** Inventory a loose top-level binding without retaining its unused RHS. */
+    Map<String,Object> coldBinding(long offset) { return binding(offset, true); }
+    private Map<String,Object> binding(long offset, boolean cold) {
         try {
             return file.data(offset, cursor -> {
                 long previous = bindingOffset;
                 bindingOffset = offset;
                 try {
-                    var binding = binding(cursor);
+                    var binding = binding(cursor, cold);
                     require(!((String) binding.get("id")).startsWith("\u0000compact-local:"), "Compact top-level binding has local identity");
                     return binding;
                 } finally { bindingOffset = previous; }
             });
         } catch (Throwable failure) { return rethrow(failure); }
     }
-    private Map<String,Object> binding(CoreCompactCursor cursor) throws Throwable {
+    private Map<String,Object> binding(CoreCompactCursor cursor) throws Throwable { return binding(cursor, false); }
+    private Map<String,Object> binding(CoreCompactCursor cursor, boolean cold) throws Throwable {
         var origin = origin(cursor.getPosition());
         int tag = cursor.readByte();
         Object signature = MISSING;
@@ -196,8 +200,35 @@ public final class CoreCompactRecords {
         field(cursor, result, "entryStrictSource", () -> text(cursor));
         field(cursor, result, "joinValueArity", cursor::unsigned);
         field(cursor, result, "joinResultRep", () -> rep(cursor));
-        result.put("expr", expression(cursor));
+        result.put("expr", cold ? coldExpression(cursor) : expression(cursor));
         return result;
+    }
+    private CoreBindingBody coldExpression(CoreCompactCursor cursor) throws Throwable {
+        long rhsOffset = cursor.getPosition();
+        long ownerOffset = bindingOffset;
+        int tag = cursor.readByte();
+        String opcode = switch (tag) {
+            case 0 -> "var"; case 1 -> "prim"; case 2 -> "lit"; case 3 -> "lam"; case 4 -> "con";
+            case 5 -> "app"; case 6 -> "let"; case 7 -> "case"; case 8 -> "void"; case 9 -> "unsupported";
+            default -> throw error("Invalid compact Core expression tag: " + tag);
+        };
+        int extent = switch (tag) {
+            case 0, 1, 9 -> 3; case 2, 3, 4 -> 4; case 5 -> 7; case 6, 7 -> 5; case 8 -> 2;
+            default -> throw error("Invalid compact Core expression tag: " + tag);
+        };
+        // Only the opcode and outer extent are complete before decoding. Case
+        // metadata, for example, gains its binder after its scrutinee is read.
+        var header = new CoreBindingBody.Header(extent, Map.of(0, opcode), file.header().getContainsDelimitedControl());
+        return new CoreBindingBody(header, () -> {
+            try {
+                return file.data(rhsOffset, selected -> {
+                    long previous = bindingOffset;
+                    bindingOffset = ownerOffset;
+                    try { return expression(selected); }
+                    finally { bindingOffset = previous; }
+                });
+            } catch (Throwable failure) { return rethrow(failure); }
+        });
     }
     private Map<String,Object> hostSignature(CoreCompactCursor cursor) throws Throwable {
         return map("inputs", list(cursor, () -> hostType(cursor)), "result", hostType(cursor));

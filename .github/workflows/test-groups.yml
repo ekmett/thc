@@ -16,6 +16,7 @@ on:
         required: true
 permissions:
   contents: read
+  actions: read
 jobs:
   compile:
     uses: ./.github/workflows/test-common.yml

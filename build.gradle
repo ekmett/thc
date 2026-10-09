@@ -124,8 +124,6 @@ def generateSimdFamilies = tasks.register("generateSimdFamilies", Exec) {
     commandLine(python.get(), "bin/generate-simd-families.py", "--check")
 }
 sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
-// Older platform pins need this upstream ordinary Java API; see its provenance.
-sourceSets.main { java.srcDir("nih/pinned/jam-lifted") }
 def graalVersion = "25.3.4.1"
 def stockTruffleOption = providers.gradleProperty("thc.stockTruffle").orElse("false").get()
 requireBuild(stockTruffleOption in ["true", "false"]) { "thc.stockTruffle must be true or false" }
@@ -221,7 +219,6 @@ def processedMainResources = layout.buildDirectory.dir("generated/main/processor
 def processMainJava = tasks.register("processMainJava", JavaCompile) {
     dependsOn(generateSimdFamilies)
     source(fileTree("src/main/java") { include("**/*.java") })
-    source(fileTree("nih/pinned/jam-lifted") { include("**/*.java") })
     source(fileTree(layout.buildDirectory.dir("generated/simd/java")) { include("**/*.java") })
     classpath = sourceSets.main.compileClasspath
     options.annotationProcessorPath = configurations.annotationProcessor
@@ -248,7 +245,7 @@ tasks.named("javadoc", Javadoc) {
     options.charSet = "UTF-8"
     options.docEncoding = "UTF-8"
     options.addStringOption("-add-modules", "jdk.incubator.vector")
-    options.addStringOption("sourcepath", [file("src/main/java"), file("nih/pinned/jam-lifted"), processedMainSources.get().asFile,
+    options.addStringOption("sourcepath", [file("src/main/java"), processedMainSources.get().asFile,
         layout.buildDirectory.dir("generated/simd/java").get().asFile].collect { it.path }.join(File.pathSeparator))
     options.addBooleanOption("notimestamp", true)
     options.linkSource = true

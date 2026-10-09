@@ -26,6 +26,60 @@ Build the driver with
 `cabal build exe:thc`; from the THC checkout, invoke it with `cabal run thc -- ...`.
 See the [driver guide](driver.md) for commands, toolchain setup and examples.
 
+## A first program
+
+After building THC (see the [README](../README.md)), create a package outside the
+checkout with one executable. Use `base >= 4.22 && < 4.23`, the version shipped
+with GHC 9.14.1.
+
+```cabal
+-- hello.cabal
+cabal-version: 3.0
+name: hello
+version: 0.1.0.0
+build-type: Simple
+
+executable hello
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+```
+
+```haskell
+-- app/Main.hs
+module Main (main) where
+
+main :: IO ()
+main = do
+  putStrLn "Hello from Haskell on Truffle/Graal!"
+  print (sum [1 .. 100 :: Int])
+```
+
+From the package directory, run the driver built in the THC checkout (find it
+with `cabal list-bin exe:thc` there):
+
+```sh
+cd hello
+"$(cd /path/to/thc && cabal list-bin exe:thc)" run --thc-root /path/to/thc
+```
+
+Or, from the THC checkout:
+
+```sh
+cabal run thc -- run hello:exe:hello --project-dir /path/to/hello \
+  --thc-root "$PWD" --dist-dir /path/to/hello/dist-thc
+```
+
+Both commands print the greeting and `5050`. The first run also acquires Core
+for the bundled libraries, which takes longer. The second command names the
+component explicitly because it runs outside the application package.
+
+Build products go to `dist-thc/` relative to the directory where you invoke the
+driver. The second command sets `--dist-dir` to keep them with the application.
+`--project-dir` selects the Cabal project without changing the working directory;
+relative guest file paths also use the directory where you invoke the driver.
+
 ## Select a component
 
 `run` targets follow Cabal syntax: `PACKAGE:exe:NAME`, `PACKAGE:test:NAME`, or

@@ -30,6 +30,7 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlphaNum, isAscii)
+import Data.Either (fromRight)
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
@@ -37,8 +38,8 @@ import qualified Data.Text.Encoding as Text
 import Numeric (showHex)
 import System.Directory
   ( canonicalizePath, copyFileWithMetadata, createDirectory, createDirectoryIfMissing
-  , doesDirectoryExist, doesFileExist, executable, findExecutable, getFileSize
-  , getPermissions, listDirectory, removeDirectoryRecursive, removeFile, removePathForcibly, renameDirectory
+  , doesDirectoryExist, doesFileExist, doesPathExist, executable, findExecutable, getFileSize
+  , getPermissions, listDirectory, pathIsSymbolicLink, removeDirectoryRecursive, removeFile, removePathForcibly, renameDirectory
   , renameFile )
 import System.Environment (getEnv, getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
@@ -90,7 +91,7 @@ validateNativeImage root = do
       | all (hasArray metadata) ["DynamicSection", "ProgramHeaders", "DynamicSymbols", "Sections"] -> pure ()
     _ -> fail ("native image inspection requires JSON ELF metadata; set THC_LLVM_READOBJ to a compatible llvm-readobj (LLVM 20 is supported): " ++ inspector)
   _ <- nativeProfile
-  pure ()
+  void (jamRuntimeInputs =<< canonicalizePath jdk)
   where
     hasArray metadata key = case KM.lookup key metadata of Just (Array _) -> True; _ -> False
 
@@ -103,7 +104,7 @@ validateNativeImage root = do
 -- Failure removes the previous marker, retains previous artifacts, and reports
 -- @.native-image-failed@ containing command/output evidence until the next
 -- owned attempt. The result is
--- a dynamic ELF plus emitted sidecars, not static linking or cache evidence.
+-- an ELF plus the producer-declared resources and Jam distribution notices.
 buildNativeImage :: FilePath -> FilePath -> String -> FilePath -> IO ()
 buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
   createDirectoryIfMissing True suppliedOutput
@@ -148,7 +149,7 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
             ("THC_NATIVE_IMAGE_EXECUTABLE_NAME", "program"), ("THC_NATIVE_IMAGE_VECTOR_PROFILE", profile),
             ("JAVA_HOME", jdk), ("THC_LLVM_READOBJ", inspector)]
           environment = overrides ++ filter (\(key, _) -> notElem key (map fst overrides)) inherited
-      jam@(libraries, jamInputs) <- jamRuntimeInputs jdk
+      jam@(linkage, jamInputs) <- jamRuntimeInputs jdk
       hPutStrLn stderr ("Building native image for " ++ program ++ " in " ++ stage)
       status <- withFile (stage </> "build.stdout") WriteMode $ \stdoutLog ->
         withFile (stage </> "build.stderr") WriteMode $ \stderrLog ->
@@ -159,8 +160,10 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
       require (status == ExitSuccess) ("native image producer failed: " ++ show status)
       reported <- artifactReport (stage </> "build-artifacts.json")
       validateJamRuntime stage jam
-      let groups = reported ++ [("jam_runtime", ["program.jam"]),
-            ("shared_libraries", map ("program.jam" </>) libraries)]
+      let groups = reported ++ case linkage of
+            JamShared libraries -> [("jam_runtime", ["program.jam"]),
+              ("shared_libraries", map ("program.jam" </>) libraries)]
+            JamStatic -> [("jam_metadata", ["program.jam"])]
       require (elem "program" [normalise path | ("executables", paths) <- groups, path <- paths])
         "native image artifact report does not declare program as an executable"
       entries <- fmap concat $ forM groups $ \(kind, paths) ->
@@ -204,8 +207,10 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
             "program" .= program, "profile" .= profile, "binding" .= binding,
             "manifest" .= object ["path" .= manifest, "sha256" .= manifestHash],
             "nativeLibraries" .= (native :: Value), "artifacts" .= inventory,
-            "jamRuntimeInputs" .= [object ["path" .= source, "sha256" .= digest,
-              "output" .= ("artifacts" </> relative)] | (relative, source, digest) <- jamInputs]]
+            "jamLinkage" .= (case linkage of JamShared _ -> "shared" :: String; JamStatic -> "static"),
+            "jamRuntimeInputs" .= [object (["path" .= source, "sha256" .= digest] ++
+              maybe [] (\path -> ["output" .= ("artifacts" </> path)]) relative)
+              | (relative, source, digest) <- jamInputs]]
       atomicJson completion result
       ) report
     cleaned <- tryIOError (removeDirectoryRecursive stage)
@@ -219,23 +224,40 @@ nativeProfile = do
   require (elem selected ["resource-copy", "intrinsics"]) "native image profile must be resource-copy or intrinsics"
   pure selected
 
--- JAM currently emits its bundle outside BuildArtifacts. The packaged manifest
--- owns library membership; the original package also owns the copied notices.
-jamRuntimeInputs :: FilePath -> IO ([FilePath], [(FilePath, FilePath, String)])
+-- The installed provider owns the ordered linkage closure and legal notices.
+-- Static archives are build inputs; only notices have deployed counterparts.
+data JamLinkage = JamShared [FilePath] | JamStatic
+
+jamRuntimeInputs :: FilePath -> IO (JamLinkage, [(Maybe FilePath, FilePath, String)])
 jamRuntimeInputs jdk = do
-  manifest <- ownedFile "lib/jam/runtime-libraries.txt"
-  libraries <- runtimeManifest manifest
+  let declaration = jdk </> "lib/jam/native-image-libraries.txt"
+  exists <- doesPathExist declaration
+  link <- fromRight False <$> tryIOError (pathIsSymbolicLink declaration)
+  let static = exists || link
+  (linkage, native) <- if static then do
+    manifest <- ownedFile "lib/jam/native-image-libraries.txt"
+    libraries <- staticManifest manifest
+    archives <- forM libraries $ \name -> do
+      source <- ownedFile ("lib/jam/static" </> ("lib" ++ name ++ ".a"))
+      header <- withBinaryFile source ReadMode $ \handle -> BS.hGet handle 8
+      require (header == "!<arch>\n") ("native image JAM input is not a self-contained static archive: " ++ source)
+      pure (Nothing, source)
+    pure (JamStatic, (Nothing, manifest) : archives)
+  else do
+    manifest <- ownedFile "lib/jam/runtime-libraries.txt"
+    libraries <- runtimeManifest manifest
+    shared <- forM libraries $ \name -> do
+      source <- ownedFile ("lib/jam" </> name)
+      pure (Just ("program.jam" </> name), source)
+    pure (JamShared libraries, (Just "program.jam/runtime-libraries.txt", manifest) : shared)
   legal <- artifactTree jdk "legal/jam-vm"
-  let notices = [("program.jam/legal" </> makeRelative "legal/jam-vm" relative, source)
+  let notices = [(Just ("program.jam/legal" </> makeRelative "legal/jam-vm" relative), source)
         | (relative, source, False) <- legal, takeDirectory relative == "legal/jam-vm"]
   require (not (null notices)) "native image JAM package has no runtime notices"
-  native <- forM libraries $ \name -> do
-    source <- ownedFile ("lib/jam" </> name)
-    pure ("program.jam" </> name, source)
-  inputs <- forM (("program.jam/runtime-libraries.txt", manifest) : native ++ notices) $ \(relative, source) -> do
+  inputs <- forM (native ++ notices) $ \(relative, source) -> do
     digest <- hashFile source
     pure (relative, source, digest)
-  pure (libraries, inputs)
+  pure (linkage, inputs)
   where
     ownedFile relative = do
       tree <- artifactTree jdk relative
@@ -243,32 +265,58 @@ jamRuntimeInputs jdk = do
         [(_, source, False)] -> pure source
         _ -> fail ("native image JAM package input is not a file: " ++ relative)
 
-runtimeManifest :: FilePath -> IO [FilePath]
-runtimeManifest path = do
-  requireFile "native image JAM runtime manifest" path
+staticManifest :: FilePath -> IO [FilePath]
+staticManifest path = do
+  names <- libraryManifest path
+  require (take 1 names == ["jam-vm-static"] && all valid names)
+    ("native image JAM static manifest has invalid library names: " ++ path)
+  pure names
+  where
+    valid [] = False
+    valid (first : rest) = initial first && all (\c -> initial c || elem c ['.', '-']) rest
+    initial c = isAscii c && (isAlphaNum c || elem c ['_', '+'])
+
+libraryManifest :: FilePath -> IO [FilePath]
+libraryManifest path = do
+  requireFile "native image JAM library manifest" path
   names <- map stripCR . lines <$> readFile path
-  require (not (null names) && nub names == names && all valid names)
-    ("native image JAM runtime manifest has invalid library names: " ++ path)
+  require (not (null names) && nub names == names)
+    ("native image JAM manifest has empty or duplicate library names: " ++ path)
   pure names
   where
     stripCR name = case reverse name of '\r' : rest -> reverse rest; _ -> name
+
+runtimeManifest :: FilePath -> IO [FilePath]
+runtimeManifest path = do
+  names <- libraryManifest path
+  require (all valid names)
+    ("native image JAM runtime manifest has invalid library names: " ++ path)
+  pure names
+  where
     valid name = "lib" `isPrefixOf` name && length name > 3 &&
       all (\c -> isAscii c && (isAlphaNum c || elem c ['_', '+', '.', '-'])) name
 
-validateJamRuntime :: FilePath -> ([FilePath], [(FilePath, FilePath, String)]) -> IO ()
-validateJamRuntime stage (libraries, inputs) = do
+validateJamRuntime :: FilePath -> (JamLinkage, [(Maybe FilePath, FilePath, String)]) -> IO ()
+validateJamRuntime stage (linkage, inputs) = do
   tree <- artifactTree stage "program.jam"
   let files = Map.fromList [(relative, source) | (relative, source, False) <- tree]
       manifest = "program.jam/runtime-libraries.txt"
-  declared <- runtimeManifest (stage </> manifest)
-  require (declared == libraries) "native image JAM runtime manifest differs from its package"
+  case linkage of
+    JamShared libraries -> do
+      declared <- runtimeManifest (stage </> manifest)
+      require (declared == libraries) "native image JAM runtime manifest differs from its package"
+    JamStatic -> do
+      requireFile "native image JAM linkage declaration" (stage </> "program.jam/linkage.txt")
+      declared <- readFile (stage </> "program.jam/linkage.txt")
+      require (declared == "static\n") "native image JAM linkage declaration differs from its static package"
   forM_ inputs $ \(relative, source, digest) -> do
     current <- hashFile source
     require (current == digest) ("native image JAM package input changed during construction: " ++ source)
-    emitted <- maybe (fail ("native image JAM runtime output missing: " ++ relative)) pure (Map.lookup relative files)
-    unless (relative == manifest) $ do
-      actual <- hashFile emitted
-      require (actual == digest) ("native image JAM runtime output differs from its package: " ++ relative)
+    forM_ relative $ \path -> do
+      emitted <- maybe (fail ("native image JAM output missing: " ++ path)) pure (Map.lookup path files)
+      unless (path == manifest) $ do
+        actual <- hashFile emitted
+        require (actual == digest) ("native image JAM output differs from its package: " ++ path)
 
 -- The pinned producer report owns output membership, including non-library
 -- resource trees. Unknown categories are retained rather than silently lost.

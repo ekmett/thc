@@ -16,6 +16,8 @@ permissions:
   actions: read
 jobs:
   automation:
+    # Restore scheduled execution after the existing nightly completes qualification.
+    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/checks.yml
     with:
       cadence: nightly
@@ -128,7 +130,8 @@ jobs:
           matrix_status=0
           for handoff in false true; do
             for backend in ast bytecode; do
-              java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+              java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -Xss2m \
+                -Xshare:off -Xms256m -Xmx256m -XX:-UseCompactObjectHeaders -XX:+UnlockExperimentalVMOptions -XX:+UseJamGC \
                 "-Dthc.backend=$backend" "-Dthc.handoffSlabs=$handoff" \
                 -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
                 -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.MapCheck build/map/modules.txt build/map/oracle.tsv \
@@ -234,7 +237,8 @@ jobs:
           HANDOFF: ${{ matrix.handoff }}
         run: |
           set -euo pipefail
-          "$JAVA_HOME/bin/java" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+          "$JAVA_HOME/bin/java" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -Xss2m \
+            -Xshare:off -Xms256m -Xmx256m -XX:-UseCompactObjectHeaders -XX:+UnlockExperimentalVMOptions -XX:+UseJamGC \
             "-Dthc.handoffSlabs=$HANDOFF" -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' \
             thc.LibraryCheck build/libraries/cases.json "$BACKEND" \
             2>&1 | tee "build/libraries/check-$BACKEND-handoff-$HANDOFF.log"

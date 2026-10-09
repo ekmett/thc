@@ -309,10 +309,15 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 block = workflow.split("name: " + label, 1)[1].split("\n      - ", 1)[0]
                 self.assertIn("--add-modules=jdk.incubator.vector", block)
                 self.assertIn(entry, block)
+                for option in ("-Xshare:off", "-Xms256m", "-Xmx256m", "-XX:-UseCompactObjectHeaders",
+                               "-XX:+UnlockExperimentalVMOptions", "-XX:+UseJamGC"):
+                    self.assertIn(option, block)
+                self.assertNotIn("-XX:+UseCompactObjectHeaders", block)
                 self.assertNotIn("continue-on-error", block)
 
     def test_full_build_reports_independent_groups_and_never_prepares_every_fixture(self):
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
+        self.assertIn("permissions:\n  contents: read\n  actions: read\n", grouped)
         for filename in ("hourly.yml", "intensive.yml"):
             workflow = (WORKFLOW.parent / filename).read_text()
             self.assertEqual(2, workflow.count("uses: ./.github/workflows/test-groups.yml"))
@@ -406,10 +411,11 @@ class FastWorkflowGuardsTest(unittest.TestCase):
 
     def test_normal_jvm_jobs_acquire_and_verify_the_exact_jam_package(self):
         project = WORKFLOW.parents[2]
-        for filename in ("fast.yml", "intensive.yml", "windows.yml"):
+        for filename in ("fast.yml", "intensive.yml", "windows.yml", "docs.yml"):
             text = (WORKFLOW.parent / filename).read_text()
             self.assertIn("uses: ./.github/actions/jam", text)
             self.assertNotIn("graalvm/setup-graalvm", text)
+            self.assertNotIn("actions/setup-java", text)
         common = (WORKFLOW.parent / "test-common.yml").read_text()
         self.assertNotIn("release['GRAALVM_VERSION']", common)
         action = (project / ".github/actions/jam/action.yml").read_text()

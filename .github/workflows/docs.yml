@@ -37,11 +37,6 @@ jobs:
           ghc-version: '9.14.1'
           cabal-version: '3.16.0.0'
           cabal-update: true
-      # Documentation compiles declarations and runs Javadoc on Java 25.
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        with:
-          java-version: '25'
-          distribution: 'temurin'
       - uses: actions/cache@v6
         with:
           path: |
@@ -55,6 +50,8 @@ jobs:
           restore-keys: |
             docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-${{ hashFiles('thc.cabal', 'cabal.project', 'build.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-
             docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-
+      # Javadoc compiles declarations against the same Jam API as the runtime.
+      - uses: ./.github/actions/jam
       - name: Install Markdown renderer
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends pandoc
       - name: Generate and validate documentation only
