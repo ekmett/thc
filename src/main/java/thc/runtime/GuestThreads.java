@@ -451,7 +451,9 @@ public final class GuestThreads {
                 }
                 port.take();
             } finally {
-                if (owner.wait != null) { owner.wait.operation.cancel(); owner.wait = null; }
+                if (owner.wait != null) {
+                    owner.wait.abandon(); owner.wait.operation.cancel(); owner.wait = null;
+                }
             }
         }
     }
@@ -729,6 +731,7 @@ public final class GuestThreads {
     /** The sender waits on this token; safepoint observation is not delivery. */
     @TruffleBoundary public AsyncRequest send(long targetId, Object payload) {
         AsyncRequest request;
+        GuestThread waking = null;
         synchronized (this) {
             if (closed) throw new IllegalStateException("Guest context has closed");
             var target = findThread(targetId);
@@ -740,11 +743,13 @@ public final class GuestThreads {
                 request = new AsyncRequest(this, targetId, target.thread, payload, self); request.recipient = target;
                 if (self) target.queue.addFirst(request); else target.queue.addLast(request);
                 target.pending = target.claimed == null;
+                PendingWait waiting = target.wait;
+                if (waiting != null && waiting.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
+                    target.waitReady = true; waking = target;
+                }
             }
         }
-        if (request.recipient != null && request.recipient.wait != null && request.recipient.wait.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
-            request.recipient.waitReady = true; wakeSuspended(request.recipient);
-        }
+        if (waking != null) wakeSuspended(waking);
         var thread = request.target;
         if (thread == null || request.forceSelf) return request;
         try { wake.wake(thread); }
@@ -856,18 +861,41 @@ public final class GuestThreads {
     /** Resume the same logical request after the sender's caught continuation resumes. */
     public void resume(AsyncRequest request) {
         Thread thread;
+        GuestThread waking = null;
         synchronized (this) {
             if (request.getState() != AsyncRequestState.PAUSED) return;
             var target = findThread(request.targetId);
             if (closed || target == null || target.thread != request.target) { request.transition(AsyncRequestState.TARGET_FINISHED); return; }
             noAsyncRequestPublished.invalidate("An async request is being resumed");
             target.queue.addLast(request); request.transition(AsyncRequestState.PENDING); target.pending = target.claimed == null; thread = target.thread;
+            PendingWait waiting = target.wait;
+            if (waiting != null && waiting.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
+                target.waitReady = true; waking = target;
+            }
         }
-        if (request.recipient != null && request.recipient.wait != null && request.recipient.wait.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
-            request.recipient.waitReady = true; wakeSuspended(request.recipient);
-        }
+        if (waking != null) wakeSuspended(waking);
         try { wake.wake(thread); }
         catch (Throwable failure) { if (failure instanceof ThreadDeath || request.fail(failure)) throw propagate(failure); }
+    }
+    /** A collector rescue uses the ordinary async origin and catch acknowledgement, without self-throw mask bypass. */
+    synchronized AsyncRequest rescue(PendingWait wait, Object payload, Node node) {
+        GuestThread target = wait.owner;
+        if (closed || currentSlot.get() != target || activeIdentity.get() != target.identity || target.wait != wait)
+            throw fault("Blocked-owner rescue left its logical target");
+        if (maskingState.get() == MaskingState.MASKED_UNINTERRUPTIBLE) {
+            target.waitReady = false;
+            return null;
+        }
+        if (target.claimed != null) throw fault("Blocked-owner rescue crossed an active async delivery");
+        // An earlier sender wins the same operation-lock arbitration without duplicating delivery.
+        if (target.queue.isEmpty()) {
+            noAsyncRequestPublished.invalidate("A collector rescue is being published");
+            AsyncRequest request = new AsyncRequest(this, target.identity.logicalId, target.thread, payload);
+            request.recipient = target; target.queue.addLast(request); target.pending = true;
+        }
+        AsyncRequest claimed = claim(target, node, true);
+        if (claimed == null) throw fault("Blocked-owner rescue was not claimable by its target");
+        return claimed;
     }
     /** Only a language-owned runner can evacuate its physical stack. */
     static GuestThread executingCurrent(Node node) { return node == null ? null : current(node).currentSlot.get(); }

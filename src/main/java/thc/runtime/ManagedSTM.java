@@ -235,8 +235,9 @@ public final class ManagedSTM implements AutoCloseable {
                     var request = checkpoint == null ? null : GuestThreads.pollCurrentWithoutYield(checkpoint, true);
                     if (request != null) { cancelLocked(); throw new AsyncBlocked(request, checkpoint); }
                     if (suspension != null && suspension.rescued) {
-                        cancelLocked();
-                        throw new GuestException(java.util.Objects.requireNonNull(blockedException), checkpoint, true);
+                        AsyncRequest rescue = suspension.owner.identity.owner.rescue(suspension,
+                            java.util.Objects.requireNonNull(blockedException), checkpoint);
+                        if (rescue != null) { cancelLocked(); throw new AsyncBlocked(rescue, checkpoint); }
                     }
                     if (suspension == null) suspension = PendingWait.capture(this, checkpoint);
                     if (suspension != null && GuestThreads.suspendingCurrent(checkpoint) == suspension.owner) throw suspension;

@@ -152,8 +152,11 @@ public final class ManagedMVar {
                         throw new AsyncBlocked(interruption, checkpoint);
                     }
                     if (suspension != null && suspension.rescued) {
-                        check(cancel());
-                        throw new GuestException(java.util.Objects.requireNonNull(blockedException), checkpoint, true);
+                        AsyncRequest rescue = suspension.owner.identity.owner.rescue(suspension,
+                            java.util.Objects.requireNonNull(blockedException), checkpoint);
+                        if (rescue != null) {
+                            check(cancel()); throw new AsyncBlocked(rescue, checkpoint);
+                        }
                     }
                     if (suspension == null) suspension = PendingWait.capture(this, checkpoint);
                     if (suspension != null && GuestThreads.suspendingCurrent(checkpoint) == suspension.owner) throw suspension;

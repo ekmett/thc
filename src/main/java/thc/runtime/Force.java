@@ -72,7 +72,7 @@ public final class Force extends Node {
                 observed = savedGuestContinuation(original.getValue());
             }
             PendingWait pending = PendingWait.of(observed);
-            if (pending != null && pending.owner != GuestThreads.executingCurrent(this)) {
+            if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) {
                 awaitOwner(original); continue;
             }
             // The continuation owns its callee frame; never materialize this caller.
@@ -172,6 +172,12 @@ public final class Force extends Node {
         throw fault("Async IO handler cut requires a captured thunk or call segment");
     }
 
+    private boolean asyncUnwind(Object input) {
+        AsyncRequest request = input instanceof AstChildSuspension suspended ? suspended.getRequest() :
+            input instanceof ChildResume child && child.getFailure() instanceof AsyncDelivery delivered ? delivered.getRequest() : null;
+        return request != null && request.getTarget() == Thread.currentThread() &&
+            request.getTargetId() == GuestThreads.current(this).currentId() && request.getState() == AsyncRequestState.CLAIMED;
+    }
     private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics) {
         boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;
         while (true) {
@@ -198,8 +204,12 @@ public final class Force extends Node {
                             else {
                                 continuation = savedGuestContinuation(original.getValue());
                                 if (continuation == null) throw fault("Suspended thunk has no guest continuation");
-                                original.setValue(null);
-                                original.setOwner(Thread.currentThread()); original.setState(1); claimedHere = true; claim = 0;
+                                PendingWait pending = PendingWait.of(continuation);
+                                if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this) && !asyncUnwind(resumeValue)) claim = 1;
+                                else {
+                                    original.setValue(null);
+                                    original.setOwner(Thread.currentThread()); original.setState(1); claimedHere = true; claim = 0;
+                                }
                             }
                         }
                         case 1 -> claim = original.getOwner() == Thread.currentThread() ? 2 : 1;
@@ -248,7 +258,7 @@ public final class Force extends Node {
                 }
                 if (child instanceof Thunk thunk) {
                     PendingWait pending = PendingWait.of(thunk.getValue());
-                    if (pending != null && pending.owner != GuestThreads.executingCurrent(this)) awaitOwner(thunk);
+                    if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) awaitOwner(thunk);
                 }
                 parked.addLast(new Parked(leaf, leafContinuation));
                 if (drainSpills) {
@@ -459,10 +469,14 @@ public final class Force extends Node {
                             else {
                                 continuation = savedGuestContinuation(segment.getValue());
                                 if (continuation == null) throw fault("Suspended call segment has no guest continuation");
-                                segment.enterInitial(SynchronousMasking.current(this));
-                                resumeMask = segment.getLogicalMask();
-                                segment.setValue(null);
-                                segment.setOwner(Thread.currentThread()); segment.setState(1); claimedHere = true; claim = 0;
+                                PendingWait pending = PendingWait.of(continuation);
+                                if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this) && !asyncUnwind(resumeValue)) claim = 4;
+                                else {
+                                    segment.enterInitial(SynchronousMasking.current(this));
+                                    resumeMask = segment.getLogicalMask();
+                                    segment.setValue(null);
+                                    segment.setOwner(Thread.currentThread()); segment.setState(1); claimedHere = true; claim = 0;
+                                }
                             }
                         }
                         case 1 -> claim = segment.getOwner() == Thread.currentThread() ? 2 : 1;
@@ -474,6 +488,11 @@ public final class Force extends Node {
                     case 1 -> awaitCallOwner(segment);
                     case 2 -> throw fault("Blackhole: cyclic call segment entered while evaluating");
                     case 3 -> { return RETRY; }
+                    case 4 -> {
+                        Object child = suspendedChild(continuation);
+                        if (child instanceof Thunk thunk) awaitOwner(thunk);
+                        else throw fault("Private call segment belongs to another suspended guest");
+                    }
                 }
             } catch (Throwable failure) {
                 if (claimedHere) suspendCallOwned(segment);
@@ -666,6 +685,8 @@ public final class Force extends Node {
         boolean previous = safepoint.setAllowSideEffects(false);
         try {
             synchronized (thunk.getMonitor()) {
+                PendingWait pending = PendingWait.of(continuation);
+                if (pending != null) pending.retainUpdate(thunk);
                 thunk.setValue(continuation.getIdentity()); thunk.setTarget(null); thunk.setEnvironment(null);
                 thunk.setOwner(null); thunk.setState(5); thunk.notifyUpdate();
             }
@@ -701,7 +722,8 @@ public final class Force extends Node {
         DemandWait(Thunk thunk) { this.thunk = thunk; }
         private boolean readyLocked() {
             int state = thunk.getState();
-            return state != 1 && (state != 5 || PendingWait.of(thunk.getValue()) == null);
+            PendingWait pending = state == 5 ? PendingWait.of(thunk.getValue()) : null;
+            return state != 1 && (pending == null || pending.abandoned());
         }
         void changedLocked() { if (readyLocked() && suspension != null) suspension.wake(); }
         private Object await() throws InterruptedException {

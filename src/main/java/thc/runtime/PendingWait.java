@@ -18,9 +18,11 @@ public final class PendingWait extends AbstractTruffleException implements Inter
     final long generation;
     final MaskingState mask;
     volatile boolean rescued;
-    private PendingWait(Operation operation, GuestThreads.GuestThread owner, Node node) {
+    private java.util.ArrayList<Thunk> updates;
+    private volatile boolean abandoned;
+    PendingWait(Operation operation, GuestThreads.GuestThread owner, MaskingState mask, Node node) {
         super("Internal guest pending-operation suspension", null, 0, node);
-        this.operation = operation; this.owner = owner; mask = SynchronousMasking.current(node);
+        this.operation = operation; this.owner = owner; this.mask = mask;
         owner.waitReady = false;
         if (owner.waitGeneration == Long.MAX_VALUE) throw new RuntimeFault("Guest wait generation exhausted");
         generation = ++owner.waitGeneration;
@@ -28,11 +30,33 @@ public final class PendingWait extends AbstractTruffleException implements Inter
     }
     static PendingWait capture(Operation operation, Node node) {
         GuestThreads.GuestThread owner = GuestThreads.suspendingCurrent(node);
-        return owner == null ? null : new PendingWait(operation, owner, node);
+        return owner == null ? null : new PendingWait(operation, owner, SynchronousMasking.current(node), node);
     }
+    synchronized void retainUpdate(Thunk thunk) {
+        if (abandoned) throw new RuntimeFault("Suspended guest evaluator terminated");
+        if (updates == null) updates = new java.util.ArrayList<>();
+        for (Thunk update : updates) if (update == thunk) return;
+        updates.add(thunk);
+    }
+    /** Host terminal cleanup cannot leave an independently retained shared update waiting for a dead evaluator. */
+    void abandon() {
+        java.util.ArrayList<Thunk> pending;
+        synchronized (this) { abandoned = true; pending = updates; updates = null; }
+        if (pending == null) return;
+        for (Thunk thunk : pending) synchronized (thunk.getMonitor()) {
+            if (thunk.getState() == 5 && of(thunk.getValue()) == this) {
+                thunk.setValue(new RuntimeFault("Suspended guest evaluator terminated"));
+                thunk.setTarget(null); thunk.setEnvironment(null); thunk.setOwner(null); thunk.setState(3); thunk.notifyUpdate();
+            }
+        }
+    }
+    boolean abandoned() { return abandoned; }
     public Object resume() {
         boolean captured = false;
-        try { return operation.resume(); }
+        try {
+            if (abandoned) throw new RuntimeFault("Suspended guest evaluator terminated");
+            return operation.resume();
+        }
         catch (PendingWait cut) { captured = true; throw cut; }
         finally { if (!captured && owner.wait == this) owner.wait = null; }
     }
