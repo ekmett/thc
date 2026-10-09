@@ -26,18 +26,30 @@ public final class AsyncContinuations {
         if (!caught) return;
         AsyncRequest request = continuation.asyncRequest();
         if (request == null) return;
-        if (request.getTarget() != Thread.currentThread() || request.getState() != AsyncRequestState.CLAIMED)
-            throw new IllegalStateException("Async delivery left its target thread or was already consumed");
+        requireTarget(request);
+        try { continuation.discard(); }
+        catch (RuntimeException | Error cleanup) { throw cleanupFailure(request, cleanup, node); }
         throw new AsyncDelivery(request, node);
     }
     @TruffleBoundary public static RuntimeException uncaught(AsyncRequest request, Node node) {
-        if (request.getTarget() != Thread.currentThread() || request.getState() != AsyncRequestState.CLAIMED)
-            throw new IllegalStateException("Uncaught async request left its target or was already settled");
+        throw uncaughtFailure(request, node);
+    }
+    private static RuntimeException uncaughtFailure(AsyncRequest request, Node node) {
+        requireTarget(request);
         boolean foreignCallback = request.inForeignCallback();
         request.acknowledge();
         GuestException guest = new GuestException(request.getPayload(), node);
-        if (foreignCallback) throw new ForeignCallbackAsyncFailure(request.getPayload(), guest, node);
-        throw guest;
+        return foreignCallback ? new ForeignCallbackAsyncFailure(request.getPayload(), guest, node) : guest;
+    }
+    /** Terminal delivery still settles its sender if retiring owned work fails. */
+    @TruffleBoundary static RuntimeException cleanupFailure(AsyncRequest request, Throwable cleanup, Node node) {
+        var failure = uncaughtFailure(request, node);
+        failure.addSuppressed(cleanup);
+        return failure;
+    }
+    private static void requireTarget(AsyncRequest request) {
+        if (request.getTarget() != Thread.currentThread() || request.getState() != AsyncRequestState.CLAIMED)
+            throw new IllegalStateException("Uncaught async request left its target or was already settled");
     }
     public static Object publicResult(Object result, Node node) {
         SavedGuestContinuation ast = result instanceof SavedGuestContinuation saved ? saved :
@@ -45,6 +57,9 @@ public final class AsyncContinuations {
         if (ast != null) {
             AsyncRequest pending = ast.asyncRequest();
             if (pending == null) throw fault("Guest AST continuation escaped without an async request");
+            requireTarget(pending);
+            try { ast.discard(); }
+            catch (RuntimeException | Error cleanup) { throw cleanupFailure(pending, cleanup, node); }
             return uncaught(pending, node);
         }
         ContinuationResult continuation;
@@ -55,6 +70,9 @@ public final class AsyncContinuations {
         else return result;
         AsyncRequest pending = request(continuation);
         if (pending == null) throw fault("Guest continuation escaped without an async request");
+        requireTarget(pending);
+        try { SavedGuestContinuations.savedGuestContinuation(continuation).discard(); }
+        catch (RuntimeException | Error cleanup) { throw cleanupFailure(pending, cleanup, node); }
         return uncaught(pending, node);
     }
     public static RuntimeException publicSuspension(ThunkSuspended suspended, Node node) {

@@ -1,0 +1,8 @@
+diff --git a/com/oracle/truffle/llvm/runtime/LLVMLanguageProvider.java b/com/oracle/truffle/llvm/runtime/LLVMLanguageProvider.java
+--- a/com/oracle/truffle/llvm/runtime/LLVMLanguageProvider.java
++++ b/com/oracle/truffle/llvm/runtime/LLVMLanguageProvider.java
+@@ -19,3 +19,3 @@ import java.util.List;
+-@Registration(byteMimeTypes = {"application/x-llvm-ir-bitcode", "application/x-sharedlib", "application/x-executable", "application/x-mach-binary", "application/x-dosexec"}, contextPolicy = ContextPolicy.SHARED, defaultMimeType = "application/x-llvm-ir-bitcode", id = "llvm", interactive = false, internal = false, name = "LLVM", version = "22.1.8", website = "https://www.graalvm.org/${graalvm-website-version}/reference-manual/llvm/")
++@Registration(byteMimeTypes = {"application/x-llvm-ir-bitcode", "application/x-sharedlib", "application/x-executable", "application/x-mach-binary", "application/x-dosexec"}, contextPolicy = ContextPolicy.SHARED, defaultMimeType = "application/x-llvm-ir-bitcode", dependentLanguages = {"nfi", "internal/nfi-native"}, id = "llvm", interactive = false, internal = false, name = "LLVM", version = "22.1.8", website = "https://www.graalvm.org/${graalvm-website-version}/reference-manual/llvm/")
+ @ProvidedTags({StatementTag.class, CallTag.class, RootTag.class, RootBodyTag.class, AlwaysHalt.class})
+ public final class LLVMLanguageProvider extends TruffleLanguageProvider {

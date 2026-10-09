@@ -214,7 +214,10 @@ public final class EntryValue implements TruffleObject {
             threads.enterCurrent(null, false, program.getCapturesContinuations(), null);
             var outcome = GuestThreadStatus.FINISHED;
             try {
-                if (processSignals) owner.getSignals().bind(program);
+                if (processSignals) {
+                    if (owner.getWindowsNativeIo() != null) owner.getWindowsNativeIo().console().bind(program);
+                    else owner.getSignals().bind(program);
+                }
                 try {
                     dispatch.execute(ioTarget, new Object[]{guestEntry});
                     // Run the original Handle action over this program's CAFs.
@@ -229,7 +232,12 @@ public final class EntryValue implements TruffleObject {
                 if (failure instanceof GuestException guest) dispatch.escaping(guest);
                 throw failure;
             } finally {
-                try { if (processSignals) owner.getSignals().close(); }
+                try {
+                    if (processSignals) {
+                        if (owner.getWindowsNativeIo() != null) owner.getWindowsNativeIo().console().close();
+                        else owner.getSignals().close();
+                    }
+                }
                 finally { threads.leaveCurrent(outcome); }
             }
             return true;

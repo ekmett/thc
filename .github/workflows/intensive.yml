@@ -16,8 +16,6 @@ permissions:
   actions: read
 jobs:
   automation:
-    # Restore scheduled execution after the existing nightly completes qualification.
-    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/checks.yml
     with:
       cadence: nightly

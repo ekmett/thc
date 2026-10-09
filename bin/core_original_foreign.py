@@ -440,8 +440,32 @@ def win32_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'Win32-2\.14\.2\.1-(?:inplace|[0-9a-f]+)', unit) is not None
 
 
+def native_profile_operation(target):
+    # The driver and runtime share these exact THC-owned descriptors. Import
+    # lazily because package manifests also use the ordinary foreign validators.
+    from core_package_manifest import _core_native_overrides
+    for call in _core_native_overrides():
+        owner = call['target']
+        if (target.get('unit'), target.get('symbol')) == (owner['unit'], owner['symbol']):
+            def carrier(rep):
+                reps = rep['primReps']
+                require(len(reps) <= 1, 'scalar native override carrier')
+                return reps[0] if reps else None
+            return (call['convention'], call['safety'],
+                    tuple(map(carrier, call['argumentReps'])),
+                    tuple(map(carrier, call['resultRep']['components'])))
+    return None
+
+
+def has_operation(target):
+    return operation_symbol(target) in OPERATIONS or native_profile_operation(target) is not None
+
+
 def operation(target, declared=None):
     unit, symbol = target.get('unit'), operation_symbol(target)
+    profile = native_profile_operation(target)
+    if profile is not None:
+        return profile
     if symbol == '__hscore_open' and isinstance(declared, list) and len(declared) == 4 and scalar(declared[2], 'Word16Rep', True):
         convention, safety, _, output = OPERATIONS[symbol]
         return convention, safety, ('AddrRep', 'Int32Rep', 'Word16Rep', None), output
@@ -754,7 +778,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     if not isinstance(target, dict) or not isinstance(target.get('symbol'), str):
         return None
     symbol = operation_symbol(target)
-    if symbol not in OPERATIONS:
+    if not has_operation(target):
         return None
     convention, safety, expected, output = operation(target, descriptor.get('argumentReps'))
     if 'ZCunixzm' in target['symbol']:

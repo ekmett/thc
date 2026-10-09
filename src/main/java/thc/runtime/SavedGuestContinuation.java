@@ -10,6 +10,9 @@ public interface SavedGuestContinuation {
     Object getYielded();
     Object getSourceRoot();
     Object continueWith(Object input);
+    /** Terminally discard this activation's own pending work, without
+     * recursively disposing shared children retained by thunk/call owners. */
+    default void discard() {}
     default AsyncRequest asyncRequest() {
         return switch (getYielded()) {
             case AsyncRequest request -> request;

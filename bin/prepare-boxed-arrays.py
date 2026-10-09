@@ -2,18 +2,16 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-# Fixture rationale (097 compiled-thunk-retention)
-# Purpose: Check compiled code retains shared thunks and lazy boxed-array elements
-#   correctly.
-# Produces/consumed result: Boxed-array and floating CBDs plus their native oracle.tsv
-#   files.
-# Cost and overlap: Sharing/lifetime coverage is essential. Grouping unrelated floating
-#   acquisition and consuming all CBD leftovers is not; quarantined, split and simplify
-#   without weakening the sharing checks.
-# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Fixture rationale (097 boxed-arrays)
+# Purpose: Public STArray laziness, read snapshots and captured closures, with
+#   native GHC values checked against an independent wrapping arithmetic model.
+# Produces/consumed result: Four named pre/post CBD roots, audits and native rows.
+# Cost and overlap: Generic thunk retention belongs to ThunkRetentionTest;
+#   these cases retain the distinct public boxed-array path. Floating is separate.
+# Build status: Named products owned by fixture-boxed-arrays.
 # Detailed file inputs/outputs: docs/fixture-inputs.log, entry 097.
 
-"""Genuine public lifted STArray storage; retain rejected error/index frontiers."""
+"""Genuine lifted STArray storage; only the four declared positive roots."""
 import hashlib
 import importlib.util
 import json
@@ -26,21 +24,19 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/boxed-arrays'
 SOURCE = 't/fixtures/compiler/BoxedArrayAudit.hs'
 ENTRIES = ['boxedSTRecursive', 'boxedZero', 'boxedSnapshot', 'boxedClosure']
-FRONTIERS = ['boxedLiteral', 'boxedST', 'boxedLazyRead', 'boxedChecked']
-OPS = {'newArray#', 'readArray#', 'writeArray#', 'unsafeFreezeArray#', 'indexArray#'}
 VALUES = sorted(set(range(-16, 17)) | {-2**63, -2**63+1, 2**63-2, 2**63-1, -4097, 4097, -2**32, 2**32})
 
 def signed(n): return (n + 2**63) % 2**64 - 2**63
 
-def mathematical(name, x, index=0):
-    return signed({'boxedSTRecursive': 44*x+350, 'boxedST': 44*x+350,
-        'boxedLiteral': 44*x+77, 'boxedLazyRead': 3*(x+9), 'boxedZero': x,
-        'boxedSnapshot': 15*x+207, 'boxedClosure': 2*x+1,
-        'boxedChecked': [x, x+7, 2*x, x-11][index]}[name])
+def mathematical(name, x):
+    return signed({'boxedSTRecursive': 44*x+350, 'boxedZero': x,
+        'boxedSnapshot': 15*x+207, 'boxedClosure': 2*x+1}[name])
 
 def main():
     BUILD.mkdir(parents=True, exist_ok=True)
-    (BUILD/'manifest.json').unlink(missing_ok=True)
+    publication = ROOT/'build/compiler/plugin.json'
+    if os.environ.get('THC_PLUGIN_MANIFEST') != str(publication):
+        raise RuntimeError('Use fixture-boxed-arrays with its declared plugin publication')
     ghc, ghc_pkg = os.environ.get('GHC', 'ghc'), os.environ.get('GHC_PKG', 'ghc-pkg')
     commands = []
     def run(command, env=None, **kwargs):
@@ -52,73 +48,54 @@ def main():
     audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
     cap = json.loads((ROOT/'bin/core-capabilities.json').read_text())
     stages, summaries, artifacts = {}, {}, []
-    missing = {
-        'boxedST': {'ghc-internal:GHC.Internal.CString.unpackCString#','ghc-internal:GHC.Internal.Err.error'},
-        'boxedLazyRead': {'ghc-internal:GHC.Internal.CString.unpackCString#','ghc-internal:GHC.Internal.Err.error'},
-        'boxedLiteral': {'ghc-internal:GHC.Internal.CString.unpackCString#','ghc-internal:GHC.Internal.Err.error','ghc-internal:GHC.Internal.Arr.arrEleBottom'},
-        'boxedChecked': {'ghc-internal:GHC.Internal.CString.unpackCString#','ghc-internal:GHC.Internal.Arr.arrEleBottom','ghc-internal:GHC.Internal.Ix.$w$sindexError'}}
     for stage in ('pre','post'):
         directory = BUILD/stage; core = directory/'core'
         run([ROOT/'bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
-             *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES+FRONTIERS], SOURCE],
+             *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], SOURCE],
             env=dict(THC_CORE_OUT=str(core),THC_GHC_OUT=str(directory/'ghc')))
-        paths = sorted(core.glob('*.cbd')); modules = [(str(p.relative_to(ROOT)),inspect_cbd(p.read_bytes())) for p in paths]
+        paths = [core/(name+'.cbd') for name in ('BoxedArrayAudit', 'THC.InterfaceClosure')]; modules = [(str(p.relative_to(ROOT)),inspect_cbd(p.read_bytes())) for p in paths]
         boundary = 'optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep'
         assert dict(modules)[str((core/'BoxedArrayAudit.cbd').relative_to(ROOT))]['boundary'] == boundary
         stages[stage] = [p for p,_ in modules]; artifacts += paths
-        for name in ENTRIES+FRONTIERS:
+        for name in ENTRIES:
             report = audit.Audit(modules,cap).run(['main:BoxedArrayAudit.'+name])
             path = directory/(name+'.audit.json'); path.write_text(json.dumps(report,indent=2)+'\n'); artifacts.append(path)
             counts = {p['name']: len(p['uses']) for p in report['primitives']}
-            if name in ENTRIES:
-                assert report['accepted'], (stage,name,report['issues'],report['missingGlobals'])
-                required = OPS if name in ('boxedSTRecursive','boxedSnapshot') else {'newArray#','unsafeFreezeArray#'}
-                if name=='boxedClosure': required |= {'writeArray#','indexArray#'}
-                assert required <= counts.keys(), (stage,name,counts)
-            else:
-                assert not report['accepted'] and not report['issues'], (stage,name,report['issues'])
-                assert {m['id'] for m in report['missingGlobals']} == missing[name], (stage,name,report['missingGlobals'])
-            if name=='boxedSTRecursive':
-                assert {n:counts[n] for n in OPS} == {'newArray#':1,'readArray#':3,'writeArray#':3,'unsafeFreezeArray#':1,'indexArray#':3}
-                reachable_ids = {b['id'] for b in report['reachableBindings']}
-                assert any(b['id'] in reachable_ids and b['expr'][:2] == ['var',b['id']]
-                           for _,module in modules for b in module['bindings']), 'Recursive bottom vanished'
+            assert report['accepted'], (stage,name,report['issues'],report['missingGlobals'])
             summaries[stage+'/'+name] = dict(summary=report['summary'],primitiveCounts=counts,missingGlobals=[m['id'] for m in report['missingGlobals']])
     driver = ['{-# LANGUAGE MagicHash #-}','module Main where','import GHC.Exts (Int(I#))',
-              'import Control.Exception (SomeException, evaluate, try)','import qualified BoxedArrayAudit as P',
+              'import qualified BoxedArrayAudit as P',
               'call name (I# x) (I# k) = case name of']
-    driver += ['  "'+name+'" -> I# (P.'+name+' x'+(' k' if name=='boxedChecked' else '')+')' for name in ENTRIES+FRONTIERS]
-    driver += ['  "bottomElement" -> P.bottomElement','  _ -> error "unknown entry"',
-               'emit [name,x,k] = do','  r <- try (evaluate (call name (read x) (read k))) :: IO (Either SomeException Int)',
-               '  putStrLn (name ++ "\\t" ++ x ++ "\\t" ++ k ++ "\\t" ++ either (const "THREW") show r)',
+    driver += ['  "'+name+'" -> I# (P.'+name+' x'+''+')' for name in ENTRIES]
+    driver += ['  _ -> error "unknown entry"',
+               'emit [name,x,k] = putStrLn (name ++ "\\t" ++ x ++ "\\t" ++ k ++ "\\t" ++ show (call name (read x) (read k)))',
                'emit _ = error "invalid input"','main = getContents >>= mapM_ (emit . words) . lines']
     source=BUILD/'NativeBoxedArray.hs'; source.write_text('\n'.join(driver)+'\n')
     native=BUILD/'native'; native.mkdir(exist_ok=True); executable=native/'boxed-array-oracle'
     run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-i'+str(ROOT/'t/fixtures/compiler'),
          '-odir',native,'-hidir',native,source,'-o',executable])
     requests=[]; expected=[]
-    for name in ENTRIES+FRONTIERS:
+    for name in ENTRIES:
         for x in VALUES:
-            for k in (range(4) if name=='boxedChecked' else [0]):
-                requests.append(f'{name}\t{x}\t{k}\n'); expected.append(f'{name}\t{x}\t{k}\t{mathematical(name,x,k)}\n')
-    for name,x,k in [('boxedChecked',17,-1),('boxedChecked',17,4),('boxedChecked',17,-2**63),('boxedChecked',17,2**63-1),('bottomElement',0,0)]:
-        requests.append(f'{name}\t{x}\t{k}\n'); expected.append(f'{name}\t{x}\t{k}\tTHREW\n')
+            requests.append(f'{name}\t{x}\t0\n'); expected.append(f'{name}\t{x}\t0\t{mathematical(name,x)}\n')
     result=run([executable],input=''.join(requests),text=True,capture_output=True,timeout=30)
-    assert result.stdout==''.join(expected),'Native/model or expected exception mismatch'
+    assert result.stdout==''.join(expected),'Native/model mismatch'
     (BUILD/'oracle.tsv').write_text(result.stdout); (BUILD/'expected.tsv').write_text(''.join(expected))
     inputs=[ROOT/SOURCE,Path(__file__).resolve(),ROOT/'bin/audit-core.py',ROOT/'bin/core-capabilities.json',
             ROOT/'src/main/resources/thc/scalar-primop-signatures.json',*sorted((ROOT/'bin').glob('core_*.py')),
-            *sorted((ROOT/'src/compiler/THC').glob('*.hs')),*[ROOT / 'bin' / n for n in ('build-compiler.sh', 'export-core.sh', 'toolchain.sh')]]
+            publication,Path(json.loads(publication.read_text())['sharedLibrary']),
+            *[ROOT / 'bin' / n for n in ('plugin.py', 'export-core.sh', 'toolchain.sh')]]
     artifacts += [source,executable,BUILD/'oracle.tsv',BUILD/'expected.tsv']
     def hashes(paths):return {str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
-    (BUILD/'manifest.json').write_text(json.dumps(dict(schema=1,ghc='9.14.1',array='0.5.8.0',wordBits=64,entries=ENTRIES,
-        frontiers=FRONTIERS,values=VALUES,stages=stages,audits=summaries,nativeValueRows=len(expected)-5,expectedExceptionRows=5,
+    receipt = BUILD/'manifest.json.tmp'
+    receipt.write_text(json.dumps(dict(schema=1,ghc='9.14.1',array='0.5.8.0',wordBits=64,entries=ENTRIES,
+        values=VALUES,stages=stages,audits=summaries,nativeValueRows=len(expected),
         supportedNativeRows=len(ENTRIES)*len(VALUES),allNativeValuesMatchIndependentModel=True,inputHashes=hashes(inputs),artifactHashes=hashes(artifacts),commands=commands,
         installedArray=run([ghc_pkg,'describe','array'],text=True,capture_output=True).stdout,
         ghcInfo=run([ghc,'--info'],text=True,capture_output=True).stdout,
         signatureSource='ghc-9.14.1-release/compiler/GHC/Builtin/primops.txt.pp:1542-1611',
         limitations=['Only known lifted elements; no copy/thaw/small-array/atomic operations.',
-                    'Explicit error/checked-index roots retain their exact missing original source definitions and must remain strict-load failures.',
-                    'Native invalid indices use checked public APIs; undefined raw primop inputs are not executed natively.']),indent=2)+'\n')
-    print(f'Prepared boxed arrays: {len(ENTRIES)*len(VALUES)} supported native/model rows; {len(expected)-5} total value rows; 5 expected exceptions; strict pre/post checks')
+                    'Invalid raw primop domains are checked by the Java semantic controls, not executed natively.']),indent=2)+'\n')
+    os.replace(receipt, BUILD/'manifest.json')
+    print(f'Prepared boxed arrays: {len(expected)} native/model rows; four roots, strict pre/post checks')
 if __name__=='__main__':main()

@@ -17,6 +17,16 @@ to the five weak-bootstrap models below; other Windows checks need qualification
 on this provider. Package identities and remaining distribution
 requirements are documented in [JAM runtime integration](jam-runtime.md).
 Python 3.12+ is still needed by existing generators and strict Core audits.
+The native descriptor fixture producer requires PowerShell 7 (`pwsh`). Bootstrap
+sets `THC_POWERSHELL` to the current PowerShell 7 executable, or discovers it on
+PATH. Set that variable explicitly when selecting tools manually. The producer
+honors the selected shell's execution policy; no policy override is used.
+
+Runtime builds also run `bin/check-windows-launcher.ps1` against the installed
+batch launcher. Its fixture-free audit verifies stdin reaches the JVM through
+the provider identity checks; it does not qualify guest Core execution. The
+binary identity comparisons receive NUL as their own stdin, preserving the
+program's input while retaining every mismatch check.
 
 ## Select tools and build
 
@@ -486,8 +496,11 @@ argument widths. Safe calls release guest scheduling admission during native
 execution, and asynchronous delivery after the call does not repeat the
 conversion.
 
-Windows file and Handle opening remains unsupported. Ordinary imports require
-the package's native artifacts alongside its Core.
+Windows Word16 `__hscore_open` calls use the selected package's original native
+adapter and CRT descriptors under the fixed `NativeIO` factory. Relative UTF-16
+paths resolve against the context CWD. Ordinary imports require the package's
+native artifacts alongside its Core. This opening boundary does not yet qualify
+canonical Haskell Handle execution, which also needs the RTS IO manager.
 
 Messages allocated by `base_getErrorMessage` must be released with `LocalFree`.
 Aliases become invalid after release, and context disposal frees remaining
@@ -617,6 +630,142 @@ still bind its actual archive; stale plugin-dependent interfaces are rejected.
 Plugin registration compares canonical archive identities, so a checkout
 junction and its resolved directory select the same actual library.
 
+The Windows loader suite also checks the native descriptor transfer boundary:
+
+~~~powershell
+./gradlew.bat testDefault --tests thc.runtime.WindowsSulongLibraryLookupTest `
+    testDense --tests thc.runtime.WindowsSulongLibraryLookupTest --continue
+~~~
+
+For a focused IOManager/console change, select the owning methods and the
+descriptor-profile checks together in each handoff mode. Reuse the same prepared
+fixtures and keep the normal test heap options:
+
+~~~powershell
+$checks = @(
+    'thc.runtime.CoreNativeOverrideProfileTest',
+    'thc.runtime.WindowsSulongLibraryLookupTest.ioManagerSelectionIsReadOnlyContextOwnedDescriptorMode',
+    'thc.runtime.WindowsSulongLibraryLookupTest.originalWindowsOpenUsesContextCwdAndRealNativeDescriptors',
+    'thc.runtime.WindowsSulongLibraryLookupTest.astSchedulerCallRetainsItsPhysicalReadAcrossCarrierAndTerminalCut',
+    'thc.runtime.WindowsSulongLibraryLookupTest.suspendedNativeRequestResumesWithoutReplayingItsRead',
+    'thc.runtime.WindowsSulongLibraryLookupTest.consoleInstallationHasSeparateLauncherAndStablePtrAuthority'
+)
+$arguments = @('--no-daemon', '--max-workers=1', '--continue')
+foreach ($mode in @('testDefault', 'testDense')) {
+    $arguments += $mode
+    foreach ($check in $checks) { $arguments += @('--tests', $check) }
+}
+./gradlew.bat @arguments
+~~~
+
+The `windows-native-io` fixture group selects `compileWindowsIoFixture` only
+for this owning class, including direct Gradle selectors. Its generated DLLs,
+bitcode and receipt are consuming test inputs; unrelated selectors do not
+prepare this fixture or acquire its GHC toolchain. Class and method wildcard
+admission uses the pinned Gradle matcher's `mayIncludeClass`; ambiguous patterns
+can conservatively prepare the owning fixture without changing test filtering.
+The prerequisite uses pinned native GHC 9.14.1
+to link the installed `ghc-internal` header's original opening body and archive;
+it does not rebuild installed packages. `THC_CLANG` builds its SDK operations
+and the MSVC-targeted Sulong transport. An opening-only DLL links the same
+original archive with its registered native dependencies, without SDK transfer
+or RTS roots. The producer verifies its actual PE imports retain `_errno` and
+omit `_read`, `_write` and the four WinSock transfer imports. Its native GHC oracle checks the actual
+ABI, reads after closing the original descriptor, and distinguishes a file
+opened into vacant fd0 from a duplicate of stdin. Commands, exit statuses,
+compiler/archive hashes and artifact hashes are retained in
+`build/generated/test-cbits/windows-io-receipt.json` beside the producer logs.
+Its SDK operations exercise real files, pipes and loopback sockets.
+The runtime boundary binds the selected DLL's actual `_errno` provider and
+resolves CRT operations within that provider, rejecting conflicting imports.
+Opening does not require unrelated transfer imports. Descriptor acquisition
+and transfers check their own required CRT or selected WinSock operations.
+The boundary acquires private descriptor loans and captures transfer
+errors before Java readmission. Closed descriptors return `EBADF`; recovery
+scopes the documented CRT validation callback to `_dup` and restores the exact
+previous thread-local handler. The regression also checks that the global
+handler identity survives. Generic embedding streams do not grant authority to
+the process CRT's standard endpoints; admit those explicitly through `NativeIO`.
+Endpoint authority follows the pinned kernel object rather than its descriptor
+number. The positive Java linkage check also exercises original native opening,
+context CWD, Unicode paths, SAFE transfers and selected-origin error capture.
+
+Physical native workers acquire and release their own module, descriptor and
+storage loans. Guest cancellation abandons delivery without aborting the
+synchronous syscall. The pipe regressions deliver real `throwTo` requests in
+unmasked and masked-interruptible waits before any pipe data arrives, then
+verify completion after closing the original descriptor. Shutdown stops
+admission and abandons delivery before joining physical workers and guest
+carriers. A still-blocked synchronous syscall can delay physical retirement.
+
+The console transport queues actual Windows events and the handler generation
+captured at synchronized native dispatcher entry. Windows supplies an event
+code, without an earlier registration identity. Its native oracle sends `CTRL_BREAK` only to a fresh hidden
+child console, checking replacement, process ownership and retirement. The JVM
+checks separate launcher authority and installation lifecycle. The service
+dispatches managed StablePtr handlers through `GuestThreads`; an aborted
+zero-byte console read waits for explicit `rts_ConsoleHandlerDone` before retrying
+under the same loans. A thrown handler does not acknowledge completion. Default
+handling preserves the existing JVM handler chain; ignore uses the active
+owner's action rather than changing the inheritable NULL-handler ignore bit.
+One dispatcher remains registered and its code pinned for process lifetime.
+Stop detaches the heap owner under the dispatcher registry lock; close frees
+its queue and HANDLE after the reader joins. Repeated owners have no fixed
+installation budget. `AttachConsole`, `AllocConsole` and `FreeConsole` reset
+the OS handler table and are outside this helper's owned API. The isolated
+oracle creates its console before installing the helper. See Microsoft's
+[handler contract](https://learn.microsoft.com/en-us/windows/console/handlerroutine)
+and [registration contract](https://learn.microsoft.com/en-us/windows/console/setconsolectrlhandler).
+
+These checks qualify the native boundary ABI and loader/endpoint ownership.
+Saved AST steps and bytecode frames can own pending physical requests. Terminal
+discard abandons delivery without replaying or releasing an unfinished native
+effect; a discarded waiter retains its shared child. Completion removes the
+frame's request ownership, and another context cannot discard it. Failed AST
+cleanup still retires remaining owners, preserves the original failure with
+suppressed cleanup evidence, and settles a claimed async delivery at its terminal
+boundary.
+The original `stg_asyncReadzh`/`stg_asyncWritezh` descriptors lower to this owned
+request protocol in both Core backends. AST resume steps and bytecode frames
+retain the same physical request across suspension; final discard abandons its
+delivery without replaying the syscall. Completion writes the original length
+and error fields, then performs the SAFE post-call async poll. The original
+`rts_InstallConsoleEvent` and `rts_ConsoleHandlerDone` calls use the executable's
+StablePtr dispatcher. Installation preflights a writable 64-bit typed pointer
+cell before changing the process handler; ordinary byte transport still rejects
+cells containing managed pointers and raw-exposed arrays cannot become typed
+cells again.
+
+`rts_IOManagerIsWin32Native` is a context-owned, read-only one-byte `CBool`
+selection reference. Pinned GHC uses it to select WinIO HANDLE/IOCP/RIO versus
+descriptor operations, rather than to identify the host OS. This runtime selects
+its real CRT/WinSock descriptor frontend, so the reference reads zero. It cannot
+be mutated, widened, projected to a native pointer or used from another or closed
+context. Ordinary linkage to a different GHC RTS global cannot make this choice.
+These focused operation and ownership checks do not alone establish canonical
+Haskell execution or first compiled calls; keep actual application evidence
+separate from native transport qualification.
+
+The native Windows checkpoint of 2026-10-09 also runs the retained genuine
+`canonical-entry-0.1.0.0` application (`exe:canonical-entry`, `-main-is Main.start`)
+against its original GHC 9.14.1 oracle. All four backend/handoff combinations
+preserve `selected-start-effect`, exit zero on normal return without forcing its
+lazy answer, and preserve `selected-action-failed` with exit one on the original
+exception path. This qualification uses the completed producer's existing CBD
+and package manifest; it does not certify a fresh complete installed-library
+export from the stock bindist, arbitrary applications or first compiled calls.
+The Windows Sulong provider declares both NFI frontend and native-backend
+dependencies so LLVM cleanup retains the errno cell and native calling context.
+Native-backend-only ordering still failed with heap corruption during frontend
+errno disposal; retain that failed evidence separately from the passing packet.
+
+If a worker exits after `jam: create heap backing (1455)`, record the failed run
+and check system commit capacity as well as physical memory. Windows defines
+[1455 as `ERROR_COMMITMENT_LIMIT`](https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--1300-1699-).
+Reduce simultaneous builds and Gradle workers to fit the available resources;
+keep the pinned JAM runtime and test heap settings. A later passing diagnostic
+run does not qualify the failed run.
+
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.
@@ -629,11 +778,12 @@ junction and its resolved directory select the same actual library.
   expressions are evaluated. An accepted audit does not certify their native
   availability. The optional Libdw backend is unsupported by THC; retain missing
   symbol errors when those paths execute and do not restore retired overrides.
-- Full canonical `runMainIO` acquisition can complete while its runtime audit
-  rejects Windows `stg_asyncReadzh`/`stg_asyncWritezh` scheduler entries and the
-  unlinked `rts_IOManagerIsWin32Native` data label. These are RTS state boundaries;
-  ordinary C linkage does not implement them. Keep the failed audit and do not
-  claim canonical effect, exception or compiled execution from acquired Core.
+- Acquisition alone does not establish canonical `runMainIO` execution. The
+  Windows scheduler entries and IOManager selection are explicit context-owned
+  boundaries; validate the original Cabal entry, observable effect and exception
+  against its native GHC oracle in both backends and handoff modes. A successful
+  runtime build does not establish complete installed-library Core export or
+  first compiled execution.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.

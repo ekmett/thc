@@ -2991,35 +2991,32 @@ Under build/unaligned-scalar-memory/:
 Consumer reads receipt/all hashes, oracle.tsv, stage CBDs/audits. Review overlap with
   explicit64/floating-byte-offset/general memory suites using behavior coverage.
 
-097 compiled-thunk-retention (two producers)
-Fixture rationale (097 compiled-thunk-retention)
-Purpose: Check compiled code retains shared thunks and lazy boxed-array elements
-  correctly.
-Produces/consumed result: Boxed-array and floating CBDs plus their native oracle.tsv
-  files.
-Cost and overlap: Sharing/lifetime coverage is essential. Grouping unrelated floating
-  acquisition and consuming all CBD leftovers is not; quarantined, split and simplify
-  without weakening the sharing checks.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+097 boxed-arrays and independent quarantined floating retention
+Purpose: Public boxed STArray laziness, read snapshots and captured closures.
+Generic sharing/lifetime checks belong to ThunkRetentionTest; no compiler-count,
+DirectCallNode inventory or valid-package rejection requirement is retained.
+Boxed build status: ADMITTED as fixture-boxed-arrays. Floating remains QUARANTINED.
 
-Consumers: thc.runtime.BoxedArrayTest, CompiledThunkRetentionTest, FloatingPrimitiveTest.
-A. bin/prepare-boxed-arrays.py:
-  IN t/fixtures/compiler/BoxedArrayAudit.hs, producer model/template, shared tools/data,
-    GHC 9.14.1 and array 0.5.8.0 registration/native libraries.
-  Under build/boxed-arrays/:
-    <pre|post>/core/{BoxedArrayAudit,THC.InterfaceClosure}.cbd and stage/ghc/:
-      IN source/eight closure roots/exporter. Producer reads all *.cbd after export,
-      so actual consumed set can also include stale CBDs.
-    stage/<entry>.audit.json: IN stage CBD set/auditor; entries boxedSTRecursive,
-      boxedZero,boxedSnapshot,boxedClosure,boxedLiteral,boxedST,boxedLazyRead,boxedChecked.
-    NativeBoxedArray.hs: IN producer Haskell driver template.
-    native/boxed-array-oracle and intermediates: IN generated driver/audit source/GHC.
-    oracle.tsv, expected.tsv: IN executable/generated stdin requests/model.
-    manifest.json: IN sources/CBDs/audits/generated driver/binary/TSVs/toolchain facts;
-      old receipt removed first.
-  Exact primitive-use counts and exact missing-global sets are asserted. Review these
-    for removal rather than preserving accidental compiler structure.
-B. bin/prepare-floating-audit.py:
+A. bin/prepare-boxed-arrays.py; consumer thc.runtime.BoxedArrayTest:
+  IN t/fixtures/compiler/BoxedArrayAudit.hs, producer model/template, auditor modules,
+    capability/signature tables, explicit compiler/plugin.json publication/library,
+    exporter, pinned GHC 9.14.1 and array 0.5.8.0 interfaces/native libraries.
+  CMake owns these named products under build/boxed-arrays in one command:
+    <pre|post>/core/{BoxedArrayAudit,THC.InterfaceClosure}.cbd: source/four closure
+      roots/exporter/plugin. Only this declared pair enters each stage receipt.
+    <pre|post>/{boxedSTRecursive,boxedZero,boxedSnapshot,boxedClosure}.audit.json:
+      declared stage pair/auditor; strict positive admission.
+    NativeBoxedArray.hs: existing producer driver template.
+    native/boxed-array-oracle: generated driver/source/GHC; .hi/.o are byproducts.
+    oracle.tsv, expected.tsv: native values/independent wrapping arithmetic model.
+    manifest.json: named inputs/products/hashes/toolchain facts; atomically replaced
+      only after success. Unrelated CBDs are neither consumed nor removed.
+  Native/model rows cover the four existing roots at the existing 41 inputs.
+  Java tests preserve installed validity before first compiled call, compiled entry
+    execution, native/model values and zero outstanding argument/result loans in
+    both backends, inlining choices and handoff modes. Invalid raw domains/state
+    are semantic Java controls; undefined primitive inputs are not native requests.
+B. bin/prepare-floating-audit.py; consumers CompiledThunkRetentionTest, FloatingPrimitiveTest:
   IN t/fixtures/compiler/FloatingAudit.hs, FloatingAuditNative.hs, producer model,
     shared tools/data/native toolchain.
   Under build/floating/:

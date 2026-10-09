@@ -33,6 +33,7 @@ import static thc.runtime.RuntimeFault.fault;
 public final class PackageScalarLibraries {
     private record Bundled(PackageNativeComponent.BundledLibrary library, FutureTask<Object> task) {}
     private record Loaded(PackageNativeComponent component, FutureTask<Object> task, Map<String, PackageScalarFunction> functions) {}
+    private final Map<String, java.nio.file.Path> nativeImages = new HashMap<>();
     private final TruffleLanguage.Env env;
     private final HashMap<String, Loaded> libraries = new HashMap<>();
     private final HashMap<String, Bundled> bundledLibraries = new HashMap<>();
@@ -154,7 +155,7 @@ public final class PackageScalarLibraries {
             if (component.nativeLibrary().length != 0) {
                 boolean windows = System.getProperty("os.name").startsWith("Windows");
                 loadNative(component.nativeLibrary(), windows ? ".dll" :
-                    component.format().equals("llvm-embedded-mach-o") ? ".dylib" : ".so", "package-native");
+                    component.format().equals("llvm-embedded-mach-o") ? ".dylib" : ".so", "package-native", component.unit());
             }
             Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(component.bytes()),
                 component.componentSha256() + switch (component.format()) {
@@ -177,6 +178,9 @@ public final class PackageScalarLibraries {
         } finally { stack.pop(); owner.getThreads().leaveForeign(previous); }
     }
     private Object loadNative(byte[] bytes, String suffix, String name) throws Exception {
+        return loadNative(bytes, suffix, name, null);
+    }
+    private Object loadNative(byte[] bytes, String suffix, String name, String unit) throws Exception {
         var file = Files.createTempFile("thc-package-native-", suffix);
         boolean windows = System.getProperty("os.name").startsWith("Windows");
         try {
@@ -189,11 +193,28 @@ public final class PackageScalarLibraries {
             Object handle = env.parseInternal(Source.newBuilder("nfi",
                 (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", name).build()).call();
             nativeContext.addLibraryHandles(handle);
+            if (windows && unit != null) synchronized (this) { nativeImages.put(unit, file); }
             return handle;
         } finally {
             // Windows keeps loaded DLLs locked; Unix mappings survive unlink.
             if (windows) file.toFile().deleteOnExit();
             else Files.deleteIfExists(file);
+        }
+    }
+    /** RTS transfers borrow the selected package's already-loaded CRT/WinSock
+     * namespace. A path supplied by the guest cannot select another provider. */
+    @TruffleBoundary java.nio.file.Path windowsIoImage() {
+        current();
+        PackageScalarLink selected;
+        synchronized (this) { selected = declarations.get("ghc-internal"); }
+        if (!WindowsDirectoryStreams.supportedHost() || selected == null || selected.getComponent() == null ||
+                !selected.getTarget().startsWith("x86_64-") || !selected.getTarget().contains("-windows-") || selected.getComponent().nativeLibrary().length == 0)
+            throw fault("Windows RTS IO requires the selected ghc-internal native component");
+        load(selected.getComponent());
+        synchronized (this) {
+            var image = nativeImages.get(selected.getUnit());
+            if (closed || image == null) throw fault("Selected Windows package native image is unavailable");
+            return image;
         }
     }
     private void loadBundled(PackageNativeComponent.BundledLibrary library) {
@@ -489,7 +510,7 @@ public final class PackageScalarLibraries {
     }
     public synchronized void close() {
         closed = true; alive.invalidate(); finalizers.close();
-        libraries.clear(); bundledLibraries.clear(); declarations.clear(); adapters.clear();
+        libraries.clear(); bundledLibraries.clear(); declarations.clear(); adapters.clear(); nativeImages.clear();
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
 }

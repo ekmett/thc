@@ -788,6 +788,48 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object retain(Object marker) { return marker instanceof PendingWait ? marker : null; }
     }
 
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "writing")
+    public static final class PrepareWindowsIoRequest {
+        @Specialization public static WindowsNativeIo.Request prepare(boolean writing, long fd, long socket,
+                long count, ManagedAddress address, Object state) {
+            TupleResults.requireVoidCarrier(state);
+            return WindowsNativeIo.required().submit(Math.toIntExact(fd), socket != 0, Math.toIntExact(count), address, writing);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "result")
+    public static final class InstallWindowsConsole {
+        @Specialization public static void install(VirtualFrame frame, LocalAccessor result, int action,
+                ManagedAddress cell, Object state, @Bind Node node) {
+            TupleResults.requireVoidCarrier(state);
+            result.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                WindowsNativeIo.required().console().install(action, cell));
+        }
+    }
+    @Operation public static final class WindowsConsoleDone {
+        @Specialization public static void done(int code, Object state) {
+            TupleResults.requireVoidCarrier(state);
+            WindowsNativeIo.required().console().done(code);
+        }
+    }
+
+    /** A prepared native request is saved before the retry/yield loop. Await
+     * may resume its original completion, but never prepares another effect. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "length")
+    @ConstantOperand(type = LocalAccessor.class, name = "error")
+    public static final class AwaitWindowsIoRequest {
+        @Specialization public static void await(VirtualFrame frame, LocalAccessor length,
+                LocalAccessor error, WindowsNativeIo.Request request, @Bind Node node) {
+            var result = request.awaitResumable(frame.materialize(), node, CompilerDirectives.inCompiledCode());
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            length.setLong(bytecode, frame, result.length());
+            error.setLong(bytecode, frame, result.error());
+        }
+    }
+
     /** Process WAIT has saved both scalar and errno before this delivery cut. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "request")

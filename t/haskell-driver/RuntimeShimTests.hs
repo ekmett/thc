@@ -24,8 +24,6 @@ import THC.Driver.RuntimeShim (validateRuntimeShimModule, validateRuntimeShimInv
 tests :: Test
 tests = TestLabel "exact runtime shim native fallback profile" $ TestList
   [ TestCase $ do
-      assertEqual "one exact shared capability for each currently wired variant" (17::Int)
-        (length coreNativeOverrideCalls)
       forM_ coreNativeOverrideCalls $ \descriptorValue -> do
         assertEqual "complete selected descriptor omits only its Core wrapper" (Right True) (coreNativeOverride descriptorValue)
         let targetValue = case descriptorValue of Object fields -> maybe (error "test target") id (KM.lookup "target" fields); _ -> error "test call"

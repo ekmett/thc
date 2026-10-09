@@ -46,3 +46,28 @@ add_custom_command(OUTPUT ${address_outputs} BYPRODUCTS ${address_objects}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate address-field Core, native values and independent byte model")
 add_custom_target(fixture-address-fields DEPENDS ${address_outputs})
+
+# 097: four positive boxed-array roots; floating preparation has a separate owner.
+set(boxed_out "${PROJECT_SOURCE_DIR}/build/boxed-arrays")
+set(boxed_outputs "${boxed_out}/manifest.json" "${boxed_out}/NativeBoxedArray.hs"
+  "${boxed_out}/oracle.tsv" "${boxed_out}/expected.tsv" "${boxed_out}/native/boxed-array-oracle")
+set(boxed_objects "${boxed_out}/native/Main.hi" "${boxed_out}/native/Main.o"
+  "${boxed_out}/native/BoxedArrayAudit.hi" "${boxed_out}/native/BoxedArrayAudit.o")
+foreach(stage pre post)
+  list(APPEND boxed_outputs "${boxed_out}/${stage}/core/BoxedArrayAudit.cbd"
+    "${boxed_out}/${stage}/core/THC.InterfaceClosure.cbd")
+  foreach(entry boxedSTRecursive boxedZero boxedSnapshot boxedClosure)
+    list(APPEND boxed_outputs "${boxed_out}/${stage}/${entry}.audit.json")
+  endforeach()
+  list(APPEND boxed_objects "${boxed_out}/${stage}/ghc/BoxedArrayAudit.hi"
+    "${boxed_out}/${stage}/ghc/BoxedArrayAudit.o")
+endforeach()
+add_custom_command(OUTPUT ${boxed_outputs} BYPRODUCTS ${boxed_objects}
+  COMMAND ${fixture_env} "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/bin/prepare-boxed-arrays.py"
+  DEPENDS "${PROJECT_SOURCE_DIR}/bin/prepare-boxed-arrays.py"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/BoxedArrayAudit.hs"
+    "${PROJECT_SOURCE_DIR}/bin/export-core.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+    ${audit_inputs} ${plugin_outputs} ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate boxed STArray Core, native values and independent arithmetic model")
+add_custom_target(fixture-boxed-arrays DEPENDS ${boxed_outputs})

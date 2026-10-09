@@ -34,6 +34,7 @@ public final class AstCapture extends ControlFlowException {
         @Override public Object resume(com.oracle.truffle.api.frame.VirtualFrame frame, Object input) {
             throw new IllegalStateException("Captured scope recipe must be instantiated before resumption");
         }
+        @Override public void discard() { AstContinuations.discardSteps(new ArrayDeque<>(steps)); }
     }
     public AsyncRequest asyncRequest() {
         return switch (yielded) {
@@ -43,10 +44,14 @@ public final class AstCapture extends ControlFlowException {
             case null, default -> null;
         };
     }
+    /** A catch handling this cut owns terminal retirement of its pending steps. */
+    @TruffleBoundary public void discard() { AstContinuations.discardSteps(steps); }
     public AstContinuation freeze(GuestRoot root, MaterializedFrame frame) { return freeze(root, frame, false); }
     @TruffleBoundary public AstContinuation freeze(GuestRoot root, MaterializedFrame frame, boolean rootEntrySpill) {
-        return new AstContinuation(root, yielded instanceof AstPendingTail tail ? tail.publish() : yielded,
+        var saved = new AstContinuation(root, yielded instanceof AstPendingTail tail ? tail.publish() : yielded,
             logicalMask, frame, List.copyOf(steps), annotations, rootEntrySpill, yielded instanceof AstPendingTail);
+        steps.clear();
+        return saved;
     }
     @TruffleBoundary public AstCapture appendRemaining(ArrayDeque<AstResumeStep> pending) {
         steps.addAll(pending);

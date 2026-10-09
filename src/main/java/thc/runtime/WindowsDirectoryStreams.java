@@ -77,7 +77,7 @@ public final class WindowsDirectoryStreams implements Closeable {
             synchronized (owner) { return checked.get(); }
         });
     }
-    private String query(ManagedAddress path) {
+    static String path(Language.State context, ManagedAddress path) {
         return path.withNativeBorrow(() -> {
             Supplier<String> read = () -> {
                 var result = new StringBuilder();
@@ -116,7 +116,7 @@ public final class WindowsDirectoryStreams implements Closeable {
 
     @TruffleBoundary public synchronized ManagedAddress first(ManagedAddress path, ManagedAddress destination) {
         current();
-        String name = query(path);
+        String name = path(context, path);
         return output(destination, () -> {
             try (var arena = Arena.ofConfined()) {
                 var text = arena.allocate((name.length() + 1L) * 2, 2);
@@ -247,6 +247,9 @@ public final class WindowsDirectoryStreams implements Closeable {
     }
     public static Context createContext() { return createContext(ContextProfile.NATIVE); }
     public static Context createContext(ContextProfile profile) {
+        return createContext(profile, java.util.Set.of());
+    }
+    public static Context createContext(ContextProfile profile, java.util.Set<thc.NativeIO.StandardEndpoint> endpoints) {
         if (!supportedHost()) throw new IllegalStateException("Windows directory scanning requires native Windows x86_64");
         // A built Context cannot have its filesystem replaced after this
         // authority is installed. Never authenticate custom wrappers.
@@ -261,6 +264,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                 var streams = new WindowsDirectoryStreams(state);
                 state.getEnv().registerOnDispose(streams);
                 state.setWindowsDirectories(streams);
+                state.setWindowsNativeIo(new WindowsNativeIo(state, endpoints, profile == ContextProfile.LAUNCHER));
             } finally { context.leave(); }
             return context;
         } catch (Throwable failure) {

@@ -868,7 +868,7 @@ nativeAddressDeclarations unit value = do
   -- Native GHC process-global state cannot represent a THC context's scheduler
   -- or compiler state. These exact RTS objects remain context-owned overrides.
   pure [(symbol,function) | (symbol,function) <- symbols, function || symbol `notElem`
-    ["enabled_capabilities","ghc_unique_counter64","ghc_unique_inc","RtsFlags"]]
+    ["enabled_capabilities","ghc_unique_counter64","ghc_unique_inc","RtsFlags","rts_IOManagerIsWin32Native"]]
 
 zlibChecksumImport :: Value -> Bool
 zlibChecksumImport value = member value "header" == Just "zlib.h" &&

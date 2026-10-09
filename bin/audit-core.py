@@ -1594,7 +1594,7 @@ class Audit:
                 self.issue('foreign-call', owner, path, str(error))
             return True
 
-        if isinstance(symbol, str) and core_original_foreign.operation_symbol(target) in core_original_foreign.OPERATIONS:
+        if isinstance(symbol, str) and core_original_foreign.has_operation(target):
             try:
                 if owner in self.original_boxed_bindings and core_original_foreign.boxed_owned_call(call):
                     core_original_foreign.require(call in self.boxed_foreign_calls.get((target['unit'], symbol), []),

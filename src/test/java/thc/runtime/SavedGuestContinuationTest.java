@@ -18,6 +18,9 @@ import java.util.Arrays;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.List;
+import java.util.ArrayDeque;
+import java.lang.foreign.Arena;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -41,6 +44,128 @@ class SavedGuestContinuationTest {
     }
     private static final class LifetimeObservation {
         WeakReference<Object> produced;
+    }
+    private static AstResumeStep ownedMemory(Arena arena) {
+        var memory = arena.allocateFrom(JAVA_INT, 123);
+        return new AstResumeStep() {
+            @Override public Object resume(VirtualFrame frame, Object input) {
+                try { return memory.get(JAVA_INT, 0); }
+                finally { arena.close(); }
+            }
+            @Override public void discard() { arena.close(); }
+        };
+    }
+    @Test void exceptionalUnwindDiscardsPendingOwnedSteps() {
+        var arena = Arena.ofShared();
+        try {
+            var steps = new ArrayDeque<AstResumeStep>();
+            steps.add((frame, input) -> { throw RuntimeFault.fault("terminal suffix failure"); });
+            steps.add(ownedMemory(arena));
+            assertThrows(RuntimeFault.class, () -> AstContinuations.resumeAstSteps(null, steps, Unit.INSTANCE));
+            assertFalse(arena.scope().isAlive(), "Unwinding dropped a native resource owner without discard");
+        } finally { if (arena.scope().isAlive()) arena.close(); }
+    }
+    @Test void failedDiscardPreservesPrimaryFailureAndCleansRemainingOwners() {
+        var first = Arena.ofShared(); var last = Arena.ofShared();
+        try {
+            var primary = RuntimeFault.fault("original guest failure");
+            var cleanup = RuntimeFault.fault("failed native cleanup");
+            var steps = new ArrayDeque<AstResumeStep>();
+            steps.add((frame, input) -> { throw primary; });
+            steps.add(new AstResumeStep() {
+                @Override public Object resume(VirtualFrame frame, Object input) { return fail("Discarded work ran"); }
+                @Override public void discard() { first.close(); throw cleanup; }
+            });
+            steps.add(ownedMemory(last));
+            var failure = assertThrows(RuntimeFault.class, () -> AstContinuations.resumeAstSteps(null, steps, Unit.INSTANCE));
+            assertFalse(first.scope().isAlive()); assertFalse(last.scope().isAlive());
+            assertSame(primary, failure);
+            assertArrayEquals(new Throwable[]{cleanup}, failure.getSuppressed());
+        } finally { if (first.scope().isAlive()) first.close(); if (last.scope().isAlive()) last.close(); }
+    }
+    @Test void failedAsyncDiscardSettlesDeliveryAndRetainsOriginalPayload() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads();
+            threads.enterCurrent(MaskingState.UNMASKED, true, true, null);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean caught : new boolean[]{false, true}) {
+                    var arena = Arena.ofShared();
+                    try {
+                        var payload = new Object(); var cleanup = RuntimeFault.fault("failed discarded async cleanup");
+                        var request = threads.send(threads.currentId(), payload);
+                        assertSame(request, threads.poll(null, true));
+                        assertEquals(AsyncRequestState.CLAIMED, request.getState());
+                        var owner = new LifetimeOwner(language);
+                        var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor());
+                        var saved = new AstContinuation(owner, request, MaskingState.UNMASKED, frame, List.of(new AstResumeStep() {
+                            @Override public Object resume(VirtualFrame activation, Object input) { return fail("Discarded async work ran"); }
+                            @Override public void discard() { arena.close(); throw cleanup; }
+                        }), StackAnnotationState.EMPTY);
+                        var failure = assertThrows(GuestException.class, () -> {
+                            if (caught) AsyncContinuations.deliverIfCaught(saved, true, null);
+                            else AsyncContinuations.publicResult(saved, null);
+                        });
+                        assertSame(payload, failure.getPayload());
+                        assertArrayEquals(new Throwable[]{cleanup}, failure.getSuppressed());
+                        assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                        assertEquals(AsyncRequestState.ACKNOWLEDGED, request.await(null));
+                        assertFalse(arena.scope().isAlive());
+                    } finally { if (arena.scope().isAlive()) arena.close(); }
+                }
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+    @Test void recaptureTransfersOwnershipBeforeResumeOrDiscard() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean discard : new boolean[]{false, true}) {
+                    var arena = Arena.ofShared();
+                    try {
+                        var owner = new LifetimeOwner(language);
+                        var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor());
+                        var steps = new ArrayDeque<AstResumeStep>();
+                        steps.add((saved, input) -> { throw new AstCapture(AstStackSpill.INSTANCE, MaskingState.UNMASKED); });
+                        steps.add(ownedMemory(arena));
+                        var cut = assertThrows(AstCapture.class, () -> AstContinuations.resumeAstSteps(frame, steps, Unit.INSTANCE));
+                        assertTrue(arena.scope().isAlive(), "Recapture discarded transferred work");
+                        cut.enclose(pending -> (saved, input) -> AstContinuations.resumeAstSteps(saved, pending, input));
+                        var saved = cut.freeze(owner, frame);
+                        cut.discard();
+                        assertTrue(arena.scope().isAlive(), "Freezing left duplicate ownership on the capture");
+                        if (discard) {
+                            saved.discard(); saved.discard();
+                            assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                        } else assertEquals(123, saved.continueWith(Unit.INSTANCE));
+                        assertFalse(arena.scope().isAlive(), "Terminal scope retained its native resource");
+                    } finally { if (arena.scope().isAlive()) arena.close(); }
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void discardingAWaiterPreservesItsRetainedSharedChild() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            var arena = Arena.ofShared();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var owner = new LifetimeOwner(language);
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor());
+                var child = new AstContinuation(owner, AstStackSpill.INSTANCE, MaskingState.UNMASKED, frame,
+                    List.of(ownedMemory(arena)), StackAnnotationState.EMPTY);
+                var segment = new CallSegment(child);
+                var parked = new CallSegmentSuspended(segment, null, null, true);
+                var caller = AstControl.captureChild(owner, parked).freeze(owner, frame);
+                caller.discard();
+                assertTrue(arena.scope().isAlive(), "Discarding a waiter disposed its retained child");
+                assertEquals(123, Calls.target(new LifetimeDriver(language).getCallTarget(),
+                    new Object[]{new AstStackContinuation(owner, parked)}));
+                assertFalse(arena.scope().isAlive());
+            } finally { if (arena.scope().isAlive()) arena.close(); context.leave(); }
+        }
     }
     private static WeakReference<Object> deadWitness() { return new WeakReference<>(new Object()); }
     private static boolean collect(WeakReference<Object> reference) {
