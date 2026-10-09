@@ -608,8 +608,9 @@ entry execution or remove the Windows deep-path copy limit.
 On Windows, `--installed-core pinned --ghc-source DIR` instead retains the
 explicitly selected, completed `ghc-internal` producer and lets ordinary pinned
 acquisition build missing dependencies. Selection validates its real Cabal unit,
-compiler/settings, complete source graph and each compiled source/CPP fingerprint;
-the current helper must reproduce the same graph. Acquisition records those
+compiler/settings, complete source graph and each compiled source/CPP fingerprint,
+including `.hs-boot` inputs against their real Cabal-owned `.hi-boot` products.
+The current helper must reproduce the same graph. Acquisition records those
 observations in `configured-source-proof.json`. It does not rebuild the supplied
 bootstrap or change an old compilation key. Dependencies that load the exporter
 still bind its actual archive; stale plugin-dependent interfaces are rejected.

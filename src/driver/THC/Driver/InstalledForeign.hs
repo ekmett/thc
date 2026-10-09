@@ -539,6 +539,7 @@ configuredSourceView context source = do
   expected <- canonicalizePath (root </> "dist")
   check (configuration == Just (expected, False)) "configured source provider lost its native owner"
   lbi <- getPersistBuildConfig Nothing (makeSymbolicPath expected)
+  built <- canonicalizePath (getSymbolicPath (buildDir lbi))
   component <- case allComponentsInBuildOrder lbi of
     [value] -> pure value
     _ -> fail "configured source provider has multiple components"
@@ -563,14 +564,16 @@ configuredSourceView context source = do
     ["--source-graph", installedLibdir context, root </> "source-graph-request.json"] (Just (root </> "source"))
   actualGraph <- either fail pure (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack observedGraph)))
   check (actualGraph == graphValue) "current helper changed the retained compilation source graph"
-  observations <- forM [(name, path) | (name, path, False) <- nodes] $ \(name, path) -> do
-    interface <- maybe (fail "configured source graph lacks its interface") pure (lookup name (installedInterfaces unit))
+  observations <- forM nodes $ \(name, path, boot) -> do
+    interface <- if boot then pure (built </> modulePath name <.> "hi-boot")
+      else maybe (fail "configured source graph lacks its interface") pure (lookup name (installedInterfaces unit))
     let sourceFile = if isAbsolute path then path else root </> "source" </> path
+        label = name ++ if boot then " [boot]" else ""
     description <- command (installedGhc context) ["--show-iface", interface] Nothing
     digest <- show <$> getFileHash sourceFile
     check ([fingerprint | line <- lines description, ["src", "hash:", fingerprint] <- [words line]] == [digest])
-      ("configured source differs from retained interface: " ++ name)
-    retained <- either (fail . (("configured source " ++ name ++ ": ") ++)) pure (retainedUsageFiles description)
+      ("configured source differs from retained interface: " ++ label)
+    retained <- either (fail . (("configured source " ++ label ++ ": ") ++)) pure (retainedUsageFiles description)
     cpp <- verifyUsageFiles (root </> "source") retained
     pure (sourceFile, digest, cpp)
   pure (selected { installedSource = Just root },

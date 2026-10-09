@@ -159,6 +159,18 @@ configuredSourceViewTests env = TestLabel "configured source keeps real native o
   case rejected of
     Left problem -> assertContains "differs from selected compiler/ABI" (show problem)
     Right _ -> assertFailure "configured source accepted a different compiler/ABI"
+  let bootSource = source </> "source/src/GHC/Internal/IO.hs-boot"
+  bootBytes <- BS.readFile bootSource
+  bracket (pure bootBytes) (BS.writeFile bootSource) $ \original -> do
+    let changed = Text.encodeUtf8 (Text.replace "mplusIO :: IO a -> IO a -> IO a"
+          "mplusIO :: IO a -> IO a -> IO ()" (Text.decodeUtf8 original))
+    assertBool "negative control changes a real boot declaration" (changed /= original)
+    BS.writeFile bootSource changed
+    rejectedBoot <- tryIOError (configuredSourceView native source)
+    case rejectedBoot of
+      Left problem -> assertContains "configured source differs from retained interface: GHC.Internal.IO [boot]" (show problem)
+      Right _ -> assertFailure "configured source accepted a changed real hs-boot declaration"
+  assertEqual "restore exact original boot-source bytes" bootBytes =<< BS.readFile bootSource
   (selected, proof) <- configuredSourceView native source
   canonical <- canonicalizePath source
   assertEqual "qualified source retains its genuine native owner" (Just canonical) (installedSource selected)
