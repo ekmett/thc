@@ -13,4 +13,8 @@ public interface AstResumeStep {
 
     /** Instantiate private progress from an immutable captured scope recipe. */
     default AstResumeStep forInvocation() { return this; }
+
+    /** Terminally release only work owned by this step. A borrowed shared
+     * thunk/call edge does not discard the child's retained continuation. */
+    default void discard() {}
 }

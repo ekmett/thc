@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import thc.Language;
+import thc.PackageScalarLink;
 
 public final class CoreOriginalStdio {
     private CoreOriginalStdio() {}
@@ -32,6 +33,25 @@ public final class CoreOriginalStdio {
     public static NativeDirectoryStreams directories(Node node) { return NativeFileProvider.current().getDirectoryStreams(); }
     public static RtsFileLocks locks(Node node) { return Language.currentState(node).getRtsFileLocks(); }
     public static ManagedIconv iconv(Node node) { return Language.currentState(node).getIconv(); }
+
+    /** Windows uses real process CRT descriptors. Keep the original package
+     * adapter and its strict ABI proof instead of manufacturing ManagedFiles IDs. */
+    static PackageScalarCall windowsOpening(OriginalStdioOp operation, Object metadata, List<?> arguments,
+                                           List<?> flags, Object result, List<PackageScalarLink> links) {
+        if (!WindowsDirectoryStreams.supportedHost() || operation == null || !operation.getOpening() ||
+                !"Word16Rep".equals(operation.getArguments().get(2))) return null;
+        var call = CorePackageScalarForeign.validate(metadata, arguments, flags, result, links);
+        requireProof(call != null && windowsOpening(call), "Windows opening requires its real selected-package native adapter");
+        return call;
+    }
+    static boolean windowsOpening(PackageScalarCall call) {
+        return WindowsDirectoryStreams.supportedHost() && call.getKind() == PackageScalarCall.Kind.STATIC &&
+            "ghc-internal".equals(call.getLink().getUnit()) && call.getLink().getTarget().startsWith("x86_64-") &&
+            call.getLink().getTarget().contains("-windows-") && call.getLink().getNativeLibrary().length != 0 &&
+            "__hscore_open".equals(call.getSignature().getSymbol()) && "ccall".equals(call.getSignature().getConvention()) &&
+            List.of("AddrRep", "Int32Rep", "Word16Rep").equals(call.getSignature().getArguments()) &&
+            "Int32Rep".equals(call.getResult());
+    }
 
     private static void requireProof(boolean condition, String detail) {
         if (!condition) throw new RuntimeFault("Invalid original stdio call: " + detail);

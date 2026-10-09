@@ -32,6 +32,7 @@ public final class PackageScalarAccess extends Node {
     private final boolean pointers;
     private final boolean integerResult;
     private final boolean addressResult;
+    private final boolean windowsOpening;
     private final List<ManagedAddress> noPointerArguments;
 
     public PackageScalarAccess(PackageScalarCall call) {
@@ -53,6 +54,7 @@ public final class PackageScalarAccess extends Node {
             default -> false;
         };
         addressResult = call.getResult().equals("AddrRep");
+        windowsOpening = CoreOriginalStdio.windowsOpening(call);
         noPointerArguments = List.of();
     }
 
@@ -115,6 +117,10 @@ public final class PackageScalarAccess extends Node {
         if (call.getKind() == PackageScalarCall.Kind.FREE_CALLBACK) {
             entry.getOwner().getNativeCallbacks().free((ManagedAddress) arguments[0]); return null;
         }
+        if (windowsOpening) {
+            arguments = arguments.clone();
+            arguments[0] = WindowsNativeIo.required().openingPath((ManagedAddress) arguments[0]);
+        }
         var threads = entry.getOwner().getThreads();
         var previous = threads.enterForeign(call.getSafety());
         try {
@@ -131,6 +137,7 @@ public final class PackageScalarAccess extends Node {
         } catch (Exception failure) { throw rethrow(failure); }
     }
     private Object invokeNative(PackageScalarFunction entry, Object[] arguments) throws com.oracle.truffle.api.interop.InteropException {
+        if (windowsOpening) return WindowsNativeIo.required().invokeOpening(() -> Calls.interop(calls, entry.getReceiver(), arguments));
         var libraries = entry.getOwner().getPackageCbits();
         libraries.seedErrno();
         try { return Calls.interop(calls, entry.getReceiver(), arguments); }

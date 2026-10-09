@@ -283,13 +283,20 @@
     "thc.runtime.WindowsCpuAffinityTest",
     "thc.runtime.WindowsDirectoryStreamsTest",
     "thc.runtime.WindowsStdioHostAbiTest",
-    "thc.runtime.WindowsSulongLibraryLookupTest",
     "thc.runtime.Word32VectorMemoryProofTest",
     "thc.runtime.Word32VectorStorageTest",
     "thc.runtime.WordArrayTest",
     "thc.runtime.TupleRepresentationTest"
   ],
   "groups": {
+    "windows-native-io": {
+      "gradleTask": "compileWindowsIoFixture",
+      "ciPlatforms": ["Windows"],
+      "junit": ["thc.runtime.WindowsSulongLibraryLookupTest"],
+      "commands": [{"argv": ["cmd", "/c", "gradlew.bat", "--no-daemon", "--max-workers=1", "compileWindowsIoFixture"]}],
+      "outputs": ["build/generated/test-cbits/windows-io-fixture.dll", "build/generated/test-cbits/windows-opening-fixture.dll", "build/generated/test-cbits/windows-open.bc", "build/generated/test-cbits/windows-io-receipt.json"],
+      "sources": ["bin/prepare-windows-native-io.ps1", "bin/build-cbits.py", "src/main/c/windows-io-api.c", "t/fixtures/compiler/WindowsNativeIo.c", "t/fixtures/compiler/WindowsNativeOpen.c", "t/fixtures/compiler/WindowsNativeOpenTransport.c", "t/fixtures/compiler/WindowsNativeIoOracle.hs", "build.gradle"]
+    },
     "backend-annotations": {
       "requires": ["compact-model"],
       "quarantined": true,

@@ -12,7 +12,8 @@ import thc.runtime.WindowsDirectoryStreams;
 /** Explicit host-filesystem authority for an opt-in context. This factory owns
  * the final filesystem configuration and returns a built Context, never a
  * mutable Builder. It cannot authenticate arbitrary filesystem wrappers.
- * POSIX files require selected-ABI resources; Windows supports the original directory API. */
+ * POSIX files require selected-ABI resources; Windows supports original package
+ * opening and directory APIs. Canonical Windows Handle/RTS IO remains unqualified. */
 public final class NativeIO {
     private NativeIO() {}
     public enum StandardEndpoint { INPUT, OUTPUT, ERROR }
@@ -25,7 +26,7 @@ public final class NativeIO {
     public static Context createContext(Set<StandardEndpoint> standardEndpoints, boolean allowProcesses) {
         if (WindowsDirectoryStreams.supportedHost()) {
             if (allowProcesses) throw new IllegalArgumentException("Native subprocesses currently require Linux x86_64");
-            return WindowsDirectoryStreams.createContext();
+            return WindowsDirectoryStreams.createContext(ContextProfile.NATIVE, Set.copyOf(standardEndpoints));
         }
         return NativeFileProvider.createContext(new LinkedHashSet<>(standardEndpoints), ContextProfile.NATIVE, allowProcesses);
     }
@@ -37,7 +38,8 @@ public final class NativeIO {
     }
     public static Context commandLineContext() { return commandLineContext(false); }
     static Context commandLineContext(boolean interfaceHelper) {
-        if (WindowsDirectoryStreams.supportedHost()) return WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER);
+        if (WindowsDirectoryStreams.supportedHost()) return WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER,
+            new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())));
         return NativeFileProvider.createContext(new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())), ContextProfile.LAUNCHER, supportedPosixHost(), interfaceHelper);
     }
 }

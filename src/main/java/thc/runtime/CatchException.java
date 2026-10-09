@@ -33,7 +33,7 @@ public final class CatchException extends Expr {
             return;
         }
         var destination = new AstTupleDestination(shape, slots, offset);
-        actionCall = new TupleDispatch(destination, null, 1, false, null);
+        actionCall = new TupleDispatch(new AstTupleDestination(shape, slots, offset, true), null, 1, false, null);
         handlerCall = new TupleDispatch(destination, null, 2, false, null);
         destinationSlots = slots; destinationOffset = offset;
     }
@@ -44,7 +44,7 @@ public final class CatchException extends Expr {
             atomic(() -> {
                 if (actionCall == null) {
                     AstTupleDestination destination = new AstTupleDestination(shape, slots, offset);
-                    actionCall = insert(new TupleDispatch(destination, metrics, 1, false, null));
+                    actionCall = insert(new TupleDispatch(new AstTupleDestination(shape, slots, offset, true), metrics, 1, false, null));
                     handlerCall = insert(new TupleDispatch(destination, metrics, 2, false, null));
                     destinationSlots = slots; destinationOffset = offset;
                 }
@@ -91,6 +91,8 @@ public final class CatchException extends Expr {
         if (request == null) throw cut.enclose(steps -> new CatchScope(this, handlerValue, steps));
         if (request.getTarget() != Thread.currentThread() || request.getState() != AsyncRequestState.CLAIMED)
             throw new IllegalStateException("AST catch delivery left its target thread or was already consumed");
+        try { cut.discard(); }
+        catch (RuntimeException | Error cleanup) { throw AsyncContinuations.cleanupFailure(request, cleanup, this); }
         request.acknowledge();
         return runHandler(frame, handlerValue, request.getPayload());
     }
@@ -100,6 +102,7 @@ public final class CatchException extends Expr {
         private final ArrayDeque<AstResumeStep> steps;
         @CompilerDirectives.TruffleBoundary CatchScope(CatchException node, Object handler) { this(node, handler, new ArrayDeque<>()); }
         CatchScope(CatchException node, Object handler, ArrayDeque<AstResumeStep> steps) { this.node = node; this.handler = handler; this.steps = steps; }
+        @Override public void discard() { AstContinuations.discardSteps(steps); }
         @Override public Object resume(VirtualFrame frame, Object input) {
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (GuestException guest) { return node.runHandler(frame, handler, guest.getPayload()); }

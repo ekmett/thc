@@ -78,16 +78,22 @@ public final class AstControl {
     public static Object complete(Node node, Object result, RootCallTarget target) { return complete(node, result, target, null, false); }
     public static Object complete(Node node, Object result, RootCallTarget target, TupleShape shape) { return complete(node, result, target, shape, false); }
     public static Object complete(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail) {
+        return complete(node, result, expectedTarget, tupleShape, identityTail, false);
+    }
+    static Object complete(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail, boolean caughtIOAction) {
         if (!captures(node)) return result;
-        return completeCallback(node, result, expectedTarget, tupleShape, identityTail);
+        return completeCallback(node, result, expectedTarget, tupleShape, identityTail, caughtIOAction);
     }
     static Object completeCallback(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail) {
+        return completeCallback(node, result, expectedTarget, tupleShape, identityTail, false);
+    }
+    private static Object completeCallback(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail, boolean caughtIOAction) {
         if (!(result instanceof TailYield) && !(result instanceof AstTailYield) &&
             !(result instanceof SavedGuestContinuation) && !(result instanceof ContinuationResult)) return result;
-        return completeSuspended(node, result, expectedTarget, tupleShape, identityTail);
+        return completeSuspended(node, result, expectedTarget, tupleShape, identityTail, caughtIOAction);
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
-    private static Object completeSuspended(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail) {
+    private static Object completeSuspended(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail, boolean caughtIOAction) {
         RootCallTarget tailTarget = result instanceof TailYield tail ? tail.getTarget() :
             result instanceof AstTailYield tail ? tail.getTarget() : null;
         SavedGuestContinuation saved = result instanceof TailYield tail ? savedGuestContinuation(tail.getContinuation()) :
@@ -98,6 +104,7 @@ public final class AstControl {
             throw fault("AST call returned an unrelated continuation");
         if (tupleShape != null && !root.hasTupleResult(tupleShape)) throw fault("AST call continuation changed its tuple result shape");
         if (!AsyncContinuations.isYieldMarker(saved.getYielded())) throw fault("AST call returned an unsupported continuation cut");
+        AsyncContinuations.deliverIfCaught(saved, caughtIOAction, node);
         MaskingState callerMask = SynchronousMasking.current(node);
         FunctionRoot caller = node.getRootNode() instanceof FunctionRoot function ? function : null;
         if (identityTail && tupleShape == null && saved instanceof AstContinuation ast &&

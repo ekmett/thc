@@ -6300,11 +6300,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         var representations = argumentMetadata(args);
         var resultRepresentation = metadata == null ? null : metadata.get("rep");
         var override = CoreForeignOverride.select(metadata);
-        var packageScalar = override == null && cpuAffinity == null && runtimeService == null
+        var stdioCandidate = override == CoreForeignOverride.STDIO ? CoreOriginalStdio.validate(metadata, representations, flags, resultRepresentation) : null;
+        var nativeOpening = CoreOriginalStdio.windowsOpening(stdioCandidate, metadata, representations, flags, resultRepresentation, packageScalarLinks);
+        var packageScalar = nativeOpening != null ? nativeOpening : override == null && cpuAffinity == null && runtimeService == null
             ? CorePackageScalarForeign.validate(metadata, representations, flags, resultRepresentation, packageScalarLinks) : null;
         boolean stackClone = override == CoreForeignOverride.STACK && CoreStackForeign.validate(metadata, representations, flags);
         var stackInfo = override == CoreForeignOverride.STACK_INFO ? CoreStackInfoForeign.validate(metadata, representations, flags, resultRepresentation) : null;
-        var originalStdio = override == CoreForeignOverride.STDIO ? CoreOriginalStdio.validate(metadata, representations, flags, resultRepresentation) : null;
+        var originalStdio = nativeOpening == null ? stdioCandidate : null;
         var originalProcess = override == CoreForeignOverride.PROCESS ? CoreProcessForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         boolean stableFree = override == CoreForeignOverride.STABLE_FREE && CoreStablePointers.validate(metadata, representations, flags, resultRepresentation);
         var sharedCAF = override == CoreForeignOverride.SHARED_CAF ? CoreSharedCAFStores.validate(metadata, representations, flags, resultRepresentation) : null;
@@ -6313,6 +6315,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean boundThreadForeign = override == CoreForeignOverride.BOUND_THREAD && CoreBoundThreadForeign.validate(metadata, representations, flags, resultRepresentation, false);
         var gcForeign = override == CoreForeignOverride.GC ? CoreGcForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         var rtsEventForeign = override == CoreForeignOverride.RTS_EVENT ? CoreRtsEventForeign.validate(metadata, representations, flags, resultRepresentation) : null;
+        var windowsIo = override == CoreForeignOverride.WINDOWS_IO ? CoreWindowsIoForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         boolean allocationCounterForeign = override == CoreForeignOverride.ALLOCATION_COUNTER && CoreBoundThreadForeign.validate(metadata, representations, flags, resultRepresentation, true);
         var stringRts = override == CoreForeignOverride.STRING_RTS ? CoreStringRtsForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         var environment = override == CoreForeignOverride.ENVIRONMENT ? CoreEnvironmentForeign.validate(metadata, representations, flags, resultRepresentation) : null;
@@ -6640,6 +6643,40 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.beginSetNumCapabilities(); for (var operand : operands) operand.emit(e); b.endSetNumCapabilities();
                 }
                 if (enableAsync && "safe".equals(rtsEventForeign.getSafety())) emitAsyncPoll(e);
+            });
+        }
+        if (windowsIo != null) {
+            CoreWindowsIoForeign.validateHead(fn, defined);
+            var operands = new ArrayList<Expression>();
+            for (int index = 0; index < args.size(); index++) {
+                var operand = compile(args.get(index), scope, false);
+                CoreWindowsIoForeign.validateOperand(windowsIo, index, operand.proof(), lexicalProof(args.get(index), scope));
+                operands.add(operand);
+            }
+            return tupleExpression(tupleProof, (e, destination) -> {
+                var b = e.builder;
+                if (windowsIo.request) {
+                    b.beginBlock();
+                    var request = b.createLocal("Windows physical IO request", FrameSlotKind.Object);
+                    b.beginStaticStoreObject(request);
+                    b.beginPrepareWindowsIoRequest(windowsIo == WindowsIoOp.WRITE);
+                    for (var operand : operands) operand.emit(e);
+                    b.endPrepareWindowsIoRequest(); b.endStaticStoreObject();
+                    emitOwnerWaitRetry(e, () -> {
+                        b.beginAwaitWindowsIoRequest(destination.get(0), destination.get(1));
+                        b.emitStaticLoadObject(request); b.endAwaitWindowsIoRequest();
+                    });
+                    b.endBlock();
+                    if (enableAsync) emitAsyncPoll(e);
+                } else if (windowsIo == WindowsIoOp.INSTALL) {
+                    b.beginInstallWindowsConsole(destination.getFirst());
+                    for (var operand : operands) operand.emit(e);
+                    b.endInstallWindowsConsole();
+                } else {
+                    b.beginWindowsConsoleDone();
+                    for (var operand : operands) operand.emit(e);
+                    b.endWindowsConsoleDone();
+                }
             });
         }
         if (gcForeign != null) {

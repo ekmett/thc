@@ -7,6 +7,7 @@ import groovy.json.JsonSlurper
 import java.security.MessageDigest
 import org.gradle.process.JavaForkOptions
 import org.gradle.process.CommandLineArgumentProvider
+import org.gradle.api.internal.tasks.testing.filter.TestSelectionMatcher
 
 buildscript {
     dependencies { classpath 'thc:build-logic' }
@@ -334,10 +335,10 @@ if "$cygwin" || "$msys"; then THC_JAM_LIB=$(cygpath --path --mixed "$JAVA_HOME/b
 '''.replace("@JAM_INPUTS@", jamLauncherIdentity.collect { "'${it}'" }.join(" "))
     def windowsJamPolicy = '''if not defined JAVA_HOME (echo thc: JAVA_HOME must select the pinned JAM GraalVM package 1>&2 & exit /b 1)
 if not exist "%JAVA_HOME%\\lib\\jam\\jam-vm.jar" (echo thc: Missing JAM API in JAVA_HOME 1>&2 & exit /b 1)
-fc /b "%APP_HOME%\\lib\\jam-vm.jar" "%JAVA_HOME%\\lib\\jam\\jam-vm.jar" >nul 2>&1
+fc /b "%APP_HOME%\\lib\\jam-vm.jar" "%JAVA_HOME%\\lib\\jam\\jam-vm.jar" <nul >nul 2>&1
 if errorlevel 1 (echo thc: JAM API differs from the distribution's pinned package 1>&2 & exit /b 1)
 for %%f in (@JAM_INPUTS@) do (
-    fc /b "%APP_HOME%\\jam-runtime-identity\\%%~f" "%JAVA_HOME%\\%%~f" >nul 2>&1
+    fc /b "%APP_HOME%\\jam-runtime-identity\\%%~f" "%JAVA_HOME%\\%%~f" <nul >nul 2>&1
     if errorlevel 1 (echo thc: JAM provider differs from the distribution's pinned package 1>&2 & exit /b 1)
 )
 '''.replace("@JAM_INPUTS@", jamLauncherIdentity.collect { '"' + it.replace('/', '\\') + '"' }.join(" "))
@@ -1212,7 +1213,7 @@ def nativeExec = { Closure action ->
 }
 def compileCbits = tasks.register("compileCbits", Exec) {
     inputs.files("bin/build-cbits.py", "src/main/c/iconv-api.c",
-        "src/main/c/package-pointer-api.c", "src/main/c/windows-malloc.c")
+        "src/main/c/package-pointer-api.c", "src/main/c/windows-malloc.c", "src/main/c/windows-io-api.c")
     inputs.files("nih/pinned/ghc-9.14.1/rts/StgPrimFloat.c", "nih/pinned/ghc-9.14.1/rts/StgPrimFloat.h")
     inputs.file("src/main/c/wait-status-api.c")
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
@@ -1222,6 +1223,34 @@ def compileCbits = tasks.register("compileCbits", Exec) {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
 tasks.processResources { dependsOn(compileCbits) }
+
+tasks.register("compileWindowsIoFixture", Exec) {
+    dependsOn(compileCbits)
+    onlyIf { windowsHost }
+    inputs.files("t/fixtures/compiler/WindowsNativeIo.c", "t/fixtures/compiler/WindowsNativeOpen.c",
+        "t/fixtures/compiler/WindowsNativeOpenTransport.c", "t/fixtures/compiler/WindowsNativeIoOracle.hs",
+        "bin/prepare-windows-native-io.ps1")
+    def output = layout.buildDirectory.dir("generated/test-cbits")
+    outputs.dir(output)
+    // Revalidate the actual selected compiler/archive, not a stale ambient DLL.
+    outputs.upToDateWhen { false }
+    commandLine(providers.environmentVariable("THC_POWERSHELL").orElse("pwsh").get(),
+        "-NoLogo", "-NoProfile", "-File", "bin/prepare-windows-native-io.ps1",
+        "-Output", output.get().asFile)
+}
+// The inventory owns producer selection and consuming artifacts together.
+// Evaluate filters after --tests and specialized task filters are configured.
+// Use pinned Gradle's own conservative class admission for class.method patterns.
+tasks.withType(Test).configureEach { testTask ->
+    def selectedGroups = {
+        if (!windowsHost || testTask.testClassesDirs.files.intersect(sourceSets.test.output.classesDirs.files).empty) return []
+        def matcher = new TestSelectionMatcher(testTask.filter.toSpec())
+        fixtureGroups.values().findAll { group -> group.gradleTask && group.junit.any { matcher.mayIncludeClass(it) } }
+    }
+    dependsOn { selectedGroups().collect { it.gradleTask } }
+    inputs.files(provider { selectedGroups().collectMany { it.outputs }.collect { file(it) } })
+        .withPropertyName("selectedNativeFixtures")
+}
 
 // Exact-width byte/short atomics, which JDK segment handles do not implement.
 def compileNativeAtomics = tasks.register("compileNativeAtomics") {

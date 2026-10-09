@@ -44,6 +44,13 @@ public final class AstContinuation implements SavedGuestContinuation {
         if (!tailSpill || claimed.get()) throw new IllegalStateException("Check failed.");
         frame.setLong(FrameLayout.BLOOM_FILTER, ((FunctionRoot) sourceRoot).entryBloom(liveOwners));
     }
+    @Override @TruffleBoundary public void discard() {
+        if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
+        if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);
+        if (!claimed.compareAndSet(false, true)) return;
+        yielded = null;
+        AstContinuations.discardSteps(steps);
+    }
     @Override @TruffleBoundary public Object continueWith(Object input) {
         if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);

@@ -12,6 +12,7 @@ final class AstMaskScope implements AstResumeStep {
     private final MaskingState prior;
     private final ArrayDeque<AstResumeStep> steps;
     AstMaskScope(Node node, MaskingState prior, ArrayDeque<AstResumeStep> steps) { this.node = node; this.prior = prior; this.steps = steps; }
+    @Override public void discard() { AstContinuations.discardSteps(steps); }
     @Override public Object resume(VirtualFrame frame, Object input) {
         try { return AstContinuations.resumeAstSteps(frame, steps, input); }
         catch (AstCapture cut) { throw cut.enclose(remaining -> new AstMaskScope(node, prior, remaining)); }

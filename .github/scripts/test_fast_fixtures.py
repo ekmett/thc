@@ -91,6 +91,23 @@ class FixtureGraphTest(unittest.TestCase):
                 self.assertEqual([], result["targets"])
                 run.assert_not_called()
 
+    def test_windows_native_io_selects_its_gradle_producer_without_exporter(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        name = "thc.runtime.WindowsSulongLibraryLookupTest"
+        self.assertEqual("windows-native-io", owners[name])
+        group = manifest["groups"][owners[name]]
+        self.assertEqual(["Windows"], group["ciPlatforms"])
+        self.assertIn("build/generated/test-cbits/windows-open.bc", group["outputs"])
+        self.assertIn("build/generated/test-cbits/windows-opening-fixture.dll", group["outputs"])
+        self.assertIn("build/generated/test-cbits/windows-io-receipt.json", group["outputs"])
+        run = mock.Mock()
+        result = fast_fixtures.prepare_cmake(project, self.selection(name), run)
+        self.assertEqual([], result["targets"])
+        self.assertEqual(["compileWindowsIoFixture"], result["gradleTargets"])
+        self.assertEqual(["fixture-gradle-build"] if fast_fixtures.os.name == "nt" else [],
+                         [call.args[0] for call in run.call_args_list])
+
     def test_every_real_quarantined_fixture_stops_before_toolchain_or_generation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)
@@ -167,10 +184,14 @@ class FixtureGraphTest(unittest.TestCase):
         classes = sorted(set(owners) - fast_fixtures.quarantined_classes(project))
         run = mock.Mock()
         result = fast_fixtures.prepare_cmake(project, self.selection(*classes), run)
-        expected = {group["cmakeTarget"] for group in manifest["groups"].values() if not group.get("quarantined")}
+        expected = {group["cmakeTarget"] for group in manifest["groups"].values()
+                    if not group.get("quarantined") and group.get("cmakeTarget")}
         self.assertEqual(expected, set(result["targets"]))
         self.assertEqual(len(expected), len(result["targets"]))
-        self.assertEqual(["fixture-configure", "fixture-build"], [call.args[0] for call in run.call_args_list])
+        self.assertEqual(["compileWindowsIoFixture"], result["gradleTargets"])
+        self.assertEqual(["fixture-configure", "fixture-build"] +
+                         (["fixture-gradle-build"] if fast_fixtures.os.name == "nt" else []),
+                         [call.args[0] for call in run.call_args_list])
 
     def test_aggregate_layout_has_one_independent_target_at_commit_cadence(self):
         import fast_select

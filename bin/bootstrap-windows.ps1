@@ -3,6 +3,10 @@
 # Dot-source this script to select task-local tools in the current shell.
 param([string]$Prefix = (Join-Path (Split-Path $PSScriptRoot) '.toolchains/windows'))
 $ErrorActionPreference = 'Stop'
+if (!$env:THC_POWERSHELL) {
+    if ($PSVersionTable.PSVersion.Major -ge 7) { $env:THC_POWERSHELL = [Environment]::ProcessPath }
+    else { $env:THC_POWERSHELL = (Get-Command pwsh -ErrorAction Stop).Source }
+}
 . "$PSScriptRoot/windows-common.ps1"
 if ($env:OS -ne 'Windows_NT' -or [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') {
     throw 'This bootstrap supplies native Windows x64 tools'
