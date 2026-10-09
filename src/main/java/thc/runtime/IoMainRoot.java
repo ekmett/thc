@@ -6,7 +6,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/** The IO newtype is an erased State# transformer, not a native process. */
+/** Runs an executable entry or shutdown action whose caller ignores its return value. */
 public final class IoMainRoot extends ContextRoot {
     @Child private Force force = new Force(new Metrics(false));
     @Child private TupleDispatch dispatch;

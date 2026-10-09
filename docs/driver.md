@@ -203,9 +203,11 @@ entries enable it automatically. The admission contract is described in
 [asynchronous exceptions](async-exceptions.md).
 
 Both library providers run GHC's generated `main::Main.main`, preserving Cabal's
-`-main-is` selection. Any lifted result of the selected `IO a` action is discarded
-without forcing it; exceptions raised by the action still propagate. On normal
-completion, `flushStdHandles` in the same program. Relative guest file paths use
+`-main-is` selection. As with GHC, `main` may have type `IO a`: the launcher runs
+it for its effects and ignores its return value without forcing it. Results used
+within the Haskell computation still follow ordinary evaluation and control flow;
+exceptions raised while running `main` still propagate. On normal completion,
+the launcher runs `flushStdHandles` in the same program. Relative guest file paths use
 the launch working directory; `--project-dir` does not change it.
 
 The command-line context grants its native filesystem and standard streams.

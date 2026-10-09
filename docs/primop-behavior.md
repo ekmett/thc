@@ -20,12 +20,17 @@ The tables distinguish unsupported behavior from intentional target choices
 and performance-only hints. Linked implementation guides supply detail and
 test commands.
 
-## Executable IO actions
+## Executable entry points
 
-Executable `IO a` entries validate the erased RealWorld state-transformer tuple
-and discard its lifted answer without forcing it, as GHC does. This includes
-returned bottoms and functions; exceptions raised by the action still propagate.
-Signal dispatch uses the same answer-discarding completion path.
+The launcher runs `main :: IO a` for its effects and ignores its return value,
+as GHC does. For example, `main = pure (undefined :: Int)` completes without
+forcing the unused `Int`; an exception raised by the action still propagates.
+Within Haskell, `(>>=)` passes each action's result to its continuation as usual.
+Result-returning foreign exports also preserve their results.
+
+The launcher's completion path checks the returned state-transformer tuple and
+releases its storage. The signal dispatcher shares that path because its caller
+also has no use for the handler's final `()` result.
 
 ## Narrow Core literals
 

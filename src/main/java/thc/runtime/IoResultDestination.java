@@ -7,7 +7,7 @@ import com.oracle.truffle.api.nodes.Node;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/** Authenticates and releases the IO tuple; lifted answers are discarded lazily. */
+/** Releases a completed IO tuple when the caller has no use for the action's return value. */
 public final class IoResultDestination extends TupleDestination {
     private final Language language;
     public IoResultDestination(TupleShape shape, Language language) {

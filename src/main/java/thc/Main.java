@@ -61,7 +61,8 @@ public final class Main {
     /**
      * Load a Core entry owned by the supplied context. Supported signatures carry
      * numeric values, logical tuple/sum arrays, exact vector species and
-     * context-owned references/functions. IO entries expose {@code runIO}.
+     * context-owned references/functions. Selecting {@code ioMain} exposes
+     * {@code runIO}, which runs the action for its effects and ignores its return value.
      */
     public static Value loadEntry(Context context, List<String> modules, String entry) { return loadEntry(context, modules, entry, true); }
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument) { return loadEntry(context, modules, entry, instrument, defaultBackend()); }
@@ -92,7 +93,8 @@ public final class Main {
     /** Select a lazy entry view from an explicitly loaded program. Lookup does not evaluate its CAFs. */
     public static Value loadEntry(Value program, String entry) { return program.invokeMember("entry", entry); }
     /**
-     * Select an IO view, optionally with executable shutdown. Only a view with
+     * With {@code ioMain}, select a {@code runIO} view that ignores the action's
+     * return value, optionally with executable shutdown. Only a view with
      * shutdown is one-shot; repeated lookup of that exact configuration retains
      * its lifecycle state. Other entry configurations have independent views.
      */
