@@ -1,0 +1,10 @@
+diff --git a/com/oracle/truffle/llvm/initialization/LoadModulesNode.java b/com/oracle/truffle/llvm/initialization/LoadModulesNode.java
+--- a/com/oracle/truffle/llvm/initialization/LoadModulesNode.java
++++ b/com/oracle/truffle/llvm/initialization/LoadModulesNode.java
+@@ -108,5 +108,5 @@ public final class LoadModulesNode extends LLVMRootNode {
+     @Children final LoadDependencyNode[] libraryDependencies;
+     final LLVMParserRuntime parserRuntime;
+     final LLVMLanguage language;
+-    private boolean hasInitialised;
++    @CompilationFinal private boolean hasInitialised;
+     @CompilationFinal private CachedMainFunction main;

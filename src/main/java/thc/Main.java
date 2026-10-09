@@ -38,7 +38,7 @@ public final class Main {
         if (profile == ContextProfile.SYNCHRONOUS_TEST)
             return builder.option("engine.BackgroundCompilation", "false");
         return builder.allowEnvironmentAccess(EnvironmentAccess.INHERIT)
-            .option("engine.CompilationFailureAction", "Print")
+            .option("engine.CompilationFailureAction", System.getProperty("polyglot.engine.CompilationFailureAction", "Print"))
             .option("engine.CompilerThreads", System.getProperty("polyglot.engine.CompilerThreads", LAUNCHER_COMPILER_THREADS))
             .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
             .option("engine.SingleTierCompilationThreshold", System.getProperty("polyglot.engine.SingleTierCompilationThreshold", "10000"))

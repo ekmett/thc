@@ -22,7 +22,7 @@ recompiled classes are replaced as needed too.
 | --- | --- | --- |
 | `org.graalvm.truffle:truffle-api` | `thc-truffle-api-25.3.4.1-protocol3-carrier1.jar` | `com.oracle.truffle.api.nodes.RootNode`, `com.oracle.truffle.api.nodes.NodeAccessor`, `com.oracle.truffle.api.bytecode.ContinuationRootNode`, `com.oracle.truffle.polyglot.JDKSupport` |
 | `org.graalvm.truffle:truffle-runtime` | `thc-truffle-runtime-25.3.4.1-return1-budget1-aot1.jar` | `OptimizedCallTarget`, `BaseOSRRootNode`, `OptimizedOSRLoopNode`, `BytecodeOSRMetadata`, all in `com.oracle.truffle.runtime` |
-| `org.graalvm.llvm:llvm-language` | `thc-llvm-language-25.3.4.1-globals1.jar`; Windows adds `-windows1` before `.jar` | `com.oracle.truffle.llvm.runtime.global.LLVMGlobalContainer`, `com.oracle.truffle.llvm.initialization.InitializeSymbolsNode`; Windows also replaces `com.oracle.truffle.llvm.parser.coff.WindowsLibraryLocator` |
+| `org.graalvm.llvm:llvm-language` | `thc-llvm-language-25.3.4.1-globals1-init1.jar`; Windows adds `-windows1` before `.jar` | `com.oracle.truffle.llvm.runtime.global.LLVMGlobalContainer`, `com.oracle.truffle.llvm.initialization.InitializeSymbolsNode`, `com.oracle.truffle.llvm.initialization.LoadModulesNode`; Windows also replaces `com.oracle.truffle.llvm.parser.coff.WindowsLibraryLocator` |
 
 The owning build files are [materializable-api.gradle](../src/gradle/materializable-api.gradle),
 [protocol-runtime.gradle](../src/gradle/protocol-runtime.gradle) and
@@ -43,6 +43,7 @@ the replaced classes.
 | [graph-budget-api.patch](../tools/truffle-protocol/graph-budget-api.patch) | Let a language change a real compilation boundary after an actual graph-size bailout. | Adds generation and recovery hooks, defaulting to no recovery. The compiler-thread callback may acknowledge only a newer structural boundary; it cannot execute guest code, access a current context or submit/wait for compilation. |
 | [graph-budget-runtime.patch](../tools/truffle-protocol/graph-budget-runtime.patch) | Retry structurally reduced graphs and allow compiler-thread node replacement without waiting under an OSR owner's AST lock. | Recovery requires an opted-in newer generation; other failures retain normal handling. **OSR submission, publication, reservation and completion use the changed scheduling path for all languages**, even without recovery. Loop and bytecode OSR submit under the lock and finish outside it. Explicit foreground recovery waits/retries after the failed task completes; background recovery leaves the root eligible for a later request. Also exposes the read-only `BaseOSRRootNode.getSourceRootNode()` accessor. |
 | [declared-mutability.patch](../tools/sulong-globals/declared-mutability.patch) | A compiled C update to a declared mutable global should not invalidate its caller by discovering that mutability. | **Applies to any LLVM module loaded through this Sulong**, including other languages' native dependencies. Managed non-TLS globals declared mutable start in fallback storage instead of speculating on a constant for their first writes. Readonly globals and the default/TLS constructor retain upstream speculation. Mutable-global optimization and deoptimization behavior can change for unrelated LLVM guests. |
+| [initialization-latch.patch](../tools/sulong-globals/initialization-latch.patch) | Specialize the root's initialization latch together with its adopted children, including before the first execution. | **Applies to all module-loader roots using this Sulong.** The root-owned latch is compilation final: a cold root deoptimizes before using its uninitialized child. Existing invalidation, initialization order, synchronization and per-context initialization state are preserved. |
 | [optional-cwd.patch](../tools/sulong-windows/optional-cwd.patch) | Permit Windows DLL lookup to continue when guest file IO denies the optional working-directory search. | **Applies to all Windows Sulong dependency lookups.** A `SecurityException` during that optional search skips it and continues existing global/native lookup. Existing loading permissions still apply; the patch grants no file or native access. |
 
 The root protocols are described in more detail in
@@ -63,8 +64,8 @@ external embedding application's dependency graph.
 The build option `-Pthc.stockTruffle=true` selects all three upstream artifacts.
 It is a build/distribution choice, not a per-context switch. Stock mode keeps
 ordinary observed frame and return profiling, has no graph-budget recovery
-hooks, and retains upstream AOT exception, mutable-global and Windows lookup
-behavior, including the upstream isolated carrier MethodHandle lookup. THC checks that depend on those changed first-compilation or recovery
+hooks, and retains upstream AOT exception, mutable-global, module-initialization
+and Windows lookup behavior, including the upstream isolated carrier MethodHandle lookup. THC checks that depend on those changed first-compilation or recovery
 contracts are not equivalent in stock mode. Adding `-Dthc.stockTruffle=true` to
 an already packaged JVM does not change its JARs.
 

@@ -8,13 +8,14 @@ buildscript {
     dependencies { classpath "thc:build-logic" }
 }
 
-// One pinned Sulong artifact: declared mutable globals on all hosts, plus the
-// optional cwd lookup correction on Windows. Keep the original task names.
+// One pinned Sulong artifact: declared mutable globals and root initialization
+// on all hosts, plus optional cwd lookup on Windows. Keep the original task names.
 def patchWindowsLocator = System.getProperty("os.name").startsWith("Windows")
 def windowsSulongVersion = "25.3.4.1"
-def sulongPolicyVersion = patchWindowsLocator ? "globals1-windows1" : "globals1"
+def sulongPolicyVersion = patchWindowsLocator ? "globals1-init1-windows1" : "globals1-init1"
 def sulongReplacedClasses = ["com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer",
-    "com/oracle/truffle/llvm/initialization/InitializeSymbolsNode"]
+    "com/oracle/truffle/llvm/initialization/InitializeSymbolsNode",
+    "com/oracle/truffle/llvm/initialization/LoadModulesNode"]
 if (patchWindowsLocator) sulongReplacedClasses.add("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator")
 def replacedSulongEntry = { String name -> name == "META-INF/MANIFEST.MF" ||
     sulongReplacedClasses.any { name == it + ".class" || name.startsWith(it + '\u0024') } }
@@ -34,17 +35,20 @@ def requireWindowsSulongArchive = { File file, String hash ->
 def prepareWindowsSulong = tasks.register("prepareWindowsSulong", Sync) {
     from(provider { zipTree(windowsSulongSources.singleFile) })
     include("com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer.java",
-        "com/oracle/truffle/llvm/initialization/InitializeSymbolsNode.java")
+        "com/oracle/truffle/llvm/initialization/InitializeSymbolsNode.java",
+        "com/oracle/truffle/llvm/initialization/LoadModulesNode.java")
     if (patchWindowsLocator) include("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java")
     into(layout.buildDirectory.dir("windows-sulong/source"))
-    inputs.file("tools/sulong-globals/declared-mutability.patch")
+    inputs.files("tools/sulong-globals/declared-mutability.patch",
+        "tools/sulong-globals/initialization-latch.patch")
     if (patchWindowsLocator) inputs.file("tools/sulong-windows/optional-cwd.patch")
     doFirst {
         requireWindowsSulongArchive(windowsSulongSources.singleFile,
             "716562a9c6cbe9201f53bc972d9eafbb1a692a9d9aebb9f177a541c5e0913f66")
     }
     doLast {
-        def patches = ["tools/sulong-globals/declared-mutability.patch"]
+        def patches = ["tools/sulong-globals/declared-mutability.patch",
+            "tools/sulong-globals/initialization-latch.patch"]
         if (patchWindowsLocator) patches.add("tools/sulong-windows/optional-cwd.patch")
         for (patch in patches) {
             providers.exec {
@@ -65,7 +69,7 @@ def compileWindowsSulong = tasks.register("compileWindowsSulong", JavaCompile) {
 }
 def windowsSulongJar = tasks.register("windowsSulongJar", Jar) {
     group = "build"
-    description = "Build pinned Sulong with declared global mutability and the Windows optional cwd search."
+    description = "Build pinned Sulong with global mutability, root initialization and Windows optional cwd search."
     archiveBaseName.set("thc-llvm-language")
     archiveVersion.set("$windowsSulongVersion-$sulongPolicyVersion")
     destinationDirectory.set(layout.buildDirectory.dir("windows-sulong"))
@@ -83,7 +87,7 @@ def windowsSulongJar = tasks.register("windowsSulongJar", Jar) {
         new JarFile(windowsSulongBinary.singleFile).withCloseable { jar ->
             manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
         }
-        manifest.attributes(["Implementation-Title": "THC Sulong declared global mutability",
+        manifest.attributes(["Implementation-Title": "THC Sulong global mutability and initialization",
             "Implementation-Version": "$windowsSulongVersion-$sulongPolicyVersion",
             "Upstream-Source-SHA256": "716562a9c6cbe9201f53bc972d9eafbb1a692a9d9aebb9f177a541c5e0913f66"])
     }

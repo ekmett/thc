@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.staticobject.DefaultStaticProperty;
@@ -109,8 +110,14 @@ public final class HandoffLayout {
             }
         }
     }
-    @ExplodeLoop public void clearReferences(HandoffStorage storage) {
-        for (int i = 0; i < fields.length; i++) if (isObject(i)) fields[i].setObject(storage, null);
+    public void clearReferences(HandoffStorage storage) {
+        int width = fields.length;
+        // Fixed fields specialize during PE; resumed dynamic layouts keep a counted clear.
+        if (CompilerDirectives.isPartialEvaluationConstant(width)) clearFixed(storage, width);
+        else for (int i = 0; i < width; i++) if (isObject(i)) fields[i].setObject(storage, null);
+    }
+    @ExplodeLoop private void clearFixed(HandoffStorage storage, int width) {
+        for (int i = 0; i < width; i++) if (isObject(i)) fields[i].setObject(storage, null);
     }
     private static final Set<String> VECTOR_REPS;
     static {

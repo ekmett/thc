@@ -237,6 +237,10 @@ compilation timeout (30 s) and graph budget (`compiler.MaximumGraalGraphSize`,
 100 000). An explicit `polyglot.` system property overrides each, for example
 `JAVA_OPTS="${JAVA_OPTS:-} -Dpolyglot.compiler.MaximumGraalGraphSize=400000"`
 when a hot function stays interpreted after `GraphTooBigBailoutException`.
+Compiler failures default to `Print`;
+`-Dpolyglot.engine.CompilationFailureAction=Throw` selects Graal's `Throw`
+policy. Pair it with `-Dpolyglot.engine.BackgroundCompilation=false` when
+synchronous failure reporting is wanted.
 
 ## Attach a debugger
 
