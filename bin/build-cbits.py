@@ -172,6 +172,17 @@ def main():
             "dllSha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}, indent=2) + "\n")
         source_files.append(source)
         artifacts.extend([artifact, receipt])
+        source = ROOT / "src/main/c/windows-io-api.c"
+        artifact = output / "windows-io.dll"
+        command = [*options, "-shared", str(source), "-lws2_32", "-o", str(artifact)]
+        subprocess.run(command, cwd=ROOT, check=True)
+        commands.append(command)
+        receipt = output / "windows-io-abi.json"
+        receipt.write_text(json.dumps({"schema": 1, "target": target,
+            "dllSha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+            "loanSize": 16, "resultSize": 16}, indent=2) + "\n")
+        source_files.append(source)
+        artifacts.extend([artifact, receipt])
     record = lambda p: {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
     manifest = {"schema": 1, "target": target, "compilerDefaultTarget": default_target,
                 "bitcodeTargets": bitcode_targets,

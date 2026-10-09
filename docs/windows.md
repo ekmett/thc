@@ -617,36 +617,27 @@ still bind its actual archive; stale plugin-dependent interfaces are rejected.
 Plugin registration compares canonical archive identities, so a checkout
 junction and its resolved directory select the same actual library.
 
-The optional `windowsPackageIoTest` and `windowsPackageIoDenseTest` tasks check
-the ordinary package transport using an already acquired, original
-`GHC.Internal.IO.FD` CBD. Set `THC_WINDOWS_NATIVE_IO_CBD` to that module's CBD in
-the acquired unit; the suite verifies its native archive and component ABI.
-It opens a real temporary file through the captured `__hscore_open` declaration
-and checks zero-length reads, partial reads, EOF, read-only write failure and
-close through the captured CAPI entries, using caller-owned pinned storage.
-It does not prepare boot libraries or exercise an AST/bytecode guest program.
+The Windows loader suite also checks the native descriptor transfer boundary:
 
 ~~~powershell
-$env:THC_WINDOWS_NATIVE_IO_CBD = 'C:\path\to\acquired\GHC.Internal.IO.FD.cbd'
-./gradlew.bat --max-workers=1 --continue windowsPackageIoTest windowsPackageIoDenseTest
+./gradlew.bat testDefault --tests thc.runtime.WindowsSulongLibraryLookupTest `
+    testDense --tests thc.runtime.WindowsSulongLibraryLookupTest --continue
 ~~~
 
-`t/haskell-fixtures/WindowsFileOracle.hs` independently observes the same
-operations through native GHC:
+The named `compileWindowsIoFixture` prerequisite builds its own native DLL using
+the selected `THC_CLANG`. Its SDK operations exercise real files, pipes and
+loopback sockets. The runtime boundary binds the selected DLL's resolved CRT
+and WinSock imports, acquires private descriptor loans, and captures transfer
+errors before Java readmission. Closed descriptors return `EBADF`; recovery
+scopes the documented CRT validation callback to `_dup` and restores the exact
+previous thread-local handler. The regression also checks that the global
+handler identity survives. Generic embedding streams do not grant authority to
+the process CRT's standard endpoints; admit those explicitly through `NativeIO`.
 
-~~~powershell
-New-Item -ItemType Directory -Force build/windows-file-oracle | Out-Null
-[IO.File]::WriteAllBytes("$PWD/build/windows-file-oracle/input.bin", [byte[]]@(37,91,122))
-& $env:GHC --make -O2 -Wall -Werror -dcore-lint -dstg-lint t/haskell-fixtures/WindowsFileOracle.hs `
-    -odir build/windows-file-oracle -hidir build/windows-file-oracle -o build/windows-file-oracle/oracle.exe
-./build/windows-file-oracle/oracle.exe ./build/windows-file-oracle/input.bin
-~~~
-
-Its observation is `(0,3,[37,91,122],0,-1,9)` on
-the selected Windows toolchain. Passing these checks establishes ordinary CRT file
-transport, not RTS async IO, pipe/socket transport, console event completion,
-SAFE scheduler progress or first-compiled-call behavior. Those boundaries
-remain required before general Windows IO can be admitted.
+These checks qualify the native boundary ABI and loader/endpoint ownership.
+Console handler completion, genuine RTS tuple lowering and native opening still
+need integration before canonical Windows `runMainIO` is admitted. They do not
+establish guest compiled execution.
 
 If a worker exits after `jam: create heap backing (1455)`, record the failed run
 and check system commit capacity as well as physical memory. Windows defines

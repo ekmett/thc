@@ -25,7 +25,7 @@ public final class NativeIO {
     public static Context createContext(Set<StandardEndpoint> standardEndpoints, boolean allowProcesses) {
         if (WindowsDirectoryStreams.supportedHost()) {
             if (allowProcesses) throw new IllegalArgumentException("Native subprocesses currently require Linux x86_64");
-            return WindowsDirectoryStreams.createContext();
+            return WindowsDirectoryStreams.createContext(ContextProfile.NATIVE, Set.copyOf(standardEndpoints));
         }
         return NativeFileProvider.createContext(new LinkedHashSet<>(standardEndpoints), ContextProfile.NATIVE, allowProcesses);
     }
@@ -37,7 +37,8 @@ public final class NativeIO {
     }
     public static Context commandLineContext() { return commandLineContext(false); }
     static Context commandLineContext(boolean interfaceHelper) {
-        if (WindowsDirectoryStreams.supportedHost()) return WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER);
+        if (WindowsDirectoryStreams.supportedHost()) return WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER,
+            new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())));
         return NativeFileProvider.createContext(new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())), ContextProfile.LAUNCHER, supportedPosixHost(), interfaceHelper);
     }
 }

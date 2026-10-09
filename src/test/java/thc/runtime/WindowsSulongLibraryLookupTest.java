@@ -9,6 +9,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import thc.NativeIO;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.io.IOAccess;
 import org.junit.jupiter.api.Test;
@@ -22,6 +29,7 @@ import thc.PackageScalarLink;
 import thc.PackageScalarSignature;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static java.lang.foreign.ValueLayout.*;
 
 /** Native DLL lookup must not depend on guest cwd/file authority. The buffer
  * remains real context-owned Sulong C storage, not a managed replacement. */
@@ -154,6 +162,124 @@ class WindowsSulongLibraryLookupTest {
             try {
                 var failure = assertThrows(RuntimeFault.class, () -> buffer(owner));
                 assertTrue(failure.getMessage().contains("requires native access"));
+            } finally { leave(context); }
+        }
+    }
+    private static MemorySegment wide(Arena arena, String value) {
+        var result = arena.allocate((value.length() + 1L) * 2, 2);
+        for (int i = 0; i < value.length(); i++) result.set(JAVA_CHAR, i * 2L, value.charAt(i));
+        result.set(JAVA_CHAR, value.length() * 2L, '\0');
+        return result;
+    }
+    private static int sdk(SymbolLookup library, String name, MemoryLayout[] arguments, Object... values) throws Throwable {
+        return (int) Linker.nativeLinker().downcallHandle(library.find("fixture_" + name).orElseThrow(),
+            FunctionDescriptor.of(JAVA_INT, arguments)).invokeWithArguments(values);
+    }
+    private static void transfer(MemorySegment owner, MemorySegment loan, boolean writing, int count,
+                                 MemorySegment buffer, MemorySegment result, int length, int error) throws Throwable {
+        WindowsNativeIo.Api.transfer.invokeExact(owner, loan, writing ? 1 : 0, count, buffer, result);
+        assertEquals(length, result.get(JAVA_INT, 0));
+        assertEquals(error, result.get(JAVA_INT, 4));
+        assertEquals(0, result.get(JAVA_INT, 12));
+    }
+    /** Named native producer uses actual SDK files, pipes and loopback sockets.
+     * This qualifies the boundary ABI/loans, not guest compiled execution. */
+    @Test void selectedNativeNamespaceTransfersAndPinsRealDescriptors() throws Throwable {
+        var image = Path.of(System.getProperty("thc.projectRoot"), "build/generated/test-cbits/windows-io-fixture.dll");
+        assertTrue(Files.isRegularFile(image), "compileWindowsIoFixture must prepare its own DLL");
+        try (var arena = Arena.ofConfined()) {
+            var library = SymbolLookup.libraryLookup(image, arena);
+            var error = arena.allocate(JAVA_INT);
+            var wrong = (MemorySegment) WindowsNativeIo.Api.bind.invokeExact(wide(arena, "kernelbase.dll"), error);
+            assertEquals(0, wrong.address(), "an unrelated OS module must not become a CRT/WinSock provider");
+            assertEquals(13, error.get(JAVA_INT, 0));
+            var owner = (MemorySegment) WindowsNativeIo.Api.bind.invokeExact(wide(arena, image.toString()), error);
+            assertNotEquals(0, owner.address(), "selected import binding failed with " + error.get(JAVA_INT, 0));
+            try {
+                var loan = arena.allocate(16, 8);
+                var result = arena.allocate(16, 4);
+                var bytes = arena.allocateFrom(JAVA_BYTE, new byte[]{37, 91, 122});
+                int fd = sdk(library, "open", new MemoryLayout[]{ADDRESS}, wide(arena, scratch.resolve("transport.bin").toString()));
+                assertTrue(fd >= 0);
+                assertEquals(0, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, fd, 0, loan));
+                try { transfer(owner, loan, true, 3, bytes, result, 3, 0); }
+                finally { WindowsNativeIo.Api.release.invokeExact(owner, loan); }
+                assertEquals(0, sdk(library, "seek", new MemoryLayout[]{JAVA_INT}, fd));
+                assertEquals(0, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, fd, 0, loan));
+                assertEquals(0, sdk(library, "close", new MemoryLayout[]{JAVA_INT}, fd));
+                try {
+                    bytes.fill((byte) 0);
+                    transfer(owner, loan, false, 2, bytes, result, 2, 0);
+                    assertArrayEquals(new byte[]{37, 91, 0}, bytes.toArray(JAVA_BYTE));
+                    transfer(owner, loan, false, 1, bytes, result, 1, 0);
+                    assertEquals(122, bytes.get(JAVA_BYTE, 0));
+                    transfer(owner, loan, false, 1, bytes, result, 0, 0);
+                    transfer(owner, loan, false, 0, MemorySegment.NULL, result, 0, 0);
+                } finally { WindowsNativeIo.Api.release.invokeExact(owner, loan); }
+                assertEquals(0, sdk(library, "validation_begin", new MemoryLayout[0]));
+                try {
+                    assertEquals(9, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, fd, 0, loan));
+                    assertEquals(9, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, -1, 0, loan));
+                } finally { assertEquals(1, sdk(library, "validation_end", new MemoryLayout[0])); }
+
+                var pair = arena.allocate(8, 4);
+                assertEquals(0, sdk(library, "pipe", new MemoryLayout[]{ADDRESS}, pair));
+                int input = pair.get(JAVA_INT, 0), output = pair.get(JAVA_INT, 4);
+                try {
+                    bytes.copyFrom(MemorySegment.ofArray(new byte[]{37, 91, 122}));
+                    assertEquals(0, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, output, 0, loan));
+                    try { transfer(owner, loan, true, 3, bytes, result, 3, 0); }
+                    finally { WindowsNativeIo.Api.release.invokeExact(owner, loan); }
+                    assertEquals(0, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, input, 0, loan));
+                    try { bytes.fill((byte) 0); transfer(owner, loan, false, 3, bytes, result, 3, 0); }
+                    finally { WindowsNativeIo.Api.release.invokeExact(owner, loan); }
+                    assertArrayEquals(new byte[]{37, 91, 122}, bytes.toArray(JAVA_BYTE));
+                    assertEquals(0, sdk(library, "close", new MemoryLayout[]{JAVA_INT}, input));
+                    input = -1;
+                    assertEquals(0, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, output, 0, loan));
+                    try {
+                        transfer(owner, loan, true, 3, bytes, result, -1, 32);
+                        assertEquals(232, result.get(JAVA_INT, 8));
+                    } finally { WindowsNativeIo.Api.release.invokeExact(owner, loan); }
+                } finally {
+                    if (input >= 0) assertEquals(0, sdk(library, "close", new MemoryLayout[]{JAVA_INT}, input));
+                    assertEquals(0, sdk(library, "close", new MemoryLayout[]{JAVA_INT}, output));
+                }
+                assertEquals(0, sdk(library, "socket_pair", new MemoryLayout[]{ADDRESS}, pair));
+                input = pair.get(JAVA_INT, 4); output = pair.get(JAVA_INT, 0);
+                try {
+                    assertEquals(0, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, output, 1, loan));
+                    try { transfer(owner, loan, true, 3, bytes, result, 3, 0); }
+                    finally { WindowsNativeIo.Api.release.invokeExact(owner, loan); }
+                    assertEquals(0, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, input, 1, loan));
+                    try { bytes.fill((byte) 0); transfer(owner, loan, false, 3, bytes, result, 3, 0); }
+                    finally { WindowsNativeIo.Api.release.invokeExact(owner, loan); }
+                    assertArrayEquals(new byte[]{37, 91, 122}, bytes.toArray(JAVA_BYTE));
+                    assertEquals(10038, (int) WindowsNativeIo.Api.acquire.invokeExact(owner, -1, 1, loan));
+                } finally {
+                    assertEquals(0, sdk(library, "socket_close", new MemoryLayout[]{JAVA_INT}, input));
+                    assertEquals(0, sdk(library, "socket_close", new MemoryLayout[]{JAVA_INT}, output));
+                    assertEquals(0, sdk(library, "socket_cleanup", new MemoryLayout[0]));
+                }
+            } finally { WindowsNativeIo.Api.unbind.invokeExact(owner); }
+        }
+    }
+    @Test void fixedNativeFactoryDoesNotConfuseEmbeddingStreamsWithProcessEndpoints() {
+        try (var context = NativeIO.createContext()) {
+            var owner = enter(context);
+            try {
+                var io = owner.getWindowsNativeIo();
+                assertNotNull(io);
+                assertThrows(SecurityException.class, () -> io.transfer(0, false, 0, ManagedAddress.nullAddress(), false));
+                assertThrows(SecurityException.class, () -> io.transfer(1, false, 0, ManagedAddress.nullAddress(), true));
+                assertThrows(SecurityException.class, () -> io.transfer(2, false, 0, ManagedAddress.nullAddress(), true));
+                var heap = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8, false, 8));
+                var failure = assertThrows(RuntimeFault.class, () -> io.transfer(8, false, 1, heap, false));
+                assertTrue(failure.getMessage().contains("addressable caller-owned storage"));
+                failure = assertThrows(RuntimeFault.class, () -> io.transfer(8, false, 1, ManagedAddress.nullAddress(), false));
+                assertTrue(failure.getMessage().contains("storage for a nonzero length"));
+                failure = assertThrows(RuntimeFault.class, () -> io.transfer(8, false, 0, ManagedAddress.nullAddress(), false));
+                assertTrue(failure.getMessage().contains("selected ghc-internal native component"));
             } finally { leave(context); }
         }
     }

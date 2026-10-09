@@ -247,6 +247,9 @@ public final class WindowsDirectoryStreams implements Closeable {
     }
     public static Context createContext() { return createContext(ContextProfile.NATIVE); }
     public static Context createContext(ContextProfile profile) {
+        return createContext(profile, java.util.Set.of());
+    }
+    public static Context createContext(ContextProfile profile, java.util.Set<thc.NativeIO.StandardEndpoint> endpoints) {
         if (!supportedHost()) throw new IllegalStateException("Windows directory scanning requires native Windows x86_64");
         // A built Context cannot have its filesystem replaced after this
         // authority is installed. Never authenticate custom wrappers.
@@ -261,6 +264,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                 var streams = new WindowsDirectoryStreams(state);
                 state.getEnv().registerOnDispose(streams);
                 state.setWindowsDirectories(streams);
+                state.setWindowsNativeIo(new WindowsNativeIo(state, endpoints));
             } finally { context.leave(); }
             return context;
         } catch (Throwable failure) {

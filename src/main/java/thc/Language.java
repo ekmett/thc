@@ -153,6 +153,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         // Installed only by explicit fixed-filesystem factories; ordinary builders retain embedding IO.
         private NativeFileProvider nativeFiles;
         private WindowsDirectoryStreams windowsDirectories;
+        private WindowsNativeIo windowsNativeIo;
         private final WindowsCodePages windowsCodePages;
         private final ManagedStdio stdio;
         private final ManagedSignals signals;
@@ -281,6 +282,8 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         public NativeFileProvider getNativeFiles() { return nativeFiles; }
         public void setNativeFiles(NativeFileProvider value) { nativeFiles = value; }
         public WindowsDirectoryStreams getWindowsDirectories() { return windowsDirectories; }
+        public WindowsNativeIo getWindowsNativeIo() { return windowsNativeIo; }
+        public void setWindowsNativeIo(WindowsNativeIo value) { windowsNativeIo = value; }
         public void setWindowsDirectories(WindowsDirectoryStreams value) { windowsDirectories = value; }
         public WindowsCodePages getWindowsCodePages() { return windowsCodePages; }
         public ManagedStdio getStdio() { return stdio; }
@@ -390,6 +393,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         failure = closeOwners(failure, context.compilerRts::close, context.graphRecovery::close,
             context.runtimeJit::close, context.runtimeTrace::close, context.compactImages::close,
             context.heapAddresses::close, context.managedExports::close, context.nativeCallbacks::close,
+            () -> { if (context.windowsNativeIo != null) context.windowsNativeIo.close(); },
             context.packageCbits::close, context.foreignRoots::close, context.savedTermios::close,
             context.stm::close, context.threads::close, context.capturedAsyncRequests::close,
             context.files::dispose, context.stdio::dispose, context.rtsFileLocks::dispose,

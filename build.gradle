@@ -668,28 +668,6 @@ configurations[fullCoreTests.annotationProcessorConfigurationName].extendsFrom(c
 fullCoreTests.compileClasspath += sourceSets.main.output + sourceSets.test.output
 fullCoreTests.runtimeClasspath += sourceSets.main.output + sourceSets.test.output
 
-// Explicit selected-provider checks consume genuine acquired CBD, independently
-// of runtime models and the unsupported Windows RTS scheduler entries.
-[["windowsPackageIoTest", false], ["windowsPackageIoDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Checks the acquired Windows GHC package's actual CRT file transport."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.WindowsPackageIoTest") }
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Selected-provider evidence requires a fresh native process") { true }
-        doFirst {
-            checkBuild(System.getProperty("os.name").startsWith("Windows")) { "Native Windows is required" }
-            def input = System.getenv("THC_WINDOWS_NATIVE_IO_CBD")
-            checkBuild(input != null && file(input).isFile()) { "Set THC_WINDOWS_NATIVE_IO_CBD to the acquired GHC.Internal.IO.FD CBD" }
-        }
-    }
-}
-tasks.named("windowsPackageIoDenseTest") { mustRunAfter("windowsPackageIoTest") }
-
 // Explicitly prepared converter/native controls, separate from ordinary models.
 def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInteropDenseTest", true]].collect { taskName, dense ->
     tasks.register(taskName, Test) {
@@ -1233,7 +1211,7 @@ def nativeExec = { Closure action ->
 }
 def compileCbits = tasks.register("compileCbits", Exec) {
     inputs.files("bin/build-cbits.py", "src/main/c/iconv-api.c",
-        "src/main/c/package-pointer-api.c", "src/main/c/windows-malloc.c")
+        "src/main/c/package-pointer-api.c", "src/main/c/windows-malloc.c", "src/main/c/windows-io-api.c")
     inputs.files("nih/pinned/ghc-9.14.1/rts/StgPrimFloat.c", "nih/pinned/ghc-9.14.1/rts/StgPrimFloat.h")
     inputs.file("src/main/c/wait-status-api.c")
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
@@ -1243,6 +1221,18 @@ def compileCbits = tasks.register("compileCbits", Exec) {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
 tasks.processResources { dependsOn(compileCbits) }
+
+def windowsIoFixture = tasks.register("compileWindowsIoFixture", Exec) {
+    onlyIf { windowsHost }
+    inputs.file("t/fixtures/compiler/WindowsNativeIo.c")
+    def output = layout.buildDirectory.file("generated/test-cbits/windows-io-fixture.dll")
+    outputs.file(output)
+    doFirst { output.get().asFile.parentFile.mkdirs() }
+    commandLine(providers.environmentVariable("THC_CLANG").orElse("clang").get(),
+        "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "-shared", "-fno-builtin",
+        "t/fixtures/compiler/WindowsNativeIo.c", "-lws2_32", "-o", output.get().asFile)
+}
+tasks.withType(Test).configureEach { dependsOn(windowsIoFixture) }
 
 // Exact-width byte/short atomics, which JDK segment handles do not implement.
 def compileNativeAtomics = tasks.register("compileNativeAtomics") {
