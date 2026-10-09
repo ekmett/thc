@@ -87,6 +87,8 @@ thc.runtime.ManagedAddressRead
 thc.runtime.ManagedArray
 thc.runtime.ManagedMVar
 thc.runtime.ManagedMutVar
+# Immutable self-field STATE VarHandle only; no thunk, guest frame or thread is created.
+thc.runtime.Thunk
 thc.runtime.ManagedWeaks
 thc.runtime.PosixStat
 thc.runtime.SigsetImage

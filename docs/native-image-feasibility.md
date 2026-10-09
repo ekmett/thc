@@ -7,9 +7,10 @@ toolchain:
   Cabal components and produces a fresh application-bound executable for each
   executable, stdio test or benchmark. It embeds the reachable Core and native
   providers for AST execution. This path currently requires Linux
-  x86-64 and the pinned toolchain; it does not enable guest machine-code
-  compilation or static linking. Deploy the files listed in its completion
-  inventory together.
+  x86-64 and the pinned toolchain. Jam is linked statically; guest machine-code
+  compilation remains unqualified. The executable runs without Jam shared libraries,
+  CBD files or the builder JDK. Preserve the legal notices listed in its completion
+  inventory when distributing it; package-native dependencies still apply.
 - The [selected-Core native code cache](native-code-cache.md) compiles selected
   guest code ahead of execution. `bin/native-cache build/store/run` produces a
   native launcher and matching machine-code cache. Each fresh run loads that
@@ -138,11 +139,14 @@ blocked platform-child shutdown; it does not establish disabled guest JIT
 compilation, Loom hosting or every masking/foreign-call case.
 
 Sulong and package native libraries are extracted at runtime. System C, math,
-zlib and the dynamic loader remain external dependencies. This qualifies captured
-native providers for the selected Linux x86-64 programs, not static linking or
+zlib and the dynamic loader remain external dependencies. Jam's collector and
+C++ support are linked statically with the pinned Linux package. The ordinary
+CLI-built WeakThreads executable passes its native-GHC oracle after relocation
+without runtime sidecars. This establishes that application's deployment, not
 arbitrary clean-machine deployment. Providers that open additional data files
 still require those files.
 
-General package/Unix-library coverage, Windows images and guest machine-code
-compilation remain unqualified and are tracked in
-[issue #1060](https://github.com/ekmett/thc/issues/1060).
+General package/Unix-library coverage, macOS and Windows images, and guest
+machine-code compilation remain separate work.
+[Issue #1060](https://github.com/ekmett/thc/issues/1060) tracks the single-executable
+CLI workflow qualified above.

@@ -22,8 +22,9 @@ producer revision, upstream source pins, transport digest and unpacked package
 identities for each platform. A release/version string alone does not establish compatibility.
 
 The upstream owner is now [ekmett/jam](https://github.com/ekmett/jam), including
-its managed-runtime sources under `vm/`. Linux and Windows consume the complete release-flavor
-JVM and Native Image toolchain from `vm-2026.10.08-3cb04509`. macOS consumes
+its managed-runtime sources under `vm/`. Linux consumes the complete release-flavor
+JVM and Native Image toolchain from `vm-2026.10.09-9392bca-static`; Windows
+uses `vm-2026.10.08-3cb04509`. macOS consumes
 the release-flavor preview `vm-2026.10.08-50b08881-macos15`, qualified locally
 on macOS 15.5. Source, archive and
 installation identities move together within each platform. Native adapter filenames use `jam-vm`; runtime library manifests
@@ -49,7 +50,7 @@ and maximum heap capacities. Existing THC Truffle API/runtime/Sulong patches
 remain part of the shared-host contract. The API loads from the host classloader,
 with the matching native directory selected from the running package.
 
-The pinned Linux package requires glibc 2.38. Matching macOS and Windows
+The pinned Linux package requires glibc 2.35. Matching macOS and Windows
 packages have separate recorded identities. Windows has the bounded JVM
 weak-bootstrap evidence below. The macOS arm64 package requires macOS 15.5;
 its selected JVM checks pass on that version. THC Native Image execution on
@@ -70,22 +71,26 @@ image heap's 1 GiB offset. Do not carry the former 16 GiB executable heap defaul
 into this layout. Larger application heaps require collector support and actual
 workload qualification.
 
-The currently pinned Linux package requires an adjacent `.jam` runtime directory,
-validated against its `runtime-libraries.txt` and legal notices. The driver also
-accepts the supplier's static Native Image contract: release metadata declares
+The pinned Linux package links Jam into the Native Image executable. Its
+static Native Image contract declares
 `native_image_linkage=static`, and the installed `lib/jam/native-image-libraries.txt`
 lists ordered library names whose `lib*.a` archives live under `lib/jam/static/`.
 The driver validates and records all selected archives, checks emitted
 `program.jam/linkage.txt` says `static`, and preserves legal notices in the
 published inventory. Those static `.jam` files are distribution metadata;
 the executable does not need that directory at runtime. JVM shared libraries
-continue to use `runtime-libraries.txt`. Windows retains the Microsoft dynamic
+continue to use `runtime-libraries.txt`. Shared-library image providers remain
+supported and require their declared runtime libraries beside the executable.
+Windows retains the Microsoft dynamic
 CRT, and THC image production still admits only Linux x86-64.
 
-Static deployment acceptance requires the verified supplier package, relocated
-execution of the existing weak-thread application without runtime `.jam` files,
-and inspection of actual executable imports. The current public pin and retained
-sidecar-based image evidence do not establish that qualification.
+The ordinary `thc build thc-examples:exe:weak-threads --native-image` workflow
+passes with this package, including Cabal acquisition, GHC's generated Main
+wrapper, artifact verification and atomic publication. After relocation with
+only the executable, it matches all six native-GHC output lines with empty
+stderr. Its ELF imports are the system loader, libc, libm and libz; no Jam, C++
+or unwind shared libraries remain. This does not make arbitrary package-native
+dependencies static.
 
 ## Reachability and identity
 
@@ -223,17 +228,15 @@ preserving repeatable committed results; completed finalizer work releases its
 captures after the carrier has joined. Pending operations and failed setup
 retain the state they still own.
 
-The unchanged `WeakThreads` program also matches its complete six-line native-GHC
-oracle in redirected, relocated Native Image execution. It exercises completed
-thread collection, resurrection and a fresh weak lifetime, with each finalizer
-running once. Both the resource-copy and intrinsics image profiles pass with the
-normal published Jam package and tracked recipe. No diagnostic queue overlay is
-required. Execution needs only the executable and its declared `.jam` libraries
-and notices, without source, CBD, GHC or JDK runtime mounts. The intrinsics check
-includes the general executable IO entry repair at `3e5e7f330`; its input proof
-uses indexed access and an emptiness check, avoiding generic collection traversal
-in the runtime compilation graph. The user-facing driver and `native-runtime`
-wrapper still default to resource-copy.
+The `WeakThreads` program matches its complete six-line native-GHC oracle on
+both JVM backends in both handoff modes and in the relocated static-Jam Native
+Image built by the ordinary CLI. It checks that a running worker and a retained
+ThreadId remain observable, then that dropping the ThreadId allows collection.
+A finalizer resurrects its cell without reviving the old weak handle; a fresh
+weak handle permits another lifetime, with each finalizer running once.
+The driver uses the declared Cabal component and its complete acquired closure,
+including the original GHC Main wrapper and exception bridge. The resource-copy
+image profile is the default and the one used for this static qualification.
 
 On macOS 15.5 arm64, 36 selected JVM checks pass: 18 per handoff mode, with
 no failures or skips. They cover weak handoff and threaded thunk behavior,
@@ -248,11 +251,10 @@ passed the unchanged `NativeWeak` executable; its evidence and the newer
 Supplier release qualification is
 tracked in [Jam #10](https://github.com/ekmett/jam/issues/10).
 
-The ordinary executable runs reuse verified producer inputs, artifact hashes and
-Core audits. A separate optional `--verify-artifacts` run exceeded its time bound
-while traversing complete Core modules before guest entry. That verification
-performance failure remains unresolved; it is not a weak-finalizer deadlock or
-a passing verification result.
+The ordinary static build includes `--verify-artifacts` and succeeds with its
+declared producer inputs and loader admission checks. An earlier separate full-module
+verification of `NativeWeak` exceeded its time bound before guest entry; that
+different workload has not been requalified by the WeakThreads result.
 
 The automatic law requests one major collection and waits on its finalizer
 signal. Its native-GHC oracle, CBDs and audits come from the declared producer.
