@@ -260,12 +260,19 @@ public final class Force extends Node {
         var seen = new IdentityHashMap<Object, Boolean>();
         Object leaf = original;
         while (true) {
+            // Authorize the entire descent before its first ownership mutation.
+            // Every retained child follows this same logical wait; rescanning each
+            // suffix would be quadratic. Claims below still recheck the exact
+            // continuation and its current wait under the boundary's monitor.
+            SavedGuestContinuation descent = continuationOf(leaf);
+            BytecodeContinuations.preflightWait(descent);
+            PendingWait descentWait = PendingWait.of(descent);
+            descent = null;
             SavedGuestContinuation leafContinuation;
             Object injected = Unit.INSTANCE;
             while (true) {
                 if (seen.put(leaf, true) != null) throw fault("Suspended thunk dependency cycle");
                 leafContinuation = continuationOf(leaf);
-                BytecodeContinuations.preflightWait(leafContinuation);
                 if (delimitedInvocation && leafContinuation != null && leafContinuation.getYielded() instanceof DelimitedCut)
                     throw new UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain");
                 Object child = suspendedChild(leafContinuation);
@@ -276,9 +283,12 @@ public final class Force extends Node {
                     break;
                 }
                 if (child instanceof Thunk thunk) {
-                    BytecodeContinuations.preflightWait(continuationOf(thunk));
-                    PendingWait pending = PendingWait.of(thunk.getValue());
-                    if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) awaitOwner(thunk);
+                    if (descentWait != null && !descentWait.abandoned() && descentWait.owner != GuestThreads.executingCurrent(this)) {
+                        // A shared child can change after the descent snapshot.
+                        // Authorize its current dependency before registering a wait.
+                        BytecodeContinuations.preflightWait(continuationOf(thunk));
+                        awaitOwner(thunk);
+                    }
                 }
                 parked.addLast(new Parked(leaf, leafContinuation));
                 if (drainSpills) {
@@ -287,6 +297,7 @@ public final class Force extends Node {
                 }
                 leaf = child;
             }
+            descentWait = null;
             Object current = leaf;
             SavedGuestContinuation expected = leafContinuation;
             // Traversal has transferred ownership to the active boundary. These
