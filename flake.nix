@@ -27,6 +27,8 @@
       packages.${system} = {
         jam-graalvm = jam;
         inherit toolchain;
+        native-tools = pkgs.callPackage ./nix/native-tools.nix {};
+        jvm = pkgs.callPackage ./nix/jvm.nix { inherit jam toolchain; revision = self.rev or "unversioned"; };
         development-image = pkgs.callPackage ./nix/image.nix { inherit toolchain jam; };
         toolchain-with-hide = withHide;
       };

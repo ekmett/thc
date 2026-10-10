@@ -27,6 +27,40 @@ Updating it requires checking its local Cabal packages as well as the shared
 Nixpkgs/GHC selection. Hide continues to discover THC through `PATH` or its
 configured command.
 
+## Package components
+
+The native compiler tools and JVM distribution can also be built separately:
+
+```sh
+nix build .#native-tools
+nix build .#jvm
+```
+
+`native-tools` builds the Cabal components with GHC 9.14.1, shared libraries and
+retained simplified Core for THC's modules. It preserves Cabal's actual package
+registrations. `jvm` builds the Gradle distribution using the pinned GHC source
+for runtime C support and a hashed Maven dependency closure. Its build runs
+inside the toolchain filesystem through `proot`, leaving the Jam installation
+unchanged.
+
+These are construction components. They do not yet assemble the installed
+producer, private package database and runtime CBD manifest required by #1218.
+The JVM distribution needs the selected Jam runtime and Linux library layout;
+its Nix output alone is not a standalone command environment.
+
+After a deliberate Gradle dependency change, regenerate its lock and verify an
+ordinary build from the result:
+
+```sh
+nix build .#jvm.mitmCache.updateScript -o update-jvm-deps
+./update-jvm-deps
+nix build .#jvm
+```
+
+The dependency recorder needs network access. Ordinary builds consume the
+recorded artifact hashes. The artifact workflow below currently builds the
+development image, not these compiler components.
+
 ## Container
 
 The development image contains the same toolchain filesystem. It runs as UID/GID

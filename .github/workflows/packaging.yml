@@ -14,9 +14,9 @@ concurrency:
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    # Separate artifact path. Budget includes cold downloads and archive upload;
-    # this is a hang guard, not the ordinary commit CI performance target.
-    timeout-minutes: 30
+    # First complete artifact run took 4m49s, including downloads and upload.
+    # Leave roughly 3x headroom; this is not the commit CI performance target.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7.0.1
         with:
