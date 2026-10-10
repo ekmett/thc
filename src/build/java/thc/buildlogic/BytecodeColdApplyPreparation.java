@@ -9,11 +9,11 @@ import static thc.buildlogic.BytecodeNormalizers.*;
 /** Construct immutable call-site children, never observed targets or specialization state. */
 public final class BytecodeColdApplyPreparation {
     private BytecodeColdApplyPreparation() {}
-    private static final String MARKER = "THC immutable application child v1";
-    private static final String ARGS = "arg0Value, arg1Value, arg2Value, arg3Value";
+    private static final String MARKER = "THC immutable application child v2";
+    private static final String ARGS = "arg0Value, arg1Value, arg2Value, arg3Value, arg4Value";
     private static String type(String name) { return name.equals("Apply") ? "int" : "ArgumentLayout"; }
     private static String parameters(String name) {
-        return type(name) + " arg0Value, boolean arg1Value, Metrics arg2Value, boolean[] arg3Value";
+        return type(name) + " arg0Value, boolean arg1Value, Metrics arg2Value, boolean[] arg3Value, RootCallTarget arg4Value";
     }
     private static String code(String template, String name) {
         String source = template.replace("@NAME@", name).replace("@TYPE@", type(name))
@@ -34,39 +34,39 @@ public final class BytecodeColdApplyPreparation {
                 public @NAME@_Node() {
                 }
 
-                private Object executeAndSpecialize(VirtualFrame frameValue, @PARAMETERS@, Object arg4Value, Object[] arg5Value, AbstractBytecodeNode $bytecode, byte[] $bc, long $bci) {
-                    int state_0 = Short.toUnsignedInt(BYTES.getShort($bc, $bci + 20 /* imm state_0 */));
+                private Object executeAndSpecialize(VirtualFrame frameValue, @PARAMETERS@, Object arg5Value, Object[] arg6Value, AbstractBytecodeNode $bytecode, byte[] $bc, long $bci) {
+                    int state_0 = Short.toUnsignedInt(BYTES.getShort($bc, $bci + 24 /* imm state_0 */));
                     {
                         Node node__ = null;
-                        if (arg4Value instanceof Closure) {
-                            Closure arg4Value_ = (Closure) arg4Value;
+                        if (arg5Value instanceof Closure) {
+                            Closure arg5Value_ = (Closure) arg5Value;
                             node__ = (this);
                             PreparedDispatch dispatch__ = this.insert((@NAME@.createDispatch(@ARGS@)));
                             Objects.requireNonNull(dispatch__, "A specialization cache returned a default value. The cache initializer must never return a default value for this cache. Use @Cached(neverDefault=false) to allow default values for this cached value or make sure the cache initializer never returns the default value.");
                             VarHandle.storeStoreFence();
                             this.dispatch_ = dispatch__;
-                            state_0 = state_0 | 0b1 /* add SpecializationActive[BytecodeRoot.@NAME@.apply(VirtualFrame, @TYPE@, boolean, Metrics, boolean[], Closure, Object[], Node, PreparedDispatch)] */;
-                            BYTES.putShort($bc, $bci + 20, (short) (state_0 & 0xFFFF));
-                            return @NAME@.apply(frameValue, @ARGS@, arg4Value_, arg5Value, node__, dispatch__);
+                            state_0 = state_0 | 0b1 /* add SpecializationActive[BytecodeRoot.@NAME@.apply(VirtualFrame, @TYPE@, boolean, Metrics, boolean[], RootCallTarget, Closure, Object[], Node, PreparedDispatch)] */;
+                            BYTES.putShort($bc, $bci + 24, (short) (state_0 & 0xFFFF));
+                            return @NAME@.apply(frameValue, @ARGS@, arg5Value_, arg6Value, node__, dispatch__);
                         }
                     }
-                    throw new UnsupportedSpecializationException(this, null, @ARGS@, arg4Value, arg5Value);
+                    throw new UnsupportedSpecializationException(this, null, @ARGS@, arg5Value, arg6Value);
                 }
 
                 @InliningRoot
-                private Object execute(FrameWithoutBoxing frameValue, @PARAMETERS@, Closure arg4Value, Object[] arg5Value, AbstractBytecodeNode $bytecode, byte[] $bc, long $bci) {
-                    int state_0 = Short.toUnsignedInt(BYTES.getShort($bc, $bci + 20 /* imm state_0 */));
-                    if (state_0 != 0 /* is SpecializationActive[BytecodeRoot.@NAME@.apply(VirtualFrame, @TYPE@, boolean, Metrics, boolean[], Closure, Object[], Node, PreparedDispatch)] */) {
+                private Object execute(FrameWithoutBoxing frameValue, @PARAMETERS@, Closure arg5Value, Object[] arg6Value, AbstractBytecodeNode $bytecode, byte[] $bc, long $bci) {
+                    int state_0 = Short.toUnsignedInt(BYTES.getShort($bc, $bci + 24 /* imm state_0 */));
+                    if (state_0 != 0 /* is SpecializationActive[BytecodeRoot.@NAME@.apply(VirtualFrame, @TYPE@, boolean, Metrics, boolean[], RootCallTarget, Closure, Object[], Node, PreparedDispatch)] */) {
                         {
                             PreparedDispatch dispatch__ = this.dispatch_;
                             if (dispatch__ != null) {
                                 Node node__ = (this);
-                                return @NAME@.apply(frameValue, @ARGS@, arg4Value, arg5Value, node__, dispatch__);
+                                return @NAME@.apply(frameValue, @ARGS@, arg5Value, arg6Value, node__, dispatch__);
                             }
                         }
                     }
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    return executeAndSpecialize(frameValue, @ARGS@, arg4Value, arg5Value, $bytecode, $bc, $bci);
+                    return executeAndSpecialize(frameValue, @ARGS@, arg5Value, arg6Value, $bytecode, $bc, $bci);
                 }
 
             }
@@ -83,12 +83,12 @@ public final class BytecodeColdApplyPreparation {
                 }
 
                 @InliningRoot
-                private Object execute(FrameWithoutBoxing frameValue, @PARAMETERS@, Closure arg4Value, Object[] arg5Value, AbstractBytecodeNode $bytecode, byte[] $bc, long $bci) {
-                    if (arg4Value == null) {
+                private Object execute(FrameWithoutBoxing frameValue, @PARAMETERS@, Closure arg5Value, Object[] arg6Value, AbstractBytecodeNode $bytecode, byte[] $bc, long $bci) {
+                    if (arg5Value == null) {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
-                        throw new UnsupportedSpecializationException(this, null, @ARGS@, arg4Value, arg5Value);
+                        throw new UnsupportedSpecializationException(this, null, @ARGS@, arg5Value, arg6Value);
                     }
-                    return @NAME@.apply(frameValue, @ARGS@, arg4Value, arg5Value, this, dispatch_);
+                    return @NAME@.apply(frameValue, @ARGS@, arg5Value, arg6Value, this, dispatch_);
                 }
             }
             """, name);
@@ -96,11 +96,12 @@ public final class BytecodeColdApplyPreparation {
     static String construction(String name, boolean prepared) {
         String first = name.equals("Apply") ? "BYTES.getIntUnaligned(bc, bci + 2 /* imm arity */)"
             : "(ArgumentLayout) constants[BYTES.getIntUnaligned(bc, bci + 2 /* imm layout */)]";
-        String operands = !prepared ? "" : first + ", BYTES.getShort(bc, bci + 18 /* imm tail */) != 0, "
+        String operands = !prepared ? "" : first + ", BYTES.getShort(bc, bci + 22 /* imm tail */) != 0, "
             + "(Metrics) constants[BYTES.getIntUnaligned(bc, bci + 6 /* imm metrics */)], "
-            + "(boolean[]) constants[BYTES.getIntUnaligned(bc, bci + 10 /* imm evaluatedArguments */)]";
-        return "                            result[BYTES.getIntUnaligned(bc, bci + 14 /* imm node */)] = insert(new "
-            + name + "_Node(" + operands + "));\n                            bci += 22;\n";
+            + "(boolean[]) constants[BYTES.getIntUnaligned(bc, bci + 10 /* imm evaluatedArguments */)], "
+            + "(RootCallTarget) constants[BYTES.getIntUnaligned(bc, bci + 14 /* imm coldTarget */)]";
+        return "                            result[BYTES.getIntUnaligned(bc, bci + 18 /* imm node */)] = insert(new "
+            + name + "_Node(" + operands + "));\n                            bci += 26;\n";
     }
     public static String transform(String source, String version) {
         require(VERSION.equals(version), "Review immutable Apply construction for Truffle " + version);
@@ -130,9 +131,9 @@ public final class BytecodeColdApplyPreparation {
         require(transform(original.replace("\n", "\r\n"), VERSION).equals(result.replace("\n", "\r\n")), "Apply CRLF mismatch");
         require(!result.contains("state_0") && !result.contains("executeAndSpecialize"), "Apply transformation writes specialization history");
         reject(original, "next-version");
-        for (String malformed : List.of(original.replace("+ 20", "+ 22"), original.replace("+ 14", "+ 16"),
-                original.replace("arg4Value instanceof Closure", "arg4Value != null"), original + before("Apply"),
+        for (String malformed : List.of(original.replace("+ 24", "+ 26"), original.replace("+ 18", "+ 20"),
+                original.replace("arg5Value instanceof Closure", "arg5Value != null"), original + before("Apply"),
                 original.replaceFirst("\n", "\r\n"), result.replace("this, dispatch_", "this, null"),
-                result.replace("+ 18", "+ 20"), result.replace("bci += 22", "bci += 24"))) reject(malformed, VERSION);
+                result.replace("+ 22", "+ 24"), result.replace("bci += 26", "bci += 28"))) reject(malformed, VERSION);
     }
 }

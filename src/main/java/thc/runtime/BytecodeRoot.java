@@ -130,7 +130,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         return casePlan == null ? failedGeneration : casePlan.recover(failedGeneration);
     }
     @Override protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {
-        // These private roots can only be called by the recovered case edge.
+        // These private roots are reached only through prepared region call edges.
         return (!passThrough || rootCompilation) && super.prepareForCompilation(rootCompilation, tier, lastTier);
     }
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
@@ -2800,7 +2800,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Exact tail calls have no caller suffix; a nested yield carries its actual callee identity. */
-    private static Object tailResult(Object result, Closure function, int supplied, boolean tail) {
+    static Object tailResult(Object result, Closure function, int supplied, boolean tail) {
         if (!tail || function.arity != supplied) return result;
         if (result instanceof ContinuationResult continuation) return new TailYield(continuation, function.target);
         if (result instanceof SavedGuestContinuation continuation) return new AstTailYield(continuation, function.target);
@@ -2845,11 +2845,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = boolean.class, name = "tail")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = boolean[].class, name = "evaluatedArguments")
+    @ConstantOperand(type = RootCallTarget.class, name = "coldTarget")
     public static final class Apply {
         @Specialization public static Object apply(VirtualFrame frame, int arity, boolean tail,
-                Metrics metrics, boolean[] evaluatedArguments, Closure function, @Variadic Object[] arguments,
+                Metrics metrics, boolean[] evaluatedArguments, RootCallTarget coldTarget, Closure function, @Variadic Object[] arguments,
                 @Bind("$node") Node node,
-                @Cached(value = "createDispatch(arity, tail, metrics, evaluatedArguments)", neverDefault = true) PreparedDispatch dispatch) {
+                @Cached(value = "createDispatch(arity, tail, metrics, evaluatedArguments, coldTarget)", neverDefault = true) PreparedDispatch dispatch) {
             try {
                 return tailResult(dispatch.execute(frame, function, arguments), function, arity, tail);
             } catch (TailCall call) {
@@ -2861,8 +2862,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return call;
             }
         }
-        public static PreparedDispatch createDispatch(int arity, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
-            return new PreparedDispatch(arity, tail, metrics, evaluatedArguments, null);
+        public static PreparedDispatch createDispatch(int arity, boolean tail, Metrics metrics, boolean[] evaluatedArguments, RootCallTarget coldTarget) {
+            return new PreparedDispatch(arity, tail, metrics, evaluatedArguments, null, coldTarget);
         }
     }
 
@@ -2871,11 +2872,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = boolean.class, name = "tail")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = boolean[].class, name = "evaluatedArguments")
+    @ConstantOperand(type = RootCallTarget.class, name = "coldTarget")
     public static final class ApplyCompact {
         @Specialization public static Object apply(VirtualFrame frame, ArgumentLayout layout, boolean tail,
-                Metrics metrics, boolean[] evaluatedArguments, Closure function, @Variadic Object[] arguments,
+                Metrics metrics, boolean[] evaluatedArguments, RootCallTarget coldTarget, Closure function, @Variadic Object[] arguments,
                 @Bind("$node") Node node,
-                @Cached(value = "createDispatch(layout, tail, metrics, evaluatedArguments)", neverDefault = true) PreparedDispatch dispatch) {
+                @Cached(value = "createDispatch(layout, tail, metrics, evaluatedArguments, coldTarget)", neverDefault = true) PreparedDispatch dispatch) {
             try {
                 return tailResult(dispatch.execute(frame, function, arguments), function,
                         layout.getLogicalArity(), tail);
@@ -2888,8 +2890,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return call;
             }
         }
-        public static PreparedDispatch createDispatch(ArgumentLayout layout, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
-            return new PreparedDispatch(layout.getLogicalArity(), tail, metrics, evaluatedArguments, layout);
+        public static PreparedDispatch createDispatch(ArgumentLayout layout, boolean tail, Metrics metrics, boolean[] evaluatedArguments, RootCallTarget coldTarget) {
+            return new PreparedDispatch(layout.getLogicalArity(), tail, metrics, evaluatedArguments, layout, coldTarget);
         }
     }
 

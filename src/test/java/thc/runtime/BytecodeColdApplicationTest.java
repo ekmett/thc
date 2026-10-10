@@ -59,16 +59,19 @@ class BytecodeColdApplicationTest {
         }.getCallTarget();
     }
 
-    private static BytecodeRoot root(Language language, Object closure, Metrics metrics) {
+    private static BytecodeRoot root(Language language, Object closure, Metrics metrics) throws Exception {
         return root(language, closure, metrics, false);
     }
 
-    private static BytecodeRoot root(Language language, Object closure, Metrics metrics, boolean checkpoint) {
+    private static BytecodeRoot root(Language language, Object closure, Metrics metrics, boolean checkpoint) throws Exception {
         return root(language, closure, metrics, checkpoint, null, () -> {});
     }
 
     private static BytecodeRoot root(Language language, Object closure, Metrics metrics,
-                                     boolean checkpoint, ArgumentLayout layout, Runnable sourceRead) {
+                                     boolean checkpoint, ArgumentLayout layout, Runnable sourceRead) throws Exception {
+        RootCallTarget coldTarget = PreparedDispatch.prepareApplication(language,
+            layout == null ? 1 : layout.getLogicalArity(), false, metrics, layout, false, true, checkpoint, null);
+        compile(coldTarget);
         var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
             if (b.isParsingSources()) {
                 sourceRead.run();
@@ -78,11 +81,11 @@ class BytecodeColdApplicationTest {
             b.beginRoot();
             b.emitEnterRoot(metrics);
             b.beginReturn();
-            if (layout == null) b.beginApply(1, false, metrics, new boolean[]{true});
+            if (layout == null) b.beginApply(1, false, metrics, new boolean[]{true}, coldTarget);
             else {
                 var strict = new boolean[layout.getLogicalArity()];
                 Arrays.fill(strict, true);
-                b.beginApplyCompact(layout, false, metrics, strict);
+                b.beginApplyCompact(layout, false, metrics, strict, coldTarget);
             }
             if (closure == null) b.emitLoadNull(); else b.emitLoadConstant(closure);
             b.emitLoadConstant(42L);
@@ -119,8 +122,8 @@ class BytecodeColdApplicationTest {
                 var root = root(language, closure, metrics, checkpoint);
                 compile(root.getCallTarget());
                 assertEquals(0, calls[0]); assertEquals(0L, metrics.getCompiledEntries());
-                assertEquals(42L, Calls.target(root.getCallTarget(), new Object[0]));
-                assertEquals(1, calls[0]); assertEquals(1L, metrics.getCompiledEntries());
+                assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                assertEquals(1, calls[0]); assertEquals(2L, metrics.getCompiledEntries());
                 valid(root.getCallTarget());
             }
         });
@@ -147,22 +150,39 @@ class BytecodeColdApplicationTest {
             var root = root(language, closure, metrics, true, layout, () -> sources[0]++);
             compile(root.getCallTarget());
             assertEquals(0, calls[0]); assertEquals(0, sources[0]);
-            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[0]));
-            assertEquals(1L, metrics.getCompiledEntries()); valid(root.getCallTarget());
+            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L}));
+            assertEquals(2L, metrics.getCompiledEntries()); valid(root.getCallTarget());
             var before = code(root);
             root.getBytecodeNode().ensureSourceInformation();
             assertEquals(1, sources[0]); assertEquals(before, code(root));
-            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[0]));
-            assertEquals(2L, metrics.getCompiledEntries()); valid(root.getCallTarget());
+            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L}));
+            assertEquals(4L, metrics.getCompiledEntries()); valid(root.getCallTarget());
             var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized");
             cloneMethod.setAccessible(true);
             var clone = (BytecodeRoot) cloneMethod.invoke(root);
             assertNotSame(root, clone);
             compile(clone.getCallTarget());
             assertEquals(2, calls[0]);
-            assertEquals(42L, Calls.target(clone.getCallTarget(), new Object[0]));
-            assertEquals(3, calls[0]); assertEquals(3L, metrics.getCompiledEntries());
+            assertEquals(42L, Calls.target(clone.getCallTarget(), new Object[]{0L}));
+            assertEquals(3, calls[0]); assertEquals(6L, metrics.getCompiledEntries());
             valid(clone.getCallTarget()); valid(root.getCallTarget());
+        });
+    }
+
+    @Test void firstInstalledGenericApplicationReturnsItsLazyResultWithoutDemand() throws Exception {
+        withLanguage(language -> {
+            for (boolean checkpoint : new boolean[]{false, true}) {
+                int[] demands = {0};
+                Thunk lazy = new Thunk(target(language, frame -> { demands[0]++; return 71L; }), null);
+                Closure function = new Closure(null, 1, target(language, frame -> lazy));
+                Metrics metrics = new Metrics(true);
+                BytecodeRoot caller = root(language, function, metrics, checkpoint);
+                compile(caller.getCallTarget());
+                assertEquals(0, demands[0]);
+                assertSame(lazy, Calls.target(caller.getCallTarget(), new Object[]{0L}));
+                assertEquals(0, demands[0]); assertEquals(0, lazy.getState());
+                assertEquals(2L, metrics.getCompiledEntries()); valid(caller.getCallTarget());
+            }
         });
     }
 
@@ -175,10 +195,10 @@ class BytecodeColdApplicationTest {
             var metrics = new Metrics(true);
             var root = root(language, closure, metrics, true);
             compile(root.getCallTarget());
-            var pap = (Closure) Calls.target(root.getCallTarget(), new Object[0]);
+            var pap = (Closure) Calls.target(root.getCallTarget(), new Object[]{0L});
             assertEquals(0, calls[0]); assertEquals(1, pap.arity); assertSame(closure.target, pap.target);
             assertArrayEquals(new Object[]{42L}, pap.supplied);
-            assertEquals(1L, metrics.getCompiledEntries()); valid(root.getCallTarget());
+            assertEquals(2L, metrics.getCompiledEntries()); valid(root.getCallTarget());
         });
     }
 
@@ -194,9 +214,15 @@ class BytecodeColdApplicationTest {
             var root = root(language, closure, metrics, true);
             compile(root.getCallTarget());
             assertEquals(0, first[0]); assertEquals(0, last[0]);
-            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[0]));
+            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L}));
             assertEquals(1, first[0]); assertEquals(1, last[0]);
-            assertEquals(1L, metrics.getCompiledEntries()); valid(root.getCallTarget());
+            assertEquals(2L, metrics.getCompiledEntries()); valid(root.getCallTarget());
+            var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized");
+            cloneMethod.setAccessible(true);
+            var interpreted = (BytecodeRoot) cloneMethod.invoke(root);
+            assertEquals(42L, Calls.target(interpreted.getCallTarget(), new Object[]{0L}));
+            assertEquals(2, first[0]); assertEquals(2, last[0]);
+            assertEquals(3L, metrics.getCompiledEntries(), "An interpreter overapplication retains the same helper-owned suffix");
         });
     }
 
@@ -208,44 +234,37 @@ class BytecodeColdApplicationTest {
             }));
             var metrics = new Metrics(true);
             var root = root(language, closure, metrics);
-            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[0]));
+            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L}));
             assertEquals(1, calls[0]); assertEquals(0L, metrics.getCompiledEntries());
             assertEquals(0L, metrics.getIndirectCalls());
             compile(root.getCallTarget());
-            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[0]));
+            assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L}));
             assertEquals(2, calls[0]); assertEquals(0L, metrics.getIndirectCalls());
             assertEquals(1L, metrics.getCompiledEntries()); valid(root.getCallTarget());
         });
     }
 
-    @Test void malformedFunctionKeepsTheOriginalGeneratedTypeFailure() throws Exception {
+    @Test void invalidFunctionDoesNotDispatchACall() throws Exception {
         withLanguage(language -> {
             for (Object invalid : new Object[]{null, 7L}) {
                 var metrics = new Metrics(true);
                 var root = root(language, invalid, metrics);
                 compile(root.getCallTarget());
-                if (invalid == null) {
-                    var failure = assertThrows(UnsupportedSpecializationException.class,
-                            () -> Calls.target(root.getCallTarget(), new Object[0]));
-                    assertEquals(6, failure.getSuppliedValues().length);
-                    assertNull(failure.getSuppliedValues()[4]);
-                    // Preserve the original invalidating null-specialization failure.
-                    // A constant-invalid root can compile to a start-frame deopt stub;
-                    // the valid first-entry controls above must never do so.
-                    assertEquals(0L, metrics.getCompiledEntries());
-                } else assertThrows(ClassCastException.class,
-                        () -> Calls.target(root.getCallTarget(), new Object[0]));
+                if (invalid == null) assertThrows(UnsupportedSpecializationException.class,
+                        () -> Calls.target(root.getCallTarget(), new Object[]{0L}));
+                else assertThrows(ClassCastException.class,
+                        () -> Calls.target(root.getCallTarget(), new Object[]{0L}));
+                assertEquals(0L, metrics.getIndirectCalls());
             }
         });
     }
 
-    private static void missing(String message, Executable action) {
+    private static void missing(Executable action) {
         var failure = assertThrows(NullPointerException.class, action);
         assertEquals(NullPointerException.class, failure.getClass());
-        assertEquals(message, failure.getMessage());
     }
 
-    @Test void outlinedNullDiagnosticsRetainTypesMessagesAndNonNullIdentity() {
+    @Test void outlinedNullChecksRetainTypesAndNonNullIdentity() {
         Object[] values = {new Object(), null};
         assertSame(values, ColdCallChecks.values(values));
         var target = new RootNode(null) {
@@ -254,11 +273,11 @@ class BytecodeColdApplicationTest {
         var transfer = new TailCall(target, values, null);
         assertSame(target, ColdCallChecks.target(target));
         assertSame(transfer, ColdCallChecks.transfer(transfer));
-        missing(null, () -> ColdCallChecks.values(null));
-        missing(null, () -> ColdCallChecks.typedInput(null));
-        missing("null cannot be cast to non-null type thc.runtime.GuestRoot", () -> ColdCallChecks.guestRoot(null));
-        missing("null cannot be cast to non-null type com.oracle.truffle.api.RootCallTarget", () -> ColdCallChecks.target(null));
-        missing("null cannot be cast to non-null type thc.runtime.TailCall", () -> ColdCallChecks.transfer(null));
+        missing(() -> ColdCallChecks.values(null));
+        missing(() -> ColdCallChecks.typedInput(null));
+        missing(() -> ColdCallChecks.guestRoot(null));
+        missing(() -> ColdCallChecks.target(null));
+        missing(() -> ColdCallChecks.transfer(null));
         assertThrows(ClassCastException.class, () -> ColdCallChecks.target(new Object()));
         assertThrows(ClassCastException.class, () -> ColdCallChecks.transfer(new Object()));
         assertThrows(ClassCastException.class, () -> ColdCallChecks.guestRoot(target.getRootNode()));

@@ -96,21 +96,23 @@ class BytecodeColdBranchTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var metrics = new Metrics(true); var effects = new int[1]; var scope = AstStacks.astStackScope(null);
                 var action = new Closure(null, 0, new RootNode(language) {
-                    @Override public Object execute(VirtualFrame frame) { effects[0]++; scope.setDepth(AstStackScope.MAX_DEPTH); return Unit.INSTANCE; }
+                    @Override public Object execute(VirtualFrame frame) { effects[0]++; scope.setDepth(AstStackScope.MAX_DEPTH + scope.getDepth()); return Unit.INSTANCE; }
                 }.getCallTarget());
+                var coldTarget = PreparedDispatch.prepareApplication(language, 0, false, metrics, null, false, true, false, null);
+                compile(coldTarget);
                 var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
                     b.beginRoot(); b.emitEnterRoot(metrics); b.beginBlock();
                     var ignored = b.createLocal("completed effect", FrameSlotKind.Object); var done = b.createLabel();
                     b.beginWhile(); b.emitLoadConstant(true); b.beginBlock();
                     b.beginIfThen(); b.emitStackLimit(); b.emitBranch(done); b.endIfThen();
-                    b.beginStaticStoreObject(ignored); b.beginApply(0, false, metrics, new boolean[0]);
+                    b.beginStaticStoreObject(ignored); b.beginApply(0, false, metrics, new boolean[0], coldTarget);
                     b.emitLoadConstant(action); b.endApply(); b.endStaticStoreObject();
                     b.endBlock(); b.endWhile(); b.emitLabel(done);
                     b.beginReturn(); b.emitLoadConstant(7L); b.endReturn(); b.endBlock(); b.endRoot();
                 }).getNode(0);
                 var target = root.getCallTarget(); compile(target); assertEquals(0, effects[0]);
                 try {
-                    assertEquals(7L, Calls.target(target, new Object[0])); assertEquals(1, effects[0]);
+                    assertEquals(7L, Calls.target(target, new Object[]{0L})); assertEquals(1, effects[0]);
                     valid(target, true); assertArrayEquals(new int[]{0, 0, 0, 0, 0, 0}, profiles(root));
                 } finally { scope.setDepth(0); }
             } finally { context.leave(); }

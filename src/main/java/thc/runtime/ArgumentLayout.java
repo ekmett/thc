@@ -35,6 +35,19 @@ public final class ArgumentLayout {
         requiresTyped = typed;
         physicalStorageReps = reps;
     }
+    /** Complete scalar transport/demand shape for preparation caches, independent of allocation identity. */
+    Object scalarKey() {
+        if (requiresTyped) throw new IllegalArgumentException("Scalar application requires scalar array transport");
+        record Proof(CoreKind kind, boolean evaluated, boolean present, CoreRepresentation.HostCarrier host,
+                     String representation, int from, int to) {}
+        var result = new ArrayList<Proof>(proofs.length);
+        for (int i = 0; i < proofs.length; i++) {
+            var proof = proofs[i];
+            result.add(new Proof(proof.getKind(), proof.getEvaluated(), proof.getPresent(), proof.getHostCarrier(),
+                TupleShape.compatibilityKey(proof), offsets[i], offsets[i + 1]));
+        }
+        return List.copyOf(result);
+    }
     public int getLogicalArity() { return proofs.length; }
     public int getPhysicalArity() { return offsets[offsets.length - 1]; }
     public CoreRepresentation[] getPhysicalProofs() { return physicalProofs; }

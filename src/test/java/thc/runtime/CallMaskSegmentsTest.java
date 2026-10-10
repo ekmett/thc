@@ -60,7 +60,7 @@ class CallMaskSegmentsTest {
             b.beginBlock(); b.beginStoreLocal(entry); b.emitCurrentMask(); b.endStoreLocal(); b.beginStoreLocal(prior); b.emitEnterMask(targetMask); b.endStoreLocal();
             b.beginTryFinally(() -> { b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask(); });
             b.beginBlock(); b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal(); b.beginTryCatch(); b.beginStoreLocal(result); b.beginCaptureApplicationResult(0); b.emitLoadConstant(function);
-            b.beginApply(0, false, metrics, new boolean[0]); b.emitLoadConstant(function); b.endApply(); b.emitLoadLocal(active); b.endCaptureApplicationResult(); b.endStoreLocal();
+            b.beginApply(0, false, metrics, new boolean[0], PreparedDispatch.prepareApplication(language, 0, false, metrics, null, true, true, false, null)); b.emitLoadConstant(function); b.endApply(); b.emitLoadLocal(active); b.endCaptureApplicationResult(); b.endStoreLocal();
             b.beginBlock(); b.beginStoreLocal(suspended); b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly(); b.endStoreLocal(); b.beginStoreLocal(result); b.beginResumeApplication(); b.emitLoadLocal(suspended); b.beginReenterCallMask(); b.beginYield(); b.beginParkCallMask(); b.emitLoadLocal(suspended); b.emitLoadLocal(entry); b.emitLoadLocal(active); b.endParkCallMask(); b.endYield(); b.emitLoadLocal(active); b.endReenterCallMask(); b.endResumeApplication(); b.endStoreLocal(); b.endBlock(); b.endTryCatch(); b.endBlock(); b.endTryFinally(); b.beginReturn(); b.emitLoadLocal(result); b.endReturn(); b.endBlock(); b.endRoot();
         }).getNode(0).getCallTarget();
     }

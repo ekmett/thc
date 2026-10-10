@@ -35,7 +35,10 @@ root. The generated interpreter executes those instructions directly; it does
 not call the AST interpreter to evaluate Core expressions. Layouts, call arities,
 and other metadata used during partial evaluation are constant operands.
 
-Large constructor cases can be split into prepared side roots when bytecode
+Complex constructor decisions with fewer than 64 alternatives use a prepared
+side root per arm when the bounded preparation work in their alternatives reaches
+64. This keeps disjoint bodies behind real call edges from the first compilation.
+Wide constructor cases can also split into prepared side roots when bytecode
 local-ID capacity is exhausted before publication. A contiguous, nonrecursive
 join-only let prefix can move with its case when it has no free outer joins and
 the scrutinee does not reference its joins. The scrutinee stays in the caller and

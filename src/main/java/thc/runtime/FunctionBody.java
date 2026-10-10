@@ -11,6 +11,7 @@ import static thc.runtime.RuntimeFault.fault;
 final class FunctionBody extends Node {
     @Child private Expr value;
     private final boolean initializer;
+    private final boolean rawResult;
     private final TupleShape tuple;
     @CompilationFinal(dimensions = 1) private final int[] tupleSlots;
     private final CoreKind resultKind;
@@ -20,8 +21,13 @@ final class FunctionBody extends Node {
         this(expression, metrics, result, tuple, tupleSlots, false);
     }
     FunctionBody(Expr expression, Metrics metrics, CoreRepresentation result, TupleShape tuple, int[] tupleSlots, boolean initializer) {
-        this.initializer = initializer;
-        value = initializer ? expression : new Evaluate(expression, metrics);
+        this(expression, metrics, result, tuple, tupleSlots, initializer, false);
+    }
+    /** Internal application roots transport a lazy value; ordinary functions still demand their result. */
+    FunctionBody(Expr expression, Metrics metrics, CoreRepresentation result, TupleShape tuple, int[] tupleSlots,
+                 boolean initializer, boolean rawResult) {
+        this.initializer = initializer; this.rawResult = rawResult;
+        value = initializer || rawResult ? expression : new Evaluate(expression, metrics);
         this.tuple = tuple; this.tupleSlots = tupleSlots;
         if (tuple != null) value.prepareTuple(tupleSlots, 0);
         CoreRepresentation effective = result.getKind() == CoreKind.UNKNOWN ? expression.getRepresentation() : result;
@@ -32,6 +38,7 @@ final class FunctionBody extends Node {
     }
     /** Keep a primitive body until the mandatory Object-returning root/call boundary. */
     Object execute(VirtualFrame frame) {
+        if (rawResult) return value.execute(frame);
         TupleShape shape = tuple;
         if (shape != null) {
             try { value.executeTuple(frame, tupleSlots, 0); }
