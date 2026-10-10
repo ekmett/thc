@@ -75,10 +75,14 @@ intended paths are disjoint. Synchronous calls from multiple Java carriers in th
 same context continue to share transactions and retry wakeups correctly.
 `newTVar#` and `readTVarIO#` need no transaction frame.
 
-THC does not implement GC-driven `BlockedIndefinitelyOnSTM` detection. An
-unreachable empty-read-set retry waits until embedding cancellation/disposal;
-it cannot return success. Unsafe effects inside STM are not rolled back, just
-as in GHC; callers must not rely on how many times an invalid action reruns.
+Jam's Candidate lifecycle rescues an unreachable parked retry with the original
+GHC `BlockedIndefinitelyOnSTM` exception, including an empty read set. Live
+read-set TVars and independently retained thread state remain rescue paths.
+Rescue aborts the attempt and preserves its exception handlers and masking;
+it does not commit the transaction. See the
+[blocked-owner qualification limits](managed-mvars.md#waiting-and-cancellation).
+Unsafe effects inside STM are not rolled back, just as in GHC; callers must not
+rely on how many times an invalid action reruns.
 
 Linking `atomically#` requires complete installed GHC Core for the original
 nested-transaction exception and its dictionaries, even if the intended action
