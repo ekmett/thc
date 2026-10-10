@@ -15,6 +15,8 @@ public interface ExecutableProgram {
     RootCallTarget hostEntryTarget(int arity);
     default RootCallTarget hostEntryTarget() { return hostEntryTarget(0); }
     Object entryValue(String name);
+    /** Lower all admitted local bindings without guest or native initialization. */
+    default void prepareCode() {}
     /** Link this demanded program after inert lowering, on its exact context owner. */
     default void initializeNative(thc.Language.State owner) {}
     /** Complete staged ordinary global initialization after native constructors. */

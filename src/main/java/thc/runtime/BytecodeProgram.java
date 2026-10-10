@@ -612,6 +612,10 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
     }
 
+    @Override public void prepareCode() {
+        for (var binding : bindings) Objects.requireNonNull(globals.get((String) binding.get("id"))).prepareCode();
+    }
+
     @Override public void initializeGlobals() {
         for (String id : pendingInitializers) Objects.requireNonNull(globals.get(id)).read();
         pendingInitializers = List.of();
