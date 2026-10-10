@@ -6,8 +6,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.bytecode.ContinuationRootNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.compiler.TruffleCompilerListener;
-import com.oracle.truffle.runtime.AbstractCompilationTask;
 import com.oracle.truffle.runtime.BaseOSRRootNode;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
@@ -24,11 +22,13 @@ public final class GraphRecovery implements AutoCloseable {
     private static final Pattern GRAPH_TOO_BIG = Pattern.compile(
             "jdk\\.graal\\.compiler\\.truffle\\.GraphTooBigBailoutException: " +
             "Graph too big to safely compile\\. Node count: [0-9]+\\. Graph Size: [0-9]+\\. Limit: [0-9]+\\.");
-    private record Observation(OptimizedCallTarget target, String reason) {}
+    private record Observation(OptimizedCallTarget target, String reason, boolean bailout, boolean permanent) {}
     /** Distinct failures from this source generation; the head's identity survives sibling callbacks. */
     record Failure(List<Observation> observations, boolean claimed) {
         OptimizedCallTarget target() { return observations.getFirst().target; }
         String reason() { return observations.getFirst().reason; }
+        boolean bailout() { return observations.getFirst().bailout; }
+        boolean permanent() { return observations.getFirst().permanent; }
         boolean sameClaim(Failure other) {
             return claimed && other.claimed && observations.getFirst() == other.observations.getFirst();
         }
@@ -72,6 +72,12 @@ public final class GraphRecovery implements AutoCloseable {
         return bailout && permanent && reason != null && GRAPH_TOO_BIG.matcher(reason).matches();
     }
 
+    /** An abandoned task has no failed graph. All other bailouts, including transient ones, retire it. */
+    static boolean cancelled(String reason) {
+        return reason != null && reason.startsWith(
+                "jdk.graal.compiler.core.common.CancellationBailoutException:");
+    }
+
     private ContextRoot owned(OptimizedCallTarget target) {
         if (closed) return null;
         Object token = owner.get();
@@ -79,37 +85,26 @@ public final class GraphRecovery implements AutoCloseable {
         return token != null && root != null && root.compilationOwner() == token ? root : null;
     }
 
-    private void failed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanent) {
-        if (!graphTooBig(reason, bailout, permanent) && !(bailout && permanent &&
-                "jdk.vm.ci.code.BailoutException: Code installation failed: code is too large".equals(reason))) return;
+    void failed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanent) {
+        if (cancelled(reason)) return;
         ContextRoot root = owned(target);
         if (root == null) return;
+        root.compilationFailureObserved = true;
+        if (target.getRootNode() instanceof ContextRoot physicalRoot) physicalRoot.compilationFailureObserved = true;
+        // The public callback disables hotness admission and inlining even when the compiler
+        // classified the original failure as transient. Preserve that original receipt below.
+        // Do not invoke graph-size block compilation recovery on this physical target.
+        target.onCompilationFailed(() -> reason, true, true, true, false);
+        if (target.isValid()) target.invalidate("retired after compilation failure");
         Failure observed;
         Failure updated;
         do {
             observed = root.graphFailure.get();
             if (observed != null && observed.observations.stream().anyMatch(o -> o.target == target)) return;
             var observations = new ArrayList<Observation>(observed == null ? List.of() : observed.observations);
-            observations.add(new Observation(target, reason));
+            observations.add(new Observation(target, reason, bailout, permanent));
             updated = new Failure(List.copyOf(observations), observed != null && observed.claimed);
         } while (!root.graphFailure.compareAndSet(observed, updated));
-    }
-
-    private void succeeded(OptimizedCallTarget target) {
-        ContextRoot root = owned(target);
-        if (root == null) return;
-        Failure observed = root.graphFailure.get();
-        if (observed == null) return;
-        var success = observed.observations.stream().filter(o -> o.target == target).findFirst().orElse(null);
-        if (success == null) return;
-        while (observed != null) {
-            var remaining = observed.observations.stream().filter(o -> o != success).toList();
-            if (remaining.size() == observed.observations.size()) return;
-            Failure updated = remaining.isEmpty() ? null :
-                    new Failure(remaining, observed.claimed && observed.observations.getFirst() != success);
-            if (root.graphFailure.compareAndSet(observed, updated)) return;
-            observed = root.graphFailure.get();
-        }
     }
 
     Failure claim(ContextRoot root) {
@@ -117,7 +112,6 @@ public final class GraphRecovery implements AutoCloseable {
                 Language.currentState().getCompilationOwner() != root.compilationOwner()) return null;
         Failure observed = root.graphFailure.get();
         if (observed == null || observed.claimed || observed.target().isSubmittedForCompilation()) return null;
-        if (observed.target().isValid()) { root.graphFailure.compareAndSet(observed, observed.remaining()); return null; }
         Failure claimed = new Failure(observed.observations, true);
         return root.graphFailure.compareAndSet(observed, claimed) ? claimed : null;
     }
@@ -125,7 +119,7 @@ public final class GraphRecovery implements AutoCloseable {
     boolean publishable(ContextRoot root, Failure claim) {
         Failure observed = root.graphFailure.get();
         return !closed && observed != null && observed.sameClaim(claim) && !claim.target().isSubmittedForCompilation() &&
-                !claim.target().isValid() && root.compilationOwner() == Language.currentState().getCompilationOwner();
+                root.compilationOwner() == Language.currentState().getCompilationOwner();
     }
 
     void complete(ContextRoot root, Failure claim, boolean replaced) {
@@ -150,11 +144,6 @@ public final class GraphRecovery implements AutoCloseable {
                 boolean permanent, int tier, Supplier<String> lazyStackTrace) {
             GraphRecovery current = service.get();
             if (current != null) current.failed(target, reason, bailout, permanent);
-        }
-        @Override public void onCompilationSuccess(OptimizedCallTarget target, AbstractCompilationTask task,
-                TruffleCompilerListener.GraphInfo graph, TruffleCompilerListener.CompilationResultInfo result) {
-            GraphRecovery current = service.get();
-            if (current != null) current.succeeded(target);
         }
     }
 }

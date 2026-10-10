@@ -13,6 +13,7 @@ import thc.Language;
 public abstract class ContextRoot extends RootNode {
     private Object compilationOwner;
     AtomicReference<GraphRecovery.Failure> graphFailure = new AtomicReference<>();
+    volatile boolean compilationFailureObserved;
 
     protected ContextRoot(TruffleLanguage<?> language, FrameDescriptor descriptor) {
         super(language, descriptor);
@@ -33,6 +34,7 @@ public abstract class ContextRoot extends RootNode {
     @Override public Node copy() {
         ContextRoot copy = (ContextRoot) super.copy();
         copy.graphFailure = new AtomicReference<>();
+        copy.compilationFailureObserved = false;
         return copy;
     }
 }

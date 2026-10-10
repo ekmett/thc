@@ -65,10 +65,13 @@ public final class FunctionRoot extends GuestRoot {
     @Child private LoopNode loop;
     @Child private HandoffCaller delimitedHandoff;
     @Child private volatile DirectCallNode recoveredEntry;
+    @CompilationFinal private volatile boolean coldEntry;
+    @CompilationFinal private boolean recoveryBoundary;
 
     @Override public Node copy() {
         FunctionRoot copy = (FunctionRoot) super.copy();
         copy.recoveredEntry = null;
+        copy.coldEntry = false;
         return copy;
     }
 
@@ -81,17 +84,27 @@ public final class FunctionRoot extends GuestRoot {
             boolean reduced = claim.target().getRootNode() instanceof AstSameFrameArm.ArmRoot side
                     ? side.extractInCopy(replacement)
                     : deferredBudget ? AstDeferredArm.extractFresh(replacement) : AstSameFrameArm.extract(replacement);
-            if (!reduced) return null;
+            if (!reduced) {
+                atomic(() -> {
+                    if (recoveredEntry == null && service.publishable(this, claim)) {
+                        coldEntry = true;
+                        reportReplace(this, this, "cold trampoline after compilation failure");
+                    }
+                    return null;
+                });
+                return null;
+            }
             replacement.budgetGeneration = budgetGeneration + 1;
+            replacement.recoveryBoundary = true;
             DirectCallNode prepared = DirectCallNode.create(replacement.getCallTarget());
             return atomic(() -> {
                 if (recoveredEntry == null && service.publishable(this, claim)) {
                     recoveredEntry = insert(prepared);
-                    reportReplace(this, this, "fresh entry after terminal graph-size failure");
+                    reportReplace(this, this, "smaller fresh entry after compilation failure");
                 }
                 return recoveredEntry;
             });
-        } finally { service.complete(this, claim, recoveredEntry != null); }
+        } finally { service.complete(this, claim, recoveredEntry != null || coldEntry); }
     }
 
     final FunctionRoot copyForRecovery() {
@@ -537,6 +550,14 @@ public final class FunctionRoot extends GuestRoot {
             redirect = recoverEntry();
         }
         if (redirect != null) return Calls.direct(redirect, frame.getArguments());
+        if (coldEntry) return executeCold(frame.getArguments());
+        return executeEntry(frame);
+    }
+    /** Fresh ingress has not consumed a typed loan or initialized any guest locals yet. */
+    @TruffleBoundary private Object executeCold(Object[] arguments) {
+        return executeEntry(Truffle.getRuntime().createVirtualFrame(arguments, getFrameDescriptor()));
+    }
+    private Object executeEntry(VirtualFrame frame) {
         if (!capturesContinuations) return executeInitial(frame, false);
         AstStackScope stack = astStackScope(this);
         boolean driver = !stack.getDriving();
@@ -701,7 +722,9 @@ public final class FunctionRoot extends GuestRoot {
     @Override public String getName() { return label; }
     @Override public String toString() { return label; }
     public long getGraphBudgetGeneration() { return budgetGeneration; }
+    /** Compatibility with older runtime overlays: a failed physical target is never rearmed. */
     public synchronized long prepareGraphBudgetRetry(long failedGeneration) {
+        if (compilationFailureObserved) return failedGeneration;
         if (deferredBudget && failedGeneration == 0L && budgetGeneration == 0L && AstDeferredArm.extract(this))
             budgetGeneration = 1L;
         else if (failedGeneration == budgetGeneration && AstSameFrameArm.extract(this))
@@ -709,7 +732,10 @@ public final class FunctionRoot extends GuestRoot {
         return budgetGeneration;
     }
     @Override protected boolean prepareForCompilation(boolean rootCompilation, int compilationTier, boolean lastTier) {
-        return (!budgetBoundary || rootCompilation) && super.prepareForCompilation(rootCompilation, compilationTier, lastTier);
+        return (!budgetBoundary && !recoveryBoundary || rootCompilation) && !coldEntry &&
+                super.prepareForCompilation(rootCompilation, compilationTier, lastTier);
     }
-    @Override public boolean isCloningAllowed() { return !budgetBoundary; }
+    @Override public boolean isCloningAllowed() {
+        return !budgetBoundary && !recoveryBoundary && !compilationFailureObserved;
+    }
 }
