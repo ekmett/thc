@@ -24,7 +24,7 @@ import static thc.runtime.DataValues.*;
 
 /* Fixed immutable representations and StaticShape construction follow Cadenza
  * frame assembly and capture layouts. See NOTICE.md and
- * LICENSE.txt. Constructor fields need neither object fallbacks nor tags. */
+ * LICENSE.md. Constructor fields need neither object fallbacks nor tags. */
 public final class DataLayout {
     private final String id;
     private final String name;
