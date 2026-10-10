@@ -22,6 +22,8 @@ public final class Thunk implements Lifted {
     private Object value;
     private Thread owner;
     private boolean hasWaited;
+    // A live shared thunk owns every logical demander until its evaluator publishes progress.
+    java.util.ArrayList<Force.DemandWait> demandWaiters;
 
     public Thunk(RootCallTarget target, CapturedFrame environment) {
         this.target = target;
@@ -52,7 +54,10 @@ public final class Thunk implements Lifted {
     /** Caller holds this thunk's monitor. Registration precedes the atomic wait release. */
     void awaitUpdate() throws InterruptedException { hasWaited = true; wait(); }
     /** Caller holds this thunk's monitor. Once contended, retain every later wakeup. */
-    void notifyUpdate() { if (hasWaited) notifyAll(); }
+    void notifyUpdate() {
+        if (hasWaited) notifyAll();
+        if (demandWaiters != null) for (int i = 0; i < demandWaiters.size(); ++i) demandWaiters.get(i).changedLocked();
+    }
     // One stable monitor per thunk, with no additional lock allocation.
     public Object getMonitor() { return this; }
 }

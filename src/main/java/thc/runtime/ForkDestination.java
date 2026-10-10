@@ -17,14 +17,22 @@ final class ForkDestination extends TupleDestination {
             result instanceof AstTailYield tail ? tail.getContinuation() : null;
         if (ast != null) {
             AsyncRequest request = ast.asyncRequest();
-            if (request == null) throw RuntimeFault.fault("Fork action suspended without an async request");
+            if (request == null) {
+                PendingWait wait = PendingWait.of(ast);
+                if (wait != null) throw new ForkSuspension(new ForkActionRoot.Body(ast, shape), wait);
+                throw RuntimeFault.fault("Fork action suspended without an async request");
+            }
             throw new UncaughtForkAsync(request);
         }
         ContinuationResult continuation = result instanceof ContinuationResult saved ? saved :
             result instanceof TailYield tail ? tail.getContinuation() : null;
         if (continuation != null) {
             AsyncRequest request = AsyncContinuations.request(continuation);
-            if (request == null) throw RuntimeFault.fault("Fork action suspended without an async request");
+            if (request == null) {
+                PendingWait wait = PendingWait.of(continuation);
+                if (wait != null) throw new ForkSuspension(new ForkActionRoot.Body(SavedGuestContinuations.savedGuestContinuation(continuation), shape), wait);
+                throw RuntimeFault.fault("Fork action suspended without an async request");
+            }
             throw new UncaughtForkAsync(request);
         }
         if (result == TupleComplete.INSTANCE) {

@@ -136,13 +136,16 @@ public final class ManagedSTM implements AutoCloseable {
     @TruffleBoundary boolean validException(Transaction tx) {
         lock.lock(); try { live(); return valid(tx); } finally { lock.unlock(); }
     }
-    @TruffleBoundary void await(Transaction tx, Node node, boolean async) {
-        var request = new RetryWait(tx, async ? node : null);
+    @TruffleBoundary void await(Transaction tx, Node node, boolean async) { await(tx, node, async, null); }
+    @TruffleBoundary void await(Transaction tx, Node node, boolean async, Object blockedException) {
+        var request = new RetryWait(tx, async ? node : null, blockedException);
+        boolean captured = false;
         try {
             if (node == null) {
                 try { request.await(); } catch (InterruptedException failure) { throw rethrow(failure); }
             } else TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, AWAIT_RETRY, request);
-        } finally { request.cancel(); }
+        } catch (PendingWait cut) { captured = true; throw cut; }
+        finally { if (!captured) request.cancel(); }
     }
     /** Protocol convenience; guest execution uses STMCall's direct scope/loop operations. */
     public <T> T atomically(Node node, Runnable nested, Supplier<T> action) { return atomically(node, nested, false, action); }
@@ -191,20 +194,24 @@ public final class ManagedSTM implements AutoCloseable {
         catch (Throwable failure) { abort(parent, child); throw failure; }
         finally { restore(parent); }
     }
-    final class RetryWait {
+    final class RetryWait implements PendingWait.Operation {
         private final Node checkpoint;
         private final IdentityHashMap<ManagedTVar, Object> versions = new IdentityHashMap<>();
         private final Condition ready = lock.newCondition();
         private boolean submitted;
         private boolean changed;
-        RetryWait(Transaction tx, Node checkpoint) {
-            this.checkpoint = checkpoint;
+        private PendingWait suspension;
+        private final Object blockedException;
+        RetryWait(Transaction tx, Node checkpoint, Object blockedException) {
+            this.checkpoint = checkpoint; this.blockedException = blockedException;
             for (var item : tx.entries.entrySet()) versions.put(item.getKey(), item.getValue().revision);
         }
         void changedLocked() {
             if (changed) return;
             for (var item : versions.entrySet()) if (item.getKey().revision != item.getValue()) {
-                changed = true; ready.signalAll(); break;
+                changed = true; ready.signalAll();
+                if (suspension != null) suspension.wake();
+                break;
             }
         }
         Object await() throws InterruptedException {
@@ -227,6 +234,13 @@ public final class ManagedSTM implements AutoCloseable {
                     live();
                     var request = checkpoint == null ? null : GuestThreads.pollCurrentWithoutYield(checkpoint, true);
                     if (request != null) { cancelLocked(); throw new AsyncBlocked(request, checkpoint); }
+                    if (suspension != null && suspension.rescued) {
+                        AsyncRequest rescue = suspension.owner.identity.owner.rescue(suspension,
+                            java.util.Objects.requireNonNull(blockedException), checkpoint);
+                        if (rescue != null) { cancelLocked(); throw new AsyncBlocked(rescue, checkpoint); }
+                    }
+                    if (suspension == null) suspension = PendingWait.capture(this, checkpoint);
+                    if (suspension != null && GuestThreads.suspendingCurrent(checkpoint) == suspension.owner) throw suspension;
                     var blocked = GuestThreads.blocking(GuestThreadStatus.STM);
                     try { ready.await(); }
                     finally {
@@ -247,7 +261,15 @@ public final class ManagedSTM implements AutoCloseable {
             }
             versions.clear();
         }
-        void cancel() { lock.lock(); try { cancelLocked(); } finally { lock.unlock(); } }
+        @Override public Object resume() {
+            boolean captured = false;
+            try { return TruffleSafepoint.setBlockedThreadInterruptibleFunction(checkpoint, AWAIT_RETRY, this); }
+            catch (PendingWait cut) { captured = true; throw cut; }
+            finally { if (!captured) cancel(); }
+        }
+        @Override public boolean ready() { lock.lock(); try { return changed || closed; } finally { lock.unlock(); } }
+        @Override public GuestThreadStatus status() { return GuestThreadStatus.STM; }
+        @Override public boolean cancel() { lock.lock(); try { cancelLocked(); return true; } finally { lock.unlock(); } }
         void closeLocked() { ready.signalAll(); }
     }
     public int pendingWaiters() { lock.lock(); try { return waiters.size(); } finally { lock.unlock(); } }

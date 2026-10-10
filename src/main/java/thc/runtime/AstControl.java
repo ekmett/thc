@@ -28,6 +28,17 @@ public final class AstControl {
         ResumeChild(Object child, Node node) { this.child = child; this.node = node; }
         @Override public Object resume(VirtualFrame frame, Object input) { return resumeChild(child, node, input, this); }
     }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    static AstCapture captureChild(Node node, ThunkSuspended suspended) {
+        return new AstCapture(suspended, SynchronousMasking.current(node))
+            .append(new ResumeChild(suspended.getThunk(), node));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    static AstCapture captureForce(Node node, Force force, Object value, PendingWait wait) {
+        RetryForce retry = new RetryForce(node, force, value); retry.wait = wait;
+        return new AstCapture(wait, SynchronousMasking.current(node)).append(retry);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureChild(Node node, CallSegmentSuspended suspended) {
         return new AstCapture(suspended, SynchronousMasking.current(node))
             .append(new ResumeChild(suspended.getSegment(), node));
@@ -53,9 +64,14 @@ public final class AstControl {
         private final Node node;
         private final Force force;
         private final Object value;
+        private PendingWait wait;
         RetryForce(Node node, Force force, Object value) { this.node = node; this.force = force; this.value = value; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             if (input != thc.runtime.Unit.INSTANCE) throw fault("AST blackhole continuation requires Unit");
+            try { if (wait != null) wait.resume(); }
+            catch (PendingWait cut) { wait = cut; throw new AstCapture(cut, SynchronousMasking.current(node)).append(this); }
+            catch (AsyncBlocked blocked) { wait = null; throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(this); }
+            wait = null;
             return force(frame, node, force, value);
         }
     }
@@ -67,9 +83,11 @@ public final class AstControl {
     static Object forceCallback(VirtualFrame frame, Node node, Force force, Object value) {
         try { return force.execute(frame, value); }
         catch (ThunkSuspended suspended) {
-            throw new AstCapture(suspended, SynchronousMasking.current(node)).append(new ResumeChild(suspended.getThunk(), node));
+            throw captureChild(node, suspended);
         } catch (CallSegmentSuspended suspended) {
-            throw new AstCapture(suspended, SynchronousMasking.current(node)).append(new ResumeChild(suspended.getSegment(), node));
+            throw captureChild(node, suspended);
+        } catch (PendingWait cut) {
+            throw captureForce(node, force, value, cut);
         } catch (AsyncBlocked blocked) {
             throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(new RetryForce(node, force, value));
         }
@@ -117,10 +135,17 @@ public final class AstControl {
                 expectedTarget != null ? expectedTarget : root.getCallTarget(), node, callerMask);
             throw new AstCapture(pending, callerMask).append(pending);
         }
+        throw captureCompletion(node, saved, tupleShape != null ? tupleShape : root.getTupleResult());
+    }
+    /** The private completion already owns this exact checked chain and local result shape; its source may be a caller frame. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    static AstCapture captureCompletion(Node node, SavedGuestContinuation saved, TupleShape shape) {
+        if (!(saved.getSourceRoot() instanceof GuestRoot) || !AsyncContinuations.isYieldMarker(saved.getYielded()))
+            throw fault("Invalid owned completion continuation");
+        MaskingState callerMask = SynchronousMasking.current(node);
         MaskingState parkedMask = saved.getYielded() instanceof CallSegmentSuspended suspended ? suspended.getParkedActiveMask() : null;
-        CallSegment segment = new CallSegment(saved.getIdentity(), parkedMask != null ? parkedMask : callerMask,
-            callerMask, tupleShape != null ? tupleShape : root.getTupleResult(), false, false);
+        CallSegment segment = new CallSegment(saved.getIdentity(), parkedMask != null ? parkedMask : callerMask, callerMask, shape, false, false);
         CallSegmentSuspended suspended = new CallSegmentSuspended(segment, null, saved.asyncRequest(), saved.stackSpill());
-        throw new AstCapture(suspended, callerMask).append(new ResumeChild(segment, node));
+        return new AstCapture(suspended, callerMask).append(new ResumeChild(segment, node));
     }
 }

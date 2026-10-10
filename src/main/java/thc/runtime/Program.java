@@ -2383,7 +2383,7 @@ public final class Program implements ExecutableProgram {
                 nested = globalRead(STMOp.NESTED, scope);
             }
             return new STMExpression(operation, tupleProof, operands,
-                operation.getCallback() ? new TupleShape(tupleProof, (thc.Language) language) : null, codeMetrics(), nested, enableAsync);
+                operation.getCallback() ? new TupleShape(tupleProof, (thc.Language) language) : null, codeMetrics(), nested, enableAsync, operation == STMOp.ATOMICALLY ? globalRead(CoreBlockedExceptions.STM, scope) : null);
         }
         if (primitive && MVarOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(MVarOp.named((String) fn.get(1)));
@@ -2391,7 +2391,8 @@ public final class Program implements ExecutableProgram {
             operation.validateBindings(argumentProofs(args), bindingProofs(args, scope));
             Expr[] operands = argumentOperands(args, scope, flags);
             operation.validate(loweredProofs(operands), flags, tupleProof);
-            return ManagedMVars.expression(operation, tupleProof, operands, enableAsync);
+            String blocked = CoreBlockedExceptions.payload(operation.getPrimitive());
+            return ManagedMVars.expression(operation, tupleProof, operands, enableAsync, blocked == null ? null : globalRead(blocked, scope));
         }
         if (primitive && CompactImageOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(CompactImageOp.named((String) fn.get(1)));

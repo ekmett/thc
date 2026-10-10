@@ -71,6 +71,10 @@ public final class Force extends Node {
                 resumeProfile.enter();
                 observed = savedGuestContinuation(original.getValue());
             }
+            PendingWait pending = PendingWait.of(observed);
+            if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) {
+                awaitOwner(original); continue;
+            }
             // The continuation owns its callee frame; never materialize this caller.
             if (suspendedChild(observed) != null) return resumeChain(original, false, false, invocationMetrics);
             Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics);
@@ -168,6 +172,12 @@ public final class Force extends Node {
         throw fault("Async IO handler cut requires a captured thunk or call segment");
     }
 
+    private boolean asyncUnwind(Object input) {
+        AsyncRequest request = input instanceof AstChildSuspension suspended ? suspended.getRequest() :
+            input instanceof ChildResume child && child.getFailure() instanceof AsyncDelivery delivered ? delivered.getRequest() : null;
+        return request != null && request.getTarget() == Thread.currentThread() &&
+            request.getTargetId() == GuestThreads.current(this).currentId() && request.getState() == AsyncRequestState.CLAIMED;
+    }
     private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics) {
         boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;
         while (true) {
@@ -194,8 +204,12 @@ public final class Force extends Node {
                             else {
                                 continuation = savedGuestContinuation(original.getValue());
                                 if (continuation == null) throw fault("Suspended thunk has no guest continuation");
-                                original.setValue(null);
-                                original.setOwner(Thread.currentThread()); original.setState(1); claimedHere = true; claim = 0;
+                                PendingWait pending = PendingWait.of(continuation);
+                                if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this) && !asyncUnwind(resumeValue)) claim = 1;
+                                else {
+                                    original.setValue(null);
+                                    original.setOwner(Thread.currentThread()); original.setState(1); claimedHere = true; claim = 0;
+                                }
                             }
                         }
                         case 1 -> claim = original.getOwner() == Thread.currentThread() ? 2 : 1;
@@ -219,12 +233,17 @@ public final class Force extends Node {
         }
     }
 
-    @TruffleBoundary private Object resumeChain(Object original, boolean drainSpills, boolean delimitedInvocation, Metrics invocationMetrics) {
+    private Object resumeChain(Object original, boolean drainSpills, boolean delimitedInvocation, Metrics invocationMetrics) {
+        return resumeChain(original, drainSpills, delimitedInvocation, invocationMetrics, null, null);
+    }
+    @TruffleBoundary private Object resumeChain(Object original, boolean drainSpills, boolean delimitedInvocation,
+            Metrics invocationMetrics, AsyncRequest waitingRequest, Thunk awaited) {
         var parked = new ArrayDeque<Parked>();
         var seen = new IdentityHashMap<Object, Boolean>();
         Object leaf = original;
         while (true) {
             SavedGuestContinuation leafContinuation;
+            Object injected = Unit.INSTANCE;
             while (true) {
                 if (seen.put(leaf, true) != null) throw fault("Suspended thunk dependency cycle");
                 leafContinuation = continuationOf(leaf);
@@ -232,6 +251,15 @@ public final class Force extends Node {
                     throw new UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain");
                 Object child = suspendedChild(leafContinuation);
                 if (child == null) break;
+                if (waitingRequest != null && child == awaited) {
+                    injected = unwindCaller(new Parked(leaf, leafContinuation), child, waitingRequest);
+                    waitingRequest = null; awaited = null;
+                    break;
+                }
+                if (child instanceof Thunk thunk) {
+                    PendingWait pending = PendingWait.of(thunk.getValue());
+                    if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) awaitOwner(thunk);
+                }
                 parked.addLast(new Parked(leaf, leafContinuation));
                 if (drainSpills) {
                     AstStackScope scope = astStackScope(this);
@@ -245,7 +273,7 @@ public final class Force extends Node {
             // interpreter locals must not root a completed leaf while its parent runs.
             leaf = null;
             leafContinuation = null;
-            Object input = thc.runtime.Unit.INSTANCE;
+            Object input = injected;
             while (true) {
                 AsyncRequest pending = input instanceof AstChildSuspension suspension ? suspension.getRequest() :
                     input instanceof ChildResume child && child.getFailure() instanceof AsyncDelivery delivered ? delivered.getRequest() : null;
@@ -259,7 +287,7 @@ public final class Force extends Node {
                     };
                     outcome = answer == RETRY ? null : new ChildResume(answer, null);
                 } catch (ThunkSuspended suspension) {
-                    if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null) {
+                    if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null && PendingWait.of(suspension) == null) {
                         spilled = true; outcome = null;
                     } else if (suspension.getThunk() == current && suspension.getAsyncRequest() != null && canUnwindCaller(parked.peekLast(), drainSpills)) {
                         outcome = unwindCaller(parked.peekLast(), current, suspension.getAsyncRequest());
@@ -268,7 +296,7 @@ public final class Force extends Node {
                         throw suspension;
                     }
                 } catch (CallSegmentSuspended suspension) {
-                    if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null) {
+                    if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null && PendingWait.of(suspension) == null) {
                         spilled = true; outcome = null;
                     } else if (suspension.getSegment() == current && suspension.getAsyncRequest() != null && canUnwindCaller(parked.peekLast(), drainSpills)) {
                         outcome = unwindCaller(parked.peekLast(), current, suspension.getAsyncRequest());
@@ -365,6 +393,40 @@ public final class Force extends Node {
             catch (CallSegmentSuspended cut) {
                 if (cut.getSegment() != segment) throw cut;
                 if (!cut.getStackSpill() || cut.getAsyncRequest() != null) return new AstStackContinuation(root, cut);
+            } catch (PendingWait wait) {
+                return new DriverWait(this, root, segment, wait, delimitedInvocation, invocationMetrics);
+            }
+        }
+    }
+    static final class DriverWait implements SavedGuestContinuation {
+        private final Force force;
+        private final GuestRoot root;
+        private final CallSegment segment;
+        private final PendingWait wait;
+        private final boolean delimited;
+        private final Metrics metrics;
+        private boolean claimed;
+        DriverWait(Force force, GuestRoot root, CallSegment segment, PendingWait wait, boolean delimited, Metrics metrics) {
+            this.force = force; this.root = root; this.segment = segment; this.wait = wait; this.delimited = delimited; this.metrics = metrics;
+        }
+        @Override public Object getIdentity() { return this; }
+        @Override public Object getYielded() { return wait; }
+        @Override public Object getSourceRoot() { return root; }
+        @Override public Object continueWith(Object input) {
+            if (input != Unit.INSTANCE || claimed) throw fault("Invalid pending driver continuation entry");
+            claimed = true;
+            try {
+                try { wait.resume(); }
+                catch (AsyncBlocked blocked) {
+                    if (!(wait.operation instanceof Force.DemandWait demand)) throw blocked;
+                    return force.resumeChain(segment, true, delimited, metrics, blocked.getRequest(), demand.thunk);
+                }
+                return force.resumeChain(segment, true, delimited, metrics);
+            } catch (PendingWait pending) {
+                return new DriverWait(force, root, segment, pending, delimited, metrics);
+            } catch (CallSegmentSuspended cut) {
+                if (cut.getSegment() != segment) throw cut;
+                return new AstStackContinuation(root, cut);
             }
         }
     }
@@ -407,10 +469,14 @@ public final class Force extends Node {
                             else {
                                 continuation = savedGuestContinuation(segment.getValue());
                                 if (continuation == null) throw fault("Suspended call segment has no guest continuation");
-                                segment.enterInitial(SynchronousMasking.current(this));
-                                resumeMask = segment.getLogicalMask();
-                                segment.setValue(null);
-                                segment.setOwner(Thread.currentThread()); segment.setState(1); claimedHere = true; claim = 0;
+                                PendingWait pending = PendingWait.of(continuation);
+                                if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this) && !asyncUnwind(resumeValue)) claim = 4;
+                                else {
+                                    segment.enterInitial(SynchronousMasking.current(this));
+                                    resumeMask = segment.getLogicalMask();
+                                    segment.setValue(null);
+                                    segment.setOwner(Thread.currentThread()); segment.setState(1); claimedHere = true; claim = 0;
+                                }
                             }
                         }
                         case 1 -> claim = segment.getOwner() == Thread.currentThread() ? 2 : 1;
@@ -422,6 +488,11 @@ public final class Force extends Node {
                     case 1 -> awaitCallOwner(segment);
                     case 2 -> throw fault("Blackhole: cyclic call segment entered while evaluating");
                     case 3 -> { return RETRY; }
+                    case 4 -> {
+                        Object child = suspendedChild(continuation);
+                        if (child instanceof Thunk thunk) awaitOwner(thunk);
+                        else throw fault("Private call segment belongs to another suspended guest");
+                    }
                 }
             } catch (Throwable failure) {
                 if (claimedHere) suspendCallOwned(segment);
@@ -614,6 +685,8 @@ public final class Force extends Node {
         boolean previous = safepoint.setAllowSideEffects(false);
         try {
             synchronized (thunk.getMonitor()) {
+                PendingWait pending = PendingWait.of(continuation);
+                if (pending != null) pending.retainUpdate(thunk, continuation.getIdentity());
                 thunk.setValue(continuation.getIdentity()); thunk.setTarget(null); thunk.setEnvironment(null);
                 thunk.setOwner(null); thunk.setState(5); thunk.notifyUpdate();
             }
@@ -642,20 +715,54 @@ public final class Force extends Node {
     @SuppressWarnings("unchecked")
     private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
 
-    @TruffleBoundary private void awaitOwner(Thunk thunk) {
-        TruffleSafepoint.setBlockedThreadInterruptible(this, (Thunk waiting) -> {
-            GuestThreads.checkpointCurrent(this);
-            GuestThreadExtent blocked = null;
-            try { synchronized (waiting.getMonitor()) {
-                if (waiting.getState() == 1 && waiting.getOwner() != Thread.currentThread()) {
-                    if (asyncMode || AstControl.INSTANCE.enabled(this)) {
-                        AsyncRequest request = GuestThreads.pollCurrentWithoutYield(this, true);
-                        if (request != null) throw new AsyncBlocked(request, this);
+    final class DemandWait implements PendingWait.Operation {
+        private final Thunk thunk;
+        private boolean registered;
+        private PendingWait suspension;
+        DemandWait(Thunk thunk) { this.thunk = thunk; }
+        private boolean readyLocked() {
+            int state = thunk.getState();
+            PendingWait pending = state == 5 ? PendingWait.of(thunk.getValue()) : null;
+            return state != 1 && (pending == null || pending.abandoned());
+        }
+        void changedLocked() { if (readyLocked() && suspension != null) suspension.wake(); }
+        private Object await() throws InterruptedException {
+            GuestThreads.checkpointCurrent(Force.this);
+            while (true) {
+                GuestThreadExtent blocked = null;
+                try { synchronized (thunk.getMonitor()) {
+                    if (!registered) {
+                        if (thunk.demandWaiters == null) thunk.demandWaiters = new java.util.ArrayList<>();
+                        thunk.demandWaiters.add(this); registered = true;
                     }
+                    if (readyLocked()) return Unit.INSTANCE;
+                    AsyncRequest request = asyncMode || AstControl.captures(Force.this) ?
+                        GuestThreads.pollCurrentWithoutYield(Force.this, true) : null;
+                    if (request != null) { cancel(); throw new AsyncBlocked(request, Force.this); }
+                    if (suspension == null) suspension = PendingWait.capture(this, Force.this);
+                    if (suspension != null && GuestThreads.suspendingCurrent(Force.this) == suspension.owner) throw suspension;
                     blocked = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE);
-                    waiting.awaitUpdate();
-                }
-            } } finally { if (blocked != null) blocked.close(); }
-        }, thunk);
+                    thunk.awaitUpdate();
+                } } finally { if (blocked != null) blocked.close(); }
+            }
+        }
+        @Override public Object resume() {
+            boolean captured = false;
+            try { return TruffleSafepoint.setBlockedThreadInterruptibleFunction(Force.this, DemandWait::await, this); }
+            catch (PendingWait cut) { captured = true; throw cut; }
+            finally { if (!captured) cancel(); }
+        }
+        @Override public boolean cancel() {
+            synchronized (thunk.getMonitor()) {
+                if (!registered) return false;
+                thunk.demandWaiters.remove(this);
+                if (thunk.demandWaiters.isEmpty()) thunk.demandWaiters = null;
+                registered = false; return true;
+            }
+        }
+        @Override public boolean ready() { synchronized (thunk.getMonitor()) { return readyLocked(); } }
+        @Override public GuestThreadStatus status() { return GuestThreadStatus.BLACK_HOLE; }
     }
+    @TruffleBoundary private void awaitOwner(Thunk thunk) { new DemandWait(thunk).resume(); }
+
 }

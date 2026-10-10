@@ -255,6 +255,7 @@ public final class CoreModules {
                         String payload = CoreArithmeticExceptions.payload(name); if (payload != null) reference.accept(payload);
                         var compact = CompactOp.named(name); if (compact != null && compact.getAdds()) for (String failure : CompactOp.getFailures()) reference.accept(failure);
                         if (name.equals("atomically#")) reference.accept(STMOp.NESTED);
+                        String blocked = thc.runtime.CoreBlockedExceptions.payload(name); if (blocked != null) reference.accept(blocked);
                         if (name.equals("mkWeak#")) {
                             // Runtime-entered Haskell actions use this same linked unit
                             // and its current original GHC finalizer handler CAF.

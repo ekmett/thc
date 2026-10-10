@@ -12,7 +12,7 @@ public final class AsyncContinuations {
     private AsyncContinuations() {}
     public static boolean isYieldMarker(Object value) {
         return value == thc.runtime.Unit.INSTANCE || value == AstStackSpill.INSTANCE ||
-            value instanceof ThunkSuspended || value instanceof CallSegmentSuspended || value instanceof AsyncRequest;
+            value instanceof PendingWait || value instanceof ThunkSuspended || value instanceof CallSegmentSuspended || value instanceof AsyncRequest;
     }
     public static AsyncRequest request(ContinuationResult continuation) {
         return switch (continuation.getResult()) {

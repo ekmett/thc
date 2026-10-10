@@ -15,6 +15,9 @@ import java.util.List;
 import java.util.WeakHashMap;
 import java.util.concurrent.Callable;
 import thc.Language;
+import jam.vm.Candidate;
+import java.lang.ref.WeakReference;
+import java.lang.ref.Reference;
 import static thc.runtime.RuntimeFault.fault;
 
 /** A carrier can suspend one guest in foreign code and enter a distinct bound callback. */
@@ -112,6 +115,14 @@ public final class GuestThreads {
         }
     }
     public void stopHostedThreads() {
+        stoppingRescue = true;
+        synchronized (dormant) { dormant.notifyAll(); }
+        List<WaitRegistration> sleeping;
+        synchronized (this) { sleeping = List.copyOf(dormant.values()); }
+        for (WaitRegistration registration : sleeping) {
+            GuestThread owner = registration.lookup.get();
+            if (owner != null) { owner.waitReady = true; wakeSuspended(owner); }
+        }
         if (loom != null) { loom.stopThreads(); return; }
         Thread[] carriers;
         synchronized (this) {
@@ -144,6 +155,17 @@ public final class GuestThreads {
         AsyncRequest claimed;
         int entries;
         volatile boolean pending;
+        boolean suspensionBoundary;
+        long waitGeneration;
+        volatile PendingWait wait;
+        volatile boolean waitReady;
+        GuestWakePort wakePort;
+        volatile WaitRegistration registration;
+        boolean guestDetached;
+        Object work;
+        MaskingState parkedMask;
+        StackAnnotationState parkedAnnotations;
+        AstStackScope parkedStack;
         public GuestThread(Thread thread, GuestThreadId identity, boolean externalAsync) {
             this.thread = thread; this.identity = identity; this.externalAsync = externalAsync;
         }
@@ -202,6 +224,240 @@ public final class GuestThreads {
     private final PollStates pollStates;
     public PollState pollState(Thread thread) { return pollStates.get(thread); }
     private final HashMap<Long, GuestThread> threads = new HashMap<>();
+    private final HashMap<Long, WaitRegistration> dormant = new HashMap<>();
+    // A masked rearm can publish a new ticket while the old native claim still needs completion.
+    private final HashMap<Long, WaitRegistration> retiring = new HashMap<>();
+    private static final class WaitRegistration {
+        final long identity, generation;
+        final GuestWakePort port;
+        final WeakReference<GuestThread> lookup;
+        volatile long ticket;
+        GuestThread claimed;
+        volatile boolean terminal;
+        WaitRegistration(GuestThread owner) {
+            identity = owner.identity.logicalId; generation = owner.wait.generation;
+            port = owner.wakePort; lookup = new WeakReference<>(owner);
+        }
+    }
+    private Thread rescueService;
+    private volatile boolean stoppingRescue;
+    private long observedCandidateEpoch = -1;
+    private volatile boolean retryTerminalCleanup;
+    private GuestThread findThread(long id) {
+        GuestThread active = threads.get(id);
+        WaitRegistration registration = active == null ? dormant.get(id) : null;
+        return active != null ? active : registration == null ? null : registration.lookup.get();
+    }
+    void installSuspensionBoundary(GuestWakePort port) {
+        GuestThread owner = currentSlot.get();
+        if (owner == null || !owner.identity.forked || owner.entries != 1 || inForeignCallback())
+            throw fault("Invalid independent guest suspension boundary");
+        owner.wakePort = port; owner.suspensionBoundary = true;
+    }
+    private synchronized void startRescueService() {
+        if (rescueService != null) return;
+        Thread service = Thread.ofPlatform().daemon(true).name("thc-blocked-owner-rescue")
+            .inheritInheritableThreadLocals(false).unstarted(this::rescueLoop);
+        service.start(); rescueService = service;
+    }
+    private void rescueLoop() {
+        boolean reported = false;
+        try {
+            while (!stoppingRescue) {
+                try { scanCandidates(); reported = false; }
+                catch (Throwable failure) {
+                    // Claims remain in their registration until a later transfer succeeds.
+                    if (!reported) failure.printStackTrace(new java.io.PrintStream(env.err(), true));
+                    reported = true;
+                }
+                synchronized (dormant) { if (!stoppingRescue) dormant.wait(10L); }
+            }
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+    }
+    private void scanCandidates() {
+        long epoch = Candidate.epoch();
+        if (epoch == observedCandidateEpoch && epoch != Long.MAX_VALUE && !retryTerminalCleanup) return;
+        List<WaitRegistration> registrations;
+        synchronized (this) { registrations = new ArrayList<>(dormant.values()); registrations.addAll(retiring.values()); }
+        for (WaitRegistration registration : registrations) {
+            if (registration.ticket == 0) continue;
+            GuestThread selected;
+            synchronized (registration) {
+                selected = registration.claimed;
+                if (selected == null) {
+                    selected = (GuestThread) (registration.terminal ? Candidate.disarm(registration.ticket, registration.generation) :
+                        Candidate.poll(registration.ticket, registration.generation));
+                    if (selected != null) registration.claimed = selected;
+                }
+            }
+            if (selected == null) continue;
+            synchronized (selected) {
+                if (selected.registration == registration && !registration.terminal) {
+                    if (!selected.waitReady && selected.wait.mask == MaskingState.MASKED_UNINTERRUPTIBLE) {
+                        // The mask defers rescue; reserve the replacement before releasing this claim.
+                        armSuspended(selected);
+                    } else {
+                        if (!selected.waitReady) { selected.wait.rescued = true; selected.waitReady = true; }
+                        registration.port.deliver(selected);
+                    }
+                }
+                Candidate.complete(registration.ticket, registration.generation);
+                synchronized (registration) { registration.claimed = null; }
+                synchronized (this) { retiring.remove(registration.ticket, registration); }
+                if (registration.terminal) {
+                    synchronized (this) { dormant.remove(registration.identity, registration); }
+                    if (selected.registration == registration) selected.registration = null;
+                    registration.port.take();
+                }
+            }
+        }
+        synchronized (this) { retryTerminalCleanup = dormant.values().stream().anyMatch(item -> item.terminal); }
+        observedCandidateEpoch = epoch;
+    }
+    private void armSuspended(GuestThread owner) {
+        WaitRegistration registration = new WaitRegistration(owner);
+        WaitRegistration previous = owner.registration;
+        synchronized (this) {
+            dormant.put(owner.identity.logicalId, registration);
+            if (previous != null) retiring.put(previous.ticket, previous);
+        }
+        try {
+            registration.ticket = Candidate.arm(owner, registration.generation);
+            owner.registration = registration;
+            Reference.reachabilityFence(owner);
+        } catch (Throwable failure) {
+            synchronized (this) {
+                if (previous == null) dormant.remove(owner.identity.logicalId, registration);
+                else { dormant.put(owner.identity.logicalId, previous); retiring.remove(previous.ticket, previous); }
+            }
+            throw failure;
+        }
+    }
+    static void wakeSuspended(GuestThread owner) {
+        // Commit publishes a real runnable root under its operation lock; native claim can follow outside it.
+        owner.wakePort.deliver(owner);
+    }
+    private void claimRunnable(GuestThread owner) {
+        WaitRegistration registration = owner.registration;
+        if (registration == null) return;
+        synchronized (registration) {
+            if (registration.claimed == null)
+                registration.claimed = (GuestThread) Candidate.disarm(registration.ticket, registration.generation);
+        }
+    }
+    private void completeRunnable(GuestThread owner) {
+        WaitRegistration registration = owner.registration;
+        if (registration == null) return;
+        synchronized (registration) {
+            if (registration.claimed != null) {
+                Candidate.complete(registration.ticket, registration.generation);
+                registration.claimed = null;
+            }
+        }
+    }
+    /** Publication precedes root removal; this method itself returns before neutral park. */
+    void suspendCurrent(Object work, PendingWait wait) {
+        GuestThread owner = currentSlot.get();
+        if (owner != wait.owner || owner.wait != wait || owner.entries != 1 || !owner.suspensionBoundary || inForeignCallback())
+            throw fault("Guest wait escaped its independent owner");
+        var handoff = TruffleLanguage.LanguageReference.create(Language.class).get(null).getHandoffState().get();
+        if (handoff.getPending() != null || handoff.getArguments().getDepth() != 0 || handoff.getResults().getDepth() != 0)
+            throw fault("Guest suspension retains a typed transport loan");
+        startRescueService();
+        synchronized (owner) {
+            owner.work = work; owner.parkedMask = maskingState.get();
+            owner.parkedAnnotations = StackAnnotations.current(null);
+            owner.parkedStack = pollState(owner.thread).astStack;
+            AstStackScope neutralStack = new AstStackScope();
+            armSuspended(owner);
+            var safepoint = com.oracle.truffle.api.TruffleSafepoint.getCurrent();
+            boolean allow = safepoint.setAllowSideEffects(false);
+            try {
+                // Guest roots and typed argument/result loans have unwound before this transition.
+                leaveGuestPermission(); owner.guestDetached = true; pauseAllocation(owner.identity);
+                if (loom != null) { owner.wakePort.admission = loom.suspendGuest(); loom.detach(owner.identity); }
+                synchronized (this) {
+                    threads.remove(owner.identity.logicalId, owner); identities.remove(owner.thread, owner.identity);
+                    var poll = pollState(owner.thread); poll.current = null; poll.astStack = neutralStack;
+                }
+                currentSlot.remove(); activeIdentity.remove(); maskingState.remove();
+                StackAnnotations.set(null, StackAnnotationState.EMPTY);
+                owner.identity.status = wait.operation.status();
+                if (owner.waitReady || owner.pending && wait.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
+                    owner.waitReady = true; wakeSuspended(owner);
+                }
+            } finally { safepoint.setAllowSideEffects(allow); }
+        }
+        Reference.reachabilityFence(owner);
+    }
+    void resumeSuspended(GuestThread owner) {
+        if (owner.thread != Thread.currentThread() || currentSlot.get() != null)
+            throw fault("Suspended guest resumed on another carrier");
+        synchronized (owner) {
+            claimRunnable(owner);
+            // Admission can block and be cancelled. Keep the wake port's ordinary owner root until it succeeds.
+            if (loom != null) {
+                loom.resumeGuest(owner.wakePort.admission, null); owner.wakePort.admission = null; loom.attach(owner.identity);
+            }
+            restoreSuspended(owner);
+            completeRunnable(owner);
+            synchronized (this) { dormant.remove(owner.identity.logicalId, owner.registration); }
+            owner.registration = null;
+        }
+    }
+    /** Restore logical cleanup ownership without requiring a cancelled carrier to readmit guest execution. */
+    private void restoreSuspended(GuestThread owner) {
+        var safepoint = com.oracle.truffle.api.TruffleSafepoint.getCurrent();
+        boolean allow = safepoint.setAllowSideEffects(false);
+        try {
+            synchronized (this) {
+                threads.put(owner.identity.logicalId, owner); identities.put(owner.thread, owner.identity);
+                var poll = pollState(owner.thread); poll.current = owner;
+                if (owner.parkedStack != null) poll.astStack = owner.parkedStack;
+            }
+            currentSlot.set(owner); activeIdentity.set(owner.identity);
+            if (owner.parkedMask != null) maskingState.set(owner.parkedMask);
+            if (owner.parkedAnnotations != null) StackAnnotations.set(null, owner.parkedAnnotations);
+            if (owner.guestDetached) { enterGuestPermission(); owner.guestDetached = false; }
+            if (owner.identity.allocationSuspended) resumeAllocation(owner.identity);
+            owner.parkedStack = null; owner.parkedAnnotations = null; owner.parkedMask = null;
+            owner.identity.status = GuestThreadStatus.RUNNING;
+        } finally { safepoint.setAllowSideEffects(allow); }
+    }
+    /** Cancellation/shutdown deliberately reacquires ownership before ordinary terminal cleanup. */
+    void recoverSuspended(GuestWakePort port) {
+        GuestThread owner = currentSlot.get();
+        if (owner == null) {
+            owner = port.peek();
+            if (owner == null) {
+                WaitRegistration registration;
+                synchronized (this) { registration = dormant.values().stream().filter(item -> item.port == port).findFirst().orElse(null); }
+                if (registration != null) owner = registration.lookup.get();
+            }
+        }
+        if (owner == null) return;
+        synchronized (owner) {
+            restoreSuspended(owner);
+            port.admission = null;
+            WaitRegistration registration = owner.registration;
+            try {
+                if (registration != null) {
+                    // A failed native release remains rooted and is retried by the infrastructure service.
+                    port.deliver(owner);
+                    synchronized (this) { registration.terminal = true; retryTerminalCleanup = true; }
+                    claimRunnable(owner); completeRunnable(owner);
+                    synchronized (this) { dormant.remove(owner.identity.logicalId, registration); }
+                    owner.registration = null;
+                }
+                port.take();
+            } finally {
+                if (owner.wait != null) {
+                    owner.wait.abandon(); owner.wait.operation.cancel(); owner.wait = null;
+                }
+            }
+        }
+    }
+
     private long nextIdentity = 1;
     // Platform host reentry keeps its identity; finite guest lifetimes remove their entry.
     private final WeakHashMap<Thread, GuestThreadId> identities = new WeakHashMap<>();
@@ -360,7 +616,7 @@ public final class GuestThreads {
         else if (prior == null && inheritedMask != null) maskingState.set(inheritedMask);
         GuestThread slot;
         if (!callback && prior != null) slot = prior;
-        else { slot = new GuestThread(current, identity, externalAsync); threads.put(identity.logicalId, slot); }
+        else { slot = new GuestThread(current, identity, externalAsync); identity.lifetime = slot; threads.put(identity.logicalId, slot); }
         if (slot.entries == 0) {
             identity.allocationBaseline = GuestAllocationAccounting.sample(identity.javaId);
             if (identity.allocationBaseline < 0) identity.allocationUnavailable = true;
@@ -426,7 +682,7 @@ public final class GuestThreads {
     @TruffleBoundary public synchronized void setAllocationCounter(long value, GuestThreadId identity) {
         if (closed) throw fault("Guest context has closed");
         requireIdentity(identity);
-        var slot = threads.get(identity.logicalId);
+        var slot = findThread(identity.logicalId);
         if (!identity.allocationSuspended && slot != null && slot.identity == identity)
             identity.allocationBaseline = GuestAllocationAccounting.bytes(identity.javaId);
         identity.allocationRemaining = value; identity.allocationUnavailable = false;
@@ -464,9 +720,9 @@ public final class GuestThreads {
         if (closed || identity.status.getTerminal()) return null;
         var carrier = identity.carrier.get();
         if (carrier == null || !carrier.isAlive() || carrier.threadId() != identity.javaId || !knownThreads.containsKey(identity)) return null;
-        var active = threads.get(identity.logicalId);
+        var active = findThread(identity.logicalId);
         if (active != null && (active.identity != identity || active.thread != carrier)) return null;
-        if (active == null && identities.get(carrier) != identity) return null;
+        if (active == null && identities.get(carrier) != identity && (identity.lifetime == null || identity.lifetime.registration == null)) return null;
         return identity.javaId;
     }
     @TruffleBoundary public AsyncRequest send(GuestThreadId identity, Object payload) {
@@ -475,19 +731,25 @@ public final class GuestThreads {
     /** The sender waits on this token; safepoint observation is not delivery. */
     @TruffleBoundary public AsyncRequest send(long targetId, Object payload) {
         AsyncRequest request;
+        GuestThread waking = null;
         synchronized (this) {
             if (closed) throw new IllegalStateException("Guest context has closed");
-            var target = threads.get(targetId);
+            var target = findThread(targetId);
             if (target == null) { request = new AsyncRequest(this, targetId, null, payload); request.transition(AsyncRequestState.TARGET_FINISHED); }
             else {
                 boolean self = currentSlot.get() == target && activeIdentity.get() == target.identity;
                 if (!self && !target.externalAsync) throw new UnsupportedCore("External killThread# to a nonresumable AST fork is unsupported");
                 noAsyncRequestPublished.invalidate("An async request is being published");
-                request = new AsyncRequest(this, targetId, target.thread, payload, self);
+                request = new AsyncRequest(this, targetId, target.thread, payload, self); request.recipient = target;
                 if (self) target.queue.addFirst(request); else target.queue.addLast(request);
                 target.pending = target.claimed == null;
+                PendingWait waiting = target.wait;
+                if (waiting != null && waiting.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
+                    target.waitReady = true; waking = target;
+                }
             }
         }
+        if (waking != null) wakeSuspended(waking);
         var thread = request.target;
         if (thread == null || request.forceSelf) return request;
         try { wake.wake(thread); }
@@ -549,7 +811,7 @@ public final class GuestThreads {
                     if (!closed) target.identity.status = target.identity.forked || target.identity.callback || loom != null ? outcome : GuestThreadStatus.FOREIGN;
                     if (target.identity.forked || loom != null) identities.remove(current, target.identity);
                     if (loom != null) loom.detach(target.identity);
-                    threads.remove(target.identity.logicalId);
+                    threads.remove(target.identity.logicalId); target.identity.lifetime = null; target.wait = null; target.work = null;
                     if (previous.prior == null) currentSlot.remove(); else currentSlot.set(previous.prior);
                     pollState(current).current = previous.prior;
                     if (target.identity.callback) { maskingState.set(previous.mask); resumed = previous.active; } else maskingState.remove();
@@ -580,7 +842,7 @@ public final class GuestThreads {
     public boolean finish(AsyncRequest request, AsyncRequestState state) { return finish(request, state, null); }
     public synchronized boolean finish(AsyncRequest request, AsyncRequestState state, Throwable cause) {
         var thread = request.target; if (thread == null) return false;
-        var target = threads.get(request.targetId); if (target == null || target.thread != thread) return false;
+        var target = findThread(request.targetId); if (target == null || target.thread != thread) return false;
         boolean queued = target.queue.contains(request);
         if (!queued && request.getState() != AsyncRequestState.PAUSED) return false;
         if (state == AsyncRequestState.CANCELLED && request.getState() != AsyncRequestState.PENDING && request.getState() != AsyncRequestState.PAUSED) return false;
@@ -588,26 +850,61 @@ public final class GuestThreads {
         if (state == AsyncRequestState.FAILED && request.getState() != AsyncRequestState.PENDING) return false;
         if (queued) target.queue.remove(request);
         if (target.claimed == request) target.claimed = null;
-        target.pending = target.claimed == null && !target.queue.isEmpty(); request.failure = cause; request.transition(state); return true;
+        target.pending = target.claimed == null && !target.queue.isEmpty(); request.failure = cause; request.transition(state); request.recipient = null; return true;
     }
     /** Remove an uncommitted outbound throwTo while its sender handles an async exception. */
     public synchronized boolean pause(AsyncRequest request) {
-        var target = threads.get(request.targetId);
+        var target = findThread(request.targetId);
         if (target == null || target.thread != request.target || request.getState() != AsyncRequestState.PENDING || !target.queue.remove(request)) return false;
         target.pending = target.claimed == null && !target.queue.isEmpty(); request.transition(AsyncRequestState.PAUSED); return true;
     }
     /** Resume the same logical request after the sender's caught continuation resumes. */
     public void resume(AsyncRequest request) {
         Thread thread;
+        GuestThread waking = null;
         synchronized (this) {
             if (request.getState() != AsyncRequestState.PAUSED) return;
-            var target = threads.get(request.targetId);
+            var target = findThread(request.targetId);
             if (closed || target == null || target.thread != request.target) { request.transition(AsyncRequestState.TARGET_FINISHED); return; }
             noAsyncRequestPublished.invalidate("An async request is being resumed");
             target.queue.addLast(request); request.transition(AsyncRequestState.PENDING); target.pending = target.claimed == null; thread = target.thread;
+            PendingWait waiting = target.wait;
+            if (waiting != null && waiting.mask != MaskingState.MASKED_UNINTERRUPTIBLE) {
+                target.waitReady = true; waking = target;
+            }
         }
+        if (waking != null) wakeSuspended(waking);
         try { wake.wake(thread); }
         catch (Throwable failure) { if (failure instanceof ThreadDeath || request.fail(failure)) throw propagate(failure); }
+    }
+    /** A collector rescue uses the ordinary async origin and catch acknowledgement, without self-throw mask bypass. */
+    synchronized AsyncRequest rescue(PendingWait wait, Object payload, Node node) {
+        GuestThread target = wait.owner;
+        if (closed || currentSlot.get() != target || activeIdentity.get() != target.identity || target.wait != wait)
+            throw fault("Blocked-owner rescue left its logical target");
+        if (maskingState.get() == MaskingState.MASKED_UNINTERRUPTIBLE) {
+            target.waitReady = false;
+            return null;
+        }
+        if (target.claimed != null) throw fault("Blocked-owner rescue crossed an active async delivery");
+        // An earlier sender wins the same operation-lock arbitration without duplicating delivery.
+        if (target.queue.isEmpty()) {
+            noAsyncRequestPublished.invalidate("A collector rescue is being published");
+            AsyncRequest request = new AsyncRequest(this, target.identity.logicalId, target.thread, payload);
+            request.recipient = target; target.queue.addLast(request); target.pending = true;
+        }
+        AsyncRequest claimed = claim(target, node, true);
+        if (claimed == null) throw fault("Blocked-owner rescue was not claimable by its target");
+        return claimed;
+    }
+    /** Only a language-owned runner can evacuate its physical stack. */
+    static GuestThread executingCurrent(Node node) { return node == null ? null : current(node).currentSlot.get(); }
+    static GuestThread suspendingCurrent(Node node) {
+        if (node == null) return null;
+        GuestThreads threads = current(node);
+        GuestThread slot = threads.currentSlot.get();
+        return slot != null && slot.suspensionBoundary && slot.entries == 1 &&
+            !threads.inForeignCallback() ? slot : null;
     }
     public static GuestThreads current(Node node) { return Language.currentState(node).getThreads(); }
     private static final ThreadLocal<ForeignStack> foreignActivations = new ThreadLocal<>();

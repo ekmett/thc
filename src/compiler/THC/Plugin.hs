@@ -1411,6 +1411,13 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         case thing of
           AnId v -> pure v
           _ -> error "THC implicit descriptor-wait exception is not an Id"
+      blockedPayloadId occurrence = do
+        name <- initIfaceCheck (text "THC implicit blocked-thread exception") hsc $
+          lookupOrig (mkModule ghcInternalUnit (mkModuleName "GHC.Internal.IO.Exception")) (mkVarOcc occurrence)
+        thing <- lookupGlobal hsc name
+        case thing of
+          AnId v -> pure v
+          _ -> error "THC implicit blocked-thread exception is not an Id"
       stmPayloadId = do
         name <- initIfaceCheck (text "THC implicit nested atomically exception") hsc $
           lookupOrig (mkModule ghcInternalUnit (mkModuleName "GHC.Internal.Control.Exception.Base"))
@@ -1449,6 +1456,11 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         | Just op <- isPrimOpId_maybe v
         , occNameString (primOpOcc op) == "atomically#" = do
             payload <- stmPayloadId
+            blocked <- blockedPayloadId "blockedIndefinitelyOnSTM"
+            walk seen' (payload : blocked : todo) found missing
+        | Just op <- isPrimOpId_maybe v
+        , occNameString (primOpOcc op) `elem` ["takeMVar#", "readMVar#", "putMVar#"] = do
+            payload <- blockedPayloadId "blockedIndefinitelyOnMVar"
             walk seen' (payload : todo) found missing
         | Just op <- isPrimOpId_maybe v
         , occNameString (primOpOcc op) `elem` ["waitRead#", "waitWrite#"] = do

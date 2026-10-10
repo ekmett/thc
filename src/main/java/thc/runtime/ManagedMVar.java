@@ -27,19 +27,23 @@ public final class ManagedMVar {
         throw new RuntimeFault("Expected managed MVar#");
     }
     private static void check(boolean condition) { if (!condition) throw new IllegalStateException("Check failed."); }
-    @TruffleBoundary(transferToInterpreterOnException = false)
     public Object take(Node node) { return take(node, false); }
+    public Object take(Node node, boolean async) { return take(node, async, null); }
     @TruffleBoundary(transferToInterpreterOnException = false)
-    public Object take(Node node, boolean async) { return awaitAt(new Request(this, Operation.TAKE, null, async ? node : null), node); }
-    @TruffleBoundary public Object read(Node node) { return read(node, false); }
-    @TruffleBoundary public Object read(Node node, boolean async) { return awaitAt(new Request(this, Operation.READ, null, async ? node : null), node); }
-    @TruffleBoundary public void put(Object value, Node node) { put(value, node, false); }
-    @TruffleBoundary public void put(Object value, Node node, boolean async) { awaitAt(new Request(this, Operation.PUT, value, async ? node : null), node); }
-    private Object awaitAt(Request request, Node node) {
+    Object take(Node node, boolean async, Object blocked) { return awaitAt(new Request(this, Operation.TAKE, null, async ? node : null, blocked), node); }
+    public Object read(Node node) { return read(node, false); }
+    public Object read(Node node, boolean async) { return read(node, async, null); }
+    @TruffleBoundary Object read(Node node, boolean async, Object blocked) { return awaitAt(new Request(this, Operation.READ, null, async ? node : null, blocked), node); }
+    public void put(Object value, Node node) { put(value, node, false); }
+    public void put(Object value, Node node, boolean async) { put(value, node, async, null); }
+    @TruffleBoundary void put(Object value, Node node, boolean async, Object blocked) { awaitAt(new Request(this, Operation.PUT, value, async ? node : null, blocked), node); }
+    static Object awaitAt(Request request, Node node) {
+        boolean captured = false;
         try {
             // Harmless safepoint interruptions retry the callback, not registration.
             return TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, AWAIT_REQUEST, request);
-        } finally { request.cancel(); }
+        } catch (PendingWait cut) { captured = true; throw cut; }
+        finally { if (!captured) request.cancel(); }
     }
     @TruffleBoundary public MVarReadResult tryTake() {
         lock.lock();
@@ -88,20 +92,24 @@ public final class ManagedMVar {
         @Override public String toString() { return "PendingCounts(takers=" + takers + ", readers=" + readers + ", putters=" + putters + ")"; }
     }
     /** Stable request identity is also the seam for deterministic protocol tests. */
-    public static final class Request {
+    public static final class Request implements PendingWait.Operation {
         private ManagedMVar cell;
         private final ReentrantLock lock;
         private final Condition completed;
         private final Operation operation;
         private final Node checkpoint;
+        private final Object blockedException;
         private RequestState status = RequestState.PENDING;
         private boolean submitted;
         private boolean queued;
         private Object offeredValue;
         private Object result;
+        private PendingWait suspension;
         public Request(ManagedMVar cell, Operation operation) { this(cell, operation, null); }
         public Request(ManagedMVar cell, Operation operation, Object offered) { this(cell, operation, offered, null); }
-        public Request(ManagedMVar cell, Operation operation, Object offered, Node checkpoint) {
+        public Request(ManagedMVar cell, Operation operation, Object offered, Node checkpoint) { this(cell, operation, offered, checkpoint, null); }
+        private Request(ManagedMVar cell, Operation operation, Object offered, Node checkpoint, Object blockedException) {
+            this.blockedException = blockedException;
             this.cell = java.util.Objects.requireNonNull(cell); lock = cell.lock; completed = lock.newCondition();
             this.operation = java.util.Objects.requireNonNull(operation); offeredValue = offered; this.checkpoint = checkpoint;
         }
@@ -127,6 +135,7 @@ public final class ManagedMVar {
             result = value; offeredValue = null; queued = false; status = RequestState.COMMITTED;
             // Safepoint retries need the cached result and lock, not the completed cell.
             cell = null; completed.signalAll();
+            if (suspension != null) suspension.wake();
         }
         /** InterruptedException leaves this same request queued at the same position. */
         public Object await() throws InterruptedException {
@@ -141,7 +150,16 @@ public final class ManagedMVar {
                         check(cancel());
                         throw new AsyncBlocked(interruption, checkpoint);
                     }
-                    var blocked = GuestThreads.blocking(operation == Operation.READ ? GuestThreadStatus.MVAR_READ : GuestThreadStatus.MVAR);
+                    if (suspension != null && suspension.rescued) {
+                        AsyncRequest rescue = suspension.owner.identity.owner.rescue(suspension,
+                            java.util.Objects.requireNonNull(blockedException), checkpoint);
+                        if (rescue != null) {
+                            check(cancel()); throw new AsyncBlocked(rescue, checkpoint);
+                        }
+                    }
+                    if (suspension == null) suspension = PendingWait.capture(this, checkpoint);
+                    if (suspension != null && GuestThreads.suspendingCurrent(checkpoint) == suspension.owner) throw suspension;
+                    var blocked = GuestThreads.blocking(status());
                     try { completed.await(); }
                     finally {
                         lock.unlock();
@@ -153,6 +171,9 @@ public final class ManagedMVar {
                 return result;
             } finally { lock.unlock(); }
         }
+        @Override public Object resume() { return awaitAt(this, checkpoint); }
+        @Override public boolean ready() { return getState() != RequestState.PENDING; }
+        @Override public GuestThreadStatus status() { return operation == Operation.READ ? GuestThreadStatus.MVAR_READ : GuestThreadStatus.MVAR; }
         /** A terminal caller may revoke Pending, never roll back Committed. */
         public boolean cancel() {
             lock.lock();
@@ -164,6 +185,7 @@ public final class ManagedMVar {
                 }
                 queued = false; offeredValue = null; result = null; status = RequestState.CANCELLED;
                 cell = null; completed.signalAll();
+            if (suspension != null) suspension.wake();
                 return true;
             } finally { lock.unlock(); }
         }

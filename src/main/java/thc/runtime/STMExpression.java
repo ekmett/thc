@@ -14,6 +14,7 @@ public final class STMExpression extends Expr {
     private final TupleShape shape;
     private final Metrics metrics;
     @Child private Expr nested;
+    @Child private Expr blocked;
     private final boolean async;
     @Child private volatile STMCall call;
     @CompilationFinal(dimensions = 1) private int[] destinationSlots;
@@ -22,7 +23,10 @@ public final class STMExpression extends Expr {
         this(operation, proof, operands, shape, metrics, nested, false);
     }
     public STMExpression(STMOp operation, CoreRepresentation proof, Expr[] operands, TupleShape shape, Metrics metrics, Expr nested, boolean async) {
-        this.operation = operation; this.operands = operands; this.shape = shape; this.metrics = metrics; this.nested = nested; this.async = async;
+        this(operation, proof, operands, shape, metrics, nested, async, null);
+    }
+    public STMExpression(STMOp operation, CoreRepresentation proof, Expr[] operands, TupleShape shape, Metrics metrics, Expr nested, boolean async, Expr blocked) {
+        this.operation = operation; this.operands = operands; this.shape = shape; this.metrics = metrics; this.nested = nested; this.async = async; this.blocked = blocked;
         setRepresentation(proof.withEvaluated(true));
     }
     @Override public Object execute(VirtualFrame frame) {
@@ -72,7 +76,7 @@ public final class STMExpression extends Expr {
     private void finish(VirtualFrame frame, Object action, Object alternative, Object nested,
             java.util.ArrayDeque<AstResumeStep> steps, Object input) {
         try {
-            Object result = steps == null ? call.execute(frame, action, alternative, nested)
+            Object result = steps == null ? call.execute(frame, action, alternative, nested, blocked == null ? null : blocked.execute(frame))
                 : AstContinuations.resumeAstSteps(frame, steps, input);
             if (steps != null || call.captures()) shape.consume(frame, result, destinationSlots, destinationOffset);
         } catch (AstCapture cut) {

@@ -30,7 +30,9 @@ public final class DelimitedPrimitive extends Expr {
         if (name.equals("prompt#")) {
             Object result;
             try { result = site.prompt(frame, tag, action, state, shape); }
-            catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedTupleStep(new AstTupleDestination(shape, slots, offset), this)); }
+            catch (AstCapture cut) {
+                throw cut.append((saved, value) -> { shape.consume(saved, value, slots, offset); return null; });
+            } catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedTupleStep(new AstTupleDestination(shape, slots, offset), this)); }
             shape.consume(frame, result, slots, offset); return null;
         }
         requireVoidCarrier(state);
