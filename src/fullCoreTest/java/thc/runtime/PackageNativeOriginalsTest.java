@@ -150,7 +150,11 @@ public class PackageNativeOriginalsTest {
     private void checkDigest(List<String> row, PackageScalarLink link, Map<PackageScalarSignature, RootCallTarget> entries) {
         String symbol = row.getFirst(), carrier = row.get(1); int offset = Integer.parseInt(row.get(2)), count = Integer.parseInt(row.get(3)); long seed = Long.parseLong(row.get(4));
         byte[] bytes = checksumBytes(count + offset);
-        Object pointer = carrier.equals("AddrRep") ? ManagedAddress.fromByteArray(bytes).plus(offset) : Arrays.copyOfRange(bytes, offset, bytes.length);
+        var storage = PinnedMemory.allocate(carrier.equals("AddrRep") ? bytes.length : count, 8);
+        int start = carrier.equals("AddrRep") ? 0 : offset;
+        for (int i = start; i < bytes.length; i++) storage.writeByte(i - start, bytes[i]);
+        var segment = storage.nativeSegment();
+        Object pointer = carrier.equals("AddrRep") ? ManagedAddress.fromGuestByteArray(storage).plus(offset) : ManagedByteArray.freezeGuest(storage);
         PackageScalarSignature signature = null;
         for (var abi : link.getAbi()) if (abi.getSymbol().equals(symbol) && abi.getArguments().contains(carrier)) { assertNull(signature); signature = abi; }
         assertNotNull(signature);
@@ -161,12 +165,12 @@ public class PackageNativeOriginalsTest {
             default -> throw new AssertionError("Unexpected original digest symbol");
         };
         assertEquals(Long.parseLong(row.get(5)), entries.get(signature).call(arguments), row.toString());
-        assertArrayEquals(checksumBytes(count + offset), bytes, "original checksums must not mutate or replace their heap input");
+        assertSame(segment, storage.nativeSegment(), "native checksums retain the allocation created for the guest");
+        for (int i = start; i < bytes.length; i++) assertEquals(Byte.toUnsignedLong(bytes[i]), storage.readByte(i - start), "checksums preserve their input");
     }
     @Test public void originalDigestCxxAndZlibMatchNativeAcrossOffsetsAndLoopBoundaries() throws Exception {
         var manifest = json(new File(directory, "manifest.json")); assertEquals(1L, manifest.get("schema"));
         assertEquals("original-package-foreign-adapters", manifest.get("scope")); assertEquals(270L, manifest.get("nativeRows"));
-        assertEquals(true, manifest.get("rejectedChangedSource")); assertEquals(true, manifest.get("rejectedHeaderMismatch"));
         OriginalStdioChecks.hashes(root, manifest.get("sourceHashes"), Set.of(
             "build/original-native/sources/digest-0.0.2.1/digest.cabal", "build/original-native/sources/digest-0.0.2.1/Data/Digest/CRC32C.hs",
             "build/original-native/sources/digest-0.0.2.1/external/crc32c/src/crc32c.cc", "build/original-native/sources/digest-0.0.2.1/external/crc32c/src/crc32c_portable.cc"), "build/original-native/sources/");
@@ -179,7 +183,8 @@ public class PackageNativeOriginalsTest {
         for (var module : modules) moduleNames.add(module.get("module")); assertEquals(Set.of("Data.Digest.Adler32", "Data.Digest.CRC32", "Data.Digest.CRC32C"), moduleNames);
         var link = link(CoreModules.merge(modules)); assertEquals(6, link.getAbi().size()); var rows = rows("digest-native.tsv"); assertEquals(270, rows.size());
         var profile = (Map<?, ?>) modules.getFirst().get("packageNativeLink"); var inputs = (Map<?, ?>) profile.get("buildInputs");
-        assertEquals(List.of(), inputs.get("unresolved")); assertEquals(2, ((List<?>) inputs.get("providers")).size());
+        assertEquals(Set.of("adler32", "crc32"), new LinkedHashSet<>((List<?>) inputs.get("unresolved")));
+        assertEquals(List.of(), inputs.get("providers")); assertNotNull(profile.get("nativeLibrary"));
         try (Context context = context()) {
             context.initialize("thc"); context.enter();
             try {

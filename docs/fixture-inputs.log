@@ -4696,10 +4696,10 @@ Fixture rationale (166 package-native-originals)
 Purpose: Exercise digest, erf and primitive through original package Core/native
   linkage; compare checksum, floating and primitive-array observations.
 Consumes: External digest/erf/primitive source trees, native toolchain, driver/plugin,
-  five Original* oracle/entry sources and pinned zlib sources.
+  five Original* oracle/entry sources and package-declared native libraries.
 Produces/consumed result: Captured/linked package CBDs, three native TSVs and manifest.
 Cost and overlap: Public package smoke is sufficient for these libraries. This
-  bespoke three-package acquisition, 1078 rows and zlib conformance setup is excess.
+  bespoke three-package acquisition and 1078 rows are excess.
 Build status: QUARANTINED. Copied-source leftovers require a fresh output directory;
   staging also enumerates captured CBDs and fixes exact package-module inventories.
 Consumer: PackageNativeOriginalsTest. Under build/original-native/:
@@ -4716,13 +4716,9 @@ Consumer: PackageNativeOriginalsTest. Under build/original-native/:
   {erf,primitive}-entry/units/<unit>/<entry>.cbd and compiler intermediates <-
     OriginalErfEntry/OriginalPrimitiveEntry.hs, acquired packages/plugin.
   {erf,primitive}-audit.json <- entry/package CBDs and auditor.
-  negative-header/{zlib.h,mismatch.c} <- invented bad-version header/pinned provider
-    implementation; clang expected rejection (mismatch.o is unsuccessful output).
-  negative-source/nih/pinned/zlib-1.2.11/** <- copied pinned tree with altered adler32.c;
-    provider expected to reject hash mismatch. These tooling controls need no packages.
   logs/* triplets, manifest.json <- selected source/copied-source/linked CBD/oracle/
     entry/audit hashes and command records; no old success invalidation.
-Reject the fresh-directory prerequisite and native library conformance ceremony;
+Reject the fresh-directory prerequisite;
   retain only package integration cases not already covered by public smoke.
 
 170 hashable-ffi (custom fixture)

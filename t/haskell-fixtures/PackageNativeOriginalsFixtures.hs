@@ -5,10 +5,10 @@
 -- Purpose: Exercise digest, erf and primitive through original package Core/native
 --   linkage; compare checksum, floating and primitive-array observations.
 -- Consumes: External digest/erf/primitive source trees, native toolchain, driver/plugin,
---   five Original* oracle/entry sources and pinned zlib sources.
+--   five Original* oracle/entry sources and package-declared native libraries.
 -- Produces/consumed result: Captured/linked package CBDs, three native TSVs and manifest.
 -- Cost and overlap: Public package smoke is sufficient for these libraries. This
---   bespoke three-package acquisition, 1078 rows and zlib conformance setup is excess.
+--   bespoke three-package acquisition and 1078 rows are excess.
 -- Build status: QUARANTINED. Copied-source leftovers require a fresh output directory;
 --   staging also enumerates captured CBDs and fixes exact package-module inventories.
 -- Detailed inputs/outputs: docs/fixture-inputs.log, entry 166.
@@ -29,15 +29,13 @@ import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (eitherDecodeStrict', Value, object, (.=))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
-import Data.List (isInfixOf, sort)
+import Data.List (sort)
 import FixtureSupport
 import InstalledCoreFixtures (field, readJson)
 import System.Directory
 import System.Environment (lookupEnv, unsetEnv)
 import System.FilePath
-import System.IO.Error (tryIOError)
 import THC.Driver.GhcProxy (ghcProxyCommand)
-import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.PackageNative (finishPackageNative)
 
 -- Native observations use original public APIs. The JVM checks digest's six
@@ -207,39 +205,13 @@ preparePackageNativeOriginals root = do
     [relative </> "linked" </> unit </> name | (name,_) <- linked] ++
     [relative </> "linked" </> erfUnit </> name | (name,_) <- erfLinked] ++
     [relative </> "linked" </> primitiveUnit </> name | (name,_) <- primitiveLinked])
-  implementations <- zlibChecksumSources root
-  implementation <- case implementations of
-    (_,sourceText):_ -> pure sourceText
-    [] -> fail "pinned zlib provider returned no implementations"
-  let negative = output </> "negative-header"
-  createDirectoryIfMissing True negative
-  writeFile (negative </> "zlib.h") "#define ZLIB_VERNUM 0x1300\n"
-  writeFile (negative </> "mismatch.c") implementation
-  clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
-  badHeader <- runLoggedExpect 1 60 root (relative </> "logs") "mismatched-zlib-header" [] clang
-    ["-I" ++ negative,"-c",negative </> "mismatch.c","-o",negative </> "mismatch.o"]
-  unless ("requires the configured zlib 1.2.11 header" `BSC.isInfixOf` commandStderr badHeader)
-    (fail "configured zlib version negative control did not reach the provider's rejection")
-  let altered = output </> "negative-source"
-      sourceTree = root </> "nih/pinned/zlib-1.2.11"
-  pinned <- files sourceTree
-  forM_ pinned $ \path -> do
-    let destination = altered </> makeRelative root path
-    createDirectoryIfMissing True (takeDirectory destination)
-    copyFile path destination
-  appendFile (altered </> "nih/pinned/zlib-1.2.11/adler32.c") "\n/* altered negative-control source */\n"
-  rejected <- tryIOError (zlibChecksumSources altered)
-  case rejected of
-    Left problem | "pinned zlib checksum source differs" `isInfixOf` show problem -> pure ()
-    _ -> fail "changed upstream checksum source was not rejected"
   writeJson (output </> "manifest.json") $ object
     ["schema" .= (1::Int),"scope" .= ("original-package-foreign-adapters"::String),
      "unit" .= unit,"nativeRows" .= (270::Int),"erfNativeRows" .= (88::Int),"primitiveNativeRows" .= (720::Int),
      "driverSha256" .= driverHash,"inputHashes" .= inputs,
      "sourceHashes" .= sourceHashes,"artifactHashes" .= artifacts,
-     "rejectedChangedSource" .= True,"rejectedHeaderMismatch" .= True,
      "commands" .= map commandRecord [built,acquired,compiled,oracle,erfCompiled,erfOracle,
-       primitiveCompiled,primitiveOracle,primitiveEntryCompiled,primitiveAudited,entryCompiled,audited,badHeader]]
+       primitiveCompiled,primitiveOracle,primitiveEntryCompiled,primitiveAudited,entryCompiled,audited]]
   putStrLn "package-native-originals: original digest, erf and primitive acquisition; 270 + 88 + 720 native observations"
   where
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "expected exactly one tool result"
