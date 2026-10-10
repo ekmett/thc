@@ -62,7 +62,12 @@ cancellation stops and reaps the owned tree before output/cache scopes end.
 POSIX producers must wait for their descendants before normal exit; the driver
 never signals a reaped leader's potentially reused group ID. Foreground guest
 launches retain terminal input and interrupt behavior and are separate from
-this producer policy. Pipe capture drains EOF before reaping.
+this producer policy. Pipe capture drains EOF before reaping. A captured
+owner's deadline first sends SIGINT, allowing up to two seconds for EOF and
+parent exit so a managed driver can stop its nested private producer groups;
+then it falls back to killing its still-owned group. Crashed, non-cooperating
+or externally hard-killed POSIX owners can leave descendants in private groups.
+Windows job ownership contains nested producers directly.
 
 Package integration checks retain their focused selectors for explicit runs.
 The driver suite's public-package smoke compares Integer, Text, ByteString and

@@ -15,24 +15,26 @@ module THC.Driver.Process
   ( runProducer
   , waitOwnedProcess
   , stopProcessTree
+  , cancelCapturedProcess
   ) where
 
-#ifdef mingw32_HOST_OS
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
-#else
+#ifndef mingw32_HOST_OS
 import Control.Concurrent (threadDelay)
 #endif
 import Control.Exception (mask, onException)
+#ifndef mingw32_HOST_OS
+import Control.Exception (uninterruptibleMask_)
+#endif
 import Control.Monad (void)
 import System.Exit (ExitCode)
 #ifndef mingw32_HOST_OS
 import System.IO.Error (catchIOError, isDoesNotExistError)
-import System.Posix.Signals (sigKILL, signalProcessGroup)
+import System.Posix.Signals (sigINT, sigKILL, signalProcessGroup)
+import System.Timeout (timeout)
 #endif
 import qualified System.Process as Process
-#ifdef mingw32_HOST_OS
 import System.Process.Internals (withForkWait)
-#endif
 
 -- | Run a producer with caller-owned streams in a private process group/job.
 -- Arguments, environment, working directory and exit status are unchanged.
@@ -80,3 +82,34 @@ stopProcessTree child = do
     `catchIOError` \problem -> if isDoesNotExistError problem then pure () else ioError problem)
 #endif
   void (Process.waitForProcess child)
+
+-- | Cancel a pipe-captured owner while its EOF readers are still alive.
+-- On POSIX, give a managed owner two seconds to clean up private producer
+-- groups after SIGINT. The repeatable action must confirm successful EOF on
+-- both streams before the sole owner reaps the leader. Timeout or failure
+-- falls back to immediate group cleanup while the handle remains owned.
+-- Repeated cancellation cannot interrupt the bounded cooperative phase;
+-- immediate fallback and reap remain outside that shield.
+-- Windows jobs already contain the nested producers and are stopped directly.
+--
+-- A crashed, non-cooperating or externally hard-killed POSIX owner can leave
+-- descendants in private groups; this protocol cannot contain escaped groups.
+cancelCapturedProcess :: Process.ProcessHandle -> IO () -> IO ()
+#ifdef mingw32_HOST_OS
+cancelCapturedProcess child _ = stopProcessTree child
+#else
+cancelCapturedProcess child awaitEOF = mask $ \restore -> do
+  completion <- newEmptyMVar
+  let cooperate = do
+        Process.getPid child >>= mapM_ (\pid -> signalProcessGroup sigINT pid
+          `catchIOError` \problem -> if isDoesNotExistError problem then pure () else ioError problem)
+        timeout 2000000 (awaitEOF >> void (waitOwnedProcess child)) >>= putMVar completion
+  -- Only this deadline-bounded phase is shielded from a second cancellation.
+  -- A failed worker still triggers hard cleanup and propagates its exception.
+  withForkWait (restore cooperate) uninterruptibleMask_
+    `onException` stopProcessTree child
+  completed <- readMVar completion
+  case completed of
+    Nothing -> stopProcessTree child
+    Just () -> pure ()
+#endif

@@ -26,7 +26,7 @@ import System.Directory (createDirectory, createDirectoryIfMissing, createDirect
 import System.Environment (getEnvironment, getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>), takeDirectory)
-import System.IO (IOMode(WriteMode), hClose, hPutStrLn, openTempFile, stderr, withFile)
+import System.IO (IOMode(WriteMode), hClose, hPutStrLn, openTempFile, stderr, stdout, withFile)
 import System.Info (os)
 import qualified System.Process as Process
 import System.Timeout (timeout)
@@ -131,7 +131,8 @@ tests = TestLabel "driver test support" $ TestList
           worker <- forkFinally (runProducer (Process.proc self
             ["--test-support-producer", "hold", scope])) (putMVar finished)
           let await = do
-                started <- doesFileExist writes
+                exists <- doesFileExist writes
+                started <- if exists then not . BS.null <$> BS.readFile writes else pure False
                 if started then pure () else threadDelay 10000 >> await
           ready <- timeout 3000000 await
           case ready of
@@ -148,6 +149,25 @@ tests = TestLabel "driver test support" $ TestList
           threadDelay 250000
           after <- BS.readFile writes
           assertEqual "production cancellation stops descendant writes before returning" before after)
+          `finally` writeFile stop ""
+  , TestLabel "captured deadline owns nested production groups" $ TestCase $ withHarness $ \environment -> do
+      self <- getExecutablePath
+      forM_ ["open", "closed"] $ \mode -> do
+        let directory = root environment </> mode
+            writes = directory </> "descendant-writes"
+            stop = directory </> "stop-descendant"
+        createDirectory directory
+        (do
+          failure <- try (runExe environment directory Nothing 2 self
+            ["--test-support-managed-producer", mode, directory])
+          case failure :: Either SomeException Result of
+            Left problem -> assertContains "timed out:" (displayException problem)
+            Right result -> assertFailure ("expected nested production timeout: " ++ show result)
+          before <- BS.readFile writes
+          assertBool "nested production descendant started" (not (BS.null before))
+          threadDelay 250000
+          after <- BS.readFile writes
+          assertEqual "captured deadline finishes nested producer cleanup before returning" before after)
           `finally` writeFile stop ""
   ]
   where
@@ -174,6 +194,12 @@ helperMode arguments = case arguments of
     -- The timeout case leaves an exited leader whose descendant keeps the
     -- inherited output pipes open. Capture must not reap away group ownership.
     if mode == "hold" then pure () else Process.waitForProcess child >>= exitWith
+  ["--test-support-managed-producer", mode, directory] -> Just $ do
+    self <- getExecutablePath
+    -- Closing stdout first exercises a completion already consumed by normal
+    -- capture while its stderr reader still waits for nested cleanup.
+    when (mode == "closed") (hClose stdout)
+    runProducer (Process.proc self ["--test-support-producer", "hold", directory]) >>= exitWith
   ["--test-support-producer", mode, directory] -> Just $ do
     self <- getExecutablePath
     (_, _, _, child) <- Process.createProcess

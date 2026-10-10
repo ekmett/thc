@@ -19,6 +19,7 @@ module TestSupport
   ) where
 
 import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
 import Control.Exception (bracket, evaluate, finally, mask, onException)
 import Control.Monad (forM, forM_, void)
 import Data.Aeson (Value(..), eitherDecodeStrict', toJSON)
@@ -49,7 +50,7 @@ import System.Timeout (timeout)
 import Test.HUnit (assertBool, assertEqual)
 import qualified Test.HUnit as HUnit
 import THC.Compact.Module (readModuleValue)
-import THC.Driver.Process (waitOwnedProcess, stopProcessTree)
+import THC.Driver.Process (waitOwnedProcess, stopProcessTree, cancelCapturedProcess)
 
 data Env = Env { root :: FilePath, thcRoot :: FilePath, driver :: FilePath
                , runtime :: FilePath, scratch :: FilePath }
@@ -192,14 +193,20 @@ captureProcess command = bracket (Process.createProcess command
       stderr <- IO.hGetContents diagnostic
       -- Use process's own reader-thread lifetime helper. Wait for both EOFs
       -- before reaping so a departed parent's PID still owns its POSIX group.
-      withForkWait (void (evaluate (length stdout))) $ \waitOutput ->
-        withForkWait (void (evaluate (length stderr))) $ \waitDiagnostic ->
+      -- withForkWait's wait actions consume their completions. Separate
+      -- successful-EOF latches can be read again if cancellation happens
+      -- after the normal path has already consumed one reader's completion.
+      outputEOF <- newEmptyMVar
+      diagnosticEOF <- newEmptyMVar
+      withForkWait (void (evaluate (length stdout)) >> putMVar outputEOF ()) $ \waitOutput ->
+        withForkWait (void (evaluate (length stderr)) >> putMVar diagnosticEOF ()) $ \waitDiagnostic ->
           restore (do
             ignoreSigPipe (hClose input)
             waitOutput
             waitDiagnostic
             status <- waitOwnedProcess child
-            pure (status, stdout, stderr)) `onException` stopProcessTree child
+            pure (status, stdout, stderr)) `onException`
+              cancelCapturedProcess child (readMVar outputEOF >> readMVar diagnosticEOF)
     _ -> fail "Driver test subprocess pipes were unavailable"
   where
     cleanup (input, output, diagnostic, child) = stopProcessTree child `finally`
