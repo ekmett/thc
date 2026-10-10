@@ -62,6 +62,7 @@ import THC.Driver.Lock (withLock)
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess,
                        readCreateProcessWithExitCode)
 import THC.Driver.Process (runProducer)
+import THC.Driver.Admission (Admission, localAdmission, waitForNative, withBuildAdmission, traceAdmission)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
@@ -74,7 +75,7 @@ import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBit
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
 import THC.Driver.PackageNative (captureNativeObject, captureConfiguredNativeObject, capturePackageNative, finishPackageNative,
   finishPackageNativeWithDependencies, linkInstalledNativeWithProduct)
-import THC.Driver.NativeDependencies (readNativeProduct, configuredNativeArchive)
+import THC.Driver.NativeDependencies (readNativeProduct, readNativeProductAvailable, configuredNativeArchive)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.NativeImage (validateNativeImage, buildNativeImage)
 import THC.Driver.Installed
@@ -135,6 +136,14 @@ data ExportContext = ExportContext
   , contextNoLinkUnits :: [String]
   , contextCoreView :: Maybe InstalledContext
   , contextCoreInterfaces :: Map.Map String FilePath }
+
+-- Invocation-private executable capture and its immutable selection identity.
+-- Final publication still uses the actual concrete plan and ordinary keys.
+data OriginalStoreCapture = OriginalStoreCapture
+  { originalCaptureDirectory :: FilePath
+  , originalCapturePlan :: Map.Map String Unit
+  , originalCaptureKeys :: Map.Map String (String, String)
+  , originalCaptureStore :: FilePath }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -497,6 +506,188 @@ selectedPackageTool ghc requested = do
       require (status == ExitSuccess) ("selected tool failed: " ++ program ++ ": " ++ take 4096 err)
       pure (reverse (dropWhile (`elem` ['\r','\n']) (reverse out)))
 
+-- Prepare only the genuine helper and selected interface view. Installed Core
+-- acquisition may overlap native work only for this already-installed closure.
+prepareProjectInterfaceView :: ExportContext -> Maybe Value -> String -> Maybe FilePath -> String ->
+                               Map.Map String Unit -> [Unit] -> IO (InstalledContext, InstalledContext, [Value])
+prepareProjectInterfaceView context producer installedPolicy ghcSource registeredLibrary byId installedUnits = do
+  originalContext <- prepareInterfaceHelper context (contextRoot context)
+  support <- case producer of
+    Nothing -> pure []
+    Just value -> do
+      manifest <- readJson =<< field value "runtimeSupport"
+      field manifest "units"
+  let supportFor identifier = case [record | record <- support, jsonField record "id" == Just identifier] of
+        [record] -> Just record
+        _ -> Nothing
+  originalRegistrations <- case installedUnits of
+    [] -> pure []
+    _ -> do
+      discover <- registrationSnapshot originalContext
+      mapM (discover . unitId) installedUnits
+  validateReexports originalRegistrations
+  forM_ originalRegistrations $ \registrationUnit -> do
+    planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
+    require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
+      ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+  let acquisitionRegistrations = [registrationUnit | registrationUnit <- originalRegistrations,
+        supportFor (registeredId registrationUnit) == Nothing]
+  helperContext <- if installedPolicy == "pinned"
+    then preparePinnedInterfaces (contextCache context) (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context) originalContext acquisitionRegistrations
+    else case ghcSource of
+      Nothing -> pure originalContext
+      Just source -> prepareForeignInterfaces
+        (ForeignCompiler (contextGhc context) (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context) registeredLibrary (contextDriverHash context))
+        (contextCache context) source originalContext originalRegistrations
+  pure (originalContext, helperContext, support)
+
+-- The selected already-installed closure has no dependency on native-created
+-- products. Discover/read/lock outside admission; only ready helper processes
+-- consume the actual Cabal budget. Final plan reconciliation happens at caller.
+acquireProjectInstalled :: Admission -> ExportContext -> FilePath -> String -> Map.Map String Unit -> [Unit] ->
+                           (InstalledContext, InstalledContext, [Value]) ->
+                           IO (Map.Map String (InstalledUnit, InstalledSource), InstalledContext, [Value], [InstalledUnit], [(FilePath, BS.ByteString)])
+acquireProjectInstalled admission context layout installedPolicy byId installedUnits
+                        (originalContext, helperContext, support) = do
+  capturedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
+  let supportFor identifier = case [record | record <- support, jsonField record "id" == Just identifier] of
+        [record] -> Just record
+        _ -> Nothing
+  traceAdmission "installed-original-registration-start" Nothing
+  originalRegistrations <- case installedUnits of
+    [] -> pure []
+    _ -> do
+      discover <- registrationSnapshot originalContext
+      mapM (discover . unitId) installedUnits
+  validateReexports originalRegistrations
+  forM_ originalRegistrations $ \registrationUnit -> do
+    planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
+    require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
+      ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+  traceAdmission "installed-original-registration-end" Nothing
+  traceAdmission "installed-selected-registration-start" Nothing
+  let selectedContext unit = if supportFor (unitId unit) == Nothing then helperContext else originalContext
+  snapshots <- forM (nub (map selectedContext installedUnits)) $ \snapshotContext ->
+    (,) snapshotContext <$> registrationSnapshot snapshotContext
+  registrations <- forM installedUnits $ \unit ->
+    maybe (fail "missing selected installed registration snapshot") ($ unitId unit)
+      (lookup (selectedContext unit) snapshots)
+  validateReexports registrations
+  traceAdmission "installed-selected-registration-end" Nothing
+  traceAdmission "installed-input-snapshot-start" Nothing
+  inputSnapshot <- installedInputSnapshot
+    [(originalContext, originalRegistrations), (helperContext, registrations)]
+  traceAdmission "installed-input-snapshot-end" Nothing
+  retained <- case capturedPath of
+    Nothing -> pure Nothing
+    Just path -> do
+      supplied <- readJson path
+      case jsonField supplied "installed" :: Maybe Value of
+        Nothing -> pure Nothing
+        Just _ -> do
+          when (installedPolicy == "pinned") $ do
+            request <- field supplied "request"
+            require (jsonField request "coreInterfaceView" == Just (installedViewIdentity helperContext))
+              "captured installed Core uses a different pinned interface view"
+          Just <$> readCapturedInstalledBundles (contextVerifyArtifacts context) (installedCompiler originalContext) originalRegistrations path
+  (bundles, demandInputs) <- case retained of
+    Just selectedInstalled -> pure ([(identifier, (unit, InstalledCBD artifact)) |
+      (identifier, (unit, artifact)) <- Map.toList selectedInstalled], [])
+    Nothing -> do
+      (demandInputs, demandUnits) <- if installedPolicy == "demand"
+        then prepareInstalledDemandWithAdmission admission helperContext [r | r <- registrations, supportFor (registeredId r) == Nothing] else pure ([], Map.empty)
+      let acquireSource registrationUnit = case Map.lookup (registeredId registrationUnit) demandUnits of
+              Just record -> do
+                owner <- field record "id"
+                pure (InstalledInterfaces owner record)
+              Nothing -> do
+                result <- prepareInstalledBundleWithAdmission admission (contextVerifyArtifacts context) (contextNativeTools context)
+                  (contextCache context) (contextNative context </> "cache/thc/staging") layout helperContext registrationUnit
+                either (\missing -> fail
+                  ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
+                   " (" ++ missingInterface missing ++ "). Build the libraries with -fwrite-if-simplified-core or select --installed-core pinned.")) (pure . InstalledCBD) result
+      bundles <- forM registrations $ \registrationUnit -> do
+        planned <- maybe (fail "installed registration not in Cabal plan") pure
+          (Map.lookup (registeredId registrationUnit) byId)
+        require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
+          ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+        source <- case supportFor (registeredId registrationUnit) of
+          Just record -> pure (InstalledSupport (registeredId registrationUnit) record)
+          Nothing -> acquireSource registrationUnit
+        pure (registeredId registrationUnit, (registrationUnit, source))
+      pure (bundles, demandInputs)
+  let owners = map (installedSourceOwner . snd . snd) bundles
+      registered = map fst bundles
+  require (length owners == length (nub owners)) "multiple installed registrations claim one Core owner"
+  require (all (\(identifier, (_, item)) -> installedSourceOwner item == identifier ||
+                installedSourceOwner item `notElem` registered && Map.notMember (installedSourceOwner item) byId) bundles)
+    "installed Core owner collides with another Cabal unit"
+  pure (Map.fromList bundles, helperContext, demandInputs, originalRegistrations, inputSnapshot)
+
+withOriginalStoreCapture :: ExportContext -> InstalledContext -> Map.Map String Unit -> [Unit] ->
+                            FilePath -> [(String, String)] ->
+                            (Maybe OriginalStoreCapture -> [(String, String)] -> IO a) -> IO a
+withOriginalStoreCapture context helper planned selected project environment body = do
+  supplied <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
+  candidates <- if supplied /= Nothing then pure [] else filterM immutable selected
+  located <- forM candidates $ \unit -> do
+    (buildKey, exportKey, path) <- globalLocation context planned Map.empty unit
+    present <- doesFileExist path
+    ready <- if present then readGlobalForReplay context path (unitId unit) (unitDepends unit) buildKey exportKey
+      else pure Nothing
+    pure (unit, buildKey, exportKey, path, ready)
+  let missing = [(unit, buildKey, exportKey) | (unit, buildKey, exportKey, _, Nothing) <- located]
+      warm = Map.fromList [(unitId unit, replayInterfacePath path) |
+        (unit, _, _, path, Just bundle) <- located, not (null (bundleModules bundle))]
+      scrub = filter ((`notElem` ["THC_PROXY_CORE_LIBDIR", "THC_PROXY_CORE_DATABASES", "THC_PROXY_ORIGINAL_BUILD", "THC_PROXY_BUILD_ADMISSION"]) . fst)
+  if null missing then body Nothing (scrub environment) else do
+    let root = contextNative context </> "cache/thc/staging"
+    createDirectoryIfMissing True root
+    bracket (temporary root) (const (pure ())) $ \capture -> do
+      let overrides = [("THC_PROXY_ROOT", contextRoot context),
+            ("THC_PROXY_GHC_PKG", maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id (contextGhcPkg context)),
+            ("THC_PROXY_CORE_INTERFACES", Text.unpack (Text.decodeUtf8 (BL.toStrict (encode warm)))),
+            ("THC_PROXY_CAPTURE", capture), ("THC_PROXY_ORIGINAL_BUILD", "1"),
+            ("THC_PROXY_GLOBAL_UNITS", unlines [unitId unit | (unit, _, _) <- missing]),
+            ("THC_PROXY_INTERFACE_HELPER", installedHelper helper),
+            ("THC_PROXY_INTERFACE_LIBDIR", installedLibdir helper)] ++
+            concat [[("THC_PROXY_CORE_LIBDIR", installedLibdir view),
+              ("THC_PROXY_CORE_DATABASES", Text.unpack (Text.decodeUtf8 (BL.toStrict (encode (helperDatabases view)))))] |
+              Just view <- [contextCoreView context]]
+          captureEnvironment = overrides ++ filter ((`notElem` map fst overrides) . fst) (scrub environment)
+          cabal = maybe "cabal" id (lookup "CABAL" environment)
+      result <- (do
+        (status, output, diagnostic) <- readCreateProcessWithExitCode
+          (proc cabal (["path", "--output-format=json", "--store-dir"] ++ contextProjectOptions context ++
+            ["--builddir", contextNative context])) {cwd = Just project, env = Just captureEnvironment} ""
+        require (status == ExitSuccess) ("cannot query selected Cabal store: " ++ diagnostic)
+        paths <- either fail pure (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)) :: Either String Value)
+        store <- field paths "store-dir"
+        require (isAbsolute store) "Cabal selected a relative native store"
+        let original = OriginalStoreCapture capture planned
+              (Map.fromList [(unitId unit, (buildKey, exportKey)) | (unit, buildKey, exportKey) <- missing]) store
+        body (Just original) captureEnvironment
+        ) `onException` do
+          exists <- doesDirectoryExist capture
+          when exists $ do
+            _ <- tryIOError (hPutStrLn stderr ("Original Cabal capture retained after failure: " ++ capture))
+            pure ()
+      exists <- doesDirectoryExist capture
+      when exists (removePathForcibly capture)
+      pure result
+  where
+    immutable unit
+      | jsonField (unitValue unit) "type" /= Just ("configured" :: String) ||
+        jsonField (unitValue unit) "style" /= Just ("global" :: String) = pure False
+      | otherwise = all (\dependency -> not (unitLocal dependency || sourceInplace dependency)) <$>
+          dependencyClosure planned (unitId unit)
+    temporary root = do
+      (path, handle) <- openTempFile root "original-store-capture-"
+      hClose handle
+      removeFile path
+      createDirectory path
+      pure path
+
 runBuiltProject :: ProjectAction -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
                    Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> [(String, String)] -> [String] -> IO ()
@@ -526,7 +717,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
                    ("THC_PROXY_PLUGIN_LIBRARY", pluginLibrary),
                    ("THC_PROXY_NO_LINK_UNIT", ""),
                    ("THC_PROXY_NATIVE_PIECES", native </> "cache/thc/native-pieces-v1")]
-      selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
+      selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_BUILD_ADMISSION" : map fst overrides)) inherited
       cabal = maybe "cabal" id (lookup "CABAL" selectionEnvironment)
   selectedUnits <- case action of
     BuildTargets _ targets -> resolveBuildTargets working targets configuration selectionEnvironment native
@@ -549,230 +740,217 @@ runBuiltProject action project working thcRoot runtime output native target proj
         runnable = maybe False ((`elem` ["exe", "test", "bench"]) . takeWhile (/= ':'))
           (jsonField (unitValue unit) "component-name" :: Maybe String)
     pure [unitId unit | guestOnly && runnable]
-  let environment = ("THC_PROXY_NO_LINK_UNIT", unlines noLinkUnits) :
+  let initialEnvironment = ("THC_PROXY_NO_LINK_UNIT", unlines noLinkUnits) :
         filter ((/= "THC_PROXY_NO_LINK_UNIT") . fst) selectionEnvironment
-      nativeBuild arguments = runCommandWithEnv True cabal arguments project (Just environment)
   targetComponents <- forM selectedUnits $ \unit -> do
     name <- componentTarget unit
     component <- field (unitValue unit) "component-name"
     require (takeWhile (/= ':') component `elem` ["lib", "exe", "test", "bench"])
       ("Core acquisition does not support Cabal component " ++ name)
     pure name
-  nativeBuild (["build"] ++ targetComponents ++ ["--enable-build-info"] ++ configuration)
-  plan <- readJson (native </> "cache/plan.json")
-  cabalVersion <- field plan "cabal-version"
-  compilerId <- field plan "compiler-id"
-  require (take 5 cabalVersion == "3.16." && compilerId == "ghc-9.14.1")
-    "THC project run requires cabal-install 3.16 and GHC 9.14.1"
-  abi <- field plan "compiler-abi"
-  os <- field plan "os"
-  arch <- field plan "arch"
-  cacheRoot <- coreCacheDirectory
-  driverHash <- digestFile driver
-  nativeTools <- nativeToolIdentity
-  let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts noLinkUnits Nothing Map.empty
-  records <- field plan "install-plan" :: IO [Value]
-  units <- mapM readUnit records >>= concreteProjectUnits context
-  let byId = Map.fromList [(unitId unit, unit) | unit <- units]
-  require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
-  selected <- forM selectedUnits $ \before -> do
-    after <- maybe (fail "Cabal changed the selected unit identity during its build") pure
-      (Map.lookup (unitId before) byId)
-    oldTarget <- componentTarget before
-    newTarget <- componentTarget after
-    require (oldTarget == newTarget) "Cabal changed the selected component during its build"
-    pure after
-  -- Stale build-info for previously built targets must not broaden acquisition.
-  ordered <- nubBy (\left right -> unitId left == unitId right) . concat <$>
-    mapM (dependencyClosure byId . unitId) selected
-  builtLocals <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
-    Nothing -> pure False
-    Just path -> doesFileExist path) (filter unitLocal units)
-  builtComponents <- forM builtLocals $ \unit -> do
-    component <- readComponentMetadata (unitId unit `elem` map unitId ordered) unit context
-    pure (unit, component)
-  prepareBackpackSignatures context byId ordered builtComponents
-  roots <- fmap (sort . nub . concat) $ forM builtComponents $ \(unit, component) -> do
-    dist <- field (unitValue unit) "dist-dir"
-    componentRoots dist (componentValue component)
-  localComponents <- forM (filter (\(unit, _) -> unitId unit `elem` map unitId ordered) builtComponents) $
-    \(unit, component) -> do
-      completed <- completeHomeModules context roots unit component
-      pure (unit, completed)
-  -- Repair missing native receipts through Cabal itself; never reconstruct
-  -- the missing compiler invocation from a binary setup-config.
-  forM_ localComponents $ \(unit, component) -> do
-    dist <- field (unitValue unit) "dist-dir"
-    ensureNativeRecipes native dist roots ghc (componentValue component) $ do
-      packageName <- field (unitValue unit) "pkg-name" :: IO String
-      componentName <- field (unitValue unit) "component-name" :: IO String
-      sourceRoot <- field (componentValue component) "src-dir"
-      let setupTarget = if componentName == "lib" then "lib:" ++ packageName else componentName
-      -- v2-build's monitor can say "up to date" after an intermediate .o is
-      -- deleted. Ask this same Cabal CLI's Simple Setup to build the component
-      -- directly; it owns and reads its own configured build representation.
-      runCommandWithEnv True cabal ["act-as-setup", "--build-type=Simple", "--", "build",
-        "--builddir=" ++ dist, setupTarget] sourceRoot (Just environment)
-  let globals = [unit | unit <- ordered, not (unitLocal unit),
-                       jsonField (unitValue unit) "type" == Just ("configured" :: String)]
-  capturedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
-  (installed, acquiredContext, interfaceInputs) <- do
-    originalContext <- prepareInterfaceHelper context thcRoot
-    support <- case producer of
-      Nothing -> pure []
-      Just value -> do
-        manifest <- readJson =<< field value "runtimeSupport"
-        field manifest "units"
-    let supportFor identifier = case [record | record <- support, jsonField record "id" == Just identifier] of
-          [record] -> Just record
-          _ -> Nothing
-        installedUnits = [unit | unit <- ordered,
-              jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
-    originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
-    validateReexports originalRegistrations
-    forM_ originalRegistrations $ \registrationUnit -> do
-      planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
-      require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
-        ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-    let acquisitionRegistrations = [registrationUnit | registrationUnit <- originalRegistrations,
-          supportFor (registeredId registrationUnit) == Nothing]
-    helperContext <- if installedPolicy == "pinned"
-      then preparePinnedInterfaces cacheRoot pluginDb pluginUnit pluginLibrary originalContext acquisitionRegistrations
-      else case ghcSource of
-        Nothing -> pure originalContext
-        Just source -> prepareForeignInterfaces
-          (ForeignCompiler ghc pluginDb pluginUnit pluginLibrary registeredLibrary driverHash)
-          cacheRoot source originalContext originalRegistrations
-    retained <- case capturedPath of
-      Nothing -> pure Nothing
-      Just path -> do
-        supplied <- readJson path
-        case jsonField supplied "installed" :: Maybe Value of
-          Nothing -> pure Nothing
-          Just _ -> do
-            when (installedPolicy == "pinned") $ do
-              request <- field supplied "request"
-              require (jsonField request "coreInterfaceView" == Just (installedViewIdentity helperContext))
-                "captured installed Core uses a different pinned interface view"
-            Just <$> readCapturedInstalledBundles verifyArtifacts (installedCompiler originalContext) originalRegistrations path
-    (bundles, demandInputs) <- case retained of
-      Just selectedInstalled -> pure ([(identifier, (unit, InstalledCBD artifact)) |
-        (identifier, (unit, artifact)) <- Map.toList selectedInstalled], [])
-      Nothing -> do
-        registrations <- forM installedUnits $ \unit ->
-          discoverInstalled (if supportFor (unitId unit) == Nothing then helperContext else originalContext) (unitId unit)
-        validateReexports registrations
-        (demandInputs, demandUnits) <- if installedPolicy == "demand"
-          then prepareInstalledDemand helperContext [r | r <- registrations, supportFor (registeredId r) == Nothing] else pure ([], Map.empty)
-        let acquireSource registrationUnit = case Map.lookup (registeredId registrationUnit) demandUnits of
-                Just record -> do
-                  owner <- field record "id"
-                  pure (InstalledInterfaces owner record)
-                Nothing -> do
-                  result <- prepareInstalledBundleWithVerification verifyArtifacts (contextNativeTools context)
-                    cacheRoot (native </> "cache/thc/staging") layout helperContext registrationUnit
-                  either (\missing -> fail
-                    ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
-                     " (" ++ missingInterface missing ++ "). Build the libraries with -fwrite-if-simplified-core or select --installed-core pinned.")) (pure . InstalledCBD) result
-        bundles <- forM registrations $ \registrationUnit -> do
-          planned <- maybe (fail "installed registration not in Cabal plan") pure
-            (Map.lookup (registeredId registrationUnit) byId)
-          require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
-            ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-          source <- case supportFor (registeredId registrationUnit) of
-            Just record -> pure (InstalledSupport (registeredId registrationUnit) record)
-            Nothing -> acquireSource registrationUnit
-          pure (registeredId registrationUnit, (registrationUnit, source))
-        pure (bundles, demandInputs)
-    let owners = map (installedSourceOwner . snd . snd) bundles
-        registered = map fst bundles
-    require (length owners == length (nub owners)) "multiple installed registrations claim one Core owner"
-    require (all (\(identifier, (_, item)) -> installedSourceOwner item == identifier ||
-                  installedSourceOwner item `notElem` registered && Map.notMember (installedSourceOwner item) byId) bundles)
-      "installed Core owner collides with another Cabal unit"
-    pure (Map.fromList bundles, helperContext, demandInputs)
-  let coreContext = context { contextCoreView = if installedPolicy == "pinned"
-        then Just acquiredContext else Nothing }
-  captured <- traverse (\_ -> prepareGlobalBundles coreContext project targetComponents byId localComponents globals) capturedPath
-  globalBundles <- maybe (prepareGlobalBundles coreContext project
-    targetComponents byId localComponents globals) pure captured
-  let sourceInterfaces = Map.map (replayInterfacePath . bundlePath)
-        (Map.filter (not . null . bundleModules) globalBundles)
-  (_, _, described) <- foldlM (\(keys, interfaces, acc) unit -> do
-    kind <- optionalField (unitValue unit) "type" ("" :: String)
-    bundle <- if unitLocal unit
-      then Just <$> exportUnit coreContext {contextCoreInterfaces = interfaces} roots keys unit
+  selectionCompiler <- field selectionPlan "compiler-id"
+  selectionAbi <- field selectionPlan "compiler-abi"
+  selectionOs <- field selectionPlan "os"
+  selectionArch <- field selectionPlan "arch"
+  selectionCache <- coreCacheDirectory
+  selectionDriverHash <- digestFile driver
+  selectionNativeTools <- nativeToolIdentity
+  let selectionContext = ExportContext selectionCompiler selectionAbi (selectionArch ++ "-" ++ selectionOs)
+        pluginDb pluginUnit pluginLibrary native selectionCache selectionDriverHash ghc ghcPkg driver thcRoot
+        projectOptions selectionNativeTools verifyArtifacts noLinkUnits Nothing Map.empty
+  selectionOrdered <- nubBy (\left right -> unitId left == unitId right) . concat <$>
+    mapM (dependencyClosure selectionById . unitId) selectedUnits
+  let selectionInstalled = [unit | unit <- selectionOrdered,
+        jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
+  preparedInterfaces <- prepareProjectInterfaceView selectionContext producer installedPolicy ghcSource
+    registeredLibrary selectionById selectionInstalled
+  let (_, selectedView, _) = preparedInterfaces
+      captureContext = selectionContext {contextCoreView = if installedPolicy == "pinned" then Just selectedView else Nothing}
+      selectedHelper = if installedPolicy == "pinned" then selectedView else let (helper, _, _) = preparedInterfaces in helper
+  withOriginalStoreCapture captureContext selectedHelper selectionById selectionOrdered project initialEnvironment $ \originalCapture environment -> do
+    (initialInstalled, initialHelper, initialInputs, originalRegistrations, inputSnapshot) <-
+      withBuildAdmission (native </> "cache/thc/staging")
+        (\handoff -> runCommandWithEnv True cabal
+          (["build"] ++ targetComponents ++ ["--enable-build-info"] ++ configuration) project
+          (Just (("THC_PROXY_BUILD_ADMISSION", handoff) :
+            filter ((/= "THC_PROXY_BUILD_ADMISSION") . fst) environment)))
+        (\admission -> acquireProjectInstalled admission selectionContext layout installedPolicy
+          selectionById selectionInstalled preparedInterfaces)
+    plan <- readJson (native </> "cache/plan.json")
+    cabalVersion <- field plan "cabal-version"
+    compilerId <- field plan "compiler-id"
+    require (take 5 cabalVersion == "3.16." && compilerId == "ghc-9.14.1")
+      "THC project run requires cabal-install 3.16 and GHC 9.14.1"
+    abi <- field plan "compiler-abi"
+    os <- field plan "os"
+    arch <- field plan "arch"
+    cacheRoot <- coreCacheDirectory
+    driverHash <- digestFile driver
+    nativeTools <- nativeToolIdentity
+    let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
+                                pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts noLinkUnits Nothing Map.empty
+    records <- field plan "install-plan" :: IO [Value]
+    units <- mapM readUnit records >>= concreteProjectUnits context
+    let byId = Map.fromList [(unitId unit, unit) | unit <- units]
+    require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
+    selected <- forM selectedUnits $ \before -> do
+      after <- maybe (fail "Cabal changed the selected unit identity during its build") pure
+        (Map.lookup (unitId before) byId)
+      oldTarget <- componentTarget before
+      newTarget <- componentTarget after
+      require (oldTarget == newTarget) "Cabal changed the selected component during its build"
+      pure after
+    -- Stale build-info for previously built targets must not broaden acquisition.
+    ordered <- nubBy (\left right -> unitId left == unitId right) . concat <$>
+      mapM (dependencyClosure byId . unitId) selected
+    builtLocals <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
+      Nothing -> pure False
+      Just path -> doesFileExist path) (filter unitLocal units)
+    builtComponents <- forM builtLocals $ \unit -> do
+      component <- readComponentMetadata (unitId unit `elem` map unitId ordered) unit context
+      pure (unit, component)
+    prepareBackpackSignatures context byId ordered builtComponents
+    roots <- fmap (sort . nub . concat) $ forM builtComponents $ \(unit, component) -> do
+      dist <- field (unitValue unit) "dist-dir"
+      componentRoots dist (componentValue component)
+    localComponents <- forM (filter (\(unit, _) -> unitId unit `elem` map unitId ordered) builtComponents) $
+      \(unit, component) -> do
+        completed <- completeHomeModules context roots unit component
+        pure (unit, completed)
+    -- Repair missing native receipts through Cabal itself; never reconstruct
+    -- the missing compiler invocation from a binary setup-config.
+    forM_ localComponents $ \(unit, component) -> do
+      dist <- field (unitValue unit) "dist-dir"
+      ensureNativeRecipes native dist roots ghc (componentValue component) $ do
+        packageName <- field (unitValue unit) "pkg-name" :: IO String
+        componentName <- field (unitValue unit) "component-name" :: IO String
+        sourceRoot <- field (componentValue component) "src-dir"
+        let setupTarget = if componentName == "lib" then "lib:" ++ packageName else componentName
+        -- v2-build's monitor can say "up to date" after an intermediate .o is
+        -- deleted. Ask this same Cabal CLI's Simple Setup to build the component
+        -- directly; it owns and reads its own configured build representation.
+        runCommandWithEnv True cabal ["act-as-setup", "--build-type=Simple", "--", "build",
+          "--builddir=" ++ dist, setupTarget] sourceRoot (Just environment)
+    let globals = [unit | unit <- ordered, not (unitLocal unit),
+                         jsonField (unitValue unit) "type" == Just ("configured" :: String)]
+    capturedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
+    let installedUnits = [unit | unit <- ordered,
+          jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
+        installedScope = sort [(unitId unit, sort (unitDepends unit)) | unit <- installedUnits]
+        initialScope = sort [(unitId unit, sort (unitDepends unit)) | unit <- selectionInstalled]
+    let samePreparation = installedScope == initialScope && driverHash == selectionDriverHash &&
+          nativeTools == selectionNativeTools && contextCompiler context == contextCompiler selectionContext &&
+          contextAbi context == contextAbi selectionContext && contextPlatform context == contextPlatform selectionContext
+    finalPrepared@(originalContext, finalHelper, _) <- prepareProjectInterfaceView context producer
+      installedPolicy ghcSource registeredLibrary byId installedUnits
+    currentRegistrations <- case installedUnits of
+      [] -> pure []
+      _ -> do
+        discover <- registrationSnapshot originalContext
+        mapM (discover . unitId) installedUnits
+    currentInputSnapshot <- forM inputSnapshot $ \(path, _) -> (,) path <$> digestFile path
+    (installed, acquiredContext, interfaceInputs) <-
+      if samePreparation && currentInputSnapshot == [(path, digestHex digest) | (path, digest) <- inputSnapshot] && preparedInterfaces == finalPrepared && currentRegistrations == originalRegistrations then do
+        let registrations = map fst (Map.elems initialInstalled)
+            observedContext registrationUnit = if registrationUnit `elem` originalRegistrations
+              then originalContext else finalHelper
+        snapshots <- forM (nub (map observedContext registrations)) $ \snapshotContext ->
+          (,) snapshotContext <$> registrationSnapshot snapshotContext
+        forM_ registrations $ \registrationUnit -> do
+          current <- maybe (fail "missing final installed registration snapshot") ($ registeredId registrationUnit)
+            (lookup (observedContext registrationUnit) snapshots)
+          require (current == registrationUnit) "selected installed interface view changed during native build"
+        pure (initialInstalled, initialHelper, initialInputs)
       else do
-        if kind == "configured" then Just <$> maybe
-          (fail ("Core bundle missing for Cabal store component " ++ unitId unit)) pure
-          (Map.lookup (unitId unit) globalBundles)
-        else pure $ case snd <$> Map.lookup (unitId unit) installed of
-          Just (InstalledCBD artifact) -> Just (installedBundle artifact)
-          _ -> Nothing
-    forM_ (maybe [] bundleReexports bundle) $ \(_, provider, name) -> do
-      dependencies <- dependencyClosure byId (unitId unit)
-      let owner = maybe provider (installedSourceOwner . snd) (Map.lookup provider installed)
-          exported = [moduleName | record <- acc, jsonField record "id" == Just owner,
-            moduleRef <- maybe [] id (jsonField record "modules" :: Maybe [Value]),
-            Just moduleName <- [jsonField moduleRef "name" :: Maybe String]]
-      require (provider `elem` map unitId dependencies && name `elem` exported)
-        ("missing concrete store reexport provider " ++ provider ++ ":" ++ name ++ " for " ++ unitId unit)
-    let modules = maybe [] bundleModules bundle
-        fields = ["id" .= unitId unit, "depends" .= unitDepends unit, "modules" .= modules] ++
-                 maybe [] (\item -> ["bundle" .= object ["path" .= bundlePath item,
-                                                   "sha256" .= bundleHash item]]) bundle
-        keys' = maybe keys (\item -> Map.insert (unitId unit) (bundleBuildKey item) keys) bundle
-        interfaces' = if unitLocal unit then maybe interfaces
-          (\item -> if null (bundleModules item) then interfaces else
-            Map.insert (unitId unit) (replayInterfacePath (bundlePath item)) interfaces) bundle else interfaces
-        recordsForUnit = maybe [object fields] (uncurry installedSourceRecords) (Map.lookup (unitId unit) installed)
-    pure (keys', interfaces', acc ++ recordsForUnit)) (Map.empty, sourceInterfaces, []) ordered
-  let manifest = output </> "packages.json"
-      -- Both providers retain GHC's generated main wrapper and Handle shutdown.
-      entry = "main::Main.main"
-      shutdown = "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"
-      audit = output </> "audit.json"
-      publish path bridge suppliedUnits = do
-        published <- mapM (publishCoreUnit cacheRoot verifyArtifacts) suppliedUnits
-        atomicJson path (object ["format" .= ("thc-core-packages" :: String),
-          "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-          "foreignExceptionBridgeUnit" .= (bridge :: Maybe String),
-          "interfaceInputs" .= interfaceInputs, "units" .= published])
-      link = linkForeignExceptionRuntime coreContext environment installedPolicy ghcSource registeredLibrary
-  if buildsNativeImages action then do
-    -- This union is acquisition inventory. Only each runnable's own closure
-    -- can select its Main wrapper and exact exception bridge without ambiguity.
-    publish manifest Nothing described
-    let owners = Map.map (installedSourceOwner . snd) installed
-        runnable unit = maybe False ((`elem` ["exe", "test", "bench"]) . takeWhile (/= ':'))
-          (jsonField (unitValue unit) "component-name" :: Maybe String)
-    forM_ (filter runnable selected) $ \unit -> do
-      component <- field (unitValue unit) "component-name"
-      let directory = output </> "native-images" </> shaHex (Text.encodeUtf8 (Text.pack (unitId unit)))
-          packages = directory </> "packages.json"
-          program = reverse (takeWhile (/= ':') (reverse component))
-      componentRecords <- componentCoreRecords owners (unitId unit) described
-      (bridge, linked) <- link componentRecords
-      createDirectoryIfMissing True directory
-      publish packages (Just bridge) linked
-      buildNativeImage thcRoot directory program packages
-  else do
-    (bridge, linked) <- link described
-    publish manifest (Just bridge) linked
-  when (action == RunGuest) $ do
-    when verifyArtifacts $
-      runCommand True "python3" (["-B", thcRoot </> "bin/audit-core.py", "--runtime", runtime, "--package-manifest", manifest,
-                                "--entry", entry, "--entry", shutdown] ++
-                               ["--io-main", "--output", audit]) thcRoot
-    -- Full-Core main and shutdown share one program and its Handle CAFs.
-    -- Like cabal run, preserve the caller's cwd even with --project-dir.
-    selectedComponent <- case selected of
-      [unit] -> field (unitValue unit) "component-name"
-      _ -> fail "run requires exactly one runnable component"
-    let programName = reverse (takeWhile (/= ':') (reverse selectedComponent))
-    runCommandWithEnv False runtime (["--allow-interface-helper" | installedPolicy == "demand"] ++ runtimeLaunchArguments verifyArtifacts
-      ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working (Just launchEnvironment)
+        -- A concrete post-build plan may legitimately differ (for example
+        -- Backpack instantiation). Do not use speculative results in it.
+        (completed, helper, inputs, _, _) <- acquireProjectInstalled localAdmission context layout
+          installedPolicy byId installedUnits finalPrepared
+        pure (completed, helper, inputs)
+    let coreContext = context { contextCoreView = if installedPolicy == "pinned"
+          then Just acquiredContext else Nothing }
+    captured <- traverse (\_ -> prepareGlobalBundles coreContext originalCapture project targetComponents byId localComponents globals) capturedPath
+    globalBundles <- maybe (prepareGlobalBundles coreContext originalCapture project
+      targetComponents byId localComponents globals) pure captured
+    -- All original products have now been published or replaced by the
+    -- isolated fallback; guest execution no longer owns this private stage.
+    forM_ originalCapture $ \capture -> removePathForcibly (originalCaptureDirectory capture)
+    let sourceInterfaces = Map.map (replayInterfacePath . bundlePath)
+          (Map.filter (not . null . bundleModules) globalBundles)
+    (_, _, described) <- foldlM (\(keys, interfaces, acc) unit -> do
+      kind <- optionalField (unitValue unit) "type" ("" :: String)
+      bundle <- if unitLocal unit
+        then Just <$> exportUnit coreContext {contextCoreInterfaces = interfaces} roots keys unit
+        else do
+          if kind == "configured" then Just <$> maybe
+            (fail ("Core bundle missing for Cabal store component " ++ unitId unit)) pure
+            (Map.lookup (unitId unit) globalBundles)
+          else pure $ case snd <$> Map.lookup (unitId unit) installed of
+            Just (InstalledCBD artifact) -> Just (installedBundle artifact)
+            _ -> Nothing
+      forM_ (maybe [] bundleReexports bundle) $ \(_, provider, name) -> do
+        dependencies <- dependencyClosure byId (unitId unit)
+        let owner = maybe provider (installedSourceOwner . snd) (Map.lookup provider installed)
+            exported = [moduleName | record <- acc, jsonField record "id" == Just owner,
+              moduleRef <- maybe [] id (jsonField record "modules" :: Maybe [Value]),
+              Just moduleName <- [jsonField moduleRef "name" :: Maybe String]]
+        require (provider `elem` map unitId dependencies && name `elem` exported)
+          ("missing concrete store reexport provider " ++ provider ++ ":" ++ name ++ " for " ++ unitId unit)
+      let modules = maybe [] bundleModules bundle
+          fields = ["id" .= unitId unit, "depends" .= unitDepends unit, "modules" .= modules] ++
+                   maybe [] (\item -> ["bundle" .= object ["path" .= bundlePath item,
+                                                     "sha256" .= bundleHash item]]) bundle
+          keys' = maybe keys (\item -> Map.insert (unitId unit) (bundleBuildKey item) keys) bundle
+          interfaces' = if unitLocal unit then maybe interfaces
+            (\item -> if null (bundleModules item) then interfaces else
+              Map.insert (unitId unit) (replayInterfacePath (bundlePath item)) interfaces) bundle else interfaces
+          recordsForUnit = maybe [object fields] (uncurry installedSourceRecords) (Map.lookup (unitId unit) installed)
+      pure (keys', interfaces', acc ++ recordsForUnit)) (Map.empty, sourceInterfaces, []) ordered
+    let manifest = output </> "packages.json"
+        -- Both providers retain GHC's generated main wrapper and Handle shutdown.
+        entry = "main::Main.main"
+        shutdown = "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"
+        audit = output </> "audit.json"
+        publish path bridge suppliedUnits = do
+          published <- mapM (publishCoreUnit cacheRoot verifyArtifacts) suppliedUnits
+          atomicJson path (object ["format" .= ("thc-core-packages" :: String),
+            "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
+            "foreignExceptionBridgeUnit" .= (bridge :: Maybe String),
+            "interfaceInputs" .= interfaceInputs, "units" .= published])
+        link = linkForeignExceptionRuntime coreContext environment installedPolicy ghcSource registeredLibrary
+    if buildsNativeImages action then do
+      -- This union is acquisition inventory. Only each runnable's own closure
+      -- can select its Main wrapper and exact exception bridge without ambiguity.
+      publish manifest Nothing described
+      let owners = Map.map (installedSourceOwner . snd) installed
+          runnable unit = maybe False ((`elem` ["exe", "test", "bench"]) . takeWhile (/= ':'))
+            (jsonField (unitValue unit) "component-name" :: Maybe String)
+      forM_ (filter runnable selected) $ \unit -> do
+        component <- field (unitValue unit) "component-name"
+        let directory = output </> "native-images" </> shaHex (Text.encodeUtf8 (Text.pack (unitId unit)))
+            packages = directory </> "packages.json"
+            program = reverse (takeWhile (/= ':') (reverse component))
+        componentRecords <- componentCoreRecords owners (unitId unit) described
+        (bridge, linked) <- link componentRecords
+        createDirectoryIfMissing True directory
+        publish packages (Just bridge) linked
+        buildNativeImage thcRoot directory program packages
+    else do
+      (bridge, linked) <- link described
+      publish manifest (Just bridge) linked
+    when (action == RunGuest) $ do
+      when verifyArtifacts $
+        runCommand True "python3" (["-B", thcRoot </> "bin/audit-core.py", "--runtime", runtime, "--package-manifest", manifest,
+                                  "--entry", entry, "--entry", shutdown] ++
+                                 ["--io-main", "--output", audit]) thcRoot
+      -- Full-Core main and shutdown share one program and its Handle CAFs.
+      -- Like cabal run, preserve the caller's cwd even with --project-dir.
+      selectedComponent <- case selected of
+        [unit] -> field (unitValue unit) "component-name"
+        _ -> fail "run requires exactly one runnable component"
+      let programName = reverse (takeWhile (/= ':') (reverse selectedComponent))
+      runCommandWithEnv False runtime (["--allow-interface-helper" | installedPolicy == "demand"] ++ runtimeLaunchArguments verifyArtifacts
+        ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working (Just launchEnvironment)
 
 -- | Select the original exception bridge and optional weak finalizer ABI modules.
 -- The flag requests full artifact verification rather than replaying an
@@ -1064,9 +1242,13 @@ prepareInstalledBundle cache staging recipe context registrationUnit = do
 
 prepareInstalledBundleWithVerification :: Bool -> Value -> FilePath -> FilePath -> FilePath -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
-prepareInstalledBundleWithVerification verify nativeTools cache staging recipe context registrationUnit = do
+prepareInstalledBundleWithVerification = prepareInstalledBundleWithAdmission localAdmission
+
+prepareInstalledBundleWithAdmission :: Admission -> Bool -> Value -> FilePath -> FilePath -> FilePath -> InstalledContext -> InstalledUnit ->
+                                      IO (Either MissingCore InstalledBundle)
+prepareInstalledBundleWithAdmission admission verify nativeTools cache staging recipe context registrationUnit = do
   let producer = object ["recipe" .= installedBundleRecipeIdentity, "nativeTools" .= nativeTools]
-  fullProbe <- prepareInstalledProbe context registrationUnit
+  fullProbe <- prepareInstalledProbeWithAdmission admission context registrationUnit
   -- Ordinary builds reuse the exact validated inventory while its helper and
   -- raw interfaces retain their file observations. Verification always probes
   -- the contents; source text and native artifacts are validated below either way.
@@ -1109,7 +1291,7 @@ prepareInstalledBundleWithVerification verify nativeTools cache staging recipe c
         index = cache </> "installed-probes/v1" </> shaHex (BL.toStrict (encode identity)) ++ ".json"
     pure (identity, before, index)
   case evidence of
-    Nothing -> acquireInstalledBundle verify cache staging recipe producer context registrationUnit (\_ _ _ -> pure ())
+    Nothing -> acquireInstalledBundle admission verify cache staging recipe producer context registrationUnit (\_ _ _ -> pure ())
     Just (identity, before@(_, probe), index) -> do
       hit <- optionalIO $ do
         envelope <- readJson index
@@ -1145,7 +1327,7 @@ prepareInstalledBundleWithVerification verify nativeTools cache staging recipe c
         pure (InstalledBundle owner bundle)
       case hit of
         Just bundle -> pure (Right bundle)
-        Nothing -> acquireInstalledBundle verify cache staging recipe producer context registrationUnit $ \bundle inputs modules -> do
+        Nothing -> acquireInstalledBundle admission verify cache staging recipe producer context registrationUnit $ \bundle inputs modules -> do
           _ <- optionalIO $ do
             sources <- installedSourceObservations modules
             validateSourceObservations sources
@@ -1257,14 +1439,17 @@ validateSourceObservations sources = forM_ sources $ \expected -> do
 
 -- Ordinary acquisition remains authoritative, including when the optional
 -- probe cannot establish complete evidence. GHC compiler binaries are not hashed.
-acquireInstalledBundle :: Bool -> FilePath -> FilePath -> FilePath -> Value -> InstalledContext -> InstalledUnit ->
+acquireInstalledBundle :: Admission -> Bool -> FilePath -> FilePath -> FilePath -> Value -> InstalledContext -> InstalledUnit ->
                           (InstalledBundle -> Value -> [(String, BS.ByteString)] -> IO ()) ->
                           IO (Either MissingCore InstalledBundle)
-acquireInstalledBundle verify cache staging recipe producer context registrationUnit remember = do
-  acquired <- acquireInstalled context registrationUnit
+acquireInstalledBundle admission verify cache staging recipe producer context registrationUnit remember = do
+  acquired <- acquireInstalledWithAdmission admission context registrationUnit
   case acquired of
     Left missing -> pure (Left missing)
     Right core -> do
+      -- No token is held while waiting. Native packaging has its existing
+      -- serial process owners; only interface helpers overlap this build.
+      waitForNative admission
       createDirectoryIfMissing True staging
       (temporary, handle) <- openTempFile staging "installed-native-"
       hClose handle
@@ -1701,9 +1886,9 @@ exporterIdentity context = do
                                 "-fplugin-trustworthy"] :: [String])] ++
                  ["coreInterfaceView" .= installedViewIdentity path | Just path <- [contextCoreView context]]
 
-prepareGlobalBundles :: ExportContext -> FilePath -> [String] -> Map.Map String Unit -> [(Unit, Component)] -> [Unit] -> IO (Map.Map String Bundle)
-prepareGlobalBundles _ _ _ _ _ [] = pure Map.empty
-prepareGlobalBundles context project target planned locals units = do
+prepareGlobalBundles :: ExportContext -> Maybe OriginalStoreCapture -> FilePath -> [String] -> Map.Map String Unit -> [(Unit, Component)] -> [Unit] -> IO (Map.Map String Bundle)
+prepareGlobalBundles _ _ _ _ _ _ [] = pure Map.empty
+prepareGlobalBundles context originalCapture project target planned locals units = do
   let lockDir = contextCache context </> "core-bundles/v1/export-batches"
   createDirectoryIfMissing True lockDir
   closures <- mapM (dependencyClosure planned . unitId) units
@@ -1767,11 +1952,21 @@ prepareGlobalBundles context project target planned locals units = do
                      else pure Nothing
             pure (unit, buildKey, exportKey, path, ready)
           let pending = [(unit, buildKey, exportKey, path) | (unit, buildKey, exportKey, path, Nothing) <- checked]
+          forM_ originalCapture $ \capture ->
+            publishOriginalStoreCapture context capture planned pending validateInputs
+          -- A concurrent publication or original capture can complete either
+          -- payload or interfaces. Recheck before choosing the isolated fallback.
+          remaining <- forM checked $ \(unit, buildKey, exportKey, path, _) -> do
+            present <- doesFileExist path
+            ready <- if present then readGlobalForReplay context path (unitId unit) (unitDepends unit) buildKey exportKey
+              else pure Nothing
+            pure (unit, buildKey, exportKey, path, ready)
+          let uncaptured = [(unit, buildKey, exportKey, path) | (unit, buildKey, exportKey, path, Nothing) <- remaining]
               warm = Map.fromList [(unitId unit, replayInterfacePath path)
-                | (unit, _, _, path, Just bundle) <- checked, not (null (bundleModules bundle))]
-          when (not (null pending)) $
+                | (unit, _, _, path, Just bundle) <- remaining, not (null (bundleModules bundle))]
+          when (not (null uncaptured)) $
             captureGlobalUnits context { contextCoreInterfaces = Map.union warm (contextCoreInterfaces context) }
-              project target planned (map first4 pending) pending validateInputs
+              project target planned (map first4 uncaptured) uncaptured validateInputs
       -- Check warm hits too, before they enter the combined manifest.
       validateInputs
       pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
@@ -1783,6 +1978,76 @@ prepareGlobalBundles context project target planned locals units = do
         pure (unitId unit, bundle)
       pure (Map.fromList pairs)
   where first4 (unit, _, _, _) = unit
+
+-- Optional original-build reuse is admitted only under the ordinary immutable
+-- keys and final dependency identities. Availability is checked for the whole
+-- configured native closure before any ZIP or replay interfaces are published.
+-- Missing warm-native compiler evidence falls back; invalid declared evidence
+-- retains the native reader's ordinary hard failure.
+publishOriginalStoreCapture :: ExportContext -> OriginalStoreCapture -> Map.Map String Unit ->
+                               [(Unit, String, String, FilePath)] -> IO () -> IO ()
+publishOriginalStoreCapture context capture planned pending validateInputs = do
+  databases <- nativeCaptureDatabases (originalCaptureStore capture) (contextNative context)
+  let directory = originalCaptureDirectory capture
+      pieces = contextNative context </> "cache/thc/native-pieces-v1"
+      completedRegistration unit = do
+        paths <- filterM doesFileExist [database </> unitId unit <.> "conf" | database <- databases]
+        case paths of
+          [] -> pure Nothing
+          [path] -> pure (Just path)
+          _ -> fail ("native dependency has ambiguous completed registration: " ++ unitId unit)
+      moduleless unit path = do
+        bytes <- BS.readFile path
+        pure (modulelessRegistration (unitId unit) (unitDepends unit) bytes /= Nothing)
+      completed unit = doesFileExist (directory </> unitId unit </> "capture-complete")
+  eligible <- filterM (\(unit, buildKey, exportKey, _) ->
+    if Map.lookup (unitId unit) (originalCaptureKeys capture) /= Just (buildKey, exportKey)
+      then pure False else do
+        before <- dependencyClosure (originalCapturePlan capture) (unitId unit)
+        after <- dependencyClosure planned (unitId unit)
+        if map sourceIdentity (sortOn unitId before) /= map sourceIdentity (sortOn unitId after)
+          then pure False else do
+            fresh <- completed unit
+            if fresh then pure True else do
+              selected <- completedRegistration unit
+              maybe (pure False) (moduleless unit) selected) pending
+  closures <- mapM (dependencyClosure planned . first4) eligible
+  let dependencies = Map.elems (Map.fromList [(unitId unit, unit) | unit <- concat closures,
+        jsonField (unitValue unit) "type" == Just ("configured" :: String)])
+  available <- forM dependencies $ \unit -> do
+    selected <- completedRegistration unit
+    case selected of
+      Nothing -> pure False
+      Just path -> do
+        native <- readNativeProductAvailable (unitValue unit) (unitDepends unit) path pieces
+        case native of
+          Left _ -> pure False
+          Right (Just _) -> pure True
+          Right Nothing -> do
+            fresh <- completed unit
+            if fresh then pure True else moduleless unit path
+  when (not (null eligible) && and available) $ do
+    validateInputs
+    packageTool <- maybe (fail "selected native ghc-pkg is missing") pure (contextGhcPkg context)
+    forM_ eligible $ \(unit, buildKey, exportKey, path) -> do
+      createDirectoryIfMissing True (takeDirectory path)
+      withLock (path ++ ".lock") $ do
+        present <- doesFileExist path
+        loaded <- if present then readGlobalBundle (contextVerifyArtifacts context) path (unitId unit)
+          (unitDepends unit) buildKey exportKey else pure Nothing
+        bundle <- case loaded of
+          Just value -> pure value
+          Nothing -> do
+            packGlobalBundle packageTool pieces databases directory planned unit buildKey exportKey path
+            readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
+              >>= maybe (fail "original Core bundle publication was not readable") pure
+        ready <- replayInterfacesReady context bundle
+        unless ready $ do
+          requireFile (directory </> unitId unit </> "capture-complete")
+          requireFile (directory </> unitId unit </> "interfaces-ready")
+          names <- mapM (`field` "name") (bundleModules bundle)
+          publishReplayInterfaces context (directory </> unitId unit </> "objects") names False path
+  where first4 (unit, _, _, _) = unitId unit
 
 -- Core replay interfaces belong to the same immutable exporter key as their
 -- executable payload. Native package registrations and libraries stay intact.
@@ -1972,7 +2237,7 @@ captureGlobalUnits context project target planned requested missing validateInpu
                      concat [[("THC_PROXY_CORE_LIBDIR", installedLibdir view),
                        ("THC_PROXY_CORE_DATABASES", Text.unpack (Text.decodeUtf8 (BL.toStrict (encode (helperDatabases view)))))]
                        | Just view <- [contextCoreView context]]
-        environment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_CORE_DATABASES" : "THC_PROXY_CORE_LIBDIR" : map fst overrides)) inherited
+        environment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_BUILD_ADMISSION" : "THC_PROXY_ORIGINAL_BUILD" : "THC_PROXY_CORE_DATABASES" : "THC_PROXY_CORE_LIBDIR" : map fst overrides)) inherited
     runCommandWithEnv True "cabal" arguments project (Just environment)
     plan <- readJson (dist </> "cache/plan.json")
     isolatedCompiler <- field plan "compiler-id"
@@ -2013,7 +2278,8 @@ captureGlobalUnits context project target planned requested missing validateInpu
           Just value -> pure value
           Nothing -> do
             selectedPkg <- maybe (fail "selected native ghc-pkg is missing") pure (contextGhcPkg context)
-            packGlobalBundle selectedPkg store dist capture byId unit buildKey exportKey path
+            databases <- nativeCaptureDatabases store dist
+            packGlobalBundle selectedPkg (staging </> "native-pieces") databases capture byId unit buildKey exportKey path
             readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
               >>= maybe (fail "fresh Core bundle publication was not readable") pure
         names <- mapM (`field` "name") (bundleModules bundle)
@@ -2053,14 +2319,28 @@ publishCapturedStoreUnit packageTool planPath store dist capture identifier dest
         ("thc-captured-store-native-build-v1" :: String,compiler,abi,platform,map sourceIdentity closure)))
       exportKey = shaHex (BL.toStrict (encode (buildKey,producer)))
   createDirectoryIfMissing True (takeDirectory destination)
-  packGlobalBundle packageTool selectedStore selectedDist selectedCapture planned unit buildKey exportKey selectedDestination
+  databases <- nativeCaptureDatabases selectedStore selectedDist
+  packGlobalBundle packageTool (takeDirectory selectedCapture </> "native-pieces") databases selectedCapture planned unit buildKey exportKey selectedDestination
   result <- readGlobalBundle True selectedDestination identifier (unitDepends unit) buildKey exportKey
   maybe (fail "new captured unit failed its ordinary bundle validation") pure result
 
-packGlobalBundle :: FilePath -> FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundle packageTool store dist capture planned unit buildKey exportKey destination =
+-- Actual completed Cabal registration sources; callers retain their selected
+-- store configuration rather than deriving it from a Core staging directory.
+nativeCaptureDatabases :: FilePath -> FilePath -> IO [FilePath]
+nativeCaptureDatabases store dist = do
+  let databases directory suffix = do
+        exists <- doesDirectoryExist directory
+        if not exists then pure [] else do
+          partitions <- listDirectory directory
+          filterM doesDirectoryExist [directory </> partition </> suffix | partition <- partitions]
+  storeDatabases <- databases store "package.db"
+  inplaceDatabases <- databases (dist </> "packagedb") ""
+  pure (storeDatabases ++ inplaceDatabases)
+
+packGlobalBundle :: FilePath -> FilePath -> [FilePath] -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundle packageTool pieces databases capture planned unit buildKey exportKey destination =
   bracket temporary removePathForcibly $ \staging ->
-    packGlobalBundleStaged packageTool staging store dist capture planned unit buildKey exportKey destination
+    packGlobalBundleStaged packageTool staging pieces databases capture planned unit buildKey exportKey destination
   where
     temporary = do
       (path, handle) <- openTempFile (takeDirectory destination) "core-link-"
@@ -2071,23 +2351,17 @@ packGlobalBundle packageTool store dist capture planned unit buildKey exportKey 
 
 -- Retained captures are immutable inputs. Native linkage may amend only the
 -- private copies made here, including copied dependency modules.
-packGlobalBundleStaged :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundleStaged packageTool staging store dist capture planned unit buildKey exportKey destination = do
+packGlobalBundleStaged :: FilePath -> FilePath -> FilePath -> [FilePath] -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundleStaged packageTool staging pieces databases capture planned unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
   exported <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles core
   empty <- if not (null exported) then pure [] else do
-    -- Inspect only this freshly rebuilt private store, never the original
-    -- native store or a guessed empty module. Cabal owns the compiler partition.
-    style <- field (unitValue unit) "style" :: IO String
-    let databaseRoot = if style == "inplace" then dist </> "packagedb" else store
-    partitions <- listDirectory databaseRoot
-    registrations <- filterM doesFileExist
-      [(if style == "inplace" then databaseRoot </> partition
-        else databaseRoot </> partition </> "package.db") </> unitId unit <.> "conf" |
-        partition <- partitions]
+    -- The actual completed registration proves moduleless/reexport shape;
+    -- absence of a captured CBD alone never creates an empty module.
+    registrations <- filterM doesFileExist [database </> unitId unit <.> "conf" | database <- databases]
     bytes <- case registrations of
       [path] -> BS.readFile path
-      _ -> fail ("isolated Cabal store lacks a unique registration for " ++ unitId unit)
+      _ -> fail ("completed Cabal build lacks a unique registration for " ++ unitId unit)
     reexports <- maybe (fail ("Cabal store build did not export Core for nonempty unit " ++ unitId unit)) pure
       (modulelessRegistration (unitId unit) (unitDepends unit) bytes)
     pure [(if null reexports then "emptyRegistration" else "reexportRegistration") .= Text.decodeUtf8 bytes]
@@ -2102,17 +2376,8 @@ packGlobalBundleStaged packageTool staging store dist capture planned unit build
           Directory.copyFile path staged
           pure (name, staged)
   checked <- stageModules (unitId unit) exported
-  let pieces = takeDirectory capture </> "native-pieces"
-  -- Cabal has installed these units and may have deleted their temporary
-  -- intra-package DBs. Keep the recorded compiler recipe unchanged, but resolve
-  -- its native dependency closure against this completed private build.
-  let databases directory suffix = do
-        exists <- doesDirectoryExist directory
-        if not exists then pure [] else do
-          partitions <- listDirectory directory
-          filterM doesDirectoryExist [directory </> partition </> suffix | partition <- partitions]
-  storeDatabases <- databases store "package.db"
-  inplaceDatabases <- databases (dist </> "packagedb") ""
+  -- Temporary intra-package DBs may already have been removed. Resolve the
+  -- unchanged native compiler receipt against the caller's completed build.
   closure <- dependencyClosure planned (unitId unit)
   (_,linked) <- foldlM (\(providers,selected) dependency -> do
     let owner = unitId dependency
@@ -2125,16 +2390,16 @@ packGlobalBundleStaged packageTool staging store dist capture planned unit build
     kind <- optionalField (unitValue dependency) "type" ("" :: String)
     if kind /= "configured" then pure (Map.insert owner forwarded providers,selected) else do
       registrations <- filterM doesFileExist
-        [database </> owner <.> "conf" | database <- storeDatabases ++ inplaceDatabases]
+        [database </> owner <.> "conf" | database <- databases]
       capturedNative <- case registrations of
         [] -> pure Nothing
         [path] -> readNativeProduct (unitValue dependency) (unitDepends dependency) path pieces
-        _ -> fail "native dependency has ambiguous private-store registration"
+        _ -> fail "native dependency has ambiguous completed registration"
       nativeReceipt <- doesFileExist (sourceDirectory </> "native.json")
       bodies <- if owner == unitId unit then pure checked else if not nativeReceipt then pure [] else do
         paths <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles (sourceDirectory </> "core")
         stageModules owner paths
-      (prepared,component) <- finishPackageNativeWithDependencies packageTool capturedNative direct (storeDatabases ++ inplaceDatabases)
+      (prepared,component) <- finishPackageNativeWithDependencies packageTool capturedNative direct (databases)
         pieces sourceDirectory (takeDirectory destination </> "native-components" </> owner) owner Nothing bodies
       let available = maybe forwarded (\value -> [([],value)]) component
       pure (Map.insert owner available providers,if owner == unitId unit then prepared else selected)

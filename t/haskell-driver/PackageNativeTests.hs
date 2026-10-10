@@ -38,7 +38,7 @@ import THC.Driver.NativeCache (nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding)
-import THC.Driver.NativeDependencies (selectNativePieces, nativeSymbolArchives)
+import THC.Driver.NativeDependencies (NativePieceSelection(..), selectNativePiecesAvailable, selectNativePieces, nativeSymbolArchives)
 import THC.Driver.Installed (installedContext, InstalledContext(..))
 import THC.Driver.Project (selectedPackageTool)
 import THC.Compact.Module (readModuleValue)
@@ -707,6 +707,14 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (selectNativePieces False [("a.o","first"),("Owner.o","haskell")] [sibling,first])
       assertEqual "an uncaptured Haskell archive is not a native provider" (Right [])
         (selectNativePieces False [("Owner.o","haskell")] [first])
+      assertEqual "unrecorded required product is an explicit acquisition miss"
+        (Right (NativePieceSelection ["b.o"] [first]))
+        (selectNativePiecesAvailable True [("a.o","first"),("b.o","second")] [first])
+      assertBool "declared product mismatch is invalid, not an acquisition miss" (isLeft
+        (selectNativePiecesAvailable True [("a.o","other")] [first]))
+      assertBool "missing product cannot hide another ambiguous declaration" (isLeft
+        (selectNativePiecesAvailable True [("missing.o","absent"),("a.o","first")]
+          [first,piece "/sibling" "a.o" "first" "other"]))
       assertBool "matching basename cannot bless different native object" (isLeft
         (selectNativePieces True [("a.o","other")] [first]))
       assertBool "unrecorded member is not silently omitted" (isLeft
