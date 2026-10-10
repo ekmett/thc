@@ -17,14 +17,16 @@ module THC.Driver.Installed
   , InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedCompilerIdentity, installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, prepareInstalledDemand, probeInstalled, prepareInstalledProbe, probeClosure
+  , prepareInstalledDemandWithAdmission, prepareInstalledProbeWithAdmission, acquireInstalledWithAdmission, acquireInstalledWithJobsAndAdmission
+  , installedInputSnapshot
   , emptyRegistration, modulelessRegistration
   , boundedInterfaceProcess, boundedInterfaceProcessIn, boundedInterfaceProcessInput
   ) where
 
-import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
+import Control.Concurrent (ThreadId, forkIOWithUnmask)
 import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newEmptyMVar, newMVar, putMVar, readMVar)
-import Control.Exception (SomeException, bracket, evaluate, finally, mask, mask_, onException, throwIO, try)
-import Control.Monad (filterM, foldM, forM, forM_, replicateM_, unless, void)
+import Control.Exception (SomeException, evaluate, finally, mask, mask_, onException, throwIO, try)
+import Control.Monad (filterM, foldM, forM, forM_, replicateM_, unless)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -50,13 +52,15 @@ import System.FilePath ((</>), pathSeparator, takeFileName)
 import System.IO (IOMode(ReadMode), hClose, hSetBinaryMode, withBinaryFile)
 import qualified System.Info as Host
 import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
-                       terminateProcess, waitForProcess, withCreateProcess)
+                       terminateProcess, withCreateProcess)
 import System.Timeout (timeout)
 import Text.Read (readMaybe)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Error (lenientDecode)
 import THC.Compact.Module (readModuleMetadata)
+import THC.Driver.Admission (Admission, localAdmission, withAdmission)
+import THC.Driver.Process (drainWorkers, waitOwnedProcess, stopProcessTree)
 
 data InterfaceWay = DynamicInterfaces | VanillaInterfaces deriving (Eq, Show)
 
@@ -303,8 +307,12 @@ helperCommand context unit (name, path) =
 -- The descriptor snapshots actual helper, interface and package-state bytes.
 -- Conversion is context-private on the JVM, so this is not a conversion cache.
 prepareInstalledDemand :: InstalledContext -> [InstalledUnit] -> IO ([Value], Map.Map String Value)
-prepareInstalledDemand _ [] = pure ([], Map.empty)
-prepareInstalledDemand context requested = do
+prepareInstalledDemand = prepareInstalledDemandWithAdmission localAdmission
+
+-- | Use invocation-scoped admission for the actual inventory helper only.
+prepareInstalledDemandWithAdmission :: Admission -> InstalledContext -> [InstalledUnit] -> IO ([Value], Map.Map String Value)
+prepareInstalledDemandWithAdmission _ _ [] = pure ([], Map.empty)
+prepareInstalledDemandWithAdmission admission context requested = do
   units <- probeClosures context requested
   helper <- canonicalizePath (installedHelper context)
   libdir <- canonicalizePath (installedLibdir context)
@@ -322,7 +330,7 @@ prepareInstalledDemand context requested = do
         let digest = concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value) (BS.unpack bytes)
         pure (object ["path" .= absolute, "sha256" .= digest])
   before <- observe
-  probe <- probeInstalledInventory context (map registeredId requested) units
+  probe <- probeInstalledInventory admission context (map registeredId requested) units
   rows <- required probe "interfaces" :: IO [Value]
   after <- observe
   unless (before == after) (fail "installed inputs changed during demand inventory")
@@ -362,7 +370,7 @@ prepareInstalledDemand context requested = do
 probeInstalled :: InstalledContext -> InstalledUnit -> IO Value
 probeInstalled context requested = do
   units <- probeClosure context requested
-  value <- probeInstalledUnits context requested units
+  value <- probeInstalledUnits localAdmission context requested units
   checkProbeRegistrations context units
   pure value
 
@@ -375,7 +383,11 @@ probeInstalled context requested = do
 -- cannot use helper bytes observed independently of its validated inventory.
 -- This state is invocation-local, not a persistent or process-global cache.
 prepareInstalledProbe :: InstalledContext -> InstalledUnit -> IO (IO (BS.ByteString, Value))
-prepareInstalledProbe context requested = do
+prepareInstalledProbe = prepareInstalledProbeWithAdmission localAdmission
+
+-- | Keep discovery and snapshots outside the physical helper admission.
+prepareInstalledProbeWithAdmission :: Admission -> InstalledContext -> InstalledUnit -> IO (IO (BS.ByteString, Value))
+prepareInstalledProbeWithAdmission admission context requested = do
   previous <- newIORef Nothing
   pure $ do
     units <- probeClosure context requested
@@ -386,7 +398,7 @@ prepareInstalledProbe context requested = do
         checkProbeRegistrations context units
         pure (helperHash, value)
       _ -> do
-        value <- probeInstalledUnits context requested units
+        value <- probeInstalledUnits admission context requested units
         after <- probeSnapshot context units
         unless (before == after) (fail "installed probe inputs changed during interface probe")
         checkProbeRegistrations context units
@@ -401,6 +413,18 @@ probeSnapshot context units = forM paths $ \path -> withBinaryFile path ReadMode
   evaluate (SHA.hashlazy bytes)
   where
     paths = installedHelper context : concatMap (map snd . installedInterfaces) units
+
+-- | Snapshot the actual helper/settings/interface bytes consumed by an already
+-- selected dependency-closed registration scope. Keep consumed paths, not
+-- resolved symlink destinations; fresh registration checks remain separate.
+installedInputSnapshot :: InstalledContext -> [InstalledUnit] -> IO [(FilePath, BS.ByteString)]
+installedInputSnapshot context units = forM paths $ \path -> withBinaryFile path ReadMode $ \handle -> do
+  bytes <- BL.hGetContents handle
+  digest <- evaluate (SHA.hashlazy bytes)
+  pure (path, digest)
+  where
+    paths = sort (nub (installedHelper context : (installedLibdir context </> "settings") :
+      concatMap (map snd . installedInterfaces) units))
 
 -- Read one fresh registration snapshot. ghc-pkg dump uses the same expanded
 -- record format as describe; only selected records have their interfaces
@@ -457,12 +481,12 @@ checkProbeRegistrations context units = do
 
 -- The caller rechecks registrations after consuming the response and any
 -- additional raw-input snapshots, immediately before returning the evidence.
-probeInstalledUnits :: InstalledContext -> InstalledUnit -> [InstalledUnit] -> IO Value
-probeInstalledUnits context requested = probeInstalledInventory context [registeredId requested]
+probeInstalledUnits :: Admission -> InstalledContext -> InstalledUnit -> [InstalledUnit] -> IO Value
+probeInstalledUnits admission context requested = probeInstalledInventory admission context [registeredId requested]
 
-probeInstalledInventory :: InstalledContext -> [String] -> [InstalledUnit] -> IO Value
-probeInstalledInventory _ [] _ = fail "installed probe requires a requested unit"
-probeInstalledInventory context requested@(requestedUnit : _) units = do
+probeInstalledInventory :: Admission -> InstalledContext -> [String] -> [InstalledUnit] -> IO Value
+probeInstalledInventory _ _ [] _ = fail "installed probe requires a requested unit"
+probeInstalledInventory admission context requested@(requestedUnit : _) units = do
   let entries = [(registeredId unit, name, path) | unit <- units,
                    (name, path) <- installedInterfaces unit]
       request = object ["units" .= map registeredId units,
@@ -471,14 +495,15 @@ probeInstalledInventory context requested@(requestedUnit : _) units = do
       arguments = ["--libdir", installedLibdir context, "--unit", requestedUnit,
                    "--way", interfaceWayName (installedInterfaceWay context), "--probe-inventory"] ++
         concatMap (\db -> ["--package-db", db]) (helperDatabases context)
-  (status, output, diagnostic) <- boundedProcessInput (installedHelper context) arguments
-    (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode request))))
-  response <- either (fail . ("invalid interface probe: " ++)) pure
-    (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+  (status, output, diagnostic) <- withAdmission admission $ boundedAdmittedInterfaceProcessInput
+    (installedHelper context) arguments (BL.toStrict (encode request))
+  response <- either (fail . ("invalid interface probe: " ++)) pure (eitherDecodeStrict' output)
   unless (status == ExitSuccess && valueAt response "schema" == Just (1 :: Int) &&
           valueAt response "way" == Just (interfaceWayName (installedInterfaceWay context)) &&
           valueAt response "status" == Just ("probed" :: String))
-    (fail ("interface probe unavailable: " ++ take 2000 output ++ take 2000 diagnostic))
+    (fail ("interface probe unavailable: " ++
+      Text.unpack (Text.decodeUtf8With lenientDecode (BS.take 2000 output)) ++
+      Text.unpack (Text.decodeUtf8With lenientDecode (BS.take 2000 diagnostic))))
   rows <- required response "interfaces" :: IO [Value]
   unless (length rows == length entries) (fail "incomplete interface probe inventory")
   forM_ (zip entries rows) $ \((identifier, name, path), row) -> do
@@ -498,12 +523,16 @@ probeInstalledInventory context requested@(requestedUnit : _) units = do
 -- returned separately from corrupt or inconsistent evidence, which fails in IO.
 -- @THC_INSTALLED_CORE_JOBS@ bounds helper concurrency (default 4, range 1–64).
 acquireInstalled :: InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
-acquireInstalled context unit = do
+acquireInstalled = acquireInstalledWithAdmission localAdmission
+
+-- | Admit each ready module helper against the active native-build budget.
+acquireInstalledWithAdmission :: Admission -> InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
+acquireInstalledWithAdmission admission context unit = do
   selected <- lookupEnv "THC_INSTALLED_CORE_JOBS"
   jobs <- case selected of
     Nothing -> pure 4
     Just value -> maybe (fail "THC_INSTALLED_CORE_JOBS must be an integer from 1 to 64") pure (readMaybe value)
-  acquireInstalledWithJobs jobs context unit
+  acquireInstalledWithJobsAndAdmission admission jobs context unit
 
 type LoadedInterface = Either MissingCore (String, String, BS.ByteString)
 type InterfaceWorker = (ThreadId, MVar ())
@@ -513,7 +542,11 @@ type InterfaceWorker = (ThreadId, MVar ())
 -- and first-failure reporting retain registration order even when work finishes
 -- out of order. Each helper owns its GHC session and is reaped before return.
 acquireInstalledWithJobs :: Int -> InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
-acquireInstalledWithJobs jobs context unit = do
+acquireInstalledWithJobs = acquireInstalledWithJobsAndAdmission localAdmission
+
+-- | The local worker count bounds the queue; admission owns physical tokens.
+acquireInstalledWithJobsAndAdmission :: Admission -> Int -> InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
+acquireInstalledWithJobsAndAdmission admission jobs context unit = do
   unless (jobs >= 1 && jobs <= 64) (fail "THC_INSTALLED_CORE_JOBS must be an integer from 1 to 64")
   mask $ \restore -> do
     pending <- forM (installedInterfaces unit) $ \item -> (,) item <$> newEmptyMVar
@@ -539,13 +572,10 @@ acquireInstalledWithJobs jobs context unit = do
           thread <- forkIOWithUnmask $ \unmask -> work unmask `finally` putMVar done ()
           modifyIORef' active ((thread, done) :)
         stop = do
-          workers <- readIORef active
-          forM_ workers $ \(thread, result) -> do
-            killThread thread
-            -- The process bracket terminates and reaps its child before
-            -- the worker publishes cancellation. Do not leave an
-            -- exporting helper alive after failure, timeout or caller unwind.
-            void (readMVar result)
+          -- Each worker drains its helper tree/waiter before completion.
+          -- Repeated cancellation must not abandon later workers.
+          pendingCancellation <- drainWorkers =<< readIORef active
+          mapM_ throwIO pendingCancellation
         go modules [] = finish modules
         go modules (result:rest) = do
           loaded <- readMVar result
@@ -569,7 +599,8 @@ acquireInstalledWithJobs jobs context unit = do
         _ -> fail "installed interfaces disagree on their original Core owner"
       pure (Right (InstalledCore owner [(name, bytes) | (_, name, bytes) <- reverse modules]))
     load item@(name, path) = do
-      (status, output, diagnostic) <- boundedInterfaceProcess (installedHelper context) (helperCommand context unit item)
+      (status, output, diagnostic) <- withAdmission admission $
+        boundedAdmittedInterfaceProcessInput (installedHelper context) (helperCommand context unit item) BS.empty
       case status of
         ExitSuccess -> do
           (_, core) <- either (fail . ("invalid thc-interface CBD: " ++)) pure (readModuleMetadata output)
@@ -623,41 +654,57 @@ boundedInterfaceProcessIn directory executable arguments =
 boundedInterfaceProcessInput :: FilePath -> [String] -> BS.ByteString -> IO (ExitCode, BS.ByteString, BS.ByteString)
 boundedInterfaceProcessInput = boundedInterfaceProcessInputAt Nothing
 
+-- Admitted helpers have an independent parent-side cleanup owner. Serial
+-- proxy descendants keep their enclosing Cabal group; a private nested group
+-- could escape when that enclosing producer is stopped.
+boundedAdmittedInterfaceProcessInput :: FilePath -> [String] -> BS.ByteString -> IO (ExitCode, BS.ByteString, BS.ByteString)
+boundedAdmittedInterfaceProcessInput = boundedInterfaceProcessInputWithOwnership True Nothing
+
 boundedInterfaceProcessInputAt :: Maybe FilePath -> FilePath -> [String] -> BS.ByteString -> IO (ExitCode, BS.ByteString, BS.ByteString)
-boundedInterfaceProcessInputAt directory executable arguments request = do
+boundedInterfaceProcessInputAt = boundedInterfaceProcessInputWithOwnership False
+
+boundedInterfaceProcessInputWithOwnership :: Bool -> Maybe FilePath -> FilePath -> [String] -> BS.ByteString -> IO (ExitCode, BS.ByteString, BS.ByteString)
+boundedInterfaceProcessInputWithOwnership ownsTree directory executable arguments request = do
   inherited <- getEnvironment
   let clean = filter (\(key, _) -> key `notElem` ["GHC_PACKAGE_PATH", "GHC_ENVIRONMENT"]) inherited
       commandLine = (proc executable arguments)
-        {cwd = directory, env = Just clean, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe}
-      execute = withCreateProcess commandLine $ \input output diagnostic child ->
-        case (input, output, diagnostic) of
-          (Just stdinPipe, Just stdoutPipe, Just stderrPipe) -> do
-            hSetBinaryMode stdinPipe True
-            hSetBinaryMode stdoutPipe True
-            hSetBinaryMode stderrPipe True
-            let startWorker :: IO a -> IO (ThreadId, MVar (Either SomeException a))
-                startWorker action = mask_ $ do
-                  result <- newEmptyMVar
-                  thread <- forkIOWithUnmask $ \unmask ->
-                    try (unmask action) >>= putMVar result
-                  pure (thread, result)
-                stopWorker (thread, result) = killThread thread >> void (readMVar result)
-                await result = readMVar result >>= either throwIO pure
-            bracket (startWorker (BS.hGetContents stdoutPipe)) stopWorker $ \(_, outputResult) ->
-              bracket (startWorker (BS.hGetContents stderrPipe)) stopWorker $ \(_, diagnosticResult) ->
-                bracket (startWorker (BS.hPut stdinPipe request `finally` hClose stdinPipe)) stopWorker $ \(_, inputResult) ->
-                  (do
-                    await inputResult
-                    out <- await outputResult
-                    err <- await diagnosticResult
-                    status <- waitForProcess child
-                    either (fail . show) (const (pure ())) (Text.decodeUtf8' err)
-                    pure (status, out, err))
-                  -- Windows pipe IO can defer a worker's asynchronous exception.
-                  -- Terminate the child before joining blocked readers/writers;
-                  -- withCreateProcess then closes the handles and reaps it.
-                  `onException` terminateProcess child
-          _ -> fail "installed-Core helper pipes were unavailable"
+        {cwd = directory, env = Just clean, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe,
+         create_group = ownsTree, use_process_jobs = ownsTree, delegate_ctlc = False}
+      execute = mask $ \restore -> withCreateProcess commandLine $ \input output diagnostic child -> do
+        workers <- newIORef []
+        let startWorker :: IO a -> IO (MVar (Either SomeException a))
+            startWorker action = mask_ $ do
+              result <- newEmptyMVar
+              done <- newEmptyMVar
+              thread <- forkIOWithUnmask $ \unmask ->
+                (try (unmask action) >>= putMVar result) `finally` putMVar done ()
+              modifyIORef' workers ((thread, done) :)
+              pure result
+            stopWorkers = do
+              pending <- drainWorkers =<< readIORef workers
+              mapM_ throwIO pending
+            await result = readMVar result >>= either throwIO pure
+            run = case (input, output, diagnostic) of
+              (Just stdinPipe, Just stdoutPipe, Just stderrPipe) -> do
+                hSetBinaryMode stdinPipe True
+                hSetBinaryMode stdoutPipe True
+                hSetBinaryMode stderrPipe True
+                outputResult <- startWorker (BS.hGetContents stdoutPipe)
+                diagnosticResult <- startWorker (BS.hGetContents stderrPipe)
+                inputResult <- startWorker (BS.hPut stdinPipe request `finally` hClose stdinPipe)
+                restore $ do
+                  await inputResult
+                  out <- await outputResult
+                  err <- await diagnosticResult
+                  status <- waitOwnedProcess child
+                  either (fail . show) (const (pure ())) (Text.decodeUtf8' err)
+                  pure (status, out, err)
+              _ -> fail "installed-Core helper pipes were unavailable"
+        -- Stop before joining any pipe worker (Windows cancellation may await
+        -- EOF), including setup and worker acquisition failure. Only admitted
+        -- helpers own a private group/job; serial proxy helpers inherit theirs.
+        let stopChild = if ownsTree then stopProcessTree child else terminateProcess child
+        (run `onException` stopChild) `finally` stopWorkers
   result <- timeout (180 * 1000000) execute
   maybe (fail ("installed-Core subprocess timed out: " ++ executable)) pure result
 

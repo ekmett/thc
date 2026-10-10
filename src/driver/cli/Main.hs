@@ -30,6 +30,7 @@ import System.Process (rawSystem, readProcessWithExitCode)
 import Text.Read (readMaybe)
 import THC.Driver.Cabal
 import THC.Driver.GhcProxy (runGhcProxy)
+import THC.Driver.Admission (observeBuildAdmission)
 import THC.Driver.Json (renderJson)
 import THC.Driver.Project (runProject, acquireProject, buildTargetsProject, exportInstalledUnit)
 import THC.Driver.Installed (installedCompilerIdentity, installedContext)
@@ -44,7 +45,7 @@ main = topHandler $ do
     ["--bash-completion-script"] -> putStr bashCompletionScript
     "--bash-completion" : index : words' -> bashCompletion index words'
     ["--bash-completion"] -> pure ()
-    "ghc-proxy" : rest -> runGhcProxy rest
+    "ghc-proxy" : rest -> observeBuildAdmission rest >> runGhcProxy rest
     ["--help"] -> putStr usage
     ["plan-package", "--help"] -> putStr usage
     "plan-package" : rest -> case getOpt Permute options rest of

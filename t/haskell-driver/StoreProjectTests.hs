@@ -33,6 +33,7 @@ import qualified System.Process as Process
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
+import THC.Driver.Admission (effectiveBuildSemaphore)
 import THC.Driver.GhcProxy (ghcProxyCommand, directPlugin)
 import THC.Driver.PackageNative (nativeSignatures, finishPackageNative)
 import THC.Driver.Installed (boundedInterfaceProcessIn)
@@ -384,6 +385,21 @@ staticExportsTest env = TestLabel "ordinary replay retains mixed static callback
 proxyOptionsTest :: Env -> Test
 proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay provenance" $ TestCase $
   withFixtureNamed env "t/fixtures/run-store-project" "proxy" $ \project -> do
+    forM_ [
+      (["--make", "-O2", "-jsem cabal-budget", "-o", "program"], Just "cabal-budget"),
+      (["-jsem", "first", "-j2"], Nothing),
+      (["-jsem", "first", "-j", "-jsem=last"], Just "last"),
+      (["-jsem", "  separate name  "], Just "  separate name  "),
+      (["-jsem  attached name  "], Just "attached name"),
+      (["-jsem= name"], Just " name"),
+      (["-o", "-jsem unrelated-output"], Nothing),
+      (["-o", "--make", "-jsem unrelated-output"], Nothing),
+      (["-o", "-jsem unrelated-output", "-O", "-jsem actual"], Just "actual"),
+      (["-jsem actual", "-unknown", "-j2"], Nothing),
+      (["+RTS", "-jsem unrelated-rts", "-RTS"], Nothing),
+      (["--show-iface", "-jsem unrelated-interface"], Nothing)
+      ] $ \(supplied, expected) -> assertEqual
+        ("effective build admission: " ++ show supplied) expected (effectiveBuildSemaphore supplied)
     let compiler = project </> "compiler.sh"
         wrapper = project </> "ghc-proxy.sh"
         arguments = project </> "compiler-arguments.txt"
@@ -403,7 +419,7 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
       permissions <- getPermissions path
       setPermissions path permissions { Directory.executable = True }
     original <- getEnvironment
-    let coreVariables = ["THC_PROXY_CORE_LIBDIR", "THC_PROXY_CORE_DATABASES", "THC_PROXY_CORE_INTERFACES", "THC_PROXY_GHC_PKG"]
+    let coreVariables = ["THC_PROXY_BUILD_ADMISSION", "THC_PROXY_CORE_LIBDIR", "THC_PROXY_CORE_DATABASES", "THC_PROXY_CORE_INTERFACES", "THC_PROXY_GHC_PKG"]
         environment = settings ++ filter ((`notElem` (coreVariables ++ map fst settings)) . fst) original
         ordinary = [ (True, ["--make", "-this-unit-id", "sample", "+RTS", "-A8m", "-RTS"])
                 , (False, ["--numeric-version", "+RTS", "-A8m", "-RTS", "--",
@@ -547,6 +563,9 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
                        (objects plan "install-plan")
         bundle manifest identifier = field (one
           ((== identifier) . string . (`field` "id")) (objects manifest "units")) "bundle"
+    -- Exercise the actual shared Cabal budget with one physical slot. These
+    -- settings belong to the copied product project, not test compilation.
+    appendFile (project </> "cabal.project") "\njobs: 1\nsemaphore: True\n"
     copyTree (project </> "dep-data") source
     removePathForcibly (project </> "dep-data")
     sourceDist env source project

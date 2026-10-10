@@ -16,13 +16,15 @@ module THC.Driver.Process
   , waitOwnedProcess
   , stopProcessTree
   , cancelCapturedProcess
+  , drainWorkers
   ) where
 
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
+import Control.Concurrent (ThreadId, killThread)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
 #ifndef mingw32_HOST_OS
 import Control.Concurrent (threadDelay)
 #endif
-import Control.Exception (mask, onException)
+import Control.Exception (SomeAsyncException, SomeException, fromException, mask, mask_, onException, throwIO, try)
 #ifndef mingw32_HOST_OS
 import Control.Exception (uninterruptibleMask_)
 #endif
@@ -35,6 +37,23 @@ import System.Timeout (timeout)
 #endif
 import qualified System.Process as Process
 import System.Process.Internals (withForkWait)
+
+-- | Stop and join registered workers before releasing their owned resources.
+-- Repeated asynchronous cancellation is remembered and retried while joining;
+-- callers release resources before propagating it. The waits remain
+-- interruptible: this does not introduce an uninterruptible process reap.
+-- Only idempotent thread cancellation/repeatable completion reads are retried.
+drainWorkers :: [(ThreadId, MVar ())] -> IO (Maybe SomeException)
+drainWorkers = mask_ . go Nothing
+  where
+    go pending [] = pure pending
+    go pending workers@((thread, done) : rest) = do
+      result <- try (killThread thread >> readMVar done)
+      case result of
+        Right () -> go pending rest
+        Left problem -> case fromException problem :: Maybe SomeAsyncException of
+          Just _ -> go (case pending of Nothing -> Just problem; _ -> pending) workers
+          Nothing -> throwIO problem
 
 -- | Run a producer with caller-owned streams in a private process group/job.
 -- Arguments, environment, working directory and exit status are unchanged.
@@ -73,15 +92,28 @@ waitOwnedProcess child = mask $ \restore -> do
 
 -- | Stop and reap a still-owned group/job. A closed handle is safe to pass:
 -- on POSIX its former PID is never signalled after it can have been reused.
+-- Repeated cancellation is deferred until this idempotent owned-tree cleanup
+-- completes; reap stays interruptible and cleanup errors still propagate.
 stopProcessTree :: Process.ProcessHandle -> IO ()
-stopProcessTree child = do
+stopProcessTree child = mask_ $ go Nothing
+  where
+    go pending = do
+      result <- try stop
+      case result of
+        Right () -> mapM_ throwIO pending
+        Left problem -> case fromException problem :: Maybe SomeAsyncException of
+          Just _ -> go (case pending of Nothing -> Just problem; _ -> pending)
+          Nothing -> throwIO problem
+    -- Repeating this owned-handle operation is safe: a ClosedHandle is never
+    -- signalled, and waiting its already published exit is repeatable.
+    stop = do
 #ifdef mingw32_HOST_OS
-  Process.terminateProcess child
+      Process.terminateProcess child
 #else
-  Process.getPid child >>= mapM_ (\pid -> signalProcessGroup sigKILL pid
-    `catchIOError` \problem -> if isDoesNotExistError problem then pure () else ioError problem)
+      Process.getPid child >>= mapM_ (\pid -> signalProcessGroup sigKILL pid
+        `catchIOError` \problem -> if isDoesNotExistError problem then pure () else ioError problem)
 #endif
-  void (Process.waitForProcess child)
+      void (Process.waitForProcess child)
 
 -- | Cancel a pipe-captured owner while its EOF readers are still alive.
 -- On POSIX, give a managed owner two seconds to clean up private producer

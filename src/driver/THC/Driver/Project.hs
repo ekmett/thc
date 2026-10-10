@@ -62,6 +62,7 @@ import THC.Driver.Lock (withLock)
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess,
                        readCreateProcessWithExitCode)
 import THC.Driver.Process (runProducer)
+import THC.Driver.Admission (Admission, localAdmission, waitForNative, withBuildAdmission)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
@@ -506,7 +507,7 @@ selectedPackageTool ghc requested = do
       pure (reverse (dropWhile (`elem` ['\r','\n']) (reverse out)))
 
 -- Prepare only the genuine helper and selected interface view. Installed Core
--- acquisition stays after the final concrete native plan has been resolved.
+-- acquisition may overlap native work only for this already-installed closure.
 prepareProjectInterfaceView :: ExportContext -> Maybe Value -> String -> Maybe FilePath -> String ->
                                Map.Map String Unit -> [Unit] -> IO (InstalledContext, InstalledContext, [Value])
 prepareProjectInterfaceView context producer installedPolicy ghcSource registeredLibrary byId installedUnits = do
@@ -536,6 +537,76 @@ prepareProjectInterfaceView context producer installedPolicy ghcSource registere
         (contextCache context) source originalContext originalRegistrations
   pure (originalContext, helperContext, support)
 
+-- The selected already-installed closure has no dependency on native-created
+-- products. Discover/read/lock outside admission; only ready helper processes
+-- consume the actual Cabal budget. Final plan reconciliation happens at caller.
+acquireProjectInstalled :: Admission -> ExportContext -> FilePath -> String -> Map.Map String Unit -> [Unit] ->
+                           (InstalledContext, InstalledContext, [Value]) ->
+                           IO (Map.Map String (InstalledUnit, InstalledSource), InstalledContext, [Value], [InstalledUnit], [(FilePath, BS.ByteString)])
+acquireProjectInstalled admission context layout installedPolicy byId installedUnits
+                        (originalContext, helperContext, support) = do
+  capturedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
+  let supportFor identifier = case [record | record <- support, jsonField record "id" == Just identifier] of
+        [record] -> Just record
+        _ -> Nothing
+  originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
+  validateReexports originalRegistrations
+  forM_ originalRegistrations $ \registrationUnit -> do
+    planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
+    require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
+      ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+  registrations <- forM installedUnits $ \unit ->
+    discoverInstalled (if supportFor (unitId unit) == Nothing then helperContext else originalContext) (unitId unit)
+  validateReexports registrations
+  originalInputs <- installedInputSnapshot originalContext originalRegistrations
+  helperInputs <- installedInputSnapshot helperContext registrations
+  let inputSnapshot = sort (nub (originalInputs ++ helperInputs))
+  retained <- case capturedPath of
+    Nothing -> pure Nothing
+    Just path -> do
+      supplied <- readJson path
+      case jsonField supplied "installed" :: Maybe Value of
+        Nothing -> pure Nothing
+        Just _ -> do
+          when (installedPolicy == "pinned") $ do
+            request <- field supplied "request"
+            require (jsonField request "coreInterfaceView" == Just (installedViewIdentity helperContext))
+              "captured installed Core uses a different pinned interface view"
+          Just <$> readCapturedInstalledBundles (contextVerifyArtifacts context) (installedCompiler originalContext) originalRegistrations path
+  (bundles, demandInputs) <- case retained of
+    Just selectedInstalled -> pure ([(identifier, (unit, InstalledCBD artifact)) |
+      (identifier, (unit, artifact)) <- Map.toList selectedInstalled], [])
+    Nothing -> do
+      (demandInputs, demandUnits) <- if installedPolicy == "demand"
+        then prepareInstalledDemandWithAdmission admission helperContext [r | r <- registrations, supportFor (registeredId r) == Nothing] else pure ([], Map.empty)
+      let acquireSource registrationUnit = case Map.lookup (registeredId registrationUnit) demandUnits of
+              Just record -> do
+                owner <- field record "id"
+                pure (InstalledInterfaces owner record)
+              Nothing -> do
+                result <- prepareInstalledBundleWithAdmission admission (contextVerifyArtifacts context) (contextNativeTools context)
+                  (contextCache context) (contextNative context </> "cache/thc/staging") layout helperContext registrationUnit
+                either (\missing -> fail
+                  ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
+                   " (" ++ missingInterface missing ++ "). Build the libraries with -fwrite-if-simplified-core or select --installed-core pinned.")) (pure . InstalledCBD) result
+      bundles <- forM registrations $ \registrationUnit -> do
+        planned <- maybe (fail "installed registration not in Cabal plan") pure
+          (Map.lookup (registeredId registrationUnit) byId)
+        require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
+          ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+        source <- case supportFor (registeredId registrationUnit) of
+          Just record -> pure (InstalledSupport (registeredId registrationUnit) record)
+          Nothing -> acquireSource registrationUnit
+        pure (registeredId registrationUnit, (registrationUnit, source))
+      pure (bundles, demandInputs)
+  let owners = map (installedSourceOwner . snd . snd) bundles
+      registered = map fst bundles
+  require (length owners == length (nub owners)) "multiple installed registrations claim one Core owner"
+  require (all (\(identifier, (_, item)) -> installedSourceOwner item == identifier ||
+                installedSourceOwner item `notElem` registered && Map.notMember (installedSourceOwner item) byId) bundles)
+    "installed Core owner collides with another Cabal unit"
+  pure (Map.fromList bundles, helperContext, demandInputs, originalRegistrations, inputSnapshot)
+
 withOriginalStoreCapture :: ExportContext -> InstalledContext -> Map.Map String Unit -> [Unit] ->
                             FilePath -> [(String, String)] ->
                             (Maybe OriginalStoreCapture -> [(String, String)] -> IO a) -> IO a
@@ -551,7 +622,7 @@ withOriginalStoreCapture context helper planned selected project environment bod
   let missing = [(unit, buildKey, exportKey) | (unit, buildKey, exportKey, _, Nothing) <- located]
       warm = Map.fromList [(unitId unit, replayInterfacePath path) |
         (unit, _, _, path, Just bundle) <- located, not (null (bundleModules bundle))]
-      scrub = filter ((`notElem` ["THC_PROXY_CORE_LIBDIR", "THC_PROXY_CORE_DATABASES", "THC_PROXY_ORIGINAL_BUILD"]) . fst)
+      scrub = filter ((`notElem` ["THC_PROXY_CORE_LIBDIR", "THC_PROXY_CORE_DATABASES", "THC_PROXY_ORIGINAL_BUILD", "THC_PROXY_BUILD_ADMISSION"]) . fst)
   if null missing then body Nothing (scrub environment) else do
     let root = contextNative context </> "cache/thc/staging"
     createDirectoryIfMissing True root
@@ -629,7 +700,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
                    ("THC_PROXY_PLUGIN_LIBRARY", pluginLibrary),
                    ("THC_PROXY_NO_LINK_UNIT", ""),
                    ("THC_PROXY_NATIVE_PIECES", native </> "cache/thc/native-pieces-v1")]
-      selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
+      selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_BUILD_ADMISSION" : map fst overrides)) inherited
       cabal = maybe "cabal" id (lookup "CABAL" selectionEnvironment)
   selectedUnits <- case action of
     BuildTargets _ targets -> resolveBuildTargets working targets configuration selectionEnvironment native
@@ -680,8 +751,14 @@ runBuiltProject action project working thcRoot runtime output native target proj
       captureContext = selectionContext {contextCoreView = if installedPolicy == "pinned" then Just selectedView else Nothing}
       selectedHelper = if installedPolicy == "pinned" then selectedView else let (helper, _, _) = preparedInterfaces in helper
   withOriginalStoreCapture captureContext selectedHelper selectionById selectionOrdered project initialEnvironment $ \originalCapture environment -> do
-    runCommandWithEnv True cabal (["build"] ++ targetComponents ++ ["--enable-build-info"] ++ configuration)
-      project (Just environment)
+    (initialInstalled, initialHelper, initialInputs, originalRegistrations, inputSnapshot) <-
+      withBuildAdmission (native </> "cache/thc/staging")
+        (\handoff -> runCommandWithEnv True cabal
+          (["build"] ++ targetComponents ++ ["--enable-build-info"] ++ configuration) project
+          (Just (("THC_PROXY_BUILD_ADMISSION", handoff) :
+            filter ((/= "THC_PROXY_BUILD_ADMISSION") . fst) environment)))
+        (\admission -> acquireProjectInstalled admission selectionContext layout installedPolicy
+          selectionById selectionInstalled preparedInterfaces)
     plan <- readJson (native </> "cache/plan.json")
     cabalVersion <- field plan "cabal-version"
     compilerId <- field plan "compiler-id"
@@ -740,73 +817,31 @@ runBuiltProject action project working thcRoot runtime output native target proj
     let globals = [unit | unit <- ordered, not (unitLocal unit),
                          jsonField (unitValue unit) "type" == Just ("configured" :: String)]
     capturedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
-    (installed, acquiredContext, interfaceInputs) <- do
-      let installedUnits = [unit | unit <- ordered,
-            jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
-          installedScope = sort [(unitId unit, sort (unitDepends unit)) | unit <- installedUnits]
-          initialScope = sort [(unitId unit, sort (unitDepends unit)) | unit <- selectionInstalled]
-          samePreparation = installedScope == initialScope && driverHash == selectionDriverHash &&
-            nativeTools == selectionNativeTools && contextCompiler context == contextCompiler selectionContext &&
-            contextAbi context == contextAbi selectionContext && contextPlatform context == contextPlatform selectionContext
-      (originalContext, helperContext, support) <- if samePreparation then pure preparedInterfaces else
-        prepareProjectInterfaceView context producer installedPolicy ghcSource registeredLibrary byId installedUnits
-      let supportFor identifier = case [record | record <- support, jsonField record "id" == Just identifier] of
-            [record] -> Just record
-            _ -> Nothing
-      originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
-      validateReexports originalRegistrations
-      forM_ originalRegistrations $ \registrationUnit -> do
-        planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
-        require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
-          ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-      retained <- case capturedPath of
-        Nothing -> pure Nothing
-        Just path -> do
-          supplied <- readJson path
-          case jsonField supplied "installed" :: Maybe Value of
-            Nothing -> pure Nothing
-            Just _ -> do
-              when (installedPolicy == "pinned") $ do
-                request <- field supplied "request"
-                require (jsonField request "coreInterfaceView" == Just (installedViewIdentity helperContext))
-                  "captured installed Core uses a different pinned interface view"
-              Just <$> readCapturedInstalledBundles verifyArtifacts (installedCompiler originalContext) originalRegistrations path
-      (bundles, demandInputs) <- case retained of
-        Just selectedInstalled -> pure ([(identifier, (unit, InstalledCBD artifact)) |
-          (identifier, (unit, artifact)) <- Map.toList selectedInstalled], [])
-        Nothing -> do
-          registrations <- forM installedUnits $ \unit ->
-            discoverInstalled (if supportFor (unitId unit) == Nothing then helperContext else originalContext) (unitId unit)
-          validateReexports registrations
-          (demandInputs, demandUnits) <- if installedPolicy == "demand"
-            then prepareInstalledDemand helperContext [r | r <- registrations, supportFor (registeredId r) == Nothing] else pure ([], Map.empty)
-          let acquireSource registrationUnit = case Map.lookup (registeredId registrationUnit) demandUnits of
-                  Just record -> do
-                    owner <- field record "id"
-                    pure (InstalledInterfaces owner record)
-                  Nothing -> do
-                    result <- prepareInstalledBundleWithVerification verifyArtifacts (contextNativeTools context)
-                      cacheRoot (native </> "cache/thc/staging") layout helperContext registrationUnit
-                    either (\missing -> fail
-                      ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
-                       " (" ++ missingInterface missing ++ "). Build the libraries with -fwrite-if-simplified-core or select --installed-core pinned.")) (pure . InstalledCBD) result
-          bundles <- forM registrations $ \registrationUnit -> do
-            planned <- maybe (fail "installed registration not in Cabal plan") pure
-              (Map.lookup (registeredId registrationUnit) byId)
-            require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
-              ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-            source <- case supportFor (registeredId registrationUnit) of
-              Just record -> pure (InstalledSupport (registeredId registrationUnit) record)
-              Nothing -> acquireSource registrationUnit
-            pure (registeredId registrationUnit, (registrationUnit, source))
-          pure (bundles, demandInputs)
-      let owners = map (installedSourceOwner . snd . snd) bundles
-          registered = map fst bundles
-      require (length owners == length (nub owners)) "multiple installed registrations claim one Core owner"
-      require (all (\(identifier, (_, item)) -> installedSourceOwner item == identifier ||
-                    installedSourceOwner item `notElem` registered && Map.notMember (installedSourceOwner item) byId) bundles)
-        "installed Core owner collides with another Cabal unit"
-      pure (Map.fromList bundles, helperContext, demandInputs)
+    let installedUnits = [unit | unit <- ordered,
+          jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
+        installedScope = sort [(unitId unit, sort (unitDepends unit)) | unit <- installedUnits]
+        initialScope = sort [(unitId unit, sort (unitDepends unit)) | unit <- selectionInstalled]
+    let samePreparation = installedScope == initialScope && driverHash == selectionDriverHash &&
+          nativeTools == selectionNativeTools && contextCompiler context == contextCompiler selectionContext &&
+          contextAbi context == contextAbi selectionContext && contextPlatform context == contextPlatform selectionContext
+    finalPrepared@(originalContext, finalHelper, _) <- prepareProjectInterfaceView context producer
+      installedPolicy ghcSource registeredLibrary byId installedUnits
+    currentRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
+    currentInputSnapshot <- forM inputSnapshot $ \(path, _) -> (,) path <$> digestFile path
+    (installed, acquiredContext, interfaceInputs) <-
+      if samePreparation && currentInputSnapshot == [(path, digestHex digest) | (path, digest) <- inputSnapshot] && preparedInterfaces == finalPrepared && currentRegistrations == originalRegistrations then do
+        forM_ (Map.elems initialInstalled) $ \(registrationUnit, _) -> do
+          let observedContext = if registrationUnit `elem` originalRegistrations
+                then originalContext else finalHelper
+          current <- discoverInstalled observedContext (registeredId registrationUnit)
+          require (current == registrationUnit) "selected installed interface view changed during native build"
+        pure (initialInstalled, initialHelper, initialInputs)
+      else do
+        -- A concrete post-build plan may legitimately differ (for example
+        -- Backpack instantiation). Do not use speculative results in it.
+        (completed, helper, inputs, _, _) <- acquireProjectInstalled localAdmission context layout
+          installedPolicy byId installedUnits finalPrepared
+        pure (completed, helper, inputs)
     let coreContext = context { contextCoreView = if installedPolicy == "pinned"
           then Just acquiredContext else Nothing }
     captured <- traverse (\_ -> prepareGlobalBundles coreContext originalCapture project targetComponents byId localComponents globals) capturedPath
@@ -1182,9 +1217,13 @@ prepareInstalledBundle cache staging recipe context registrationUnit = do
 
 prepareInstalledBundleWithVerification :: Bool -> Value -> FilePath -> FilePath -> FilePath -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
-prepareInstalledBundleWithVerification verify nativeTools cache staging recipe context registrationUnit = do
+prepareInstalledBundleWithVerification = prepareInstalledBundleWithAdmission localAdmission
+
+prepareInstalledBundleWithAdmission :: Admission -> Bool -> Value -> FilePath -> FilePath -> FilePath -> InstalledContext -> InstalledUnit ->
+                                      IO (Either MissingCore InstalledBundle)
+prepareInstalledBundleWithAdmission admission verify nativeTools cache staging recipe context registrationUnit = do
   let producer = object ["recipe" .= installedBundleRecipeIdentity, "nativeTools" .= nativeTools]
-  fullProbe <- prepareInstalledProbe context registrationUnit
+  fullProbe <- prepareInstalledProbeWithAdmission admission context registrationUnit
   -- Ordinary builds reuse the exact validated inventory while its helper and
   -- raw interfaces retain their file observations. Verification always probes
   -- the contents; source text and native artifacts are validated below either way.
@@ -1227,7 +1266,7 @@ prepareInstalledBundleWithVerification verify nativeTools cache staging recipe c
         index = cache </> "installed-probes/v1" </> shaHex (BL.toStrict (encode identity)) ++ ".json"
     pure (identity, before, index)
   case evidence of
-    Nothing -> acquireInstalledBundle verify cache staging recipe producer context registrationUnit (\_ _ _ -> pure ())
+    Nothing -> acquireInstalledBundle admission verify cache staging recipe producer context registrationUnit (\_ _ _ -> pure ())
     Just (identity, before@(_, probe), index) -> do
       hit <- optionalIO $ do
         envelope <- readJson index
@@ -1263,7 +1302,7 @@ prepareInstalledBundleWithVerification verify nativeTools cache staging recipe c
         pure (InstalledBundle owner bundle)
       case hit of
         Just bundle -> pure (Right bundle)
-        Nothing -> acquireInstalledBundle verify cache staging recipe producer context registrationUnit $ \bundle inputs modules -> do
+        Nothing -> acquireInstalledBundle admission verify cache staging recipe producer context registrationUnit $ \bundle inputs modules -> do
           _ <- optionalIO $ do
             sources <- installedSourceObservations modules
             validateSourceObservations sources
@@ -1375,14 +1414,17 @@ validateSourceObservations sources = forM_ sources $ \expected -> do
 
 -- Ordinary acquisition remains authoritative, including when the optional
 -- probe cannot establish complete evidence. GHC compiler binaries are not hashed.
-acquireInstalledBundle :: Bool -> FilePath -> FilePath -> FilePath -> Value -> InstalledContext -> InstalledUnit ->
+acquireInstalledBundle :: Admission -> Bool -> FilePath -> FilePath -> FilePath -> Value -> InstalledContext -> InstalledUnit ->
                           (InstalledBundle -> Value -> [(String, BS.ByteString)] -> IO ()) ->
                           IO (Either MissingCore InstalledBundle)
-acquireInstalledBundle verify cache staging recipe producer context registrationUnit remember = do
-  acquired <- acquireInstalled context registrationUnit
+acquireInstalledBundle admission verify cache staging recipe producer context registrationUnit remember = do
+  acquired <- acquireInstalledWithAdmission admission context registrationUnit
   case acquired of
     Left missing -> pure (Left missing)
     Right core -> do
+      -- No token is held while waiting. Native packaging has its existing
+      -- serial process owners; only interface helpers overlap this build.
+      waitForNative admission
       createDirectoryIfMissing True staging
       (temporary, handle) <- openTempFile staging "installed-native-"
       hClose handle
@@ -2170,7 +2212,7 @@ captureGlobalUnits context project target planned requested missing validateInpu
                      concat [[("THC_PROXY_CORE_LIBDIR", installedLibdir view),
                        ("THC_PROXY_CORE_DATABASES", Text.unpack (Text.decodeUtf8 (BL.toStrict (encode (helperDatabases view)))))]
                        | Just view <- [contextCoreView context]]
-        environment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_ORIGINAL_BUILD" : "THC_PROXY_CORE_DATABASES" : "THC_PROXY_CORE_LIBDIR" : map fst overrides)) inherited
+        environment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_BUILD_ADMISSION" : "THC_PROXY_ORIGINAL_BUILD" : "THC_PROXY_CORE_DATABASES" : "THC_PROXY_CORE_LIBDIR" : map fst overrides)) inherited
     runCommandWithEnv True "cabal" arguments project (Just environment)
     plan <- readJson (dist </> "cache/plan.json")
     isolatedCompiler <- field plan "compiler-id"

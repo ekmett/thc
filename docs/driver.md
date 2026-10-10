@@ -192,6 +192,18 @@ Results retain registration order and identical CBD bytes; failure or cancellati
 terminates and reaps outstanding helpers before returning. This conversion reads
 already compiled interfaces, so it needs no ordering between CBD output files.
 
+During a Cabal native build, ready installed-interface inventory and conversion
+helpers borrow one physical token from the actual Cabal semaphore. The compiler
+proxy publishes its effective `-jsem` name into a fresh invocation scope; the
+owner authenticates and retains that handle. Missing or ambiguous argument
+metadata keeps helpers gated until native success. This observer preserves the
+compiler arguments and may conservatively decline overlap. Cache discovery and
+dependency readiness happen before admission; synchronous helper descendants
+reuse the token, and cancellation drains the owned process tree before release.
+Native packaging waits for native success without holding a token. Final plan,
+registration, helper and interface bytes are rechecked before early results are
+used. External hard kills or crashed owners cannot promise token restoration.
+
 ## Installed producer roots
 
 `--thc-root` and automatic root discovery accept a fixed-prefix installation
