@@ -76,6 +76,9 @@ public final class ThreadInventoryCoreEvidence {
             // Fork action's genuine closure belongs to its fresh thread root.
             for (var argument : arguments) if (argument.getKind() == Instruction.Argument.Kind.CONSTANT &&
                 argument.asConstant() instanceof BytecodeRoot.ClosureTemplate closure) visit(closure.target, found, seen);
+            for (var argument : arguments) if (argument.getKind() == Instruction.Argument.Kind.CONSTANT &&
+                argument.asConstant() instanceof RootCallTarget constant && constant.getRootNode() instanceof GuestRoot)
+                visit(constant, found, seen);
             nodes.add(root);
             for (var argument : arguments) if (argument.getKind() == Instruction.Argument.Kind.NODE_PROFILE) {
                 var node = argument.asCachedNode(); if (node != null) nodes.add(node);

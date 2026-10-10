@@ -59,7 +59,7 @@ public final class BytecodeCaseRegion extends Node {
         }
     }
 
-    // The recovered caller must not PE-expand the original large selector again.
+    // The outlined caller must not PE-expand the original selector and side bodies.
     // These are the very same immutable constructor guards, in their original order.
     @TruffleBoundary(transferToInterpreterOnException = false)
     private int select(Object value) {
