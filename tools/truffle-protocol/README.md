@@ -137,9 +137,11 @@ the budget recovery forwarding and scheduler behavior below are separate.
 
 ## Terminal compilation targets
 
-The `terminal1` runtime overlay retires a physical target after permanent failure
+The `terminal2` runtime overlay retires a physical target after permanent failure
 or graph-budget overflow. Explicit compilation, OSR admission and direct queue
-submission reject retired targets. Queued work checks retirement before entering
+submission reject retired targets. Ordinary and forced splitting also reject
+retired sources, including a recheck under the split lock. Explicit language-owned
+cloning for a smaller recovery target remains available. Queued work checks retirement before entering
 the compiler. Recovery must publish a different target; neither partial-block
 fallback nor the old graph-budget hooks rearm the failed target. The API hooks
 remain link-compatible with existing producers.
