@@ -47,6 +47,13 @@ class ManagedMVarLoadingTest {
     private static Map<String, Object> changed(Map<String, Object> source, String key, Object value) {
         var result = new LinkedHashMap<>(source); result.put(key, value); return result;
     }
+    /** Declare the lazy RTS dependency without executing any MVar operation. */
+    private Map<String, Object> blockedMVarDependency() {
+        var proof = Map.<String, Object>of("kind", "data", "primReps", List.of(liftedBox), "evaluated", false);
+        return Map.of("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+            "type", "SomeException", "lifted", true, "arity", 0, "rep", proof,
+            "expr", variable(CoreBlockedExceptions.MVAR, proof));
+    }
     private final class Fixture {
         final Contract contract;
         final List<Map<String, Object>> parameters = new ArrayList<>();
@@ -79,7 +86,7 @@ class ManagedMVarLoadingTest {
             binding = new LinkedHashMap<>(Map.of("id", "root", "name", "root", "lifted", true,
                 "arity", parameters.size(), "rep", closure,
                 "expr", List.of("lam", parameters, application, Map.of("rep", closure, "resultRep", result))));
-            bindings = new ArrayList<>(List.of(binding));
+            bindings = new ArrayList<>(List.of(binding, blockedMVarDependency()));
             module = Map.of("bindings", bindings, "constructors", List.of(Map.of(
                 "id", "Carrier", "name", "Carrier", "arity", 0, "kind", "boxed",
                 "strictFields", List.of(), "fieldLifted", List.of(), "fieldTypes", List.of(), "fieldReps", List.of())));

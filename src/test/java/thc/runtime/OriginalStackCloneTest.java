@@ -133,11 +133,22 @@ public class OriginalStackCloneTest {
                     var runner = new Runner(); var first = runner.invoke(); runner.check(first); retained.add(first);
                     assertEquals(0L, ((Number) program.diagnostics().get("compiledEntries")).longValue());
                     for (int i = 0; i < 3; i++) runner.check(runner.invoke());
-                    var targets = activeTargets(entry); assertEquals(moved ? 1 : 2, targets.size());
+                    var targets = activeTargets(entry);
+                    var coreTargets = targets.stream().filter(target -> ((GuestRoot) target.getRootNode()).getCoreIdentity() != null).toList();
+                    var helpers = targets.stream().filter(target -> ((GuestRoot) target.getRootNode()).getCoreIdentity() == null).toList();
+                    assertEquals(moved ? 1 : 2, coreTargets.size());
+                    var expectedBindings = moved ? Set.of(consumerId) : Set.of(consumerId, binding(original()).get("id"));
+                    assertEquals(expectedBindings, coreTargets.stream().map(target -> ((GuestRoot) target.getRootNode()).getCoreIdentity().bindingId()).collect(java.util.stream.Collectors.toSet()));
+                    // Prepared internal boundaries are reachable code, not extra live Core frames.
+                    for (var target : helpers) {
+                        var helper = assertInstanceOf(FunctionRoot.class, target.getRootNode());
+                        assertEquals(FunctionRootRole.PASS_THROUGH, helper.getRole());
+                        assertTrue(helper.getStackCapture());
+                    }
                     for (var target : targets) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                     var installed = runner.invoke(); runner.check(installed); retained.add(installed);
-                    assertEquals(before + targets.size(), ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                    assertEquals(before + (moved ? 1 : 2), ((Number) program.diagnostics().get("compiledEntries")).longValue());
                     for (var target : targets) valid(target);
                     for (var snapshot : retained) rendered.add(snapshot.renderLines());
                     assertThrows(RuntimeFault.class, () -> runner.invoke(7L)); released(language);
