@@ -3472,8 +3472,6 @@ public final class BytecodeProgram implements ExecutableProgram {
         var b = e.builder;
         b.beginBlock();
         var fn = b.createLocal("captured application function", FrameSlotKind.Object);
-        var callerMask = b.createLocal("captured application caller mask", FrameSlotKind.Object);
-        var result = b.createLocal("captured application result", FrameSlotKind.Object);
         b.beginStaticStoreObject(fn); requireClosure(function).emit(e); b.endStaticStoreObject();
         var values = new ArrayList<BytecodeLocal>();
         if (layout != null && layout.getRequiresTyped()) {
@@ -3496,16 +3494,26 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }
         }
-        b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
-        if (layout == null || !layout.getRequiresTyped()) {
-            // The scalar application root owns saturation and saved suffixes.
-            // Emit one saved call instead of duplicating every possible logical
-            // prefix and its checkpoint in this bytecode activation.
-            if (tail) savedApply(e, fn, values, layout, evaluatedArguments, arguments.size(), true, false);
-            else checkpointedCall(e, fn, values, layout, evaluatedArguments, arguments.size(), callerMask);
+        boolean scalarCall = layout == null || !layout.getRequiresTyped();
+        if (scalarCall && tail) {
+            // Keep the mask query at the original post-operand point. Its value
+            // is discarded by the block before tail dispatch, which owns completion.
+            b.emitCurrentMask();
+            savedApply(e, fn, values, layout, evaluatedArguments, arguments.size(), true, false);
             b.endBlock();
             return;
         }
+        var callerMask = b.createLocal("captured application caller mask", FrameSlotKind.Object);
+        b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
+        if (scalarCall) {
+            // The scalar application root owns saturation and saved suffixes.
+            // Emit one saved call instead of duplicating every possible logical
+            // prefix and its checkpoint in this bytecode activation.
+            checkpointedCall(e, fn, values, layout, evaluatedArguments, arguments.size(), callerMask);
+            b.endBlock();
+            return;
+        }
+        var result = b.createLocal("captured application result", FrameSlotKind.Object);
         var complete = b.createLabel();
         b.beginIfThen();
         b.beginSavedCallArity(arguments.size(), true); b.emitStaticLoadObject(fn); b.endSavedCallArity();
