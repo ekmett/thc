@@ -1419,9 +1419,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.beginForceLocal(metrics, local, localExpression.local.cell, false);
                     b.emitStaticLoadObject(local); b.endForceLocal();
                 } else {
+                    b.beginBlock();
                     var result = b.createLocal("forced local result", FrameSlotKind.Object);
                     var suspended = b.createLocal("forced local suspension", FrameSlotKind.Object);
-                    b.beginBlock();
                     emitOwnerWaitRetry(e, () -> {
                         b.beginTryCatch();
                         b.beginStaticStoreObject(result);
@@ -1447,10 +1447,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             } else if (!resumable) {
                 b.beginForceValue(metrics, false); value.emit(e); b.endForceValue();
             } else {
+                b.beginBlock();
                 var operand = b.createLocal("saved force operand", FrameSlotKind.Object);
                 var result = b.createLocal("forced value result", FrameSlotKind.Object);
                 var suspended = b.createLocal("forced value suspension", FrameSlotKind.Object);
-                b.beginBlock();
                 // Evaluate the producer once, before any child ownership is claimed.
                 b.beginStaticStoreObject(operand); value.emit(e); b.endStaticStoreObject();
                 emitOwnerWaitRetry(e, () -> {
