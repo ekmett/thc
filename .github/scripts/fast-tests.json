@@ -1415,7 +1415,7 @@
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "src/test/java/thc/runtime/ThreadInventoryCoreEvidence.java": {
-      "junit": ["thc.runtime.HandoffTest", "thc.runtime.HintTraceTest", "thc.runtime.TupleCompletionTest", "thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.GhcBCOContinuationTest", "thc.runtime.ProcessSignalsTest", "thc.runtime.ScalarMemoryUtilitiesTest"], "python": []
+      "junit": ["thc.runtime.AstContinuationTest", "thc.runtime.CoreContinuationNativeTest", "thc.runtime.HandoffTest", "thc.runtime.HintTraceTest", "thc.runtime.TupleCompletionTest", "thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.GhcBCOContinuationTest", "thc.runtime.ProcessSignalsTest", "thc.runtime.ScalarMemoryUtilitiesTest"], "python": []
     },
     "src/main/java/thc/runtime/StableNames.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "src/main/java/thc/runtime/StableNameOp.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
