@@ -1060,11 +1060,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
           all ((== Just "ccall") . (`member` "convention")) abi &&
           all empty ["dataSymbols","finalizers","providers"]
     if not eligible then materializeStrict archived record native else do
-      root <- get record "root"
-      identity <- get record "sourceIdentity"
-      compiler <- get identity "compiler"
-      originalArguments <- get identity "arguments"
-      configured <- either fail pure (nativeCompilerArguments originalArguments)
+      identity <- get record "sourceIdentity" :: IO Value
       bitcodes <- mapM (`get` "bitcode") native
       inputs <- mapM (fmap sha . BS.readFile) bitcodes
       let component = sha (BL.toStrict (encode (unit,target,identity,inputs)))
@@ -1092,22 +1088,30 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
                 "target datalayout = " ++ show layout] ++ concat forwards
           writeFile forwarding forwardingSource
           _ <- command directory opt ["-passes=verify",forwarding,"-o",forwardBitcode]
+          forwardingHash <- sha <$> BS.readFile forwardBitcode
           compiled <- forM (zip [0::Int ..] abi) $ \(index,signature) -> do
             symbol <- get signature "symbol"
-            safety <- get signature "safety"
-            arguments <- get signature "arguments"
-            returned <- get signature "result"
-            wrappers <- either fail pure (nativeWrapperSource
-              [((provider symbol,"ccall",safety,arguments,returned),entry index,Nothing)])
+            fragment <- maybe (fail "verified native provider cannot forward its call seed") pure
+              (nativeProviderForwarding target (provider symbol) (entry index) forwardingSource)
             let seedDirectory = demand </> "seeds" </> show index
+                path = seedDirectory </> "target.bc"
+                seedInput = seedDirectory </> "forwarding.ll"
+                seedIR = seedDirectory </> "verified.ll"
+                seedForwarding = unlines ["target triple = " ++ show target,
+                  "target datalayout = " ++ show layout] ++ fragment
             createDirectoryIfMissing True seedDirectory
-            (path,observed,metadata) <- compileC compiler root configured seedDirectory
-              (Just ("#include <stdint.h>\n" ++ wrappers))
-            check (observed == target) "package native call seed target differs"
-            let seedIR = seedDirectory </> "verified.ll"
+            -- Cabal may have removed its temporary source tree after capture.
+            -- Forward the retained provider's actual ABI rather than replaying
+            -- C compilation against expired headers and package databases.
+            writeFile seedInput seedForwarding
+            _ <- command directory opt ["-passes=verify",seedInput,"-o",path]
             _ <- command directory opt ["-S","-passes=verify",path,"-o",seedIR]
             seedSource <- readFile seedIR
             let witness = nativeCallWitness target (provider symbol) (entry index) forwardingSource seedSource
+                metadata = object ["profile" .= ("verified-native-call-seed-forwarding-v1"::String),
+                  "source" .= seedForwarding,"sourceSha256" .= sha (T.encodeUtf8 (T.pack seedForwarding)),
+                  "inputBitcodeSha256" .= forwardingHash,
+                  "definitions" .= [definitions | Just (_,_,definitions) <- [witness]]]
             bytes <- BS.readFile path
             pure (setMember "entry" (toJSON (entry index)) signature,
               object ["entry" .= entry index,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,
@@ -1148,7 +1152,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
                 exports <- get proof "exports" :: IO [String]
                 let buildInputs = maybe (object []) id (member proof "buildInputs")
                     seedInputs = [metadata | (_,_,metadata,_) <- compiled]
-                translationUnits <- get buildInputs "translationUnits" :: IO [Value]
+                bridges <- get buildInputs "argumentBridges" :: IO [Value]
                 let
                     result = setMember "schema" (toJSON (3::Int)) .
                       setMember "profile" "thc-package-c-ffi-demand-v1" .
@@ -1157,7 +1161,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
                       setMember "abi" (toJSON [signature | (signature,_,_,_) <- compiled]) .
                       setMember "callSeeds" (toJSON [seed | (_,seed,_,_) <- compiled]) .
                       setMember "exports" (toJSON (sort (nub (map provider symbols ++ exports)))) .
-                      setMember "buildInputs" (setMember "translationUnits" (toJSON (translationUnits ++ seedInputs)) buildInputs) $ proof
+                      setMember "buildInputs" (setMember "argumentBridges" (toJSON (bridges ++ seedInputs)) buildInputs) $ proof
                 pure result
    nubBySymbol [] = []
    nubBySymbol (value@(symbol,_):rest) = value : nubBySymbol (filter ((/= symbol) . fst) rest)
