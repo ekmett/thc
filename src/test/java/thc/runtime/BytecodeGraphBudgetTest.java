@@ -204,8 +204,8 @@ class BytecodeGraphBudgetTest {
         var binding = new LinkedHashMap<>(bindings.getFirst());
         var lambda = new ArrayList<>((List<Object>) binding.get("expr"));
         lambda.set(2, afterTake("prefix", "prefixValue", (List<Object>) lambda.get(2), LONG));
-        binding.put("expr", lambda); bindings.set(0, binding); input.put("bindings", bindings);
-        constructors(input, tupleConstructor("Pair", 2));
+        binding.put("expr", lambda); bindings.set(0, binding); bindings.add(blockedMVarDependency());
+        input.put("bindings", bindings); constructors(input, tupleConstructor("Pair", 2));
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             var owner = Language.currentState(); owner.getThreads().enterCurrent(null, false, true, null);
@@ -856,7 +856,8 @@ class BytecodeGraphBudgetTest {
                     "expr", node("lam", List.of(binder("seed", LONG, false), binder("bias", LONG, false),
                             binder("payload", REFERENCE, true), binder("prefix", MUTABLE, false)),
                         afterTake("prefix", "consumed", entry, result),
-                        Map.of("resultRep", result, "entryStrict", List.of(false, false, false, false))))));
+                        Map.of("resultRep", result, "entryStrict", List.of(false, false, false, false)))),
+                    blockedMVarDependency()));
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             var owner = Language.currentState(); owner.getThreads().enterCurrent(null, false, true, null);
@@ -1144,7 +1145,8 @@ class BytecodeGraphBudgetTest {
         var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
         lambda.set(1, List.of(binder("selector", LONG, false), binder("list", DATA, true), binder("prefix", MUTABLE, false)));
         lambda.set(3, Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(false, false, false)));
-        entry.put("expr", lambda); input.put("bindings", List.of(entry)); constructors(input, tupleConstructor("Pair", 2));
+        entry.put("expr", lambda); input.put("bindings", List.of(entry, blockedMVarDependency()));
+        constructors(input, tupleConstructor("Pair", 2));
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -1682,6 +1684,14 @@ class BytecodeGraphBudgetTest {
         }
     }
 
+    /** Deliberate bottom declares the lazy RTS dependency for synthetic
+     * continuation transport. The real BlockedOwners module retains its GHC CAF. */
+    private static Map<String, Object> blockedMVarDependency() {
+        return Map.of("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+                "type", "SomeException", "lifted", true, "arity", 0, "rep", DATA,
+                "expr", node("var", CoreBlockedExceptions.MVAR, Map.of("rep", DATA)));
+    }
+
     private static List<Object> take(String cell) {
         return node("app", node("prim", "takeMVar#"), List.of(variable(cell, MUTABLE), node("void", Map.of("rep", STATE))),
                 List.of(false, false), false, false, Map.of("rep", tuple(STATE, REFERENCE)));
@@ -1756,12 +1766,7 @@ class BytecodeGraphBudgetTest {
         lambda.set(3, Map.of("rep", CLOSURE, "resultRep", resultProof,
                 "entryStrict", java.util.Collections.nCopies(arguments.size(), false)));
         entry.put("expr", lambda); bindings.set(0, entry);
-        // Deliberate bottom supplies only the declared lazy RTS dependency for
-        // continuation transport, as in AstContinuationTest.directMVarModule.
-        // The actual BlockedOwners application retains its original GHC CAF.
-        bindings.add(Map.of("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
-                "type", "SomeException", "lifted", true, "arity", 0, "rep", DATA,
-                "expr", node("var", CoreBlockedExceptions.MVAR, Map.of("rep", DATA))));
+        bindings.add(blockedMVarDependency());
         input.put("bindings", bindings);
         constructors(input, tupleConstructor("Pair", 2), tupleConstructor("Result", 2));
         try (var context = context()) {
