@@ -1170,7 +1170,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginBlock();
                 var resumed = b.createLocal("stack entry resume value", FrameSlotKind.Object);
                 b.beginStaticStoreObject(resumed);
-                b.beginYield(); b.emitLoadConstant(AstStackSpill.INSTANCE); b.endYield();
+                b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(AstStackSpill.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                 b.endStaticStoreObject();
                 b.endBlock(); b.endIfThen();
             }

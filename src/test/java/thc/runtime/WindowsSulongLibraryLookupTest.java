@@ -747,7 +747,7 @@ class WindowsSulongLibraryLookupTest {
             b.endBlock();
             b.beginBlock();
             b.beginStaticStoreObject(resumed);
-            b.beginYield(); b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly(); b.endYield();
+            b.beginYield(); b.beginRecordContinuationOwner(); b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly(); b.endRecordContinuationOwner(); b.endYield();
             b.endStaticStoreObject();
             b.endBlock(); b.endTryCatch(); b.endBlock(); b.endWhile();
             b.emitLoadNull();

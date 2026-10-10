@@ -106,6 +106,16 @@ by only the unconsumed old suffix. Completed effects and bindings are not
 replayed. The resuming Java thread regains its previous ambient mask on every
 exit, while the saved computation runs under its logical mask.
 
+Bytecode `SavedGuestContinuation` views share a terminal claim for the exact raw
+saved token. Distinct tokens remain independent even when they share a frame or
+come from a copied delimited image. A real bytecode cut records weak original
+execution-context provenance before publishing its token. Resume and discard
+validate that context and any owned native requests before claiming; Force also
+preflights before changing its outer thunk, call segment or delivery request.
+Guest or cleanup failure cannot reopen a claim, and repeated discard does not
+repeat cleanup. These laws use stock Truffle APIs in both runtime modes. They
+apply to THC's owning adapters, not arbitrary direct upstream continuation calls.
+
 Claiming a one-shot AST activation detaches its old yield marker. Resumption
 removes completed steps as it advances, including steps inside lexical scopes.
 After validating a completed child's identity and result, the caller transfers

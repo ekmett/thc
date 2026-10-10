@@ -152,6 +152,8 @@ public final class WindowsNativeIo implements AutoCloseable {
         }
         /** A saved activation may retire delivery only in its owning context.
          * Context shutdown uses abandon() directly as its lifecycle authority. */
+        void preflightFromSavedActivation() { current(); }
+        /** AST steps also use this owning disposal boundary. Revalidate for lifecycle races. */
         void discardFromSavedActivation() { current(); abandon(); }
         synchronized boolean abandoned() { return abandoned; }
         synchronized boolean suspended() { return suspended; }
