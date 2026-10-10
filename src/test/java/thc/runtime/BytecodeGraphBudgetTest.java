@@ -349,7 +349,7 @@ class BytecodeGraphBudgetTest {
     }
 
     private static Map<String, Object> siblingCapacityInput(int... repetitions) {
-        var alternatives = new ArrayList<List<Object>>();
+        var regions = new ArrayList<List<Object>>();
         Map<String, Object> input = null;
         List<Object> lambda = null;
         for (int region = 0; region < repetitions.length; region++) {
@@ -361,10 +361,15 @@ class BytecodeGraphBudgetTest {
             var part = new ArrayList<>((List<Object>) lambda.get(2));
             String id = "region" + region;
             part.set(2, id); part.set(4, Map.of("rep", LONG, "binder", binder(id, DATA, true)));
-            alternatives.add(node("data", "C" + region, List.of(), part));
+            regions.add(part);
         }
-        lambda.set(2, node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
-                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
+        // A constructor selector around these cases would eagerly outline its
+        // arms, giving each region a separate owner and bypassing the per-root cap.
+        List<Object> sum = number(0);
+        for (var region : regions)
+            sum = node("app", node("prim", "+#"), List.of(sum, region),
+                    List.of(false, false), false, false, Map.of("rep", LONG));
+        lambda.set(2, sum);
         var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
         var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
         input.put("bindings", bindings); return input;
@@ -386,7 +391,8 @@ class BytecodeGraphBudgetTest {
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void theFiniteRegionCapDoesNotRetryAnUncoveredCapacityOverflow(boolean overflow) throws Exception {
-        int[] calls = new int[9]; calls[8] = overflow ? 64 : 0;
+        int[] calls = new int[BytecodeCaseRegion.MAX_REGIONS + 1];
+        calls[BytecodeCaseRegion.MAX_REGIONS] = overflow ? 64 : 0;
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -400,6 +406,8 @@ class BytecodeGraphBudgetTest {
                 } else {
                     var program = new BytecodeProgram(language, siblingCapacityInput(calls), true);
                     var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                    var regions = BytecodeRoot.class.getDeclaredField("caseRegions"); regions.setAccessible(true);
+                    assertEquals(BytecodeCaseRegion.MAX_REGIONS, ((BytecodeCaseRegion[]) regions.get(root)).length);
                     var original = instructions(root);
                     assertEquals(0, root.getGraphBudgetGeneration());
                     assertEquals(1, root.prepareGraphBudgetRetry(0)); // Explicit plan control, not a compiler bailout.
@@ -464,7 +472,9 @@ class BytecodeGraphBudgetTest {
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void localEncodingCapacityNarrowsSidesBeforePublishingTheOriginalTarget(boolean parentOnly) throws Exception {
-        int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 8 : 64;
+        // The pinned emitter limits local IDs to 65535. Sixteen scalar calls
+        // in each of 256 arms cross that capacity while each 32-arm side fits.
+        int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 16 : 64;
         var input = decision(arms, List.of(binder("step", CLOSURE, true)), LONG,
                 arm -> capacityCalls(repetitions, arm, variable("value" + (repetitions - 1), LONG), LONG));
         try (var context = context()) {
@@ -488,7 +498,7 @@ class BytecodeGraphBudgetTest {
                         calls.incrementAndGet(); return (Long) frame.getArguments()[1] + 1;
                     }
                 }.getCallTarget());
-                assertEquals(parentOnly ? 255008L : 63064L,
+                assertEquals((arms - 1) * 1000L + repetitions,
                         Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
                 assertEquals(repetitions, calls.get(), "no preparation, retry or branch replay may execute a call");
                 assertEquals(1, entries(program));
