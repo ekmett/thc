@@ -18,6 +18,9 @@
       pin = (builtins.fromJSON (builtins.readFile ./etc/jam-graalvm.json)).platforms.Linux-x86_64;
       jam = pkgs.callPackage ./nix/jam.nix { inherit pin; };
       toolchain = pkgs.callPackage ./nix/toolchain.nix { inherit jam; };
+      nativeTools = pkgs.callPackage ./nix/native-tools.nix {};
+      jvm = pkgs.callPackage ./nix/jvm.nix { inherit jam toolchain; revision = self.rev or "unversioned"; };
+      installed = pkgs.callPackage ./nix/installed.nix { inherit nativeTools jvm jam toolchain; };
       withHide = pkgs.callPackage ./nix/toolchain.nix {
         inherit jam;
         name = "thc-hide-toolchain";
@@ -27,8 +30,10 @@
       packages.${system} = {
         jam-graalvm = jam;
         inherit toolchain;
-        native-tools = pkgs.callPackage ./nix/native-tools.nix {};
-        jvm = pkgs.callPackage ./nix/jvm.nix { inherit jam toolchain; revision = self.rev or "unversioned"; };
+        native-tools = nativeTools;
+        inherit jvm;
+        thc = installed;
+        default = installed;
         development-image = pkgs.callPackage ./nix/image.nix { inherit toolchain jam; };
         toolchain-with-hide = withHide;
       };
