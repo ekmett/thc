@@ -60,6 +60,12 @@ class NarrowIntegerContinuationTest {
             map("binders", list(map("id", cell + "State", "rep", stateRep), map("id", cell + "Value", "rep", dataRep))))),
             map("rep", resultRep, "binder", map("id", cell + "Result", "rep", pair)));
     }
+    /** Lazy RTS dependency only; these private cells never request blocked-owner delivery. */
+    private Map<String, Object> blockedMVarDependency() {
+        return map("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+            "type", "SomeException", "lifted", true, "arity", 0, "rep", dataRep,
+            "expr", variable(CoreBlockedExceptions.MVAR, dataRep));
+    }
     private Map<String, Object> module() {
         var arguments = new ArrayList<List<Object>>(); arguments.add(list("void", map("rep", stateRep)));
         for (int i = 0; i < ints.size(); i++) arguments.add(variable("n" + i, ints.get(i)));
@@ -69,7 +75,7 @@ class NarrowIntegerContinuationTest {
         var parameters = new ArrayList<Map<String, Object>>();
         formals.forEach((id, rep) -> parameters.add(map("id", id, "name", id, "lifted", false, "coercion", false, "rep", rep)));
         return map("instrument", true, "bindings", list(map("id", "entry", "name", "entry", "lifted", true,
-            "expr", list("lam", parameters, afterTake("prefix", afterTake("blocked", tuple)), map("resultRep", resultRep)))),
+            "expr", list("lam", parameters, afterTake("prefix", afterTake("blocked", tuple)), map("resultRep", resultRep))), blockedMVarDependency()),
             "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2), map("id", "Result", "name", "Result", "kind", "unboxed-tuple", "arity", 7)));
     }
     private Object wideControl(Object value) {

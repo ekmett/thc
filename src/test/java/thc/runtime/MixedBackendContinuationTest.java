@@ -69,6 +69,13 @@ class MixedBackendContinuationTest {
                 map("binders", list(arg("number", LONG), arg("reference", REF))))),
                 map("rep", result, "binder", arg("answer", PAIR)));
     }
+    /** Deliberate lazy bottom declares the RTS dependency for private-cell transport controls. */
+    private static Map<String, Object> blockedMVarDependency() {
+        var proof = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+        return map("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+            "type", "SomeException", "lifted", true, "arity", 0, "rep", proof,
+            "expr", v(CoreBlockedExceptions.MVAR, proof));
+    }
     private static Map<String, Object> module(int level) {
         var params = new ArrayList<Object>();
         if (level < 2) params.add(arg("next", CLOSURE));
@@ -81,7 +88,7 @@ class MixedBackendContinuationTest {
         var body = sequence(prim("takeMVar#", list(v("prefix", CELL), state()), READ), "prefixRead", READ, unpack(answer, done, PAIR), PAIR);
         return map("instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2)),
             "bindings", list(map("id", "run", "name", "run", "lifted", true,
-                "expr", list("lam", params, body, map("resultRep", PAIR)))));
+                "expr", list("lam", params, body, map("resultRep", PAIR))), blockedMVarDependency()));
     }
     private static SavedGuestContinuation saved(Object result) {
         return Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
@@ -136,7 +143,7 @@ class MixedBackendContinuationTest {
                 "bindings", list(map("id", "run", "name", "run", "lifted", true,
                         "expr", list("lam", params, body, map("resultRep", READ))),
                         map("id", "snapshotHelper", "name", "snapshotHelper", "lifted", true,
-                                "expr", list("lam", list(arg("s", VOID)), snapshot(), map("resultRep", tuple(VOID, CELL))))));
+                                "expr", list("lam", list(arg("s", VOID)), snapshot(), map("resultRep", tuple(VOID, CELL)))), blockedMVarDependency()));
     }
     private static void clear(Language language) {
         var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
@@ -162,7 +169,7 @@ class MixedBackendContinuationTest {
         var strict = caller ? Collections.nCopies(params.size(), false) : list(true, true, false, false, false);
         return map("instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2)),
             "bindings", list(map("id", "run", "name", "run", "lifted", true, "entryStrict", strict,
-                "expr", list("lam", params, body, map("resultRep", PAIR, "entryStrict", strict)))));
+                "expr", list("lam", params, body, map("resultRep", PAIR, "entryStrict", strict))), blockedMVarDependency()));
     }
     private static Map<String, Object> strictThunkModule() {
         var take = prim("takeMVar#", list(v("blocked", CELL), state()), READ);
@@ -173,7 +180,7 @@ class MixedBackendContinuationTest {
                 map("id", "Box", "name", "Box", "kind", "boxed", "arity", 1, "fieldTypes", list(REF), "fieldReps", list(REF.get("primReps")), "strictFields", list(false), "fieldLifted", list(true))),
             "bindings", list(map("id", "make", "name", "make", "lifted", true,
                 "expr", list("lam", list(arg("prefix", CELL), arg("blocked", CELL)),
-                    app(list("con", "Box", 1), list(waiting), REF), map("resultRep", REF)))));
+                    app(list("con", "Box", 1), list(waiting), REF), map("resultRep", REF))), blockedMVarDependency()));
     }
     private record StrictCut(SavedGuestContinuation saved, AsyncRequest request) {}
     private static SavedGuestContinuation interruptStrict(Context context, Language.State owner, Language language,
