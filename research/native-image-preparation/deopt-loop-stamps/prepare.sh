@@ -14,12 +14,15 @@ check_hash() {
     actual=$(sha256sum "$1")
     [[ "${actual%% *}" == "$2" ]] || { echo "Pinned builder input hash mismatch: $1" >&2; exit 1; }
 }
-check_hash "$builder_dir/svm.src.zip" b10b638d654121fd60923fa86d10f17aaaa82ecd3c48628be885c2b83e006ee0
-check_hash "$builder_dir/svm.jar" 7558a5c20e347c0aa5af411472c76c908d15b2601d029b1a0b7d8ed15f5e086c
+# JAM 0e36293 release Linux-x86_64 package; authenticated by etc/jam-graalvm.json.
+check_hash "$JAVA_HOME/release" d24492fa17446fdc4dec79b4856658d19f53459107e8ef133cf54a0fdcf2e004
+check_hash "$builder_dir/svm.src.zip" 0606695bf6003fc53b56226dc58ce7e5843aaf306accd492ca34439e5b54bf03
+check_hash "$builder_dir/svm.jar" b9222eeddfcc6271eb7d3243deeb72cf47552f3fd00f04107ce4023facd1b39d
 work_dir=$(mktemp -d "$output_dir/work.XXXXXX")
 mkdir -p "$work_dir/source/com/oracle/svm/hosted/phases" "$work_dir/classes"
 source_file=com/oracle/svm/hosted/phases/SharedGraphBuilderPhase.java
 unzip -p "$builder_dir/svm.src.zip" "$source_file" > "$work_dir/source/$source_file"
+check_hash "$work_dir/source/$source_file" ebe7e6a45b3bce95227815c5ae827ff034b31662b91830d6cf2fbdf18fa13b9c
 (
     cd "$work_dir/source"
     GIT_CEILING_DIRECTORIES="$work_dir" git apply --no-index "$recipe_dir/unchanged-local-stamps.patch"

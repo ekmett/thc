@@ -14,11 +14,11 @@ check_hash() {
     actual=$(sha256sum "$1")
     [[ "${actual%% *}" == "$2" ]] || { echo "Pinned builder input hash mismatch: $1" >&2; exit 1; }
 }
-# JAM 9392bca8 static Linux-x86_64 package, Graal source 7b025988a922a73286d1326e1eddc1ca39d3f569.
+# JAM 0e36293 release Linux-x86_64 package, Graal source 7b025988a922a73286d1326e1eddc1ca39d3f569.
 # The two patched sources are unchanged from that upstream revision.
 check_hash "$JAVA_HOME/release" d24492fa17446fdc4dec79b4856658d19f53459107e8ef133cf54a0fdcf2e004
-check_hash "$builder_dir/svm.src.zip" e485c479638647331cd7f5fbbc2025386afb489f371560ce08b76460bc5cf3f7
-check_hash "$builder_dir/svm.jar" 1bc2db61fa46a54b5cd1e6c94749e950e87d1914668e44ca26170868a4528118
+check_hash "$builder_dir/svm.src.zip" 0606695bf6003fc53b56226dc58ce7e5843aaf306accd492ca34439e5b54bf03
+check_hash "$builder_dir/svm.jar" b9222eeddfcc6271eb7d3243deeb72cf47552f3fd00f04107ce4023facd1b39d
 work_dir=$(mktemp -d "$output_dir/work.XXXXXX")
 source_file=com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.java
 late_source=com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport.java
