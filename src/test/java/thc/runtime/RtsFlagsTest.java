@@ -223,6 +223,38 @@ class RtsFlagsTest {
                     body, Map.of("rep", closure, "resultRep", byteRep)))));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test void demandPreparationDoesNotClaimTheRuntimeFlagsLayout() {
+        var preparedLayout = layout("prepared-producer");
+        var runtimeLayout = layout("runtime-producer");
+        for (String backend : List.of("ast", "bytecode")) try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var strict = Map.<String, Object>of("id", "label", "name", "label", "arity", 0, "lifted", false,
+                    "rep", address, "expr", List.of("lit", "data-addr", "RtsFlags", Map.of("rep", address)));
+                var module = getterModule(preparedLayout);
+                var read = (Map<String, Object>) ((List<?>) module.get("bindings")).getFirst();
+                var definitions = Map.of("read", read, "label", strict);
+                var demand = new CoreDemandBindings[1];
+                demand[0] = new CoreDemandBindings(definitions::containsKey, definitions::get, id -> null, (id, binding) -> {
+                    var selected = new LinkedHashMap<String, Object>(module);
+                    selected.put("bindings", List.of(binding)); selected.put("demandBindings", demand[0]);
+                    return backend.equals("ast") ? new Program(language, selected) : new BytecodeProgram(language, selected);
+                }, true, definitions::containsKey);
+                for (String id : definitions.keySet()) {
+                    demand[0].prepareCode(id);
+                    assertNull(demand[0].cell(id).peek());
+                }
+                // First actual resolution may still choose a different producer: lowering has no RTS authority.
+                var flags = CoreDataLabels.fromCore("RtsFlags", proof(), runtimeLayout);
+                assertEquals(0L, flags.readWord8(userOffset(runtimeLayout)));
+                var failure = assertThrows(RuntimeFault.class, () -> demand[0].cell("label").read());
+                assertTrue(failure.getMessage().contains("RtsFlags producing layout differs"), failure.getMessage());
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void exactGetterOperationsExecuteOnBothBackends() throws ReflectiveOperationException {
         var layout = layout();
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
