@@ -24,7 +24,7 @@ import Data.List (isInfixOf, isPrefixOf)
 import qualified Data.Text as Text
 import GHC.ResponseFile (escapeArgs)
 import System.Directory (findExecutable, getCurrentDirectory, createDirectory, createDirectoryIfMissing, removeFile, getModificationTime, canonicalizePath,
-  makeAbsolute, withCurrentDirectory, createFileLink)
+  makeAbsolute, withCurrentDirectory, createFileLink, removeDirectoryRecursive)
 import System.Environment (getEnv, lookupEnv, setEnv, unsetEnv)
 import System.IO (openTempFile, hClose)
 import System.IO.Error (tryIOError)
@@ -47,7 +47,7 @@ import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestLabel "normal captured GHC calls publish typed unlinked seeds and one C provider" $ TestCase $ withScratch $ \root -> do
+  [ TestLabel "captured GHC calls publish verified seeds after Cabal source removal" $ TestCase $ withScratch $ \root -> do
       repository <- lookupEnv "THC_TEST_ROOT" >>= maybe getCurrentDirectory pure
       compiler <- tool "GHC" "ghc"
       packageTool <- tool "GHC_PKG" "ghc-pkg"
@@ -55,14 +55,21 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
         [selectedLibdir] -> pure selectedLibdir
         _ -> assertFailure "selected GHC must report one library directory"
-      let directory = root </> "acquired"
+      let sourceRoot = root </> "package-source"
+          packageDb = sourceRoot </> "package.conf.inplace"
+          directory = root </> "acquired"
           objects = directory </> "objects"
-          source = root </> "Demand.hs"
-          cSource = root </> "provider.c"
+          source = sourceRoot </> "Demand.hs"
+          cSource = sourceRoot </> "provider.c"
           nativeObject = objects </> "provider.o"
-          arguments = ["-odir",objects,"-hidir",objects] ++
+          arguments = ["-odir",objects,"-hidir",objects,"-package-db",packageDb,"-Icbits"] ++
             ["-dynamic" | Host.os /= "mingw32"] ++ ["-this-unit-id","fixture-unit"]
+      createDirectory sourceRoot
+      createDirectory (sourceRoot </> "cbits")
+      (dbStatus,_,dbErrors) <- readProcessWithExitCode packageTool ["init",packageDb] ""
+      assertEqual dbErrors ExitSuccess dbStatus
       createDirectoryIfMissing True objects
+      writeFile (sourceRoot </> "cbits/provider.h") "#define INITIAL_STATE 40\n"
       writeFile source $ unlines
         ["{-# LANGUAGE MagicHash, UnboxedTuples, UnliftedFFITypes, ForeignFunctionInterface #-}",
          "module Demand (next, nextSafe) where", "import GHC.Exts", "import GHC.IO (IO(..))",
@@ -71,11 +78,12 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
          "next :: State# RealWorld -> Int#", "next s = case raw of IO action -> case action s of (# _, I# value #) -> value",
          "nextSafe :: State# RealWorld -> Int#", "nextSafe s = case rawSafe of IO action -> case action s of (# _, I# value #) -> value"]
       writeFile cSource $ unlines
-        ["#include <stdint.h>", "static uintptr_t state;",
-         "__attribute__((constructor)) static void initialize(void) { state = 40; }",
+        ["#include <stdint.h>", "#include \"provider.h\"", "static uintptr_t state;",
+         "__attribute__((constructor)) static void initialize(void) { state = INITIAL_STATE; }",
          "__attribute__((noinline)) intptr_t next(void) { return ++state; }"]
-      let nativeArguments = ["-c",cSource,"-o",nativeObject]
-      (nativeStatus,_,nativeErrors) <- readProcessWithExitCode compiler nativeArguments ""
+      let nativeArguments = ["-c",cSource,"-o",nativeObject,"-package-db",packageDb,"-Icbits"]
+      (nativeStatus,_,nativeErrors) <- withCurrentDirectory sourceRoot $
+        readProcessWithExitCode compiler nativeArguments ""
       assertEqual nativeErrors ExitSuccess nativeStatus
       canonicalObject <- canonicalizePath nativeObject
       withEnvironment [("THC_CORE_OUT",directory </> "core"),("THC_GHC_OUT",objects)] $ do
@@ -91,7 +99,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
               ["-NoProfile","-File",repository </> "bin/export-core.ps1","@" ++ response] ""
           else readProcessWithExitCode (repository </> "bin/export-core.sh") exportArguments ""
         assertEqual diagnostic ExitSuccess status
-      withCurrentDirectory root $ do
+      withCurrentDirectory sourceRoot $ do
         captureNativeObject (root </> "pieces") compiler nativeArguments
         capturePackageNative helper libdir compiler arguments "fixture-unit" directory
       let cbd = directory </> "core/units/u-fixture-unit/Demand.cbd"
@@ -99,6 +107,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       original <- either assertFailure pure (readModuleValue before)
       signatures <- either assertFailure pure (nativeSignatures "fixture-unit" [original])
       assertEqual "both actual GHC emitted safety variants survive hydration" 2 (length signatures)
+      removeDirectoryRecursive sourceRoot
       (_,descriptor) <- finishPackageNativeWithDependencies packageTool Nothing [] [] (root </> "pieces")
         directory directory "fixture-unit" (Just [canonicalObject]) [("Demand",cbd)]
       assertBool "normal producer publishes a canonical actual C component" (descriptor /= Nothing)
@@ -109,11 +118,25 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       assertEqual "native publication preserves all six original body/debug/source segments"
         originalSegments acquiredSegments
       let proof = maybe (error "normal producer native link") id (lookupField "packageNativeLink" acquired)
+          inputs = maybe (error "normal producer build inputs") id (lookupField "buildInputs" proof)
       assertEqual "ordinary calls are typed unlinked acquisition seeds, not eager native roots"
         (Just (toJSON (3::Int))) (lookupField "schema" proof)
       case lookupField "callSeeds" proof of
         Just (Array seeds) -> assertEqual "one immutable seed per actual emitted ABI" 2 (length seeds)
         _ -> assertFailure "normal CBD lacks actual call seeds"
+      case lookupField "argumentBridges" inputs of
+        Just (Array bridges) -> do
+          assertEqual "one verified LLVM transformation per seed" 2 (length bridges)
+          forM_ bridges $ \bridge -> do
+            assertEqual "seed provenance names the actual transformation"
+              (Just "verified-native-call-seed-forwarding-v1") (lookupField "profile" bridge)
+            case lookupField "definitions" bridge of
+              Just (Array witnesses) -> assertEqual "seed retains one checked call witness" 1 (length witnesses)
+              _ -> assertFailure "seed provenance lacks its checked call witness"
+        _ -> assertFailure "normal CBD lacks seed transformation provenance"
+      case lookupField "translationUnits" inputs of
+        Just (Array translationUnits) -> assertEqual "only original C compilations are recorded" 2 (length translationUnits)
+        _ -> assertFailure "normal CBD lacks original C compilation provenance"
       assertEqual "original typed foreign import inventory remains unchanged"
         (lookupField "staticForeignImports" original) (lookupField "staticForeignImports" acquired)
       let cache = directory </> "native/component-link.json"
