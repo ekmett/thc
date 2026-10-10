@@ -39,6 +39,9 @@ concrete, but does not retain those original note IDs/labels/exclusive ends.
 Bytecode snapshots preserve the sections without inventing the missing notes.
 The runtime may elide tail frames; this API records the live guest frames the
 Truffle iterator exposes, not a historical call log or a one-to-one GHC stack.
+Internal application and nonlocal demand roots are real live guest frames. Their
+Core identity and source metadata remain absent when they have no original
+binding; they do not borrow a caller's identity or callsite.
 These records are diagnostic only: they contain no resumable `AP_STACK`,
 continuation, or `throwTo` unwinding/resumption state.
 

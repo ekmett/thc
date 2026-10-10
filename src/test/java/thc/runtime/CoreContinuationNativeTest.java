@@ -975,7 +975,18 @@ class CoreContinuationNativeTest {
                 assertEquals(2, checkpoint.getVisits().get(), "The delayed result entered its first checkpoint");
                 assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver)); return null;
             });
-            var saved = (ContinuationResult) parent.getValue(); var child = ((ThunkSuspended) saved.getResult()).getThunk();
+            var saved = (ContinuationResult) parent.getValue();
+            var demandSegment = assertInstanceOf(CallSegmentSuspended.class, saved.getResult()).getSegment();
+            var demandSaved = assertInstanceOf(AstContinuation.class,
+                    SavedGuestContinuations.savedGuestContinuation(demandSegment.getValue()));
+            var demandRoot = assertInstanceOf(FunctionRoot.class, demandSaved.getSourceRoot());
+            assertEquals(FunctionRootRole.PASS_THROUGH, demandRoot.getRole());
+            assertTrue(demandRoot.getCapturesContinuations()); assertNull(demandRoot.getCoreIdentity());
+            var callerRoot = assertInstanceOf(BytecodeRoot.class,
+                    saved.getContinuationRootNode().getSourceRootNode());
+            assertTrue(entered(context, () -> ThreadInventoryCoreEvidence.targets(callerRoot.getCallTarget())
+                    .stream().anyMatch(target -> target.getRootNode() == demandRoot)));
+            var child = assertInstanceOf(ThunkSuspended.class, demandSaved.getYielded()).getThunk();
             assertSame(global, child, "The case forces the original GHC global application"); assertEquals(5, child.getState());
             boolean retainsChild = false;
             for (int i = 0; i < saved.getFrame().getFrameDescriptor().getNumberOfSlots(); i++)
@@ -996,42 +1007,6 @@ class CoreContinuationNativeTest {
             }
             assertEquals(2, child.getState()); assertEquals(2, parent.getState());
             assertEquals(3, checkpoint.getVisits().get(), "Neither parent nor child checkpoint replays");
-        }
-    }
-
-    private static RootCallTarget resumeTarget(Language language, Thunk saved, Object marker, Object outcome) {
-        return BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
-            b.beginRoot(); var numeric = b.createLocal("resumed numeric value", null); b.beginBlock();
-            b.beginStoreLocal(numeric); b.beginResumeForcedValue(); b.emitLoadConstant(saved);
-            b.emitLoadConstant(marker); b.emitLoadConstant(outcome); b.endResumeForcedValue(); b.endStoreLocal();
-            b.beginReturn(); b.emitLoadLocal(numeric); b.endReturn(); b.endBlock(); b.endRoot();
-        }).getNode(0).getCallTarget();
-    }
-    @Test void savedValueResumePreservesNumericTagsAndRejectsAnotherChild() throws Exception {
-        try (var context = executionContext()) {
-            context.initialize("thc");
-            entered(context, () -> {
-                var language = language(); var dummy = new RootNode(null) {
-                    @Override public Object execute(VirtualFrame frame) { return Unit.INSTANCE; }
-                }.getCallTarget();
-                record Tagged(Object value, FrameSlotKind tag) {}
-                for (var row : List.of(new Tagged(17L, FrameSlotKind.Long), new Tagged(1.25f, FrameSlotKind.Float), new Tagged(2.5, FrameSlotKind.Double))) {
-                    var value = row.value(); var tag = row.tag(); var child = new Thunk(dummy, null); child.setValue(value); child.setState(2);
-                    var target = resumeTarget(language, child, new ThunkSuspended(child), new ChildResume(value, null));
-                    assertEquals(value, Calls.target(target, new Object[]{0L}));
-                    var root = (BytecodeRootNode) target.getRootNode(); boolean matches = false;
-                    for (var local : root.getBytecodeNode().getLocals()) if (local.getTypeProfile() == tag) { matches = true; break; }
-                    assertTrue(matches, "The resumed " + tag + " must retain a primitive local tag");
-                    var wrong = new Thunk(dummy, null); var wrongTarget = resumeTarget(language, wrong, new ThunkSuspended(child), new ChildResume(value, null));
-                    assertThrows(IllegalStateException.class, () -> Calls.target(wrongTarget, new Object[]{0L}));
-                    assertSame(value, child.getValue(), "Wrong-child rejection cannot mutate the real child");
-                }
-                var child = new Thunk(dummy, null); child.setState(3); var payload = new Object(); var failure = new GuestException(payload, new Driver());
-                var failing = resumeTarget(language, child, new ThunkSuspended(child), new ChildResume(null, failure));
-                assertSame(payload, assertThrows(GuestException.class, () -> Calls.target(failing, new Object[]{0L})).getPayload());
-                var malformed = resumeTarget(language, child, Unit.INSTANCE, new ChildResume(17L, null));
-                assertThrows(IllegalStateException.class, () -> Calls.target(malformed, new Object[]{0L})); return null;
-            });
         }
     }
 

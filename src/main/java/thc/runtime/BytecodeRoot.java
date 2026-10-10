@@ -563,19 +563,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics, boolean async) { return new Force(metrics, async); }
     }
 
-    /** A cold nonlocal force resumes only the thunk saved before entering it. */
-    @Operation public static final class ResumeForcedValue {
-        @Specialization public static Object resume(Thunk saved, ThunkSuspended suspended, ChildResume resumed) {
-            Thunk child = suspended.getThunk();
-            if (saved != child)
-                throw new IllegalStateException("Forced-value continuation lost its saved child");
-            if (resumed.getFailure() != null) throw resumed.takeFailure();
-            if (child.getState() != 2 || child.getValue() != resumed.getValue())
-                throw new IllegalStateException("Forced-value continuation lost its child update");
-            return resumed.takeValue();
-        }
-        @Fallback public static Object malformed(Object saved, Object suspended, Object resumed) {
-            throw new IllegalStateException("Forced-value continuation requires its exact saved thunk and ChildResume");
+    /** Nonlocal demand shares a real guest root; completion belongs to that actual target. */
+    @Operation
+    @ConstantOperand(type = RootCallTarget.class, name = "target")
+    @ConstantOperand(type = Closure.class, name = "owner")
+    public static final class DemandValue {
+        @Specialization public static Object demand(VirtualFrame frame, RootCallTarget target, Closure owner,
+                Object value, MaskingState callerMask, @Bind("$node") Node node) {
+            if (!(value instanceof Thunk)) return value;
+            Object answer = target.call(node, new Object[]{((GuestRoot) node.getRootNode()).bloom(frame), value});
+            return CaptureApplicationResult.capture(1, owner, answer, callerMask, node);
         }
     }
 
