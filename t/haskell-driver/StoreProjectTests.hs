@@ -413,7 +413,7 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
                 , (True, ["--make", "-this-unit-id", "sample", "-g2"])
                 , (False, ["--numeric-version", "--RTS", "+RTS", "-A8m", "-RTS"])
                 ]
-        cases = [(replays, False, "", supplied) | (replays, supplied) <- ordinary] ++
+        ordinaryCases = [(replays, False, "", supplied) | (replays, supplied) <- ordinary] ++
           [(True, True, "sample", ["--make", "-this-unit-id", "sample",
              "-fplugin-opt=THC.Plugin:closure=first", "-fplugin-opt", "THC.Plugin:closure=second"]),
            (True, True, "sample", ["--make", "-this-unit-id=sample"]),
@@ -423,11 +423,15 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
            (True, True, "sample\nguest-two\n", ["--make", "-this-unit-id", "sample"]),
            (False, True, "sample\nguest-two\n", ["--make", "-this-unit-id", "guest-two"]),
            (False, False, "sample\nguest-two\n", ["--make", "-this-unit-id", "sample-tool"])]
-    forM_ cases $ \(replays, noLink, policy, supplied) -> do
+        cases = [(False, value) | value <- ordinaryCases] ++
+          [(True, (False, False, "", ["--make", "-this-unit-id", "sample", "-fno-code"])),
+           (True, (True, False, "", ["--make", "-this-unit-id", "sample"]))]
+    forM_ cases $ \(originalBuild, (replays, noLink, policy, supplied)) -> do
       writeText arguments ""
       let command = (Process.proc wrapper supplied)
             { Process.cwd = Just project, Process.env = Just
-                (("THC_PROXY_NO_LINK_UNIT", policy) : filter ((/= "THC_PROXY_NO_LINK_UNIT") . fst) environment) }
+                (("THC_PROXY_NO_LINK_UNIT", policy) : ("THC_PROXY_ORIGINAL_BUILD", if originalBuild then "1" else "") :
+                  filter ((`notElem` ["THC_PROXY_NO_LINK_UNIT", "THC_PROXY_ORIGINAL_BUILD"]) . fst) environment) }
       (status, _, stderr) <- Process.readCreateProcessWithExitCode command ""
       assertEqual stderr ExitSuccess status
       calls <- splitArguments <$> readText arguments
@@ -606,7 +610,7 @@ customStoreProjectTest env = TestLabel "Custom Setup capture recovers failures a
         setupOnly = base </> "setup-source"
         output = base </> "output"
         staging = output </> "native/cache/thc/staging"
-        marker = base </> "fail-isolated-capture"
+        marker = base </> "fail-store-capture"
         buildArguments = ["build", "--project-dir", project, "completed", "--thc-root", thcRoot env,
                           "--dist-dir", output]
         invoke backend = run env base (Just backend) 240
@@ -651,12 +655,12 @@ customStoreProjectTest env = TestLabel "Custom Setup capture recovers failures a
        "  selected <- lookupEnv \"THC_PROXY_GLOBAL_UNITS\"",
        "  failing <- doesFileExist " ++ show marker,
        "  when (maybe False (not . null) selected && failing)",
-       "    (die \"intentional isolated capture failure\")",
+       "    (die \"intentional store capture failure\")",
        "  prepare", "  defaultMain"]
     writeText (dependency </> "src/SafeDependency.hs") $ unlines
       ["module SafeDependency (stableValue) where", "import RuntimeLeaf (leafValue)",
        "stableValue :: Int", "stableValue = leafValue"]
-    -- Both the native build and isolated capture must preserve compiler RTS
+    -- Native compilation and Core replay must preserve compiler RTS
     -- arguments and select completed without building an unrelated executable.
     let appDescription = project </> "app/app.cabal"
     appText <- readText appDescription
@@ -670,13 +674,14 @@ customStoreProjectTest env = TestLabel "Custom Setup capture recovers failures a
       ["packages: app/app.cabal dep-data-0.1.0.0.tar.gz runtime-leaf-0.1.0.0.tar.gz setup-only-0.1.0.0.tar.gz"]
     rejected <- runPreparation env base buildArguments
     assertFailure rejected
-    assertContains "intentional isolated capture failure" (out rejected ++ err rejected)
+    assertContains "intentional store capture failure" (out rejected ++ err rejected)
     retained <- Directory.listDirectory staging
-    assertEqual "exactly the failed replay remains" 1 (length retained)
+    assertBool "failed capture retains diagnostic evidence" (not (null retained))
+    complete <- Directory.doesFileExist (output </> "packages.json")
+    assertBool "failed capture cannot publish a complete project" (not complete)
     forM_ retained $ \name -> do
       path <- Directory.canonicalizePath (staging </> name)
-      assertContains ("Cabal store capture retained after failure: " ++ path) (err rejected)
-      requireFile (path </> "ghc-proxy.sh")
+      assertContains ("capture retained after failure: " ++ path) (err rejected)
     removeFile marker
     prepared <- run env base Nothing 240 buildArguments
     assertSuccess prepared

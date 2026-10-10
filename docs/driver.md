@@ -382,11 +382,19 @@ still undergo content validation. `--verify-artifacts` bypasses selection shortc
 and checks raw interfaces, source archives and published hashes. Do not edit cache
 metadata to bypass a mismatch.
 
-Missing store exports are captured in a private Cabal build while their sources
-and generated headers exist. Successful publication removes its temporary
-staging. A failed capture or publication retains the staging directory and prints
-its path for diagnosis. Preserve it when reporting the failure; remove it when
-no longer needed. Failed refreshes leave earlier complete bundles intact.
+Missing immutable store exports are captured during the original Cabal native
+build when it compiles those selected units. The existing proxy runs native GHC,
+Core replay and interface capture synchronously under that package job's admission.
+Publication checks the final dependency identities, ordinary cache keys and entire
+configured native closure. Uncaptured native-store hits or unavailable native
+products use the private Cabal capture fallback; invalid declared products fail.
+Local and inplace acquisition retains its completed-input snapshots.
+
+Successful publication removes its temporary staging. A failed capture or
+publication retains the staging directory and prints its path for diagnosis.
+Preserve it when reporting the failure; remove it when no longer needed. Failed
+refreshes leave earlier complete bundles intact, including valid ZIPs whose replay
+interfaces still need completion.
 
 For an explicit retained-stage handoff, `THC_CAPTURED_STORE_BUNDLES` may name an
 absolute JSON file with `format: "thc-captured-store-bundles"`, `schema: 1`,
