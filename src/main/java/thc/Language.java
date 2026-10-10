@@ -446,6 +446,29 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         return unitRoot(input, CoreUnitDirectory.detached(input), true);
     }
 
+    /** Retain ordinary context-owned code; native startup and entry construction wait for restore. */
+    CallTarget checkpointRoot(Map<String,Object> input) {
+        String entry = (String) input.get("entry");
+        String shutdown = input.get("shutdownEntry") instanceof String value ? value : null;
+        var owner = currentState(null);
+        String backend = input.get("backend") instanceof String value ? value : Main.defaultBackend();
+        require(backend.equals("ast") || backend.equals("bytecode"), "Unknown THC backend: " + backend);
+        var program = new CoreUnitProgram(this, CoreUnitDirectory.detached(input), input, entry,
+            backend, Boolean.TRUE.equals(input.get("asyncExceptions")), owner, true);
+        try {
+            var plan = ProgramValue.EntryPlan.select(program,
+                new ProgramValue.View(entry, Boolean.TRUE.equals(input.get("ioMain")), shutdown), false);
+            program.prepareCheckpointCode();
+            owner.coreUnitPrograms.add(program);
+            return new RootNode(this) {
+                @Override public Object execute(VirtualFrame frame) {
+                    return initializeUnit(program, plan, owner, false);
+                }
+                @Override public String getName() { return "THC checkpoint load " + entry; }
+            }.getCallTarget();
+        } catch (Throwable failure) { program.close(); throw failure; }
+    }
+
     /** Ordinary cached sources retain their configured preparation parallelism. */
     RootCallTarget preparedRoot(Map<String,Object> input) {
         return preparedRoot(input, Integer.parseInt(System.getProperty("thc.prepareCodeJobs", "4")));
@@ -597,23 +620,32 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
             @TruffleBoundary private Object instantiate() {
                 var owner = currentState(this);
                 var program = new CoreUnitProgram(Language.this, directory, input, entry, backend, async, owner, detached);
+                ProgramValue.EntryPlan plan;
                 try {
                     // Legacy single-entry loads validate before native startup.
                     // Explicit programs defer only entry selection, not registration.
-                    var plan = view == null ? null : ProgramValue.EntryPlan.select(program, view, diagnostic);
-                    var registrations = program.registerStartup();
-                    var exports = new ArrayList<ManagedExportSignature>();
-                    for (var registration : registrations) exports.addAll(registration.getExports());
-                    owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, program::signatureBindings), program::linkStartup);
-                    Object value = plan == null ? new ProgramValue(program, Language.this, owner, diagnostic)
-                        : plan.create(program, Language.this);
-                    owner.coreUnitPrograms.add(program);
-                    return value;
-                } catch (Throwable failure) { owner.foreignRoots.release(program); program.close(); throw failure; }
+                    plan = view == null ? null : ProgramValue.EntryPlan.select(program, view, diagnostic);
+                } catch (Throwable failure) { program.close(); throw failure; }
+                owner.coreUnitPrograms.add(program);
+                return initializeUnit(program, plan, owner, diagnostic);
             }
             @Override public String getName() { return "THC load " + (explicitProgram ? "program" : entry) + " from unit directory"; }
         }.getCallTarget();
     }
+    @TruffleBoundary private Object initializeUnit(CoreUnitProgram program, ProgramValue.EntryPlan plan,
+            State owner, boolean diagnostic) {
+        try {
+            var registrations = program.registerStartup();
+            var exports = new ArrayList<ManagedExportSignature>();
+            for (var registration : registrations) exports.addAll(registration.getExports());
+            owner.foreignRoots.register(program, this, registrations,
+                ManagedExportPlan.checked(exports, program::signatureBindings), program::linkStartup);
+            return plan == null ? new ProgramValue(program, this, owner, diagnostic) : plan.create(program, this);
+        } catch (Throwable failure) {
+            owner.foreignRoots.release(program); owner.coreUnitPrograms.remove(program); program.close(); throw failure;
+        }
+    }
+
     private static <T> T singleOrNull(List<T> values, Predicate<T> selected) {
         T found = null; boolean present = false;
         for (T value : values) if (selected.test(value)) { if (present) return null; found = value; present = true; }

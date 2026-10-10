@@ -211,6 +211,12 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         // demanded cell's execution stage, after lowering ownership ends.
         return selectedBackend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);
     }
+    /** Lower the detached reachable closure without running global initializers or native startup. */
+    void prepareCheckpointCode() {
+        require(detached, "Checkpoint preparation requires detached Core");
+        for (String id : consumerBindings.keySet()) demand.prepareCode(id);
+    }
+
     public List<ManagedExportAdmission> registerStartup() {
         var registrations = new ArrayList<ManagedExportAdmission>(); var pending = new ArrayList<CoreModuleAdmission>();
         for (var module : directory.getModules()) if (module.registrationObligations()) pending.add(admission(module));

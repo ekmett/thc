@@ -94,7 +94,7 @@ class CoreUnitLoadTest {
                 assertEquals(reads, count(entry, "coreCompactDataBytesRead"));
             }
             for (var backend : List.of("ast", "bytecode")) {
-                var detached = CracExecutable.checkpoint(request(manifest, backend), () -> {});
+                var detached = CracExecutable.selectedCore(request(manifest, backend));
                 long opens = CoreFileMappings.shared.statistics().mappingOpens();
                 try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
                     var entry = Main.loadDetachedEntry(context, detached);
@@ -125,7 +125,7 @@ class CoreUnitLoadTest {
             }
             for (var backend : List.of("ast", "bytecode")) {
                 var failure = assertThrows(RuntimeException.class, () -> {
-                    var detached = CracExecutable.checkpoint(request(manifest, backend), () -> {});
+                    var detached = CracExecutable.selectedCore(request(manifest, backend));
                     try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
                         Main.loadDetachedEntry(context, detached).execute(0);
                     }

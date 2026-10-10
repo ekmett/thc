@@ -169,28 +169,57 @@ class ReusableLoaderTest {
         var args = NativeExecutable.launcherArguments(nativeBinding(ioModule()), new String[0]);
         var request = CoreModules.request(List.of(args[1]), args[2], true, false, backend, false, true, args[3], false, true);
         var failure = new IllegalStateException("checkpoint refused");
-        assertSame(failure, assertThrows(IllegalStateException.class,
-            () -> CracExecutable.checkpoint(request, () -> { throw failure; })));
-        var restored = CracExecutable.checkpoint(request, () -> {
-            var mappings = CoreFileMappings.shared.statistics();
-            assertEquals(0, mappings.activeLeases());
-            assertEquals(0, mappings.idleMappings());
-            try {
-                Files.delete(directory.resolve("PreparedIo.cbd"));
-                Files.delete(directory.resolve("packages.json"));
-            } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
-        });
-        long opens = CoreFileMappings.shared.statistics().mappingOpens();
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.Compilation", "false").build()) {
-            assertThrows(PolyglotException.class, () -> context.eval("thc", Json.stringify(restored)),
-                "Detached maps must not become an external Core input protocol");
-            var action = Main.loadDetachedEntry(context, restored);
+            assertSame(failure, assertThrows(IllegalStateException.class,
+                () -> CracExecutable.checkpoint(context, request, () -> { throw failure; })));
+        }
+        long[] opens = new long[1];
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            var action = CracExecutable.checkpoint(context, request, () -> {
+                var mappings = CoreFileMappings.shared.statistics();
+                assertEquals(0, mappings.activeLeases());
+                assertEquals(0, mappings.idleMappings());
+                opens[0] = mappings.mappingOpens();
+                try {
+                    Files.delete(directory.resolve("PreparedIo.cbd"));
+                    Files.delete(directory.resolve("packages.json"));
+                } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
+            });
             assertTrue(action.invokeMember("runIO").asBoolean());
             assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO"))
                 .getMessage().contains("already started"));
         }
-        assertEquals(opens, CoreFileMappings.shared.statistics().mappingOpens(), "Restore must not reopen CBD");
+        assertEquals(opens[0], CoreFileMappings.shared.statistics().mappingOpens(), "Restore must not reopen CBD");
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void checkpointRejectsReachableColdLoweringFailure(String backend) throws Exception {
+        var module = ioModule();
+        var definitions = (List<Map<String,Object>>) module.get("bindings");
+        var entry = definitions.getFirst();
+        var lambda = (List<Object>) entry.get("expr");
+        var metadata = (Map<String,Object>) lambda.getLast();
+        var cold = list("app", list("var", "fixture:PreparedIo.cold", map("rep", entry.get("rep"))),
+            list(list("void", map("rep", map("kind", "void", "primReps", list(), "evaluated", true)))),
+            list(false), true, true, map("rep", metadata.get("resultRep")));
+        var body = list("case", literal(0), "branch", list(
+            list("lit", list("int", "0"), list(), lambda.get(2), map("binders", list())),
+            list("default", null, list(), cold, map("binders", list()))), map("resultRep", metadata.get("resultRep")));
+        module.put("bindings", list(with(entry, "expr", list("lam", lambda.get(1), body, lambda.getLast())),
+            definitions.get(1), with(entry, "id", "cold", "name", "cold", "expr",
+                list("lam", lambda.get(1), list("unsupported", "cold code must be lowered before checkpoint", map()), metadata))));
+        var args = NativeExecutable.launcherArguments(nativeBinding(module), new String[0]);
+        var request = CoreModules.request(List.of(args[1]), args[2], true, false, backend, false, true, args[3], false, true);
+        var called = new boolean[1];
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            var failure = assertThrows(RuntimeException.class,
+                () -> CracExecutable.checkpoint(context, request, () -> called[0] = true));
+            assertEquals("Unsupported Core node unsupported", failure.getMessage());
+            assertFalse(called[0], "Unsupported reachable code must fail before invoking the engine");
+        }
     }
 
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})

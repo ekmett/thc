@@ -4,10 +4,12 @@ package thc;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Value;
 
-/** Standalone pre-main checkpoint: retained Core has no CBD readers or mappings.
- * Guest contexts, native startup and the main/shutdown wrapper begin on restore.
- * This captures decoded Core, not compiled guest code or a warmed application. */
+/** Standalone pre-main checkpoint: reachable executable nodes retain no CBD readers.
+ * The owning context survives restore; native startup and the main/shutdown wrapper
+ * start afterward. Preparing nodes does not evaluate guest CAFs or compile machine code. */
 final class CracExecutable {
     private CracExecutable() {}
 
@@ -31,13 +33,40 @@ final class CracExecutable {
     }
 
     @SuppressWarnings("unchecked")
-    static Map<String,Object> checkpoint(String request, Runnable checkpoint) {
+    static Map<String,Object> selectedCore(String request) {
         var input = (Map<String,Object>) Json.parse(request);
-        var core = CoreModules.selectedModules(input, (String) input.get("entry"));
+        return CoreModules.selectedModules(input, (String) input.get("entry"));
+    }
+
+    static void run(Main.ProgramArguments guest, boolean interfaceHelper, String request, Runnable checkpoint) {
+        var entry = new com.oracle.truffle.api.CallTarget[1];
+        Main.runExecutable(guest, interfaceHelper,
+            context -> entry[0] = prepareAndCheckpoint(context, request, checkpoint),
+            context -> resume(context, entry[0]));
+    }
+
+    static Value checkpoint(Context context, String request, Runnable checkpoint) {
+        return resume(context, prepareAndCheckpoint(context, request, checkpoint));
+    }
+
+    private static com.oracle.truffle.api.CallTarget prepareAndCheckpoint(Context context, String request, Runnable checkpoint) {
+        var core = selectedCore(request);
+        com.oracle.truffle.api.CallTarget entry;
+        context.initialize("thc"); context.enter();
+        try {
+            var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            entry = language.checkpointRoot(core);
+        } finally { context.leave(); }
         CoreFileMappings.shared.prepareCheckpoint();
-        // The real operation exits at checkpoint and returns only on restore.
-        // A failed checkpoint propagates; there is no fallback to running main.
+        // No context entry or lowering lock is held across the real engine call.
+        // Failure propagates to the owning context; guest startup is never a fallback.
         checkpoint.run();
-        return core;
+        return entry;
+    }
+
+    private static Value resume(Context context, com.oracle.truffle.api.CallTarget entry) {
+        context.enter();
+        try { return context.asValue(entry.call()); }
+        finally { context.leave(); }
     }
 }

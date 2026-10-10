@@ -6,10 +6,16 @@ the main and shutdown entries, including cold branches and required runtime
 dependencies. It closes the CBD readers and drains their idle mapping cache
 before calling `jdk.crac.Core.checkpointRestore()`.
 
-The checkpoint contains decoded Core. It does not run guest code or warm up main.
-After restore, THC creates a fresh Truffle context, loads the detached Core without
-reopening CBD, and invokes the ordinary one-shot main/shutdown wrapper. AST and
-bytecode backends use their normal lowering paths after restore.
+Before checkpointing, THC creates the owning Truffle context and lowers the
+reachable Core to executable nodes using the selected AST or bytecode backend.
+Preparation leaves global initializers and CAF evaluation pending. The checkpoint
+therefore retains executable nodes, not just decoded Core, but does not warm up
+guest execution or promise compiled machine code.
+
+After restore, the same context opens its native directory and standard streams,
+initializes native dependencies, constructs the
+one-shot main/shutdown wrapper and runs it. CBD files are not reopened, and
+reachable bindings do not need another Core-to-node conversion.
 
 This requires a **CRaC-capable Jam JDK** and a working Linux checkpoint engine.
 The current pinned Jam release does not provide CRaC. The launcher fails before
@@ -35,5 +41,6 @@ failure aborts the launch rather than running main as a fallback.
 
 Guest arguments are fixed at checkpoint time. This initial path makes no promise
 of rebinding environment variables or relocating native package libraries:
-those libraries and the JVM's runtime dependencies must remain available after
+the saved working-directory path, those libraries and the JVM's runtime
+dependencies must remain available after
 restore. Checkpoint files contain process memory and should be kept private.
