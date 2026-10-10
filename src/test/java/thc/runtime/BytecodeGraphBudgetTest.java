@@ -7,6 +7,8 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -347,7 +349,7 @@ class BytecodeGraphBudgetTest {
     }
 
     private static Map<String, Object> siblingCapacityInput(int... repetitions) {
-        var alternatives = new ArrayList<List<Object>>();
+        var regions = new ArrayList<List<Object>>();
         Map<String, Object> input = null;
         List<Object> lambda = null;
         for (int region = 0; region < repetitions.length; region++) {
@@ -359,10 +361,15 @@ class BytecodeGraphBudgetTest {
             var part = new ArrayList<>((List<Object>) lambda.get(2));
             String id = "region" + region;
             part.set(2, id); part.set(4, Map.of("rep", LONG, "binder", binder(id, DATA, true)));
-            alternatives.add(node("data", "C" + region, List.of(), part));
+            regions.add(part);
         }
-        lambda.set(2, node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
-                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
+        // A constructor selector around these cases would eagerly outline its
+        // arms, giving each region a separate owner and bypassing the per-root cap.
+        List<Object> sum = number(0);
+        for (var region : regions)
+            sum = node("app", node("prim", "+#"), List.of(sum, region),
+                    List.of(false, false), false, false, Map.of("rep", LONG));
+        lambda.set(2, sum);
         var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
         var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
         input.put("bindings", bindings); return input;
@@ -384,7 +391,8 @@ class BytecodeGraphBudgetTest {
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void theFiniteRegionCapDoesNotRetryAnUncoveredCapacityOverflow(boolean overflow) throws Exception {
-        int[] calls = new int[9]; calls[8] = overflow ? 64 : 0;
+        int[] calls = new int[BytecodeCaseRegion.MAX_REGIONS + 1];
+        calls[BytecodeCaseRegion.MAX_REGIONS] = overflow ? 64 : 0;
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -398,6 +406,8 @@ class BytecodeGraphBudgetTest {
                 } else {
                     var program = new BytecodeProgram(language, siblingCapacityInput(calls), true);
                     var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                    var regions = BytecodeRoot.class.getDeclaredField("caseRegions"); regions.setAccessible(true);
+                    assertEquals(BytecodeCaseRegion.MAX_REGIONS, ((BytecodeCaseRegion[]) regions.get(root)).length);
                     var original = instructions(root);
                     assertEquals(0, root.getGraphBudgetGeneration());
                     assertEquals(1, root.prepareGraphBudgetRetry(0)); // Explicit plan control, not a compiler bailout.
@@ -462,7 +472,9 @@ class BytecodeGraphBudgetTest {
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void localEncodingCapacityNarrowsSidesBeforePublishingTheOriginalTarget(boolean parentOnly) throws Exception {
-        int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 8 : 64;
+        // The pinned emitter limits local IDs to 65535. Sixteen scalar calls
+        // in each of 256 arms cross that capacity while each 32-arm side fits.
+        int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 16 : 64;
         var input = decision(arms, List.of(binder("step", CLOSURE, true)), LONG,
                 arm -> capacityCalls(repetitions, arm, variable("value" + (repetitions - 1), LONG), LONG));
         try (var context = context()) {
@@ -486,7 +498,7 @@ class BytecodeGraphBudgetTest {
                         calls.incrementAndGet(); return (Long) frame.getArguments()[1] + 1;
                     }
                 }.getCallTarget());
-                assertEquals(parentOnly ? 255008L : 63064L,
+                assertEquals((arms - 1) * 1000L + repetitions,
                         Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
                 assertEquals(repetitions, calls.get(), "no preparation, retry or branch replay may execute a call");
                 assertEquals(1, entries(program));
@@ -633,6 +645,7 @@ class BytecodeGraphBudgetTest {
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.DiagnoseFailure", "false")
                 .option("compiler.MaximumGraalGraphSize", Integer.toString(graphLimit))
                 .option("compiler.CompilationTimeout", "30").build();
     }
@@ -1167,38 +1180,6 @@ class BytecodeGraphBudgetTest {
         }
     }
 
-    @Test void observedDefaultSuffixRecoversAtTheExplicitCompilationBoundary() throws Exception {
-        try (var context = context(20000)) {
-            context.initialize("thc"); context.enter();
-            try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                // The observed 48-link suffix exceeds the fixed budget, while the
-                // smaller unsplit prefix fits after the suffix moves out of line.
-                var program = new BytecodeProgram(language, broadDefaultSuffix(8, 48));
-                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
-                var input = chain(program, 48);
-                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, input}));
-                var original = instructions(root);
-                assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
-                assertTrue(compile(target));
-                assertEquals(1, root.getGraphBudgetGeneration(), "only the real compiler bailout selects the suffix");
-                assertEquals(0, entries(program)); assertEquals(original, instructions(root));
-                assertTrue(valid(target), "the finite recovery graph is installed before guest execution");
-                bypass(target);
-                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, chain(program, 48)}));
-                assertSame(target, program.entryTarget("entry"));
-                // The newly extracted suffix is still cold; its first execution may deoptimize.
-                // Compile that now-observed path explicitly, never retry the guest call on failure.
-                assertEquals(original.keySet(), instructions(root).keySet());
-                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
-                long before = entries(program);
-                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, input}));
-                assertEquals(before + 1, entries(program)); assertTrue(valid(target));
-                assertSame(target, program.entryTarget("entry")); assertEquals(1, root.prepareGraphBudgetRetry(1));
-            } finally { context.leave(); }
-        }
-    }
-
     @Test void defaultSuffixRequiresALargeBodyNotJustALargeScrutinee() {
         var input = broadDefaultSuffix(24);
         var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
@@ -1303,33 +1284,6 @@ class BytecodeGraphBudgetTest {
         }
     }
 
-    @Test void observedSmallFanoutRecoversAtTheExplicitCompilationBoundary() throws Exception {
-        try (var context = context(10000)) {
-            context.initialize("thc"); context.enter();
-            try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new BytecodeProgram(language, smallDecision(192));
-                var target = ((Closure) program.entryValue("entry")).target;
-                var root = (BytecodeRoot) target.getRootNode();
-                var input = chain(program, 192);
-                for (long arm : new long[]{0, 1, -1})
-                    assertEquals((arm == -1 ? 2000 : arm * 1000) + 192,
-                            Calls.target(target, new Object[]{0L, arm, input}));
-                var original = instructions(root);
-                assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
-                assertTrue(compile(target));
-                assertEquals(1, root.getGraphBudgetGeneration(), "only a real compiler bailout activates the plan");
-                assertEquals(0, entries(program), "compilation cannot run the guest");
-                assertEquals(original, instructions(root), "parked PCs and operands remain stable");
-                bypass(target); long before = entries(program);
-                assertEquals(2192L, Calls.target(target, new Object[]{0L, -1L, chain(program, 192)}));
-                assertEquals(before + 1, entries(program)); assertTrue(valid(target));
-                assertSame(target, ((Closure) program.entryValue("entry")).target);
-                assertEquals(1, root.prepareGraphBudgetRetry(1), "finite generation is exhausted");
-            } finally { context.leave(); }
-        }
-    }
-
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void ambientJoinIsAllowedOnlyWhenNoArmReferencesItsActivation(boolean referenced) {
         var input = new LinkedHashMap<>(smallDecision(24));
@@ -1417,33 +1371,7 @@ class BytecodeGraphBudgetTest {
         }
     }
 
-    @Test void observedOversizedDecisionRecoversAtTheExplicitCompilationBoundary() throws Exception {
-        try (var context = context(10000)) {
-            context.initialize("thc"); context.enter();
-            try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new BytecodeProgram(language, decision(768));
-                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
-                // Profiles should reflect actual executed arms. Compilation itself must run no guest code.
-                for (int arm = 0; arm < 768; arm++)
-                    assertEquals(arm * 3L + 17, Calls.target(target,
-                            new Object[]{0L, program.constructorLayout("C" + arm).allocate()}));
-                var original = instructions(root);
-                assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
-                assertTrue(compile(target));
-                assertEquals(1, root.getGraphBudgetGeneration(), "an observed oversized graph selects the finite recovery plan");
-                assertEquals(0, entries(program), "compilation cannot run the guest");
-                assertEquals(original, instructions(root), "recovery preserves guest PCs and operands");
-                bypass(target);
-                assertEquals(2318L, Calls.target(target, new Object[]{0L, program.entryValue("chosen")}));
-                assertEquals(1, entries(program)); assertTrue(valid(target));
-                assertSame(target, program.entryTarget("entry"));
-                assertEquals(1, root.prepareGraphBudgetRetry(1), "the finite plan is exhausted");
-            } finally { context.leave(); }
-        }
-    }
-
-    @Test void disjointRegionsShareOneRealGraphRecoveryWithoutChangingPublishedPcs() throws Exception {
+    @Test void disjointRegionsRecoverOnFreshEntryWithoutChangingPublishedPcs() throws Exception {
         var input = new LinkedHashMap<>(decision(768));
         var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
         var entry = new LinkedHashMap<>(bindings.getFirst());
@@ -1470,18 +1398,33 @@ class BytecodeGraphBudgetTest {
                             new Object[]{0L, program.constructorLayout("C" + arm).allocate()}));
                 var original = instructions(root);
                 assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
-                assertTrue(compile(target));
-                assertEquals(1, root.getGraphBudgetGeneration(), "a real observed-graph bailout must select both regions");
+                InvocationTargetException failure = assertThrows(InvocationTargetException.class, () -> compile(target));
+                assertTrue(failure.getCause().toString().contains("GraphTooBigBailoutException"));
+                assertTrue(root.compilationFailureObserved);
+                assertEquals(0, root.getGraphBudgetGeneration(), "failure cannot rewrite the retired physical root");
                 assertEquals(0, entries(program)); assertEquals(original, instructions(root));
-                bypass(target);
+                assertFalse(valid(target)); assertFalse(compile(target), "the failed target cannot try again");
                 assertEquals(4636L, Calls.target(target, new Object[]{0L, program.entryValue("chosen")}));
-                assertEquals(1, entries(program)); assertTrue(valid(target)); assertSame(target, program.entryTarget("entry"));
-                assertEquals(1, root.prepareGraphBudgetRetry(0)); assertEquals(1, root.prepareGraphBudgetRetry(1));
+                var redirectField = BytecodeRoot.class.getDeclaredField("recoveredEntry"); redirectField.setAccessible(true);
+                var replacement = (RootCallTarget) ((DirectCallNode) redirectField.get(root)).getCallTarget();
+                var replacementRoot = (BytecodeRoot) replacement.getRootNode();
+                assertNotSame(target, replacement);
+                assertEquals(1, replacementRoot.getGraphBudgetGeneration(), "both regions belong to a smaller fresh root");
+                assertEquals(2, ((BytecodeCaseRegion[]) field.get(replacementRoot)).length);
+                assertEquals(0, entries(program), "the recovery entry ran in the interpreter");
+                assertEquals(original, instructions(root));
+                assertEquals(0, root.prepareGraphBudgetRetry(0));
+                assertSame(target, program.entryTarget("entry"));
+                assertTrue(compile(replacement)); assertTrue(valid(replacement)); bypass(replacement);
+                long before = entries(program);
+                assertEquals(4636L, Calls.target(target, new Object[]{0L, program.entryValue("chosen")}));
+                assertEquals(before + 1, entries(program), "the first installed replacement call executes once");
+                assertTrue(valid(replacement)); assertFalse(valid(target));
                 root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
                 var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
                 var clone = (BytecodeRoot) cloneMethod.invoke(root);
                 assertUninitializedClone(uninitialized, original, instructions(clone));
-                assertEquals(1, clone.getGraphBudgetGeneration());
+                assertEquals(0, clone.getGraphBudgetGeneration(), "the retired source keeps its original PC layout");
             } finally { context.leave(); }
         }
     }
@@ -1494,7 +1437,7 @@ class BytecodeGraphBudgetTest {
                 var program = new BytecodeProgram(language, decision(96));
                 var target = ((Closure) program.entryValue("entry")).target;
                 var root = (BytecodeRoot) target.getRootNode();
-                assertEquals(1, root.prepareGraphBudgetRetry(0)); // Protocol test, not the real-bailout acceptance above.
+                assertEquals(1, root.prepareGraphBudgetRetry(0)); // Preparation control; real failure selects a fresh target.
                 assertTrue(compile(target));
                 assertEquals(0, entries(program));
                 bypass(target);

@@ -56,6 +56,7 @@ class DeferredDefaultArmTest {
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.DiagnoseFailure", "false")
                 .option("compiler.MaximumGraalGraphSize", "10000")
                 .option("compiler.CompilationTimeout", "30").build();
     }
@@ -80,32 +81,6 @@ class DeferredDefaultArmTest {
                 .invoke(runtime, target);
     }
     private static long count(Program program) { return ((Number) program.diagnostics().get("compiledEntries")).longValue(); }
-
-    @Test void oneDefaultArmRecoversTheOriginalColdTargetWithoutExecutingDuringCompilation() throws Exception {
-        try (Context context = context()) {
-            context.initialize("thc"); context.enter();
-            try {
-                Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                Program program = program(language, true);
-                RootCallTarget target = program.entryTarget("entry");
-                assertEquals(0, count(program));
-                assertEquals(0, ((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration());
-                assertTrue(NodeUtil.findAllNodeInstances(target.getRootNode(), AstCaseArm.class).isEmpty(),
-                        "the original caller must still contain its arm before the real budget failure");
-                assertTrue(compile(target));
-                assertEquals(1, ((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration(), "one real structural extraction");
-                assertEquals(0, count(program), "compilation cannot execute a settling guest call");
-                assertEquals(1, NodeUtil.findAllNodeInstances(target.getRootNode(), AstCaseArm.class).size());
-                bypass(target);
-                long before = count(program);
-                // Independently obtained with native GHC Int arithmetic, not THC.
-                assertEquals(-8046168253182003595L, Calls.target(target, new Object[]{0L, 9000000001L}));
-                assertEquals(before + 1, count(program), "the original first call must enter installed code");
-                assertSame(target, program.entryTarget("entry"));
-                assertTrue(valid(target), "first call must retain that installed target");
-            } finally { context.leave(); }
-        }
-    }
 
     @Test void identicalOversizedBodyWithoutAnEligibleDefaultArmKeepsItsBudgetFailure() throws Exception {
         try (Context context = context()) {
@@ -164,7 +139,7 @@ class DeferredDefaultArmTest {
                 assertEquals(before + 1, count(program));
                 assertTrue(valid(original));
                 // Explicit callback unit control, not evidence of a real budget failure.
-                // The oversized test above exercises the actual compiler lifecycle.
+                // StockGraphRecoveryTest exercises the actual failed-target lifecycle.
                 assertEquals(1, clone.prepareGraphBudgetRetry(0));
                 assertEquals(0, ((FunctionRoot) original.getRootNode()).getGraphBudgetGeneration());
                 RootCallTarget extracted = clone.getCallTarget();
