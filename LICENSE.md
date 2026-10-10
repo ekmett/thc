@@ -1,8 +1,8 @@
+SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 # Licensing Terms
 
 Copyright (c) 2019-2026, Edward Kmett
-
-SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 THC is licensed under the [Universal Permissive License, Version 1.0](LICENSE-UPL-1.0.md)
 and the [BSD 3-Clause License](LICENSE-BSD-3-Clause.md), following Cadenza.
