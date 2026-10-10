@@ -219,6 +219,17 @@ public final class FunctionRoot extends GuestRoot {
             CoreRepresentation.UNKNOWN, null, new boolean[2], null, null, new int[0], null,
             async, new int[0][], delimited, FunctionRootRole.PASS_THROUGH, true, false, true, true);
     }
+    /** Explicit WHNF demand owns one input and a saved frame, with no caller-local writeback. */
+    static FunctionRoot demand(TruffleLanguage<?> language, Metrics metrics, boolean async, boolean delimited) {
+        Expr input = new Expr() {
+            @Override public Object execute(VirtualFrame frame) { return frame.getObject(FrameLayout.TAIL_FUNCTION); }
+        };
+        return new FunctionRoot(language, new FrameLayout().build(), "nonlocal demand", null, new int[0],
+            new int[]{FrameLayout.TAIL_FUNCTION}, new int[]{0}, new Evaluate(input, metrics), metrics,
+            new CoreRepresentation[]{CoreRepresentation.UNKNOWN}, CoreRepresentation.UNKNOWN, null,
+            new boolean[1], null, null, new int[0], null, async, new int[0][], delimited,
+            FunctionRootRole.PASS_THROUGH, true, false, true, true);
+    }
     private static boolean contains(int[] values, int value) {
         for (int element : values) if (element == value) return true;
         return false;

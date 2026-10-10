@@ -83,6 +83,17 @@ public final class BytecodeProgram implements ExecutableProgram {
             PreparedDispatch.prepareApplication(language, count, tail, metrics, layout,
                 enableAsync, eagerAsyncPolls, delimited, foreignExceptionBridge));
     }
+    private Closure nonlocalDemand;
+    /** A preparation-only boundary belongs to this program and its immutable execution policy. */
+    private synchronized Closure nonlocalDemand() {
+        if (nonlocalDemand == null) {
+            var root = FunctionRoot.demand(language, metrics, enableAsync, delimited);
+            root.configureEagerAsyncPolls(eagerAsyncPolls);
+            root.configureForeignExceptionBridge(foreignExceptionBridge);
+            nonlocalDemand = new Closure(null, 1, root.getCallTarget());
+        }
+        return nonlocalDemand;
+    }
     private final List<BytecodeRoot> roots = new ArrayList<>();
     private int initializedBindingCount;
     private final PreparationLock preparationLock;
@@ -690,7 +701,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         int sourceRootCount = 0;
         for (var root : roots)
             if (root.getBytecodeNode().hasSourceInformation() && root.getSourceSection() != null) ++sourceRootCount;
-        return Map.of("bytecodeRootCount", roots.size(), "loweredRootCount", roots.size() + coldApplications.size(),
+        return Map.of("bytecodeRootCount", roots.size(), "loweredRootCount", roots.size() + coldApplications.size() + (nonlocalDemand == null ? 0 : 1),
             "hostEntryRootCount", hostEntries.size(), "initializedBindingCount", initializedBindingCount,
             "sourceRootCount", sourceRootCount);
     }
@@ -1056,7 +1067,14 @@ public final class BytecodeProgram implements ExecutableProgram {
                 // throughout this activation, including a saved continuation.
                 boolean fixedRegionIngress = context.passThrough && !context.mayLoop && !local.cell
                     && (context.captures.contains(local) || argumentIndex >= 0);
-                boolean fixedCarrier = fixedRegionIngress || (!context.mayLoop || fixedLoopCarrier)
+                // Self-tail replacement changes captured values under the same layout,
+                // not their physical carrier. Recursive cells and typed ingress stay separate.
+                boolean fixedCaptureIngress = resumable && context.typedInput == null && !local.cell
+                    && context.captures.contains(local)
+                    && (local.proof.getEvaluated()
+                        && (local.proof.isInt() || local.proof.isLong() || local.proof.isFloat() || local.proof.isDouble())
+                        || staticBoxedReference(local.proof) || local.proof.getKind() == CoreKind.VOID);
+                boolean fixedCarrier = fixedRegionIngress || fixedCaptureIngress || (!context.mayLoop || fixedLoopCarrier)
                     && context.captures.isEmpty() && context.vectorCaptures.isEmpty() && !local.cell
                     && (typedFormal || context.typedInput == null && argumentIndex >= 0
                         && !(enableAsync && context.entryStrict[argumentIndex]));
@@ -1123,11 +1141,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                         if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
                     };
                     if (context.passThrough) restoreArgument(e, local, readCapture);
-                    else {
-                        b.beginStoreLocal(Objects.requireNonNull(e.locals.get(local.id)));
-                        readCapture.run();
-                        b.endStoreLocal();
-                    }
+                    else restoreCapture(e, local, readCapture);
                 }
                 for (var slots : vectorCaptureSlots(e, context)) {
                     b.beginCaptureReadVector(slots); b.emitLoadArgument(1); b.endCaptureReadVector();
@@ -1336,6 +1350,19 @@ public final class BytecodeProgram implements ExecutableProgram {
         b.endBlock();
     }
 
+    /** Restore the capture's physical carrier without adding a nominal WHNF demand. */
+    private void restoreCapture(Emission e, Local local, Runnable value) {
+        var b = e.builder;
+        var slot = Objects.requireNonNull(e.locals.get(local.id));
+        if (e.staticObjectLocals.contains(local.id)) {
+            b.beginStaticStoreObject(slot); value.run(); b.endStaticStoreObject();
+        } else if (e.staticLocals.contains(local.id) || e.staticScalars.containsKey(local.id)) {
+            restoreArgument(e, local, value);
+        } else {
+            b.beginStoreLocal(slot); value.run(); b.endStoreLocal();
+        }
+    }
+
     private void restoreArgument(Emission e, Local local, Runnable value) { restoreArgument(e, local, false, value); }
 
     /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
@@ -1449,30 +1476,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             } else {
                 b.beginBlock();
                 var operand = b.createLocal("saved force operand", FrameSlotKind.Object);
-                var result = b.createLocal("forced value result", FrameSlotKind.Object);
-                var suspended = b.createLocal("forced value suspension", FrameSlotKind.Object);
+                var callerMask = b.createLocal("force caller mask", FrameSlotKind.Object);
                 // Evaluate the producer once, before any child ownership is claimed.
                 b.beginStaticStoreObject(operand); value.emit(e); b.endStaticStoreObject();
-                emitOwnerWaitRetry(e, () -> {
-                    b.beginTryCatch();
-                    b.beginStaticStoreObject(result);
-                    b.beginForceValue(metrics, enableAsync); b.emitStaticLoadObject(operand); b.endForceValue();
-                    b.endStaticStoreObject();
-                    b.beginBlock();
-                    b.beginStaticStoreObject(suspended);
-                    b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly();
-                    b.endStaticStoreObject();
-                    b.beginStaticStoreObject(result);
-                    b.beginResumeForcedValue();
-                    b.emitStaticLoadObject(operand);
-                    b.emitStaticLoadObject(suspended);
-                    beginAnnotationYield(e); b.emitStaticLoadObject(suspended); endAnnotationYield(e);
-                    b.endResumeForcedValue();
-                    b.endStaticStoreObject();
-                    b.endBlock();
-                    b.endTryCatch();
+                b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
+                checkpointedResult(e, callerMask, () -> {
+                    var demand = nonlocalDemand();
+                    b.beginDemandValue(demand.target, demand);
+                    b.emitStaticLoadObject(operand); b.emitStaticLoadObject(callerMask);
+                    b.endDemandValue();
                 });
-                b.emitStaticLoadObject(result);
                 b.endBlock();
             }
         }));
@@ -3282,12 +3295,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         // Preserve this activation's ancestry when replacing captures/formals.
         for (int i = 0; i < context.captures.size(); ++i) {
             var local = context.captures.get(i);
-            b.beginStoreLocal(Objects.requireNonNull(e.locals.get(local.id)));
-            if (local.directLong()) b.beginCaptureReadLong(Objects.requireNonNull(context.captureLayout), i);
-            else b.beginCaptureRead(Objects.requireNonNull(context.captureLayout), i);
-            b.beginTailArgument(1); b.emitLoadLocal(transfer); b.endTailArgument();
-            if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
-            b.endStoreLocal();
+            int capture = i;
+            restoreCapture(e, local, () -> {
+                if (local.directLong()) b.beginCaptureReadLong(Objects.requireNonNull(context.captureLayout), capture);
+                else b.beginCaptureRead(Objects.requireNonNull(context.captureLayout), capture);
+                b.beginTailArgument(1); b.emitLoadLocal(transfer); b.endTailArgument();
+                if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
+            });
         }
         for (var slots : vectorCaptureSlots(e, context)) {
             b.beginCaptureReadVector(slots);
@@ -3345,24 +3359,32 @@ public final class BytecodeProgram implements ExecutableProgram {
     /** One exact call or PAP step; a yielded callee is captured before any suffix runs. */
     private void checkpointedCall(Emission e, BytecodeLocal fn, List<BytecodeLocal> values,
             ArgumentLayout layout, boolean[] evaluatedArguments, int arity, BytecodeLocal callerMask) {
+        checkpointedResult(e, callerMask, () -> {
+            var b = e.builder;
+            // Scalar Apply owns completion in its prepared dispatch. Typed input
+            // operations still return their saved result through this bytecode bridge.
+            boolean scalarCall = layout == null || !layout.getRequiresTyped();
+            if (!scalarCall) {
+                b.beginCaptureApplicationResult(arity);
+                b.emitStaticLoadObject(fn);
+            }
+            savedApply(e, fn, values, layout, evaluatedArguments, arity, false, false);
+            if (!scalarCall) {
+                b.emitStaticLoadObject(callerMask);
+                b.endCaptureApplicationResult();
+            }
+        });
+    }
+
+    /** One completed call edge owns its result and resumes without replaying its producer. */
+    private void checkpointedResult(Emission e, BytecodeLocal callerMask, Runnable call) {
         var b = e.builder;
         b.beginBlock();
-        var result = b.createLocal("captured application result", FrameSlotKind.Object);
-        var suspended = b.createLocal("captured application suspension", FrameSlotKind.Object);
+        var result = b.createLocal("captured call result", FrameSlotKind.Object);
+        var suspended = b.createLocal("captured call suspension", FrameSlotKind.Object);
         b.beginTryCatch();
         b.beginStaticStoreObject(result);
-        // Scalar Apply owns completion in its prepared dispatch. Typed input
-        // operations still return their saved result through this bytecode bridge.
-        boolean scalarCall = layout == null || !layout.getRequiresTyped();
-        if (!scalarCall) {
-            b.beginCaptureApplicationResult(arity);
-            b.emitStaticLoadObject(fn);
-        }
-        savedApply(e, fn, values, layout, evaluatedArguments, arity, false, false);
-        if (!scalarCall) {
-            b.emitStaticLoadObject(callerMask);
-            b.endCaptureApplicationResult();
-        }
+        call.run();
         b.endStaticStoreObject();
         b.beginBlock();
         b.beginStaticStoreObject(suspended);
@@ -3797,12 +3819,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
                 for (int i = 0; i < context.captures.size(); ++i) {
                     var local = context.captures.get(i);
-                    b.beginStoreLocal(Objects.requireNonNull(e.locals.get(local.id)));
-                    if (local.directLong()) b.beginCaptureReadLong(Objects.requireNonNull(context.captureLayout), i);
-                    else b.beginCaptureRead(Objects.requireNonNull(context.captureLayout), i);
-                    b.beginClosureEnvironment(); b.emitLoadLocal(fn); b.endClosureEnvironment();
-                    if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
-                    b.endStoreLocal();
+                    int capture = i;
+                    restoreCapture(e, local, () -> {
+                        if (local.directLong()) b.beginCaptureReadLong(Objects.requireNonNull(context.captureLayout), capture);
+                        else b.beginCaptureRead(Objects.requireNonNull(context.captureLayout), capture);
+                        b.beginClosureEnvironment(); b.emitLoadLocal(fn); b.endClosureEnvironment();
+                        if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
+                    });
                 }
                 for (var slots : vectorCaptureSlots(e, context)) {
                     b.beginCaptureReadVector(slots);
