@@ -60,7 +60,7 @@ class BytecodeUnifiedFrameTest {
                     b.beginStaticStoreObject(temporary); b.emitLoadConstant(dead); b.endStaticStoreObject();
                     b.beginStaticStoreDouble(floating); b.emitLoadConstant(-0.0d); b.endStaticStoreDouble();
                     b.endBlock();
-                    b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                     b.beginReturn(); b.emitStaticLoadObject(ref); b.endReturn(); b.endRoot();
                 }).getNode(0);
                 root.configureAsync(true); root.configureStackDriver(metrics);
@@ -73,7 +73,7 @@ class BytecodeUnifiedFrameTest {
                 assertSame(retained, saved.getFrame().getObject(1));
                 assertEquals(Long.MIN_VALUE, saved.getFrame().getLong(2));
                 cleared(saved.getFrame(), 0, 4, 5);
-                assertSame(retained, saved.continueWith(Unit.INSTANCE));
+                assertSame(retained, SavedGuestContinuations.savedGuestContinuation(saved).continueWith(Unit.INSTANCE));
             } finally { context.leave(); }
         }
     }
@@ -106,12 +106,12 @@ class BytecodeUnifiedFrameTest {
                     b.beginStaticStoreInt(narrow); b.emitLoadConstant(Integer.MIN_VALUE); b.endStaticStoreInt();
                     b.beginStaticStoreFloat(floating); b.emitLoadConstant(-0.0f); b.endStaticStoreFloat();
                     b.beginStaticStoreObject(temporary);
-                    b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                     b.endStaticStoreObject();
                     b.emitEnterRoot(metrics);
                     b.beginForceValue(metrics, false); b.emitLoadArgument(1); b.endForceValue();
                     b.endBlock();
-                    b.beginYield(); b.emitLoadException(); b.endYield();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadException(); b.endRecordContinuationOwner(); b.endYield();
                     b.endTryCatch();
                     b.beginReturn(); b.emitStaticLoadObject(ref); b.endReturn(); b.endRoot();
                 }).getNode(0);
@@ -129,7 +129,7 @@ class BytecodeUnifiedFrameTest {
                 var target = (OptimizedCallTarget) first.getContinuationRootNode().getCallTarget();
                 compile(target);
                 assertEquals(0, metrics.getCompiledEntries()); assertEquals(0, metrics.getThunkEvaluations());
-                var second = assertInstanceOf(ContinuationResult.class, first.continueWith(Unit.INSTANCE));
+                var second = assertInstanceOf(ContinuationResult.class, SavedGuestContinuations.savedGuestContinuation(first).continueWith(Unit.INSTANCE));
                 assertSame(failure, second.getResult()); assertSame(first.getFrame(), second.getFrame());
                 assertEquals(1, metrics.getCompiledEntries(), "first installed resume entry");
                 assertEquals(1, metrics.getThunkEvaluations(), "once-only failing thunk");
@@ -138,7 +138,7 @@ class BytecodeUnifiedFrameTest {
                 assertSame(retained, second.getFrame().getObject(1));
                 assertEquals(Long.MAX_VALUE, second.getFrame().getLong(2));
                 cleared(second.getFrame(), 0, 4, 5, 6);
-                assertSame(retained, second.continueWith(Unit.INSTANCE));
+                assertSame(retained, SavedGuestContinuations.savedGuestContinuation(second).continueWith(Unit.INSTANCE));
                 assertEquals(1, metrics.getThunkEvaluations());
             } finally { context.leave(); }
         }

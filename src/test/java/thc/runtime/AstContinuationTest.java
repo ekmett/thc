@@ -268,6 +268,100 @@ class AstContinuationTest {
             } finally { if (worker.isAlive()) context.close(true); worker.join(5000); }
         }
     }
+    @Test void firstCompiledNonlocalDemandOwnsItsDelayedThunkAcrossACarrierChange() throws Exception {
+        var module = directMVarModule(false, false, true, false, false, false, false);
+        var bindings = new ArrayList<>((List<Map<String, Object>>) module.get("bindings"));
+        var lambda = (List<Object>) bindings.getFirst().get("expr");
+        var delayed = map("id", "delayed", "name", "delayed", "lifted", true,
+                "rep", map("kind", "unknown", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false),
+                "expr", lambda.get(2));
+        // The let result is a nonlocal demand operand. Its producer creates one
+        // thunk; the delayed MVar effect belongs to that thunk's original root.
+        var operand = list("let", false, list(delayed), list("var", "delayed"));
+        var suffix = list("app", list("prim", "+#"),
+                list(list("var", "forced", map("rep", longRep)), list("lit", "int", "5", map("rep", longRep))),
+                list(false, false), false, false, map("rep", longRep));
+        lambda.set(2, list("case", operand, "forced", list(list("default", null, List.of(), suffix)),
+                map("rep", longRep, "binder", map("id", "forced", "rep", longRep))));
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            final Language language; final Language.State owner; final BytecodeProgram program;
+            final RootCallTarget caller, helper, resume;
+            final List<RootCallTarget> demandTargets;
+            try {
+                language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
+                program = new BytecodeProgram(language, module, true); caller = program.entryTarget("direct");
+                var targets = ThreadInventoryCoreEvidence.targets(caller); demandTargets = targets;
+                helper = targets.stream().filter(t -> t.getRootNode() instanceof FunctionRoot).findFirst()
+                        .orElseThrow(() -> new AssertionError("The nonlocal demand must own a real prepared guest root"));
+                var helperRoot = (FunctionRoot) helper.getRootNode();
+                assertEquals(FunctionRootRole.PASS_THROUGH, helperRoot.getRole());
+                assertTrue(helperRoot.getCapturesContinuations()); assertNull(helperRoot.getCoreIdentity());
+                ThreadInventoryCoreEvidence.install(targets);
+                assertEquals(0L, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) {
+                        return force.drainStack((SavedGuestContinuation) frame.getArguments()[0]);
+                    }
+                }.getCallTarget();
+            } finally { context.leave(); }
+            var cell = new ManagedMVar(); var answer = new CompletableFuture<SavedGuestContinuation>();
+            var worker = new Thread(() -> {
+                context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+                try {
+                    var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
+                            Calls.target(caller, new Object[]{0L, cell, Unit.INSTANCE})));
+                    Objects.requireNonNull(saved.asyncRequest()).acknowledge(); answer.complete(saved);
+                } catch (Throwable failure) { answer.completeExceptionally(failure); }
+                finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+            });
+            worker.start();
+            try {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (cell.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
+                if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
+                assertEquals(1, cell.pendingCounts().getTakers());
+                var request = owner.getThreads().send(Objects.requireNonNull(owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "nonlocal demand cut");
+                var saved = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
+                assertSame(caller.getRootNode(), saved.getSourceRoot()); assertSame(request, saved.asyncRequest());
+                assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                var segment = assertInstanceOf(CallSegmentSuspended.class, saved.getYielded()).getSegment();
+                var helperSaved = assertInstanceOf(AstContinuation.class,
+                        SavedGuestContinuations.savedGuestContinuation(segment.getValue()));
+                assertSame(helper.getRootNode(), helperSaved.getSourceRoot()); assertSame(helperSaved, helperSaved.getIdentity());
+                var thunk = assertInstanceOf(ThunkSuspended.class, helperSaved.getYielded()).getThunk();
+                assertEquals(5, thunk.getState());
+                var childSaved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(thunk.getValue()));
+                var childRoot = assertInstanceOf(BytecodeRoot.class, childSaved.getSourceRoot());
+                assertTrue(demandTargets.stream().anyMatch(t -> t.getRootNode() == childRoot),
+                        "The helper retains the original prepared delayed thunk root");
+                var targetStates = new ArrayList<String>();
+                for (var target : demandTargets) targetStates.add(target.getRootNode().getName() + ":valid=" + ThreadInventoryCoreEvidence.valid(target));
+                assertEquals(3L, ((Number) program.diagnostics().get("compiledEntries")).longValue(),
+                        "Caller, demand helper and delayed thunk enter installed code before execution warmup: " +
+                        demandTargets.stream().map(t -> t.getRootNode().getName()).toList() + " interpreter calls=" +
+                        ThreadInventoryCoreEvidence.interpretedCalls(demandTargets) + " " + targetStates);
+                assertTrue(cell.tryPut("consumed once"));
+                var result = CompletableFuture.supplyAsync(() -> {
+                    context.enter();
+                    try { return Calls.target(resume, new Object[]{saved}); }
+                    finally { context.leave(); }
+                }).get(5, TimeUnit.SECONDS);
+                assertEquals(12L, result); assertTrue(cell.isEmpty(), "The delayed MVar effect cannot replay");
+                assertEquals(2, thunk.getState()); assertEquals(7L, thunk.getValue()); assertNull(thunk.getOwner());
+                assertEquals(2, segment.getState()); assertEquals(7L, segment.getValue()); assertNull(segment.getOwner());
+                assertThrows(RuntimeFault.class, () -> helperSaved.continueWith(Unit.INSTANCE));
+                context.enter();
+                try {
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(caller.getRootNode()));
+                    ThreadInventoryCoreEvidence.released(language);
+                } finally { context.leave(); }
+            } finally { if (worker.isAlive()) context.close(true); worker.join(5000); }
+        }
+    }
     @Test void ordinaryCallerAndEntryRoutesAreCapturedAndConflictingProofsStillFail() {
         try (var context = Context.newBuilder("thc").build()) { context.initialize("thc"); context.enter(); try {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); new Program(language, directMVarModule(false, false, false, false, false, false, false), true); new Program(language, directMVarModule(false, true, false, false, false, false, false), true); new Program(language, directMVarModule(false, false, false, true, false, false, false), true);

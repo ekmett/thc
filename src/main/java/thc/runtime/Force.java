@@ -70,6 +70,7 @@ public final class Force extends Node {
             if (original.getState() == 5) {
                 resumeProfile.enter();
                 observed = savedGuestContinuation(original.getValue());
+                BytecodeContinuations.preflightWait(observed);
             }
             PendingWait pending = PendingWait.of(observed);
             if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) {
@@ -92,6 +93,7 @@ public final class Force extends Node {
                 if (original.getState() != 5 || saved == null ||
                     !(saved.getResult() instanceof ThunkSuspended suspension) || suspension.getThunk() != child || child.getState() != 5)
                     throw fault("Async handler cut requires the exact parked shared child");
+                BytecodeContinuations.preflight(saved);
                 original.setValue(null);
                 original.setOwner(Thread.currentThread());
                 original.setState(1);
@@ -105,6 +107,9 @@ public final class Force extends Node {
     }
     public Object deliverAtCapturedIOHandler(CapturedAsyncRequest request) { return deliverAtCapturedIOHandler(request, null); }
     public Object deliverAtCapturedIOHandler(CapturedAsyncRequest request, Runnable afterClaim) {
+        // Authorization rejection must not settle a still-pending request as failed.
+        request.requireOwner(this);
+        preflightCapturedParent(request.getParent());
         try {
             Object answer = deliverAtCapturedIOHandler(request.getParent(), request.getChild(), request.getPayload(), afterClaim, request);
             if (request.getState() != CapturedRequestState.ACKNOWLEDGED)
@@ -122,6 +127,16 @@ public final class Force extends Node {
     public Object deliverAtCapturedIOHandler(Object original, CallSegment child, Object payload, Runnable afterClaim) {
         return deliverAtCapturedIOHandler(original, child, payload, afterClaim, null);
     }
+    @TruffleBoundary private static void preflightCapturedParent(Object parent) {
+        if (parent instanceof Thunk thunk) synchronized (thunk.getMonitor()) {
+            if (thunk.getState() == 5 && thunk.getValue() instanceof ContinuationResult saved)
+                BytecodeContinuations.preflight(saved);
+        }
+        else if (parent instanceof CallSegment segment) synchronized (segment.getMonitor()) {
+            if (segment.getState() == 5 && segment.getValue() instanceof ContinuationResult saved)
+                BytecodeContinuations.preflight(saved);
+        }
+    }
     private static boolean exact(ContinuationResult saved, CallSegment child) {
         return saved != null && saved.getContinuationRootNode().getSourceRootNode() instanceof BytecodeRoot &&
             saved.getResult() instanceof CallSegmentSuspended cut && cut.getSegment() == child &&
@@ -136,6 +151,7 @@ public final class Force extends Node {
                 synchronized (thunk.getMonitor()) {
                     saved = thunk.getValue() instanceof ContinuationResult value ? value : null;
                     if (thunk.getState() != 5 || !exact(saved, child)) throw fault("Async IO handler cut requires the exact parked action");
+                    BytecodeContinuations.preflight(saved);
                     if (request != null && !request.commit$org_intelligence_thc(thunk, child))
                         throw fault("Async IO handler cut requires a pending request for this continuation");
                     thunk.setValue(null); thunk.setOwner(Thread.currentThread()); thunk.setState(1); claimed = true;
@@ -156,6 +172,7 @@ public final class Force extends Node {
                 synchronized (segment.getMonitor()) {
                     saved = segment.getValue() instanceof ContinuationResult value ? value : null;
                     if (segment.getState() != 5 || !exact(saved, child)) throw fault("Async IO handler cut requires the exact parked action");
+                    BytecodeContinuations.preflight(saved);
                     if (request != null && !request.commit$org_intelligence_thc(segment, child))
                         throw fault("Async IO handler cut requires a pending request for this continuation");
                     mask = segment.getLogicalMask();
@@ -204,6 +221,7 @@ public final class Force extends Node {
                             else {
                                 continuation = savedGuestContinuation(original.getValue());
                                 if (continuation == null) throw fault("Suspended thunk has no guest continuation");
+                                BytecodeContinuations.preflightWait(continuation);
                                 PendingWait pending = PendingWait.of(continuation);
                                 if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this) && !asyncUnwind(resumeValue)) claim = 1;
                                 else {
@@ -247,6 +265,7 @@ public final class Force extends Node {
             while (true) {
                 if (seen.put(leaf, true) != null) throw fault("Suspended thunk dependency cycle");
                 leafContinuation = continuationOf(leaf);
+                BytecodeContinuations.preflightWait(leafContinuation);
                 if (delimitedInvocation && leafContinuation != null && leafContinuation.getYielded() instanceof DelimitedCut)
                     throw new UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain");
                 Object child = suspendedChild(leafContinuation);
@@ -257,6 +276,7 @@ public final class Force extends Node {
                     break;
                 }
                 if (child instanceof Thunk thunk) {
+                    BytecodeContinuations.preflightWait(continuationOf(thunk));
                     PendingWait pending = PendingWait.of(thunk.getValue());
                     if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) awaitOwner(thunk);
                 }
@@ -401,7 +421,8 @@ public final class Force extends Node {
     static final class DriverWait implements SavedGuestContinuation {
         private final Force force;
         private final GuestRoot root;
-        private final CallSegment segment;
+        // Immutable retained owner edge, also used by cold authorization traversal.
+        final CallSegment segment;
         private final PendingWait wait;
         private final boolean delimited;
         private final Metrics metrics;
@@ -414,6 +435,7 @@ public final class Force extends Node {
         @Override public Object getSourceRoot() { return root; }
         @Override public Object continueWith(Object input) {
             if (input != Unit.INSTANCE || claimed) throw fault("Invalid pending driver continuation entry");
+            BytecodeContinuations.preflightWait(segment);
             claimed = true;
             try {
                 try { wait.resume(); }
@@ -469,6 +491,7 @@ public final class Force extends Node {
                             else {
                                 continuation = savedGuestContinuation(segment.getValue());
                                 if (continuation == null) throw fault("Suspended call segment has no guest continuation");
+                                BytecodeContinuations.preflightWait(continuation);
                                 PendingWait pending = PendingWait.of(continuation);
                                 if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this) && !asyncUnwind(resumeValue)) claim = 4;
                                 else {

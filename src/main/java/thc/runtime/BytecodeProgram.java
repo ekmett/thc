@@ -83,6 +83,17 @@ public final class BytecodeProgram implements ExecutableProgram {
             PreparedDispatch.prepareApplication(language, count, tail, metrics, layout,
                 enableAsync, eagerAsyncPolls, delimited, foreignExceptionBridge));
     }
+    private Closure nonlocalDemand;
+    /** A preparation-only boundary belongs to this program and its immutable execution policy. */
+    private synchronized Closure nonlocalDemand() {
+        if (nonlocalDemand == null) {
+            var root = FunctionRoot.demand(language, metrics, enableAsync, delimited);
+            root.configureEagerAsyncPolls(eagerAsyncPolls);
+            root.configureForeignExceptionBridge(foreignExceptionBridge);
+            nonlocalDemand = new Closure(null, 1, root.getCallTarget());
+        }
+        return nonlocalDemand;
+    }
     private final List<BytecodeRoot> roots = new ArrayList<>();
     private int initializedBindingCount;
     private final PreparationLock preparationLock;
@@ -223,10 +234,18 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean passThrough;
         boolean entryPoll = true;
         boolean preparingCaseRegion;
+        List<?> caseRegionOrigin;
         CaseRegionEmission caseEmission;
         final List<BytecodeCaseRegion> caseRegions = new ArrayList<>();
         LeadingCaseReturn leadingCaseReturn;
         TupleShape tuple;
+
+        // Each side may prepare only a proper original subtree. Rewritten
+        // selectors and copied closure wrappers cannot outline themselves.
+        boolean regionSourceAllowed(List<?> expression) {
+            return caseRegionOrigin == null || expression != caseRegionOrigin
+                && containsRegionSource(caseRegionOrigin, expression);
+        }
 
         FunctionContext(int formalArity) { this(formalArity, new boolean[formalArity]); }
         FunctionContext(int formalArity, boolean[] entryStrict) {
@@ -690,7 +709,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         int sourceRootCount = 0;
         for (var root : roots)
             if (root.getBytecodeNode().hasSourceInformation() && root.getSourceSection() != null) ++sourceRootCount;
-        return Map.of("bytecodeRootCount", roots.size(), "loweredRootCount", roots.size() + coldApplications.size(),
+        return Map.of("bytecodeRootCount", roots.size(), "loweredRootCount", roots.size() + coldApplications.size() + (nonlocalDemand == null ? 0 : 1),
             "hostEntryRootCount", hostEntries.size(), "initializedBindingCount", initializedBindingCount,
             "sourceRootCount", sourceRootCount);
     }
@@ -826,16 +845,18 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
             CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough) {
-        return function(label, args, expression, outer, resultProof, entryStrict, tail, passThrough, true);
+        return function(label, args, expression, outer, resultProof, entryStrict, tail, passThrough, true, null);
     }
 
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
-            CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough, boolean entryPoll) {
+            CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough, boolean entryPoll,
+            List<?> regionOrigin) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
         var context = new FunctionContext(args.size(), entryStrict.clone());
         context.passThrough = passThrough;
         context.entryPoll = entryPoll;
-        context.preparingCaseRegion = passThrough;
+        context.caseRegionOrigin = regionOrigin;
+        context.preparingCaseRegion = passThrough && regionOrigin == null;
         var scope = new Scope(context, outer.source);
         var free = CoreFreeVariables.coreFreeVariables(expression);
         var argumentIds = new LinkedHashSet<String>();
@@ -1056,7 +1077,14 @@ public final class BytecodeProgram implements ExecutableProgram {
                 // throughout this activation, including a saved continuation.
                 boolean fixedRegionIngress = context.passThrough && !context.mayLoop && !local.cell
                     && (context.captures.contains(local) || argumentIndex >= 0);
-                boolean fixedCarrier = fixedRegionIngress || (!context.mayLoop || fixedLoopCarrier)
+                // Self-tail replacement changes captured values under the same layout,
+                // not their physical carrier. Recursive cells and typed ingress stay separate.
+                boolean fixedCaptureIngress = resumable && context.typedInput == null && !local.cell
+                    && context.captures.contains(local)
+                    && (local.proof.getEvaluated()
+                        && (local.proof.isInt() || local.proof.isLong() || local.proof.isFloat() || local.proof.isDouble())
+                        || staticBoxedReference(local.proof) || local.proof.getKind() == CoreKind.VOID);
+                boolean fixedCarrier = fixedRegionIngress || fixedCaptureIngress || (!context.mayLoop || fixedLoopCarrier)
                     && context.captures.isEmpty() && context.vectorCaptures.isEmpty() && !local.cell
                     && (typedFormal || context.typedInput == null && argumentIndex >= 0
                         && !(enableAsync && context.entryStrict[argumentIndex]));
@@ -1123,11 +1151,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                         if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
                     };
                     if (context.passThrough) restoreArgument(e, local, readCapture);
-                    else {
-                        b.beginStoreLocal(Objects.requireNonNull(e.locals.get(local.id)));
-                        readCapture.run();
-                        b.endStoreLocal();
-                    }
+                    else restoreCapture(e, local, readCapture);
                 }
                 for (var slots : vectorCaptureSlots(e, context)) {
                     b.beginCaptureReadVector(slots); b.emitLoadArgument(1); b.endCaptureReadVector();
@@ -1146,7 +1170,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginBlock();
                 var resumed = b.createLocal("stack entry resume value", FrameSlotKind.Object);
                 b.beginStaticStoreObject(resumed);
-                b.beginYield(); b.emitLoadConstant(AstStackSpill.INSTANCE); b.endYield();
+                b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(AstStackSpill.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                 b.endStaticStoreObject();
                 b.endBlock(); b.endIfThen();
             }
@@ -1336,6 +1360,19 @@ public final class BytecodeProgram implements ExecutableProgram {
         b.endBlock();
     }
 
+    /** Restore the capture's physical carrier without adding a nominal WHNF demand. */
+    private void restoreCapture(Emission e, Local local, Runnable value) {
+        var b = e.builder;
+        var slot = Objects.requireNonNull(e.locals.get(local.id));
+        if (e.staticObjectLocals.contains(local.id)) {
+            b.beginStaticStoreObject(slot); value.run(); b.endStaticStoreObject();
+        } else if (e.staticLocals.contains(local.id) || e.staticScalars.containsKey(local.id)) {
+            restoreArgument(e, local, value);
+        } else {
+            b.beginStoreLocal(slot); value.run(); b.endStoreLocal();
+        }
+    }
+
     private void restoreArgument(Emission e, Local local, Runnable value) { restoreArgument(e, local, false, value); }
 
     /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
@@ -1449,30 +1486,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             } else {
                 b.beginBlock();
                 var operand = b.createLocal("saved force operand", FrameSlotKind.Object);
-                var result = b.createLocal("forced value result", FrameSlotKind.Object);
-                var suspended = b.createLocal("forced value suspension", FrameSlotKind.Object);
+                var callerMask = b.createLocal("force caller mask", FrameSlotKind.Object);
                 // Evaluate the producer once, before any child ownership is claimed.
                 b.beginStaticStoreObject(operand); value.emit(e); b.endStaticStoreObject();
-                emitOwnerWaitRetry(e, () -> {
-                    b.beginTryCatch();
-                    b.beginStaticStoreObject(result);
-                    b.beginForceValue(metrics, enableAsync); b.emitStaticLoadObject(operand); b.endForceValue();
-                    b.endStaticStoreObject();
-                    b.beginBlock();
-                    b.beginStaticStoreObject(suspended);
-                    b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly();
-                    b.endStaticStoreObject();
-                    b.beginStaticStoreObject(result);
-                    b.beginResumeForcedValue();
-                    b.emitStaticLoadObject(operand);
-                    b.emitStaticLoadObject(suspended);
-                    beginAnnotationYield(e); b.emitStaticLoadObject(suspended); endAnnotationYield(e);
-                    b.endResumeForcedValue();
-                    b.endStaticStoreObject();
-                    b.endBlock();
-                    b.endTryCatch();
+                b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
+                checkpointedResult(e, callerMask, () -> {
+                    var demand = nonlocalDemand();
+                    b.beginDemandValue(demand.target, demand);
+                    b.emitStaticLoadObject(operand); b.emitStaticLoadObject(callerMask);
+                    b.endDemandValue();
                 });
-                b.emitStaticLoadObject(result);
                 b.endBlock();
             }
         }));
@@ -3282,12 +3305,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         // Preserve this activation's ancestry when replacing captures/formals.
         for (int i = 0; i < context.captures.size(); ++i) {
             var local = context.captures.get(i);
-            b.beginStoreLocal(Objects.requireNonNull(e.locals.get(local.id)));
-            if (local.directLong()) b.beginCaptureReadLong(Objects.requireNonNull(context.captureLayout), i);
-            else b.beginCaptureRead(Objects.requireNonNull(context.captureLayout), i);
-            b.beginTailArgument(1); b.emitLoadLocal(transfer); b.endTailArgument();
-            if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
-            b.endStoreLocal();
+            int capture = i;
+            restoreCapture(e, local, () -> {
+                if (local.directLong()) b.beginCaptureReadLong(Objects.requireNonNull(context.captureLayout), capture);
+                else b.beginCaptureRead(Objects.requireNonNull(context.captureLayout), capture);
+                b.beginTailArgument(1); b.emitLoadLocal(transfer); b.endTailArgument();
+                if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
+            });
         }
         for (var slots : vectorCaptureSlots(e, context)) {
             b.beginCaptureReadVector(slots);
@@ -3345,24 +3369,32 @@ public final class BytecodeProgram implements ExecutableProgram {
     /** One exact call or PAP step; a yielded callee is captured before any suffix runs. */
     private void checkpointedCall(Emission e, BytecodeLocal fn, List<BytecodeLocal> values,
             ArgumentLayout layout, boolean[] evaluatedArguments, int arity, BytecodeLocal callerMask) {
+        checkpointedResult(e, callerMask, () -> {
+            var b = e.builder;
+            // Scalar Apply owns completion in its prepared dispatch. Typed input
+            // operations still return their saved result through this bytecode bridge.
+            boolean scalarCall = layout == null || !layout.getRequiresTyped();
+            if (!scalarCall) {
+                b.beginCaptureApplicationResult(arity);
+                b.emitStaticLoadObject(fn);
+            }
+            savedApply(e, fn, values, layout, evaluatedArguments, arity, false, false);
+            if (!scalarCall) {
+                b.emitStaticLoadObject(callerMask);
+                b.endCaptureApplicationResult();
+            }
+        });
+    }
+
+    /** One completed call edge owns its result and resumes without replaying its producer. */
+    private void checkpointedResult(Emission e, BytecodeLocal callerMask, Runnable call) {
         var b = e.builder;
         b.beginBlock();
-        var result = b.createLocal("captured application result", FrameSlotKind.Object);
-        var suspended = b.createLocal("captured application suspension", FrameSlotKind.Object);
+        var result = b.createLocal("captured call result", FrameSlotKind.Object);
+        var suspended = b.createLocal("captured call suspension", FrameSlotKind.Object);
         b.beginTryCatch();
         b.beginStaticStoreObject(result);
-        // Scalar Apply owns completion in its prepared dispatch. Typed input
-        // operations still return their saved result through this bytecode bridge.
-        boolean scalarCall = layout == null || !layout.getRequiresTyped();
-        if (!scalarCall) {
-            b.beginCaptureApplicationResult(arity);
-            b.emitStaticLoadObject(fn);
-        }
-        savedApply(e, fn, values, layout, evaluatedArguments, arity, false, false);
-        if (!scalarCall) {
-            b.emitStaticLoadObject(callerMask);
-            b.endCaptureApplicationResult();
-        }
+        call.run();
         b.endStaticStoreObject();
         b.beginBlock();
         b.beginStaticStoreObject(suspended);
@@ -3797,12 +3829,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
                 for (int i = 0; i < context.captures.size(); ++i) {
                     var local = context.captures.get(i);
-                    b.beginStoreLocal(Objects.requireNonNull(e.locals.get(local.id)));
-                    if (local.directLong()) b.beginCaptureReadLong(Objects.requireNonNull(context.captureLayout), i);
-                    else b.beginCaptureRead(Objects.requireNonNull(context.captureLayout), i);
-                    b.beginClosureEnvironment(); b.emitLoadLocal(fn); b.endClosureEnvironment();
-                    if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
-                    b.endStoreLocal();
+                    int capture = i;
+                    restoreCapture(e, local, () -> {
+                        if (local.directLong()) b.beginCaptureReadLong(Objects.requireNonNull(context.captureLayout), capture);
+                        else b.beginCaptureRead(Objects.requireNonNull(context.captureLayout), capture);
+                        b.beginClosureEnvironment(); b.emitLoadLocal(fn); b.endClosureEnvironment();
+                        if (local.directLong()) b.endCaptureReadLong(); else b.endCaptureRead();
+                    });
                 }
                 for (var slots : vectorCaptureSlots(e, context)) {
                     b.beginCaptureReadVector(slots);
@@ -4100,7 +4133,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             boolean outlined = !recursive && !context.preparingCaseRegion
                     && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
                     && joinRegionWork(definition.getBody(), 64) >= 64
-                    && CoreFreeVariables.coreFreeVariables(definition.getBody()).stream().noneMatch(bodyScope.joins::containsKey);
+                    && CoreFreeVariables.coreFreeVariables(definition.getBody()).stream().noneMatch(bodyScope.joins::containsKey)
+                    && context.regionSourceAllowed(definition.getBody());
             // Preserve normal case preparation first: an optional whole-body
             // side can itself exceed local capacity. Existing nested plans take
             // precedence; never wrap one in another region in this activation.
@@ -4115,7 +4149,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     int rootMark = roots.size(), joinMark = localJoinCount;
                     try {
                         var side = function("join body " + definition.getId(), List.of(), definition.getBody(), bodyScope,
-                                body.proof(), new boolean[0], tail, true, false);
+                                body.proof(), new boolean[0], tail, true, false, definition.getBody());
                         if (context.caseEmission == null) context.caseEmission = new CaseRegionEmission();
                         int index = context.caseRegions.size();
                         context.caseRegions.add(new BytecodeCaseRegion(side.target, side.captureLayout, tail));
@@ -5465,7 +5499,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var binding : group) if (CoreRepresentations.joinArity(binding) != null) {
             var context = scope.function;
             if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS) {
-                if (recursive && joinRegionWork(expr, 64) >= 64) {
+                if (recursive && joinRegionWork(expr, 64) >= 64 && context.regionSourceAllowed(expr)) {
                     var closed = closedJoinRegion(expr, scope);
                     if (closed != null) {
                         context.preparingCaseRegion = true;
@@ -5475,7 +5509,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                             FunctionSpec side;
                             try {
                                 side = function("join region " + group.getFirst().get("id"), List.of(), closed, scope,
-                                        inline.proof(), new boolean[0], tail, true, false);
+                                        inline.proof(), new boolean[0], tail, true, false, expr);
                             } catch (BytecodeEncodingException failure) {
                                 if (!localIndexOverflow(failure)) throw failure;
                                 // This optional side has not escaped preparation. Keep the
@@ -5504,14 +5538,15 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
                 if (!prefix.isEmpty() && "case".equals(body.getFirst()) && constructorRegionWidth(body) != 0
                         && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)
-                        && CoreFreeVariables.coreFreeVariables((List<Object>) body.get(1)).stream().noneMatch(joins::contains)) {
+                        && CoreFreeVariables.coreFreeVariables((List<Object>) body.get(1)).stream().noneMatch(joins::contains)
+                        && context.regionSourceAllowed(expr)) {
                     // Move the closed join region, not a case escaping a live join
                     // activation. Its definitions are inert and retain their exact
                     // lexical order in each side; the scrutinee stays in the caller.
                     context.preparingCaseRegion = true;
                     try {
                         var inline = joinRegion(group, (List<Object>) expr.get(3), recursive, scope, tail);
-                        return partitionedCase(body, scope, tail, false, constructorRegionWidth(body), inline, prefix);
+                        return partitionedCase(body, scope, tail, false, constructorRegionWidth(body), inline, prefix, expr);
                     } finally { context.preparingCaseRegion = false; }
                 }
             }
@@ -5687,12 +5722,41 @@ public final class BytecodeProgram implements ExecutableProgram {
         int constructorWidth = constructorRegionWidth(expr);
         if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
                 && (constructorWidth != 0 || scalarPartition)
-                && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)) {
+                && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)
+                && context.regionSourceAllowed(expr)) {
             context.preparingCaseRegion = true;
             try { return partitionedCase(expr, scope, tail, scalarPartition, scalarPartition ? 1 : constructorWidth); }
             finally { context.preparingCaseRegion = false; }
         }
         return inlineCase(expr, scope, tail);
+    }
+
+    // Original syntax is acyclic. A child origin is a proper descendant of
+    // its parent origin, so descent is transitive without copied identity sets.
+    // Only binding RHS maps contribute syntax; metadata cannot grant permission.
+    private static boolean containsRegionSource(Object source, List<?> candidate) {
+        if (source == candidate) return true;
+        if (!(source instanceof List<?> expression) || expression.isEmpty()) return false;
+        switch ((String) expression.getFirst()) {
+            case "lam" -> { return containsRegionSource(expression.get(2), candidate); }
+            case "app" -> {
+                if (containsRegionSource(expression.get(1), candidate)) return true;
+                for (Object argument : (List<?>) expression.get(2))
+                    if (containsRegionSource(argument, candidate)) return true;
+            }
+            case "let" -> {
+                for (Object item : (List<?>) expression.get(2))
+                    if (containsRegionSource(((Map<?, ?>) item).get("expr"), candidate)) return true;
+                return containsRegionSource(expression.get(3), candidate);
+            }
+            case "case" -> {
+                if (containsRegionSource(expression.get(1), candidate)) return true;
+                for (Object item : (List<?>) expression.get(3))
+                    if (containsRegionSource(((List<?>) item).get(3), candidate)) return true;
+            }
+            default -> { }
+        }
+        return false;
     }
 
     // A bounded preparation-size filter, not a prediction of Graal graph size.
@@ -5728,11 +5792,11 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar, int width) {
-        return partitionedCase(expr, scope, tail, scalar, width, inlineCase(expr, scope, tail, true), List.of());
+        return partitionedCase(expr, scope, tail, scalar, width, inlineCase(expr, scope, tail, true), List.of(), expr);
     }
 
     private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar, int width,
-            Expression inline, List<List<Object>> joinPrefix) {
+            Expression inline, List<List<Object>> joinPrefix, List<?> regionOrigin) {
         var alternatives = (List<List<Object>>) expr.get(3);
         var explicit = alternatives.stream().filter(a -> !"default".equals(a.getFirst())).toList();
         var fallback = alternatives.stream().filter(a -> "default".equals(a.getFirst())).toList();
@@ -5771,7 +5835,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                         body = wrapper;
                     }
                     specs.add(function("case region " + binder + " " + start, List.of(binderMetadata), body, scope,
-                            inline.proof(), new boolean[1], tail, true));
+                            inline.proof(), new boolean[1], tail, true, true, regionOrigin));
                 }
                 break;
             } catch (BytecodeEncodingException failure) {

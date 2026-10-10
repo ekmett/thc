@@ -36,6 +36,7 @@ import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath
 import System.IO (stderr)
 import System.Process (createProcess, proc, waitForProcess, CreateProcess(..), StdStream(..))
+import THC.Driver.Process (runProducer)
 import THC.Driver.Cabal (PlanOptions(..), configurePackage)
 
 -- | Resolved driver inputs, runtime selection and arguments passed to the
@@ -234,7 +235,10 @@ ensureFile path = do
 
 checked :: Bool -> FilePath -> [String] -> FilePath -> [(String, String)] -> IO ()
 checked tool command arguments directory environment = do
-  (_, _, _, process) <- createProcess (proc command arguments)
-    {cwd = Just directory, env = Just environment, std_out = if tool then UseHandle stderr else Inherit}
-  result <- waitForProcess process
+  let commandLine = (proc command arguments)
+        {cwd = Just directory, env = Just environment, std_out = if tool then UseHandle stderr else Inherit}
+  result <- if tool then runProducer commandLine else do
+    -- Preserve foreground terminal input and interrupt behavior for the guest.
+    (_, _, _, process) <- createProcess commandLine
+    waitForProcess process
   when (result /= ExitSuccess) $ fail ("command failed: " ++ command ++ " (" ++ show result ++ ")")

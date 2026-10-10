@@ -1793,6 +1793,7 @@ public final class Program implements ExecutableProgram {
             case DEFAULT_ONLY -> new DefaultCase(scrutinee, binder, alternatives, codeMetrics(), binderProof, delimited);
             case GENERIC -> new Case(scrutinee, binder, alternatives, codeMetrics(), null, delimited);
         };
+        selection.prepareLiteralIndex(binderProof);
         for (List<Object> alt : rawAlternatives)
             if (coreFreeVariables((List<Object>) alt.get(3)).contains(expr.get(2))) return selection;
         scope.layout.clearInitially(binder);

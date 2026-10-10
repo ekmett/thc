@@ -192,6 +192,18 @@ Results retain registration order and identical CBD bytes; failure or cancellati
 terminates and reaps outstanding helpers before returning. This conversion reads
 already compiled interfaces, so it needs no ordering between CBD output files.
 
+During a Cabal native build, ready installed-interface inventory and conversion
+helpers borrow one physical token from the actual Cabal semaphore. The compiler
+proxy publishes its effective `-jsem` name into a fresh invocation scope; the
+owner authenticates and retains that handle. Missing or ambiguous argument
+metadata keeps helpers gated until native success. This observer preserves the
+compiler arguments and may conservatively decline overlap. Cache discovery and
+dependency readiness happen before admission; synchronous helper descendants
+reuse the token, and cancellation drains the owned process tree before release.
+Native packaging waits for native success without holding a token. Final plan,
+registration, helper and interface bytes are rechecked before early results are
+used. External hard kills or crashed owners cannot promise token restoration.
+
 ## Installed producer roots
 
 `--thc-root` and automatic root discovery accept a fixed-prefix installation
@@ -382,11 +394,19 @@ still undergo content validation. `--verify-artifacts` bypasses selection shortc
 and checks raw interfaces, source archives and published hashes. Do not edit cache
 metadata to bypass a mismatch.
 
-Missing store exports are captured in a private Cabal build while their sources
-and generated headers exist. Successful publication removes its temporary
-staging. A failed capture or publication retains the staging directory and prints
-its path for diagnosis. Preserve it when reporting the failure; remove it when
-no longer needed. Failed refreshes leave earlier complete bundles intact.
+Missing immutable store exports are captured during the original Cabal native
+build when it compiles those selected units. The existing proxy runs native GHC,
+Core replay and interface capture synchronously under that package job's admission.
+Publication checks the final dependency identities, ordinary cache keys and entire
+configured native closure. Uncaptured native-store hits or unavailable native
+products use the private Cabal capture fallback; invalid declared products fail.
+Local and inplace acquisition retains its completed-input snapshots.
+
+Successful publication removes its temporary staging. A failed capture or
+publication retains the staging directory and prints its path for diagnosis.
+Preserve it when reporting the failure; remove it when no longer needed. Failed
+refreshes leave earlier complete bundles intact, including valid ZIPs whose replay
+interfaces still need completion.
 
 For an explicit retained-stage handoff, `THC_CAPTURED_STORE_BUNDLES` may name an
 absolute JSON file with `format: "thc-captured-store-bundles"`, `schema: 1`,

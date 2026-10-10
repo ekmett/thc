@@ -25,6 +25,7 @@ public final class CapturedAsyncRequest {
     public CallSegment getChild() { return child; }
     public Object getPayload() { return payload; }
     public CapturedRequestState getState() { return state; }
+    void requireOwner(Node node) { requests.requireOwner(node); }
 
     /** Called under the exact parent's claim monitor, before consuming the continuation. */
     public boolean commit(Object parent, CallSegment child) {

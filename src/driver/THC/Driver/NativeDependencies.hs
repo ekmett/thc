@@ -13,8 +13,8 @@
 -- Select captured C/C++ products from the resolved Cabal registration and
 -- exact native archive membership, never from an unresolved symbol spelling.
 module THC.Driver.NativeDependencies
-  ( NativeProduct, nativeProductProof, nativeProductPieces, readNativeProduct
-  , selectNativePieces, nativeLinkInputs, nativeSymbolArchives, nativeSymbolArchivesWithProduct, configuredNativeArchive
+  ( NativeProduct, nativeProductProof, nativeProductPieces, readNativeProduct, readNativeProductAvailable
+  , NativePieceSelection(..), selectNativePiecesAvailable, selectNativePieces, nativeLinkInputs, nativeSymbolArchives, nativeSymbolArchivesWithProduct, configuredNativeArchive
   , nativeWindowsRtsInputs, configuredSourceBuild
   ) where
 
@@ -416,27 +416,47 @@ configuredNativeArchive capture source destination compilerIdentity owner regist
 data NativeProduct = NativeProduct
   { nativeProductProof :: Value, nativeProductPieces :: [Value] }
 
+-- | Complete captured membership, or required members which have no recorded
+-- compiler product. Invalid or ambiguous declared evidence is still an error.
+data NativePieceSelection = NativePieceSelection
+  { missingNativeMembers :: [FilePath], matchedNativePieces :: [Value] }
+  deriving (Eq, Show)
+
 -- | Match captured C/C++ members by content, with the basename as an additional
 -- check. Moduleless C-only registrations require complete archive coverage;
 -- mixed archives omit uncaptured native Haskell objects. Ambiguity fails closed.
 selectNativePieces :: Bool -> [(FilePath, String)] -> [Value] -> Either String [Value]
 selectNativePieces complete members pieces = do
+  selected <- selectNativePiecesAvailable complete members pieces
+  if null (missingNativeMembers selected) then Right (matchedNativePieces selected)
+    else Left (missingNativePieces (missingNativeMembers selected))
+
+-- | Distinguish absent required products from invalid evidence for capture
+-- reuse. Every member is checked even after an absent product is found, so an
+-- unrelated malformed or ambiguous declaration cannot become a cache miss.
+selectNativePiecesAvailable :: Bool -> [(FilePath, String)] -> [Value] -> Either String NativePieceSelection
+selectNativePiecesAvailable complete members pieces = do
   require (not (null members) && length members == length (nub (map fst members)))
     "native archive has empty or duplicate member inventory"
-  fmap concat $ forM members $ \(name,expected) -> do
-    require (archiveMember name)
-      "native archive member is not a basename"
-    matches <- filterM (matchesMember name expected) pieces
+  recorded <- forM pieces $ \piece -> do
+    path <- field piece "object"
+    hash <- field piece "objectSha256"
+    pure (takeFileName path, hash, piece)
+  selected <- forM members $ \(name,expected) -> do
+    require (archiveMember name) "native archive member is not a basename"
+    let named = [(hash,piece) | (memberName,hash,piece) <- recorded, memberName == name]
+        matches = [piece | (hash,piece) <- named, hash == expected]
     case nub matches of
-      [piece] -> Right [piece]
-      [] | not complete -> Right []
-         | otherwise -> Left ("C-only archive member has no captured compiler product: " ++ name)
+      [piece] -> Right (Right [piece])
+      [] | not complete -> Right (Right [])
+         | null named -> Right (Left name)
+         | otherwise -> Left ("native archive member differs from captured compiler products: " ++ name)
       _ -> Left ("native archive member has ambiguous compiler products: " ++ name)
-  where
-    matchesMember name expected piece = do
-      path <- field piece "object"
-      observed <- field piece "objectSha256"
-      pure (takeFileName path == name && observed == expected)
+  let missing = [name | Left name <- selected]
+  pure (NativePieceSelection missing (concat [values | Right values <- selected]))
+
+missingNativePieces :: [FilePath] -> String
+missingNativePieces names = "C-only archive members have no captured compiler products: " ++ unwords names
 
 -- | Read one exact resolved Cabal plan row and its matching registration.
 -- Dependencies are the caller's resolved library closure: Custom Setup plans
@@ -444,7 +464,16 @@ selectNativePieces complete members pieces = do
 -- Haskell-bearing archives contribute only their captured C/C++ members;
 -- never replay their native Haskell objects or native RTS registration.
 readNativeProduct :: Value -> [String] -> FilePath -> FilePath -> IO (Maybe NativeProduct)
-readNativeProduct unit dependencies registration pieces = do
+readNativeProduct unit dependencies registration pieces =
+  readNativeProductAvailable unit dependencies registration pieces >>= either fail pure
+
+-- | Read actual native products for original-build reuse. 'Left' describes
+-- required products not recorded in this native build; the caller may perform
+-- its normal isolated acquisition. Invalid registrations, archive inventories,
+-- mismatched or ambiguous recorded products still fail. 'Right Nothing' is a
+-- valid registration with no selected C/C++ provider.
+readNativeProductAvailable :: Value -> [String] -> FilePath -> FilePath -> IO (Either String (Maybe NativeProduct))
+readNativeProductAvailable unit dependencies registration pieces = do
   identifier <- get unit "id"
   bytes <- BS.readFile registration
   (_, info) <- either (fail . show) pure (parseInstalledPackageInfo bytes)
@@ -453,7 +482,7 @@ readNativeProduct unit dependencies registration pieces = do
     "native archive registration differs from resolved unit/dependencies"
   do
     let libraries = Package.hsLibraries info
-    if null libraries then pure Nothing else do
+    if null libraries then pure (Right Nothing) else do
       kind <- get unit "type" :: IO String
       style <- get unit "style" :: IO String
       -- Cabal's local source rows have a path, not a repository tarball hash.
@@ -503,12 +532,20 @@ readNativeProduct unit dependencies registration pieces = do
         check (before == after) "native archive changed during selection"
         pure (archive,before,members)
       let members = concat [entries | (_,_,entries) <- archiveProducts]
-      selected <- if null members && not complete then pure [] else
-        either fail pure (selectNativePieces complete members candidates)
+      selection <- if null members && not complete then pure (NativePieceSelection [] []) else
+        either fail pure (selectNativePiecesAvailable complete members candidates)
+      let selected = matchedNativePieces selection
       -- One dependency cannot silently collect same-named sibling components.
       roots <- mapM (`get` "root") selected :: IO [String]
       check (length (nub roots) <= 1) "native archive combines different captured source roots"
       products <- forM selected $ \piece -> do
+        -- These fields are also consumed by the package publisher's bare
+        -- native-product path. Validate them before an acquisition miss can
+        -- hide an invalid matched declaration.
+        _ <- get piece "target" :: IO String
+        inputs <- get piece "inputs" :: IO Value
+        _ <- get inputs "compiler" :: IO String
+        _ <- get inputs "arguments" :: IO [String]
         path <- get piece "bitcode"
         hash <- digest <$> BS.readFile path
         pure (object ["receipt" .= piece,"bitcodeSha256" .= hash])
@@ -522,7 +559,9 @@ readNativeProduct unit dependencies registration pieces = do
             "archives" .= [object ["path" .= path,"sha256" .= hash,
                 "members" .= [object ["name" .= name,"sha256" .= value] | (name,value) <- entries]] |
               (path,hash,entries) <- archiveProducts],"translationUnits" .= products]
-      pure (if null selected then Nothing else Just (NativeProduct proof selected))
+      pure (if null (missingNativeMembers selection)
+        then Right (if null selected then Nothing else Just (NativeProduct proof selected))
+        else Left (missingNativePieces (missingNativeMembers selection)))
 
 member :: Value -> String -> Maybe Value
 member (Object fields) key = KM.lookup (Key.fromString key) fields

@@ -76,8 +76,13 @@ runGhcProxy arguments = do
   mapM_ (\directory -> captureNativeComponent directory nativeOptions) nativePieces
   mapM_ (\directory -> captureNativeObject directory compiler nativeOptions) nativePieces
   targetUnits <- maybe [] lines <$> lookupEnv "THC_PROXY_GLOBAL_UNITS"
+  originalBuild <- (== Just "1") <$> lookupEnv "THC_PROXY_ORIGINAL_BUILD"
   case ("--make" `elem` options, valueAfter "-this-unit-id" options) of
-    (True, Just unit) | unit `elem` targetUnits -> do
+    -- A native signature-only compilation is not a completed executable Core
+    -- witness. Optional original-build capture leaves it to final acquisition;
+    -- the explicit isolated exporter retains its existing signature policy.
+    (True, Just unit) | unit `elem` targetUnits,
+        not originalBuild || "-fno-code" `notElem` options -> do
       capture <- getEnv "THC_PROXY_CAPTURE"
       pluginDb <- getEnv "THC_PROXY_PLUGIN_DB"
       pluginUnit <- getEnv "THC_PROXY_PLUGIN_UNIT"
@@ -86,10 +91,14 @@ runGhcProxy arguments = do
           core = root </> "core"
           objects = root </> "objects"
           ready = root </> "interfaces-ready"
+          complete = root </> "capture-complete"
       createDirectoryIfMissing True core
       createDirectoryIfMissing True objects
       previous <- doesFileExist ready
       when previous (removeFile ready)
+      when originalBuild $ do
+        completed <- doesFileExist complete
+        when completed (removeFile complete)
       view <- lookupEnv "THC_PROXY_CORE_LIBDIR"
       replayArguments <- case view of
         Nothing -> pure []
@@ -127,6 +136,7 @@ runGhcProxy arguments = do
             capturePackageNative repository executable selectedLibdir compiler (options ++ replayArguments) unit root
         _ -> pure ()
       forM_ view $ \_ -> writeFile ready ""
+      when originalBuild (writeFile complete "")
     _ -> pure ()
 
 -- | Add a boot-library view and completed source-package interfaces only to a
