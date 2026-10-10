@@ -1,3 +1,5 @@
+SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 # Licensing Terms
 
 Copyright (c) 2019-2026, Edward Kmett

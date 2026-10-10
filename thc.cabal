@@ -6,7 +6,7 @@ name: thc
 version: 0.1.0.0
 synopsis: Haskell on Truffle/Graal
 license: UPL-1.0 AND BSD-3-Clause
-license-files: LICENSE.md, LICENSE.spdx, NOTICE.md
+license-files: LICENSE.md, NOTICE.md
 author: Edward Kmett
 maintainer: Edward Kmett
 category: Development
