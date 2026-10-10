@@ -1,0 +1,67 @@
+{
+  "nodes": {
+    "ghostty": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790777222,
+        "narHash": "sha256-vC9sG7g6qrawuP7S6guZlPLn0gJ3aDKUEQ3K6ITtIgY=",
+        "owner": "ghostty-org",
+        "repo": "ghostty",
+        "rev": "76895d97b74ff6b24c2b1543bcd69ccc18048a4d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ghostty-org",
+        "repo": "ghostty",
+        "rev": "76895d97b74ff6b24c2b1543bcd69ccc18048a4d",
+        "type": "github"
+      }
+    },
+    "hide": {
+      "inputs": {
+        "ghostty": "ghostty",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791536113,
+        "narHash": "sha256-DnRrjJa70DCODmmI7A/w1+I6sK9Lb3Q2Fv1tybBG6qc=",
+        "owner": "ekmett",
+        "repo": "hide",
+        "rev": "676020b019dd82608ef3dfb75f995946ea385a60",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ekmett",
+        "repo": "hide",
+        "rev": "676020b019dd82608ef3dfb75f995946ea385a60",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1791426274,
+        "narHash": "sha256-MWhktfFtFE8Jl7bf9Pkp7TR5MSdYCjCswSo0Gkb4ywc=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "7c8764b7c7b09b34f632464276218ef9090eaa11",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "7c8764b7c7b09b34f632464276218ef9090eaa11",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "hide": "hide",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

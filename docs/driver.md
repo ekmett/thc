@@ -192,6 +192,86 @@ Results retain registration order and identical CBD bytes; failure or cancellati
 terminates and reaps outstanding helpers before returning. This conversion reads
 already compiled interfaces, so it needs no ordering between CBD output files.
 
+## Installed producer roots
+
+`--thc-root` and automatic root discovery accept a fixed-prefix installation
+containing `installed-producer.json`. This selects immutable compiler products:
+the real registered plugin closure, interface helper, CBD inspector, genuine
+`thc:runtime` Core/registration, target-layout and audit inputs, and JVM launcher. Installed
+mode checks GHC 9.14.1's compiler ABI, target platform, dynamic/nonprofiling way
+and every compiler-facing boot unit ABI. Different compiler paths or retaining
+additional simplified Core do not themselves make producers incompatible.
+Missing or incompatible products fail before a producer build. Development
+checkouts retain their normal Cabal tool and runtime-sidecar builds.
+
+The installation owns producer products. Cabal application builds, compiler
+proxies, native receipts and project manifests belong to `--dist-dir`; pinned
+GHC source/interface/Core acquisition belongs to `THC_CACHE_HOME`. Runtime
+linking prefers an application's own genuine runtime unit. Otherwise it uses
+the installed runtime record, acquires missing boot dependencies normally and
+retains the exception/weak-module and owner-collision checks. Native JVM `.hi`
+loading remains retired; the isolated GHC helper still reads ordinary interfaces.
+
+Packaging first configures/builds Cabal products with their **final prefix**,
+then uses ordinary Cabal `copy` and `register --gen-pkg-config` plus `ghc-pkg`
+registration/recache to install their actual non-boot dependency closure. Build
+and export the genuine runtime through ordinary THC acquisition during
+construction; supply its published package manifest, including the exact
+exception bridge unit. A plugin registration alone supplies no runtime Core.
+Do not rewrite `plan.json` or copy an arbitrary user's Core cache.
+
+When Cabal has already installed the runtime with its final unit ID and
+`-fwrite-if-simplified-core`, export that exact registered unit during construction:
+
+```sh
+thc export-installed-unit "$RUNTIME_UNIT" \
+  --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
+  --interface-helper "$BUILT_INTERFACE" --package-db "$FINAL_DB" \
+  --target-layout "$THC_SOURCE/src/driver/cbits/target-layout.c" \
+  --cache-dir "$CONSTRUCTION_CACHE" --dist-dir "$CONSTRUCTION_OUTPUT"
+```
+
+This command uses the selected GHC's normal global database plus the additional
+`--package-db` stack in the supplied order. It checks genuine registrations and
+retained interfaces, assembles native provenance using the ordinary installed
+acquisition path, and publishes `packages.json` with per-module CBD in the output
+directory. It preserves exact declared dependency IDs; it does not export a
+recursive application closure, reacquire boot Core, run Cabal or rebuild missing
+Core. Missing retained Core is an error. Compiler, package tool, helper, layout,
+cache and output are all explicit required inputs; source and databases remain
+read-only. Native tool selection uses the existing `THC_CLANG`, `THC_LLVM_LINK`,
+`THC_LLVM_OPT`, `THC_LLVM_NM` and `THC_LLVM_OBJCOPY` environment variables, with
+`SDKROOT` for an explicitly selected macOS SDK.
+
+After installing the generated JVM distribution, publish the producer boundary:
+
+```sh
+python3 -B bin/plugin.py --root "$THC_SOURCE" --install "$PREFIX" \
+  --ghc "$GHC" --ghc-pkg "$GHC_PKG" \
+  --installed-package-db "$PREFIX/lib/thc/package.db" \
+  --runtime-support "$CONSTRUCTION_OUTPUT/packages.json" \
+  --interface-helper "$BUILT_INTERFACE" --compact "$BUILT_COMPACT" \
+  --runtime "$PREFIX/lib/thc/jvm/bin/thc"
+```
+
+The constructor derives the plugin unit from actual registrations, verifies its
+recursive library closure, checks the runtime's registered dependencies and CBD
+digests, and installs only the genuine runtime unit from that manifest. It copies
+the helper/inspector, existing Python tools, target-layout input and pinned native
+checksum inputs. The native driver and JVM distribution remain ordinary Cabal
+and Gradle installation products. Repeat `--dependency-root PATH` for separately
+installed immutable native dependency outputs (for example separate Nix package
+outputs); those paths are part of the declared installation closure. Use
+`python3 -B "$PREFIX/bin/plugin.py" --root "$PREFIX" --check-installed --ghc "$GHC" --ghc-pkg "$GHC_PKG"`
+to check the installed compatibility boundary without building or publishing.
+
+This contract supports fixed final Nix/OCI prefixes. Native libraries and
+registrations retain their real linker paths; copying the descriptor does not
+promise relocation, offline boot acquisition or compatibility with another GHC
+ABI. Qualification requires an actual ordinary-project run from a read-only
+installation and fresh writable project/cache state; descriptor construction
+alone is preparation evidence.
+
 ## Runtime selection and host resources
 
 Bytecode is the default backend; `THC_BACKEND=ast` selects AST. Ordinary executable

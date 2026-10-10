@@ -15,7 +15,7 @@
 module THC.Driver.Installed
   ( InstalledContext(..), InterfaceWay(..), interfaceWayName, packageGlobalArguments, helperDatabases, installedViewIdentity
   , InstalledUnit(..), InstalledCore(..), MissingCore(..)
-  , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
+  , installedCompilerIdentity, installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, prepareInstalledDemand, probeInstalled, prepareInstalledProbe, probeClosure
   , emptyRegistration, modulelessRegistration
   , boundedInterfaceProcess, boundedInterfaceProcessIn, boundedInterfaceProcessInput
@@ -130,6 +130,28 @@ modulelessRegistration identifier dependencies bytes = do
       Just (OpenModule (DefiniteUnitId owner) name) ->
         Just (prettyShow (exposedName entry), prettyShow owner, prettyShow name)
       _ -> Nothing
+
+-- | Observe the actual selected compiler ABI/platform and acquisition way.
+-- Paths are invocation choices, not linkage compatibility identities.
+installedCompilerIdentity :: FilePath -> IO Value
+installedCompilerIdentity ghc = do
+  info <- maybe (fail "selected GHC --info is not a compiler information table") pure . readMaybe =<< command ghc ["--info"]
+  let infoField name = maybe (fail ("selected GHC --info lacks " ++ name)) pure
+        (lookup name (info :: [(String, String)]))
+  version <- infoField "Project version"
+  dynamic <- infoField "GHC Dynamic"
+  profiled <- infoField "GHC Profiled"
+  unless (version == "9.14.1" && profiled == "NO" && (Host.os == "mingw32" || dynamic == "YES"))
+    (fail "installed Core requires GHC 9.14.1 with the selected nonprofiling interface way")
+  projectUnit <- infoField "Project Unit Id"
+  let prefix = "ghc-" ++ version ++ "-"
+  unless (take (length prefix) projectUnit == prefix) (fail "selected GHC has an invalid compiler ABI identity")
+  arch <- infoField "target arch string"
+  targetOS <- infoField "target os string"
+  let os = case targetOS of "darwin" -> "osx"; "mingw32" -> "windows"; other -> other
+      way = if Host.os == "mingw32" then "vanilla" else "dynamic"
+  pure (object ["id" .= ("ghc-" ++ version), "abi" .= drop (length prefix) projectUnit,
+    "platform" .= (arch ++ "-" ++ os), "way" .= (way ++ "-nonprofiling")])
 
 -- | Check the selected GHC version and matching package database before
 -- constructing an acquisition context. Arguments select GHC, ghc-pkg, the

@@ -273,7 +273,13 @@ application {
 // Small provider identity files support relocation checks using the platform's
 // existing byte-comparison tools; complete installation hashing belongs to builds.
 distributions.main.contents {
-    from(jamHome) { include(jamLauncherIdentity); into("jam-runtime-identity") }
+    from(jamHome) {
+        include(jamLauncherIdentity)
+        into("jam-runtime-identity")
+        // Immutable installations can have read-only directories. The copy's
+        // parents must remain writable while Gradle installs their children.
+        dirPermissions { unix("0755") }
+    }
 }
 // Keep aggregator POMs in dependency resolution, not executable runtime payloads.
 distributions.main.contents { exclude("**/*.pom") }

@@ -39,17 +39,26 @@ delivers an already committed operation: it does not compete for the cell again.
 Terminal cancellation removes only a still-pending request and releases its
 offered payload; it cannot revoke or replay a committed transfer.
 
-There is no GC-driven `BlockedIndefinitelyOnMVar` detection. A pending
-`takeMVar#`, `putMVar#` or `readMVar#` with no future partner needs supported
-asynchronous interruption or embedding cancellation to terminate. See the
-[current primop behavior reference](primop-behavior.md#exceptions-blocking-and-transactions).
+Jam's Candidate lifecycle rescues an unreachable parked logical thread with
+the original GHC `BlockedIndefinitelyOnMVar` exception. The parked Java carrier
+does not root the captured guest continuation. A live cell, strong `ThreadId`
+or independent Java reference remains a rescue path; a cycle consisting only
+of blocked threads and their cells does not keep itself alive. Commitment,
+cancellation and GC rescue compete for the same pending operation.
+
+The genuine blocked-owner example matches native GHC on both backends and
+handoff modes with platform and virtual threads on macOS. Full compiled
+application and Native Image qualification remain tracked in
+[#1213](https://github.com/ekmett/thc/issues/1213). This is reachability-based
+rescue, not a promise to detect every wait with no future producer or the
+main thread's global `Deadlock`.
 
 Both backends use these requests for
 [asynchronous exception delivery](async-exceptions.md). Interruption cancels
 an uncommitted request and saves a retry at the guest continuation cut.
 [Managed weak registrations](weak-explicit.md) allow raw `MVar#` keys to own
 lazy values and finalizers. An otherwise unrooted value-to-key cycle can collect;
-a pending request keeps its cell and conditional values alive. Cancellation or
+a reachable logical owner keeps its pending cell and conditional values alive. Cancellation or
 commitment releases the request's cell reference. A committed request retains
 its result for safepoint retries, including any cell referenced by that result.
 Explicit finalization and context close detach conditional values.

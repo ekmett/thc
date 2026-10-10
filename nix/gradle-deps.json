@@ -1,0 +1,104 @@
+{
+ "!comment": "This is a nixpkgs Gradle dependency lockfile. For more details, refer to the Gradle section in the nixpkgs manual.",
+ "!version": 1,
+ "https://repo.maven.apache.org/maven2/org/graalvm": {
+  "llvm#llvm-api/25.3.4.1": {
+   "jar": "sha256-Tnv58PbkHb25+2iyuQBFSNzaFU+DvXaWCUNfUNjsWTw=",
+   "pom": "sha256-wca2kkTVe5SAIOwF1BnoZDLkWDFjb0s0eiAXrqvApBg="
+  },
+  "llvm#llvm-community/25.3.4.1": {
+   "pom": "sha256-Ol2m9THevyGG7Xt5HXe5oK8zb0jkBPL0eAwjhatNZnA="
+  },
+  "llvm#llvm-language-native-resources/25.3.4.1": {
+   "jar": "sha256-K1+0E4BqAEYSfJddropV0QR7LDdXByuXy50GsCTFQcM=",
+   "pom": "sha256-XjI6eMEwHJuxbnBwbSIT8t+0IuqO5dM30Z0sbzGhSNs="
+  },
+  "llvm#llvm-language-native/25.3.4.1": {
+   "jar": "sha256-tJ1Ooi53vgFaik3t1JfnJTJq3VwDKX6v2OylCAajiO8=",
+   "pom": "sha256-kirXWqdawjAqFGP2ckxqOjbuMFBQkt5x4dDOER1BeUc="
+  },
+  "llvm#llvm-language-nfi/25.3.4.1": {
+   "jar": "sha256-w+7VWvxZAGNja5OeDXVZfb5dV+218jfaiYsXnqqvAsk=",
+   "pom": "sha256-+7GrQ5/PUZO4lm9tIpZVB1fpqeaBQirM/zj4MuBC6R8="
+  },
+  "llvm#llvm-language/25.3.4.1": {
+   "jar": "sha256-yDX8gKvcgYt0h8nguezWx81Zp7u3rHBB1uLNor5LkzU=",
+   "pom": "sha256-iclJ+0DXgSupjSRQ6ln2e96gTaccdNWLj/aseZx+/t8="
+  },
+  "llvm#llvm-language/25.3.4.1/sources": {
+   "jar": "sha256-cWViqcbL6SAfU7yXLZ6vuxppKp2a67nxd6VBxeCRP2Y="
+  },
+  "llvm#llvm-native/25.3.4.1": {
+   "pom": "sha256-0v04TJLheZlbpN3UZK1oXy2gISWO4gsWEvv8TW2NbNY="
+  },
+  "polyglot#llvm-community/25.3.4.1": {
+   "pom": "sha256-232fsrUH1FOcokhDFo+eWPXEv8V40tNompB1ELJ+C+4="
+  },
+  "polyglot#polyglot/25.3.4.1": {
+   "jar": "sha256-vv7Cy/tsonmnPuIGJnGKkXqx0aOXB5NpjdwRtNQeA1Y=",
+   "pom": "sha256-dqOLbz/Uz4OJ37kJ9pmgptysKr05kNZZ/5nBU1hHago="
+  },
+  "sdk#collections/25.3.4.1": {
+   "jar": "sha256-PQ0ih/Ahfn52WkfWloHArBu071DXDJRARJ6GBFu+FY8=",
+   "pom": "sha256-/Y+NpjtmdCyKDBQExhOpHuDOCYOeKaFGQ7l9EeHlmWw="
+  },
+  "sdk#jniutils/25.3.4.1": {
+   "jar": "sha256-sdeEAsdE5QIvyxn2IGRKs4uDTAJAIPNXDa2q+cvncGc=",
+   "pom": "sha256-dMq8vu1owqrHuCK84pRm+0qhT55YmfB0fm6N/GEOJ7Q="
+  },
+  "sdk#nativeimage/25.3.4.1": {
+   "jar": "sha256-pDFVAHdemNFvCDgSv1uLZk2Eq61zbaFOu+pbONd1Kw8=",
+   "pom": "sha256-yNOT/yip+XutT1hTt3Mqm0HM1KqRnPfycnaz1RaejiY="
+  },
+  "sdk#word/25.3.4.1": {
+   "jar": "sha256-/hw3I+J5B3iXMqyfPWObpgVdRZUpz8+9lhVuc5Ee57c=",
+   "pom": "sha256-OvbwvJ1NBCLabpgiuQHlu8GLNynuYPYLAeyEAUsL52s="
+  },
+  "shadowed#antlr4/25.3.4.1": {
+   "jar": "sha256-MfjE+gcVykhvpz37Y0U3901Prj2HhuN+6gCZT4sQ2n8=",
+   "pom": "sha256-1h5sZfbM0nInY7tbKfxFRu6+Httfl5C2VF1MfMWfwDs="
+  },
+  "shadowed#json/25.3.4.1": {
+   "jar": "sha256-OXVj3zcK5b2cD8mjBrRAiosPGeWhqcFvOP4omVW0c6o=",
+   "pom": "sha256-C3KQOsdSYEHHI/bBm7bOuIZsJv2xbqlSP2RYk3GaFMc="
+  },
+  "tools#dap-tool/25.3.4.1": {
+   "jar": "sha256-Vr4gg8/llSX520UL7lin+L6TF3U9lLHyGxw82OQNNTw=",
+   "pom": "sha256-V4US6Bsm8ITTylOs+Krw5KTDxFciYRbhwTvz9dXP6+s="
+  },
+  "truffle#truffle-api/25.3.4.1": {
+   "jar": "sha256-+e+hixy2xOOYYvWsg6iO5MnjElLFLC7lGSwqcHzZsn8=",
+   "pom": "sha256-TOfbwwGUUwU4t6045vil+sGf0hJMVZIjSVdcZpS7QmQ="
+  },
+  "truffle#truffle-api/25.3.4.1/sources": {
+   "jar": "sha256-GbbHetQHygYtQzQEAXeEfjItUu0vBIBJU9VN02ZXkGQ="
+  },
+  "truffle#truffle-compiler/25.3.4.1": {
+   "jar": "sha256-pCLfiP+qvkZpuLbl1j8E8qgVLl/nY7O/vz3FjX5d1Bw=",
+   "pom": "sha256-8e6r04gK6tjP2aRCySCsKtWXTiBQHk38BkvvtLauK24="
+  },
+  "truffle#truffle-dsl-processor/25.3.4.1": {
+   "jar": "sha256-PG4ZHuoJ/S/6bDXCKrxXIsmVBAnePy08meZu7v/fZpw=",
+   "pom": "sha256-qg2Y/nOXOb7w7MqiDA9W34bRVsh6LtoksNaIPhaaaWs="
+  },
+  "truffle#truffle-nfi-libffi/25.3.4.1": {
+   "jar": "sha256-7bZDAZQdhveF90j3B0JhTmJZca30WVeJ47egaNzVdNM=",
+   "pom": "sha256-em+sCVhNI6YL2cCpKn1w/DJjLY7GC+IRzDJkJgt+oxE="
+  },
+  "truffle#truffle-nfi-panama/25.3.4.1": {
+   "jar": "sha256-473Ex/qBMhjPE6UhDPvJlO3hPfUIIybC1wnOZSp47yw=",
+   "pom": "sha256-/4JnvW9h1MOc3alrRZNBFV631kLmG+e/GwR5sIAT73s="
+  },
+  "truffle#truffle-nfi/25.3.4.1": {
+   "jar": "sha256-UyDJi6ZaE6StlglzLvoconQu3niShjoVS1qJyYdJGFM=",
+   "pom": "sha256-FUiDeuwMBhQvRc/qLhsK5B/+hv60fAi7mBenZndJG2k="
+  },
+  "truffle#truffle-runtime/25.3.4.1": {
+   "jar": "sha256-10/wuOuaX+xKVx94vCF1DuQd/UVId7jM6LM2Qe/ZCuM=",
+   "pom": "sha256-tTds9PO4UADgAVQVKmdHV6UUq3hKBxUVojjwPkI+r7o="
+  },
+  "truffle#truffle-runtime/25.3.4.1/sources": {
+   "jar": "sha256-vDZdtvR2XVe8R3lQjb4PzdLDebQCfrlU/VsMnlXIpRk="
+  }
+ }
+}

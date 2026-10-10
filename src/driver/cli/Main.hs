@@ -12,14 +12,14 @@
 -- Command-line entry point for Cabal planning, Core acquisition and guest execution.
 module Main (main) where
 
-import Control.Monad (filterM, void, when)
+import Control.Monad (filterM, unless, void, when)
 import Data.Either (fromRight)
 import Data.List (isPrefixOf, nub, sort)
 import Data.Maybe (catMaybes, fromMaybe, isNothing)
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
-import System.Directory (doesFileExist, executable, findExecutable, getCurrentDirectory, getPermissions, listDirectory)
+import System.Directory (doesFileExist, executable, findExecutable, getCurrentDirectory, getPermissions, listDirectory, makeAbsolute)
 import System.Environment (getArgs, lookupEnv)
 import System.Exit (ExitCode(..), die, exitWith)
 import System.FilePath ((</>), dropExtension, splitSearchPath, takeExtension)
@@ -31,7 +31,8 @@ import Text.Read (readMaybe)
 import THC.Driver.Cabal
 import THC.Driver.GhcProxy (runGhcProxy)
 import THC.Driver.Json (renderJson)
-import THC.Driver.Project (runProject, acquireProject, buildTargetsProject)
+import THC.Driver.Project (runProject, acquireProject, buildTargetsProject, exportInstalledUnit)
+import THC.Driver.Installed (installedCompilerIdentity, installedContext)
 import THC.Driver.Run
 
 main :: IO ()
@@ -52,6 +53,23 @@ main = topHandler $ do
             target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
         planPackage opts target >>= putStrLn . renderJson
       (_, _, errors) -> die (concat errors ++ usage)
+    "export-installed-unit" : rest -> case getOpt Permute (withHelp exportInstalledOptions) rest of
+      (updates, _, []) | any isNothing updates -> putStr exportInstalledUsage
+      (updates, [identifier], []) -> do
+        let selected = foldl (flip ($)) (InstalledExportOptions "" "" "" [] "" "" "") (catMaybes updates)
+            ghc = exportGhc selected
+            pkg = exportPackageTool selected
+        unless (all (not . null) [ghc, pkg, exportHelper selected, exportLayout selected,
+                                  exportCache selected, exportOutput selected]) $
+          die ("export-installed-unit requires explicit compiler, package tool, helper, layout, cache and output\n" ++ exportInstalledUsage)
+        identity <- installedCompilerIdentity ghc
+        selectedHelper <- makeAbsolute (exportHelper selected)
+        context <- installedContext ghc pkg selectedHelper (exportDatabases selected) identity
+        selectedLayout <- makeAbsolute (exportLayout selected)
+        selectedOutput <- makeAbsolute (exportOutput selected)
+        selectedCache <- makeAbsolute (exportCache selected)
+        exportInstalledUnit context identifier selectedLayout selectedOutput selectedCache
+      (_, _, errors) -> die (concat errors ++ exportInstalledUsage)
     command : rest | command `elem` ["run", "acquire", "build"] -> do
       let (driverArgs, suffix) = break (== "--") rest
           guestArgs = drop 1 suffix
@@ -118,7 +136,8 @@ completionCommands =
   [("plan-package", map void (withHelp options)),
    ("run", map void (withHelp runOptions)),
    ("acquire", map void (withHelp acquireOptions)),
-   ("build", map void (withHelp buildOptions))]
+   ("build", map void (withHelp buildOptions)),
+   ("export-installed-unit", map void (withHelp exportInstalledOptions))]
 
 completionExtensions :: IO [String]
 completionExtensions = do
@@ -168,7 +187,7 @@ options =
     parseFlag name = (mkFlagName name, True)
 
 usage :: String
-usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc build [TARGETS...] [FLAGS]\n                thc run [TARGET] [FLAGS] [-- ARG...]\n                thc acquire [TARGET] [FLAGS]\n" options
+usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc build [TARGETS...] [FLAGS]\n                thc run [TARGET] [FLAGS] [-- ARG...]\n                thc acquire [TARGET] [FLAGS]\n                thc export-installed-unit UNIT [FLAGS]\n" options
 
 runOptions :: [OptDescr (RunOptions -> RunOptions)]
 runOptions =
@@ -221,3 +240,24 @@ buildUsage = usageInfo "Usage: thc build [TARGETS...] [FLAGS]\n\nUse Cabal to bu
 
 acquireUsage :: String
 acquireUsage = usageInfo "Usage: thc acquire [TARGET] [FLAGS]\n\nResolve the same Cabal runnable target as run and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native runnable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" (withHelp acquireOptions)
+
+-- Exact construction inputs; no implicit source build or user cache selection.
+data InstalledExportOptions = InstalledExportOptions
+  { exportGhc :: FilePath, exportPackageTool :: FilePath, exportHelper :: FilePath
+  , exportDatabases :: [FilePath], exportLayout :: FilePath
+  , exportCache :: FilePath, exportOutput :: FilePath
+  }
+
+exportInstalledOptions :: [OptDescr (InstalledExportOptions -> InstalledExportOptions)]
+exportInstalledOptions =
+  [ Option [] ["with-ghc"] (ReqArg (\value o -> o {exportGhc = value}) "PATH") "Selected GHC 9.14.1 (required)"
+  , Option [] ["with-ghc-pkg"] (ReqArg (\value o -> o {exportPackageTool = value}) "PATH") "Matching ghc-pkg (required)"
+  , Option [] ["interface-helper"] (ReqArg (\value o -> o {exportHelper = value}) "PATH") "Built thc-interface (required)"
+  , Option [] ["package-db"] (ReqArg (\value o -> o {exportDatabases = exportDatabases o ++ [value]}) "DIR") "Additional genuine registration DB; repeat in stack order"
+  , Option [] ["target-layout"] (ReqArg (\value o -> o {exportLayout = value}) "FILE") "THC target-layout.c source (required)"
+  , Option [] ["cache-dir"] (ReqArg (\value o -> o {exportCache = value}) "DIR") "Caller-owned acquisition cache (required)"
+  , Option [] ["dist-dir"] (ReqArg (\value o -> o {exportOutput = value}) "DIR") "Caller-owned manifest/CBD output (required)"
+  ]
+
+exportInstalledUsage :: String
+exportInstalledUsage = usageInfo "Usage: thc export-installed-unit UNIT [FLAGS]\n\nExport one exact registered unit from retained simplified Core to DIST/packages.json and per-module CBD.\nDeclared dependencies remain references: this is not a recursive application closure.\nComplete retained Core is required; no Cabal rebuild or boot acquisition occurs.\nInputs remain read-only. Native tools use THC_CLANG/THC_LLVM_LINK/THC_LLVM_OPT/THC_LLVM_NM/THC_LLVM_OBJCOPY.\n" (withHelp exportInstalledOptions)

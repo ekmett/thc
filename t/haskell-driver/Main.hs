@@ -51,7 +51,8 @@ runTests :: [String] -> IO ()
 runTests arguments = do
   env <- setup
   let unitTests =
-        [ CoreIndexTests.tests
+        [ ProjectTests.installedProducerTests env
+        , CoreIndexTests.tests
         , CoreSymbolsTests.tests env
         , BundleSelectionTests.tests env
         , InstalledForeignTests.tests
@@ -67,6 +68,7 @@ runTests arguments = do
         ]
   selected <- case arguments of
     ["--unit-only"] -> pure unitTests
+    ["--installed-producer-only"] -> pure [ProjectTests.installedProducerTests env]
     ["--test-support-only"] -> pure [TestSupportTests.tests]
     ["--installed-view-only"] -> pure
       [InstalledForeignTests.tests, InstalledForeignTests.viewTests env]

@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: Development toolchain artifact
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+concurrency:
+  group: packaging-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    # First complete artifact run took 4m49s, including downloads and upload.
+    # Leave roughly 3x headroom; this is not the commit CI performance target.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Build the pinned development image
+        run: |
+          mkdir -p packaging-artifact
+          git rev-parse HEAD > packaging-artifact/source-revision
+          date -u +%FT%TZ > packaging-artifact/build-started
+          nix build .#development-image --print-build-logs --max-jobs 2 --cores 2 2>&1 | tee packaging-artifact/build.log
+          date -u +%FT%TZ > packaging-artifact/build-finished
+          cp --dereference result packaging-artifact/thc-development.tar.gz
+          sha256sum packaging-artifact/thc-development.tar.gz > packaging-artifact/SHA256SUMS
+          cp flake.lock etc/jam-graalvm.json packaging-artifact/
+      - name: Run tools as an unprivileged user with read-only system files
+        run: |
+          docker load < packaging-artifact/thc-development.tar.gz
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev \
+            --tmpfs /home/thc:rw,uid=1000,gid=1000 \
+            --tmpfs /work:rw,exec,uid=1000,gid=1000 \
+            thc-development:nix /bin/bash --login -c '
+              set -eu
+              test "$(id -u)" = 1000
+              java -Xshare:off -Xms256m -Xmx256m -XX:-UseCompactObjectHeaders \
+                -XX:+UnlockExperimentalVMOptions -XX:+UseJamGC -version
+              test "$(ghc --numeric-version)" = 9.14.1
+              cabal --numeric-version
+              clang --version
+              llvm-link --version
+              printf "main = print (6 * 7 :: Int)\n" > Main.hs
+              ghc Main.hs -o answer
+              test "$(./answer)" = 42
+            ' 2>&1 | tee packaging-artifact/tools.log
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: thc-development-x86_64-linux
+          path: packaging-artifact/
+          compression-level: 0
+          retention-days: 7

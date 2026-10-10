@@ -10,7 +10,7 @@
 -- Portability : Native GHC; fixture compiler and host process services
 --
 -- Tests for project.
-module ProjectTests (tests, acquisitionTests, buildTests, exceptionBridgeTests, interopTests, cstringTests) where
+module ProjectTests (tests, acquisitionTests, buildTests, exceptionBridgeTests, interopTests, cstringTests, installedProducerTests) where
 
 import Control.Monad (foldM, forM_, when)
 import Data.Aeson (Value)
@@ -19,10 +19,40 @@ import THC.Compact.Module (readModuleSources, readModuleValue)
 import qualified THC.Driver.CoreIndex as CoreIndex
 import THC.Driver.Zip (decodeZip)
 import Data.List (isInfixOf, nub, sort)
-import System.Directory (copyFile, doesFileExist, getModificationTime, listDirectory)
+import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getModificationTime, listDirectory)
 import System.FilePath ((</>), takeDirectory, takeFileName)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
+
+-- | A selected installed root must reject incompatible or missing products
+-- before creating project output or attempting a checkout producer rebuild.
+installedProducerTests :: Env -> Test
+installedProducerTests env = TestLabel "installed producer rejection before rebuilding" $ TestCase $
+  withFixtureNamed env "t/fixtures/run-pure" "installed producer project" $ \project -> do
+    let installation = takeDirectory project </> "installation"
+        descriptor = installation </> "installed-producer.json"
+        output = takeDirectory project </> "output"
+        arguments = ["acquire", "completed", "--project-dir", project,
+          "--thc-root", installation, "--dist-dir", output]
+    createDirectoryIfMissing True (installation </> "bin")
+    copyFile (root env </> "bin/plugin.py") (installation </> "bin/plugin.py")
+    writeText descriptor "{\"format\":\"thc-installed-producer\",\"schema\":2}"
+    unsupported <- run env project Nothing 30 arguments
+    assertFailure unsupported
+    assertContains "unsupported installed THC producer descriptor" (err unsupported)
+    writeText descriptor "{\"format\":\"thc-installed-producer\",\"schema\":1,\"runtime\":\"unused\",\"compiler\":{\"id\":\"ghc-9.14.1\",\"abi\":\"incompatible\"}}"
+    incompatible <- run env project Nothing 30 arguments
+    assertFailure incompatible
+    assertContains "compiler ABI/platform/way is incompatible" (err incompatible)
+    identity <- runExe env project Nothing 30 "python3"
+      ["-B", installation </> "bin/plugin.py", "--compiler-identity"]
+    assertSuccess identity
+    writeText descriptor ("{\"format\":\"thc-installed-producer\",\"schema\":1,\"runtime\":\"unused\",\"compiler\":" ++ out identity ++ "}")
+    missing <- run env project Nothing 30 arguments
+    assertFailure missing
+    assertContains "Missing installed THC product: sharedLibrary" (err missing)
+    assertBool "no installed-root build directory" . not =<< doesDirectoryExist (installation </> "build")
+    assertBool "no project acquisition after incompatibility" . not =<< doesDirectoryExist output
 
 tests :: Env -> Test
 tests env = TestList [acquisitionTests env, buildTests env, exceptionBridgeTests env, interopTests env, cstringTests env]
