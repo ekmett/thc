@@ -10,11 +10,9 @@ nix develop
 nix develop .#with-hide
 ```
 
-These are compiler development environments. Build THC from the checkout using
-[the normal workflow](contributing.md). An installed THC package that builds and
-runs projects without a writable source checkout is tracked in
-[#1218](https://github.com/ekmett/thc/issues/1218); the environment does not yet
-provide that package.
+These shells provide compiler development environments. Build THC from the
+checkout using [the normal workflow](contributing.md), or build the installed
+package below for ordinary projects.
 
 The Jam archive is fetched by its existing release URL and SHA256. Its binaries
 are not patched for Nix: THC checks the complete supplier installation digest.
@@ -43,10 +41,33 @@ for runtime C support and a hashed Maven dependency closure. Its build runs
 inside the toolchain filesystem through `proot`, leaving the Jam installation
 unchanged.
 
-These are construction components. They do not yet assemble the installed
-producer, private package database and runtime CBD manifest required by #1218.
-The JVM distribution needs the selected Jam runtime and Linux library layout;
-its Nix output alone is not a standalone command environment.
+These components feed the installed package:
+
+```sh
+nix build .#thc
+# From an ordinary Cabal project, with build output owned by that project:
+/path/to/result/bin/thc run
+# Or select the package through Nix:
+nix run .#thc -- run --project-dir /path/to/project
+```
+
+The installed package retains Cabal's genuine final-prefix plugin and runtime
+registrations, merges the actual dependency registrations into a private package
+database, and exports the exact runtime unit's retained Core to CBD. Construction
+runs after native stripping and RPATH fixup. Native dependency roots come from
+Nix's dependency closure; package identities and library paths are preserved.
+The descriptor, tools, audit resources and JVM distribution belong to the same
+immutable prefix. This is a fixed-prefix installation; copying it to another
+location is not supported.
+
+The `thc` wrapper selects the pinned compiler, unchanged Jam and toolchain Linux
+filesystem through `proot`, without requiring user namespaces. It exposes the
+current directory, home and temporary directory to the tools. Run from the
+project or keep project/output paths within those directories. The project owns
+Cabal build output and THC's caller cache; the installed prefix stays read-only.
+Boot library Core is acquired into that cache according to the selected
+`--installed-core` policy. The separate `jvm` output still requires Jam and the
+Linux library layout supplied by this wrapper.
 
 After a deliberate Gradle dependency change, regenerate its lock and verify an
 ordinary build from the result:
