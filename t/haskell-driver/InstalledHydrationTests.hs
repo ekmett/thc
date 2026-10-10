@@ -1,5 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
@@ -8,7 +9,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Native GHC; host filesystem/process services
+-- Portability : CPP; native GHC and host filesystem/process services
 --
 -- Tests for installed hydration.
 module InstalledHydrationTests (tests, helperMode) where
@@ -16,6 +17,11 @@ module InstalledHydrationTests (tests, helperMode) where
 import Control.Concurrent (forkFinally, killThread, threadDelay)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
 import Control.Exception (IOException, bracket, finally, try)
+#ifdef mingw32_HOST_OS
+import Control.Exception (AsyncException(ThreadKilled), fromException)
+import qualified System.Semaphore as Sem
+import System.IO.Error (isDoesNotExistError)
+#endif
 import Control.Monad (forM_, unless)
 import Data.Aeson (Value(Null), eitherDecodeStrict', encode, object, (.=))
 import qualified Data.ByteString as BS
@@ -130,9 +136,82 @@ fixture names action = do
       createDirectory path
       canonicalizePath path
 
+#ifdef mingw32_HOST_OS
+-- One real owner remains live across all borrowed scopes. Nonblocking claims
+-- prove exact token conservation; MVars identify actual admitted action entry.
+borrowedAdmissionOwnership :: FilePath -> IO ()
+borrowedAdmissionOwnership directory = do
+  name <- bracket (Sem.freshSemaphore "thc-admission-ownership" 1) Sem.destroySemaphore $ \owner -> do
+    nativeRelease <- newEmptyMVar
+    withBuildAdmission directory
+      (\handoff -> do
+        publishBuildSemaphore handoff (Sem.getSemaphoreName (Sem.semaphoreName owner))
+        readMVar nativeRelease)
+      (\admission -> do
+        -- Native completion is still held: this must borrow the published name.
+        withAdmission admission $ assertEqual "borrowed action owns the only token" False
+          =<< Sem.tryWaitOnSemaphore owner
+        exactlyOne owner
+        assertEqual "owner consumes the token before blocked cancellation" True
+          =<< Sem.tryWaitOnSemaphore owner
+        blocked <- timeout 200000 $ withAdmission admission
+          (assertFailure "tokenless wait entered an action" :: IO ())
+        assertEqual "blocked borrowed wait is cancellable" Nothing blocked
+        assertEqual "cancelling a tokenless wait does not post" False
+          =<< Sem.tryWaitOnSemaphore owner
+        Sem.releaseSemaphore owner 1
+        withAdmission admission $ assertEqual "valid use after wait cancellation" False
+          =<< Sem.tryWaitOnSemaphore owner
+        failed <- try (withAdmission admission (fail "admitted action failed")) :: IO (Either IOException ())
+        assertBool "admitted action failure propagates" (case failed of Left _ -> True; _ -> False)
+        exactlyOne owner
+        entered <- newEmptyMVar
+        held <- newEmptyMVar
+        result <- newEmptyMVar
+        thread <- forkFinally
+          (withAdmission admission $ do
+            assertEqual "cancellable body holds the physical token" False
+              =<< Sem.tryWaitOnSemaphore owner
+            putMVar entered ()
+            readMVar held) (putMVar result)
+        flip finally (killThread thread >> readMVar result >> pure ()) $ do
+          readMVar entered
+          assertEqual "entered cancellable action owns the token" False
+            =<< Sem.tryWaitOnSemaphore owner
+          killThread thread
+          outcome <- readMVar result
+          assertBool "action cancellation propagates after token return"
+            (case outcome of
+              Left problem -> fromException problem == Just ThreadKilled
+              Right _ -> False)
+        exactlyOne owner
+        putMVar nativeRelease ())
+    exactlyOne owner
+    pure (Sem.semaphoreName owner)
+  reopened <- try (Sem.openSemaphore name) :: IO (Either IOException Sem.Semaphore)
+  case reopened of
+    Left problem -> assertBool "final owner close removes the named kernel object"
+      (isDoesNotExistError problem)
+    Right leaked -> Sem.destroySemaphore leaked >> assertFailure "borrowed handle survived scope close"
+  where
+    exactlyOne owner = do
+      assertEqual "one token returned" True =<< Sem.tryWaitOnSemaphore owner
+      assertEqual "no duplicate post" False =<< Sem.tryWaitOnSemaphore owner
+      Sem.releaseSemaphore owner 1
+#endif
+
 tests :: Test
 tests = TestLabel "bounded installed-interface hydration" $ TestList
-  [ TestCase $ fixture ["A"] $ \directory context unit -> do
+  [
+#ifdef mingw32_HOST_OS
+    -- Windows borrowed handles/event cancellation need native API evidence.
+    -- Existing host-independent missing/ambiguous metadata controls follow.
+    TestCase $ fixture ["A"] $ \directory _ _ -> do
+      completed <- timeout 5000000 (borrowedAdmissionOwnership directory)
+      assertEqual "borrowed semaphore ownership completes" (Just ()) completed
+  ,
+#endif
+    TestCase $ fixture ["A"] $ \directory context unit -> do
       nativeStarted <- newEmptyMVar
       nativeRelease <- newEmptyMVar
       helperReady <- newEmptyMVar
