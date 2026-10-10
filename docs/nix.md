@@ -79,25 +79,27 @@ nix build .#jvm
 ```
 
 The dependency recorder needs network access. Ordinary builds consume the
-recorded artifact hashes. The artifact workflow below currently builds the
-development image, not these compiler components.
+recorded artifact hashes. The artifact workflow below builds the installed image
+from these components.
 
 ## Container
 
-The development image contains the same toolchain filesystem. It runs as UID/GID
-1000 and does not need a nested FHS wrapper or elevated container privileges.
-Its linker cache is created during the image build so the root filesystem can
-remain read-only.
+The installed image includes THC’s immutable prefix, Hide and the same toolchain
+filesystem. The separate `development-image` target supplies just the toolchain.
+Both run as UID/GID 1000 without nested user namespaces or elevated container
+privileges. The linker cache is created during each image build so the root
+filesystem can remain read-only. The installed wrapper needs executable scratch
+space in `/tmp`.
 
 ```sh
-nix build .#development-image
+nix build .#installed-image
 docker load < result
 mkdir -p .container-home
 docker run --rm -it --read-only \
-  --tmpfs /tmp:rw,nosuid,nodev \
+  --tmpfs /tmp:rw,exec,nosuid,nodev \
   --mount "type=bind,src=$PWD,dst=/work" \
   --mount "type=bind,src=$PWD/.container-home,dst=/home/thc" \
-  thc-development:nix
+  thc-installed:nix
 ```
 
 The mounted project and home must be writable by UID/GID 1000. On a host with a
@@ -105,8 +107,13 @@ different user ID, pass `--user "$(id -u):$(id -g)"`. The project owns its build
 outputs; the mounted home owns Cabal and Gradle caches. Removing the container
 does not remove either mount.
 
-This is a development image, not a prebuilt THC release. It has no registry
-publication step. The packaging workflow produces an archive independently of
-ordinary commit tests; its checks exercise the packaged tools with an unprivileged
-user and read-only system directories. Building or running the development
-image does not qualify THC's installed compiler or Native Image execution.
+Run `thc run` from an ordinary Cabal project or `thc edit` to launch Hide. The
+image carries the complete declared store closure; it needs no host `/nix` mount.
+Boot Core acquisition uses the caller cache and may need network access for the
+pinned GHC source. A run from an existing produced manifest can remain offline.
+
+The manual packaging workflow retains the image archive, source revision, lock,
+Jam pin and check logs. It compares an ordinary Cabal consumer against native GHC,
+runs the same manifest on the second backend offline and exercises installed Hide.
+There is no registry publication step. These checks qualify the exercised
+interpreter consumer; they do not prove compiled or Native Image execution.
