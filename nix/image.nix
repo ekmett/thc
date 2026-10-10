@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-{ dockerTools, toolchain, jam, glibc, proot }:
+{ dockerTools, toolchain, jam, glibc, proot, installed ? null }:
 dockerTools.buildLayeredImage {
-  name = "thc-development";
+  name = if installed == null then "thc-development" else "thc-installed";
   tag = "nix";
   contents = [ toolchain.fhsenv ];
   # The same FHS filesystem runs directly under OCI. No nested bubblewrap or
@@ -28,11 +28,14 @@ dockerTools.buildLayeredImage {
       "HOME=/home/thc"
       "JAVA_HOME=${jam}"
       "GRAALVM_HOME=${jam}"
-      "PATH=${jam}/bin:/usr/bin:/bin"
+      "PATH=${if installed == null then "" else "${installed}/bin:${toolchain.fhsenv}/usr/bin:"}${jam}/bin:/usr/bin:/bin"
       "_JAVA_SR_SIGNUM=64"
       "SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
       "THC_CACHE_HOME=/home/thc/.cache/thc"
-    ];
+    ] ++ (if installed == null then [] else [
+      "LANG=C.UTF-8"
+      "LOCALE_ARCHIVE=/usr/lib/locale/locale-archive"
+    ]);
     Cmd = [ "/bin/bash" "--login" ];
   };
 }

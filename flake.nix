@@ -35,6 +35,10 @@
         thc = installed;
         default = installed;
         development-image = pkgs.callPackage ./nix/image.nix { inherit toolchain jam; };
+        installed-image = pkgs.callPackage ./nix/image.nix {
+          toolchain = withHide;
+          inherit jam installed;
+        };
         toolchain-with-hide = withHide;
       };
       apps.${system}.toolchain = {

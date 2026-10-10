@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-name: Development toolchain artifact
+name: Installed THC artifact
 on:
   workflow_dispatch:
 permissions:
@@ -14,32 +14,54 @@ concurrency:
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    # First complete artifact run took 4m49s, including downloads and upload.
-    # Leave roughly 3x headroom; this is not the commit CI performance target.
-    timeout-minutes: 15
+    # Installed builds and a cold consumer are expected to take 10–15 minutes,
+    # before variable upload time. Keep acquisition separate from runtime guards.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
-      - name: Build the pinned development image
+      - name: Build the pinned installed image
         run: |
           mkdir -p packaging-artifact
           git rev-parse HEAD > packaging-artifact/source-revision
           date -u +%FT%TZ > packaging-artifact/build-started
-          nix build .#development-image --print-build-logs --max-jobs 2 --cores 2 2>&1 | tee packaging-artifact/build.log
+          nix build .#installed-image --print-build-logs --max-jobs 2 --cores 2 2>&1 | tee packaging-artifact/build.log
           date -u +%FT%TZ > packaging-artifact/build-finished
-          cp --dereference result packaging-artifact/thc-development.tar.gz
-          sha256sum packaging-artifact/thc-development.tar.gz > packaging-artifact/SHA256SUMS
+          cp --dereference result packaging-artifact/thc-installed.tar.gz
+          sha256sum packaging-artifact/thc-installed.tar.gz > packaging-artifact/SHA256SUMS
           cp flake.lock etc/jam-graalvm.json packaging-artifact/
-      - name: Run tools as an unprivileged user with read-only system files
+      - name: Prepare an ordinary caller project and the existing editor checker
         run: |
-          docker load < packaging-artifact/thc-development.tar.gz
-          docker run --rm --network none --read-only \
-            --tmpfs /tmp:rw,nosuid,nodev \
-            --tmpfs /home/thc:rw,uid=1000,gid=1000 \
-            --tmpfs /work:rw,exec,uid=1000,gid=1000 \
-            thc-development:nix /bin/bash --login -c '
+          mkdir -p .packaging-project .packaging-home
+          printf 'module Main (main) where\nmain :: IO ()\nmain = print (6 * 7 :: Int)\n' > .packaging-project/Main.hs
+          cat > .packaging-project/packaging-smoke.cabal <<'CABAL'
+          cabal-version: 3.0
+          name: packaging-smoke
+          version: 0.1.0.0
+          executable packaging-smoke
+            main-is: Main.hs
+            build-depends: base >= 4.22 && < 4.23
+            default-language: Haskell2010
+          CABAL
+          printf 'packages: .\nactive-repositories: none\n' > .packaging-project/cabal.project
+          hideSource=$(nix eval --impure --raw --expr '(builtins.getFlake ("git+file://" + builtins.getEnv "PWD")).inputs.hide.outPath')
+          hideData=$(nix eval --impure --raw --expr '(builtins.getFlake ("git+file://" + builtins.getEnv "PWD")).inputs.hide.packages.x86_64-linux.hide.data.outPath')
+          printf 'HIDE_CHECKER=%s/test/remote-session.py\nHIDE_DATA=%s\n' "$hideSource" "$hideData" >> "$GITHUB_ENV"
+          sha256sum "$hideSource/test/remote-session.py" > packaging-artifact/hide-checker.sha256
+          printf '%s\n%s\n' "$hideSource" "$hideData" > packaging-artifact/hide-inputs
+          sudo chown -R 1000:1000 .packaging-project .packaging-home
+          docker load < packaging-artifact/thc-installed.tar.gz
+      - name: Compare the installed consumer with native GHC
+        # Standard pinned boot-source acquisition may use the network on this run.
+        run: |
+          date -u +%FT%TZ > packaging-artifact/consumer-started
+          docker run --rm --read-only \
+            --tmpfs /tmp:rw,exec,nosuid,nodev \
+            --mount "type=bind,src=$PWD/.packaging-home,dst=/home/thc" \
+            --mount "type=bind,src=$PWD/.packaging-project,dst=/work" \
+            thc-installed:nix /bin/bash -c '
               set -eu
               test "$(id -u)" = 1000
               java -Xshare:off -Xms256m -Xmx256m -XX:-UseCompactObjectHeaders \
@@ -48,14 +70,74 @@ jobs:
               cabal --numeric-version
               clang --version
               llvm-link --version
-              printf "main = print (6 * 7 :: Int)\n" > Main.hs
               ghc Main.hs -o answer
-              test "$(./answer)" = 42
-            ' 2>&1 | tee packaging-artifact/tools.log
+              ./answer > native.stdout
+              test "$(cat native.stdout)" = 42
+              THC_BACKEND=bytecode thc run packaging-smoke:exe:packaging-smoke \
+                --dist-dir /work/run-output --verify-artifacts > bytecode.stdout
+              cmp native.stdout bytecode.stdout
+              sha256sum run-output/packages.json
+            ' 2>&1 | tee packaging-artifact/consumer.log
+          date -u +%FT%TZ > packaging-artifact/consumer-finished
+      - name: Run the same manifest offline and check installed Hide
+        run: |
+          hideIndex=$(find "$HIDE_DATA/share" -name index.html -print -quit)
+          test -n "$hideIndex"
+          hideDatadir=$(dirname "$(dirname "$(dirname "$hideIndex")")")
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,exec,nosuid,nodev \
+            --mount "type=bind,src=$PWD/.packaging-home,dst=/home/thc" \
+            --mount "type=bind,src=$PWD/.packaging-project,dst=/work" \
+            --mount "type=bind,src=$HIDE_CHECKER,dst=/remote-session.py,readonly" \
+            --env "hide_datadir=$hideDatadir" \
+            thc-installed:nix /bin/bash -c '
+              set -eu
+              prefix=$(dirname "$(dirname "$(command -v thc)")")
+              THC_BACKEND=ast timeout 15 "$prefix/lib/thc/jvm/bin/thc" \
+                --verify-artifacts --run-executable @/work/run-output/packages.json \
+                main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles \
+                -- packaging-smoke > ast.stdout
+              cmp native.stdout ast.stdout
+              for editor in "thc edit" hide th; do
+                timeout 15 $editor --snapshot --demo > snapshot
+                test -s snapshot
+              done
+              timeout 15 python3 /remote-session.py "$(command -v hide)"
+              unset hide_datadir
+              set -m
+              THC_EDIT_WEB_OPEN=0 thc edit --web --demo > browser.log 2>&1 &
+              browser=$!
+              trap "kill -TERM -- -$browser 2>/dev/null || true" EXIT
+              deadline=$((SECONDS + 15))
+              url=""
+              until test -n "$url"; do
+                test "$SECONDS" -lt "$deadline"
+                kill -0 "$browser"
+                url=$(sed -n "s/^Haskell browser: //p" browser.log)
+                sleep 0.1
+              done
+              for asset in "" editor.js cell-shader.js canvas-shader.js canvas-images.js; do
+                curl --fail --silent --show-error --max-time 2 "$url$asset" > asset
+                test -s asset
+              done
+              kill -INT -- -"$browser"
+              timeout 15 tail --pid="$browser" -f /dev/null
+              wait "$browser"
+              trap - EXIT
+            ' 2>&1 | tee packaging-artifact/offline-editor.log
+      - name: Retain caller evidence even when a check fails
+        if: always()
+        run: |
+          mkdir -p packaging-artifact
+          for file in Main.hs packaging-smoke.cabal cabal.project native.stdout bytecode.stdout ast.stdout browser.log run-output/packages.json; do
+            if test -f ".packaging-project/$file"; then
+              cp ".packaging-project/$file" packaging-artifact/
+            fi
+          done
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: thc-development-x86_64-linux
+          name: thc-installed-x86_64-linux
           path: packaging-artifact/
           compression-level: 0
           retention-days: 7
