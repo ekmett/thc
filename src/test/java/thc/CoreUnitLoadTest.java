@@ -94,13 +94,18 @@ class CoreUnitLoadTest {
                 assertEquals(reads, count(entry, "coreCompactDataBytesRead"));
             }
             for (var backend : List.of("ast", "bytecode")) {
-                var detached = CracExecutable.selectedCore(request(manifest, backend));
-                long opens = CoreFileMappings.shared.statistics().mappingOpens();
+                long[] opens = {-1};
                 try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
-                    var entry = Main.loadDetachedEntry(context, detached);
+                    var entry = CracExecutable.checkpoint(context, request(manifest, backend), () -> {
+                        var mappings = CoreFileMappings.shared.statistics();
+                        assertEquals(0, mappings.activeLeases());
+                        assertEquals(0, mappings.idleMappings());
+                        opens[0] = mappings.mappingOpens();
+                    });
                     assertEquals(kind.equals("function-addr") ? 1L : 43L, entry.execute(0).asLong());
                 }
-                assertEquals(opens, CoreFileMappings.shared.statistics().mappingOpens());
+                assertTrue(opens[0] >= 0, "Native label code must reach the checkpoint before linking");
+                assertEquals(opens[0], CoreFileMappings.shared.statistics().mappingOpens());
             }
         }
     }
