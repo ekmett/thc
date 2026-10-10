@@ -7,6 +7,7 @@ import thc.buildlogic.BytecodeColdDelimitedPreparation
 import thc.buildlogic.BytecodeColdCompactPreparation
 import thc.buildlogic.BytecodeColdPolyglotPreparation
 import thc.buildlogic.BytecodeColdForcePreparation
+import thc.buildlogic.BytecodeColdCapturePreparation
 import thc.buildlogic.BytecodeColdBranchPreparation
 
 buildscript {
@@ -56,6 +57,10 @@ def checks = [
         BytecodeColdForcePreparation.check(file('build/generated/main/java/thc/runtime/BytecodeRootGen.java').getText('UTF-8'))
         logger.lifecycle('Cold forcing: pinned adaptive body, immutable child, version/operand/CRLF/idempotence/negative controls passed.')
     },
+    testBytecodeColdCapturePreparation: { task ->
+        BytecodeColdCapturePreparation.check(file('build/generated/main/java/thc/runtime/BytecodeRootGen.java').getText('UTF-8'))
+        logger.lifecycle('Cold capture ingress: pinned adaptive/typed body, read-only layout selection, version/operand/CRLF/idempotence/negative controls passed.')
+    },
     testBytecodeColdBranchPreparation: { task ->
         def generated = file('build/generated/main/java/thc/runtime/BytecodeRootGen.java').getText('UTF-8')
         BytecodeColdBranchPreparation.check(generated)
@@ -67,7 +72,7 @@ def checks = [
 checks.each { name, runCheck ->
     tasks.register(name) {
         group = 'verification'
-        if (name in ['testBytecodeColdForcePreparation', 'testBytecodeColdBranchPreparation']) dependsOn('processMainJava')
+        if (name in ['testBytecodeColdForcePreparation', 'testBytecodeColdCapturePreparation', 'testBytecodeColdBranchPreparation']) dependsOn('processMainJava')
         if (name == 'testBytecodeMetadataSplit') {
             description = 'Check lossless, fail-closed splitting of generated Truffle instruction argument metadata.'
         } else if (name == 'testBytecodeSourceModeAccessor') {

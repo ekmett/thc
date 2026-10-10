@@ -135,6 +135,19 @@ public final class FunctionRoot extends GuestRoot {
                         HandoffEntry handoff, TupleShape tuple, int[] tupleSlots, ArgumentLayout inputLayout,
                         boolean enableAsync, int[][] environmentVectorSlots, boolean enableDelimited,
                         FunctionRootRole role, boolean stackCapture, boolean deferredBudget, boolean budgetBoundary) {
+        this(language, descriptor, label, captureLayout, environmentSlots, argumentSlots, argumentIndices,
+            body, metrics, argumentProofs, resultProof, coreSourceLocation, entryStrict, handoff, tuple, tupleSlots,
+            inputLayout, enableAsync, environmentVectorSlots, enableDelimited, role, stackCapture, deferredBudget,
+            budgetBoundary, false);
+    }
+    private FunctionRoot(TruffleLanguage<?> language, FrameDescriptor descriptor, String label,
+                        CaptureLayout captureLayout, int[] environmentSlots, int[] argumentSlots,
+                        int[] argumentIndices, Expr body, Metrics metrics, CoreRepresentation[] argumentProofs,
+                        CoreRepresentation resultProof, CoreSourceLocation coreSourceLocation, boolean[] entryStrict,
+                        HandoffEntry handoff, TupleShape tuple, int[] tupleSlots, ArgumentLayout inputLayout,
+                        boolean enableAsync, int[][] environmentVectorSlots, boolean enableDelimited,
+                        FunctionRootRole role, boolean stackCapture, boolean deferredBudget, boolean budgetBoundary,
+                        boolean rawResult) {
         super(language, descriptor);
         this.label = label; this.captureLayout = captureLayout; this.environmentSlots = environmentSlots;
         this.argumentSlots = argumentSlots; this.argumentIndices = argumentIndices; this.argumentProofs = argumentProofs;
@@ -195,7 +208,16 @@ public final class FunctionRoot extends GuestRoot {
         }
         strictSlots = Arrays.copyOf(strict, count);
         entryForce = new Force(metrics, enableAsync);
-        loop = Truffle.getRuntime().createLoopNode(new SelfRepeater(new FunctionBody(body, metrics, resultProof, tuple, tupleSlots, role == FunctionRootRole.INITIALIZER), metrics));
+        loop = Truffle.getRuntime().createLoopNode(new SelfRepeater(new FunctionBody(body, metrics, resultProof, tuple, tupleSlots, role == FunctionRootRole.INITIALIZER, rawResult), metrics));
+    }
+    /** A real internal call boundary with its own saved frame, but no extra result demand or tail owner. */
+    static FunctionRoot application(TruffleLanguage<?> language, String label, Expr body, Metrics metrics,
+                                    boolean async, boolean delimited) {
+        return new FunctionRoot(language, new FrameLayout().build(), label, null, new int[0],
+            new int[]{FrameLayout.TAIL_FUNCTION, FrameLayout.TAIL_ARGUMENTS}, new int[]{0, 1}, body, metrics,
+            new CoreRepresentation[]{CoreRepresentation.UNKNOWN, CoreRepresentation.UNKNOWN},
+            CoreRepresentation.UNKNOWN, null, new boolean[2], null, null, new int[0], null,
+            async, new int[0][], delimited, FunctionRootRole.PASS_THROUGH, true, false, true, true);
     }
     private static boolean contains(int[] values, int value) {
         for (int element : values) if (element == value) return true;

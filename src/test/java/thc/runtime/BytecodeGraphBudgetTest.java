@@ -565,6 +565,68 @@ class BytecodeGraphBudgetTest {
             } finally { context.leave(); }
         }
     }
+    @ParameterizedTest @ValueSource(ints = {0, 2, 3})
+    void complexConstructorArmsUseTheirRealFirstCompiledSide(int chosen) throws Exception {
+        var resultProof = tuple(REFERENCE, LONG);
+        var result = node("app", node("con", "Result", 2),
+                List.of(variable("payload", REFERENCE), variable("value2", LONG)),
+                List.of(true, true), false, false, Map.of("rep", resultProof));
+        var input = new LinkedHashMap<>(decision(3,
+                List.of(binder("step", CLOSURE, true), binder("payload", REFERENCE, true)), resultProof,
+                arm -> capacityCalls(3, arm, result, resultProof)));
+        constructors(input, tupleConstructor("Result", 2),
+                Map.of("id", "C3", "name", "C3", "arity", 0, "tag", 4, "kind", "boxed",
+                        "strictFields", List.of(), "fieldLifted", List.of(), "fieldReps", List.of()));
+        var bindings = (List<Map<String, Object>>) input.get("bindings");
+        var lambda = (List<Object>) bindings.getFirst().get("expr");
+        var alternatives = (List<List<Object>>) ((List<Object>) lambda.get(2)).get(3);
+        alternatives.add(node("default", null, List.of(), node("app", node("con", "Result", 2),
+                List.of(variable("payload", REFERENCE), number(-1)), List.of(true, true), false, false,
+                Map.of("rep", resultProof))));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                var original = instructions(root); var sides = regionSides(root);
+                assertEquals(3, sides.size()); assertEquals(0, root.prepareGraphBudgetRetry(0));
+                assertTrue(original.values().stream().noneMatch(value -> value.contains("InlineCaseRegions")));
+                for (var side : sides) { assertTrue(compile(side)); assertTrue(valid(side)); bypass(side); }
+                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                for (var side : sides) assertTrue(valid(side), "Caller compilation invalidated a prepared side");
+                assertEquals(0, entries(program));
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(chosen * 1000L + calls.getAndIncrement(), frame.getArguments()[1]);
+                        return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                var payload = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Lazy case payload forced"); }
+                }.getCallTarget(), null);
+                var value = TupleResults.ownedTupleResult(Calls.target(target,
+                        new Object[]{0L, program.constructorLayout("C" + chosen).allocate(), step, payload}), root.getTupleResult());
+                var layout = root.getTupleResult().getLayout();
+                assertSame(payload, layout.getObject(value, 0)); assertEquals(0, payload.getState());
+                assertEquals(chosen == 3 ? -1 : chosen * 1000L + 3, layout.getLong(value, 1));
+                assertEquals(chosen == 3 ? 0 : 3, calls.get());
+                assertEquals(2, entries(program));
+                assertSame(target, program.entryTarget("entry"));
+                var executed = instructions(root); root.getRootNodes().ensureSourceInformation();
+                assertEquals(executed, instructions(root));
+                var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                assertEquals(original.keySet(), instructions(clone).keySet()); assertEquals(0, clone.getGraphBudgetGeneration());
+                var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
+                assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+                assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
     private static Context context() { return context(100000); }
     private static Context context(int graphLimit) {
         return Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -1639,6 +1701,9 @@ class BytecodeGraphBudgetTest {
     @Test void capacityExtractionPreservesTheFirstAsyncCutAndTupleOwnership() throws Exception {
         checkRegionCut(false, true);
     }
+    @Test void complexConstructorFirstCompiledSidePreservesTheAsyncCut() throws Exception {
+        checkRegionCut(false, false, false, true);
+    }
     private void checkRegionCut(boolean parkBeforeRecovery) throws Exception {
         checkRegionCut(parkBeforeRecovery, false);
     }
@@ -1649,21 +1714,25 @@ class BytecodeGraphBudgetTest {
         checkRegionCut(parkBeforeRecovery, capacity, false);
     }
     private void checkRegionCut(boolean parkBeforeRecovery, boolean capacity, boolean recursiveRegion) throws Exception {
+        checkRegionCut(parkBeforeRecovery, capacity, recursiveRegion, false);
+    }
+    private void checkRegionCut(boolean parkBeforeRecovery, boolean capacity, boolean recursiveRegion, boolean eager) throws Exception {
         var resultProof = tuple(REFERENCE, REFERENCE);
         var result = node("app", node("con", "Result", 2), List.of(variable("before", REFERENCE), variable("after", REFERENCE)),
                 List.of(true, true), false, false, Map.of("rep", resultProof));
-        var input = new LinkedHashMap<>(decision(64,
+        var input = new LinkedHashMap<>(decision(eager ? 3 : 64,
                 List.of(binder("prefix", MUTABLE, false), binder("blocked", MUTABLE, false)), resultProof,
-                ignored -> capacity ? capacityCalls(64, 0, afterTake("blocked", "after", result, resultProof), resultProof)
+                ignored -> capacity || eager ? capacityCalls(eager ? 3 : 64, 0,
+                        afterTake("blocked", "after", result, resultProof), resultProof)
                         : afterTake("blocked", "after", result, resultProof)));
         var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
         var entry = new LinkedHashMap<>(bindings.getFirst());
         var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
         var decision = new ArrayList<>((List<Object>) lambda.get(2));
         // The selector is closed: this control isolates region suspension, not lazy-formal forcing.
-        decision.set(1, node("con", "C63", 0, Map.of("rep", DATA)));
+        decision.set(1, node("con", eager ? "C2" : "C63", 0, Map.of("rep", DATA)));
         var arguments = new ArrayList<>(List.of(binder("prefix", MUTABLE, false), binder("blocked", MUTABLE, false)));
-        if (capacity || recursiveRegion) arguments.add(binder("step", CLOSURE, true));
+        if (capacity || recursiveRegion || eager) arguments.add(binder("step", CLOSURE, true));
         if (recursiveRegion) {
             var finishBody = node("app", node("con", "Result", 2),
                     List.of(variable("first", REFERENCE), variable("second", REFERENCE)),
@@ -1686,7 +1755,14 @@ class BytecodeGraphBudgetTest {
         lambda.set(2, afterTake("prefix", "before", decision, resultProof));
         lambda.set(3, Map.of("rep", CLOSURE, "resultRep", resultProof,
                 "entryStrict", java.util.Collections.nCopies(arguments.size(), false)));
-        entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
+        entry.put("expr", lambda); bindings.set(0, entry);
+        // Deliberate bottom supplies only the declared lazy RTS dependency for
+        // continuation transport, as in AstContinuationTest.directMVarModule.
+        // The actual BlockedOwners application retains its original GHC CAF.
+        bindings.add(Map.of("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+                "type", "SomeException", "lifted", true, "arity", 0, "rep", DATA,
+                "expr", node("var", CoreBlockedExceptions.MVAR, Map.of("rep", DATA))));
+        input.put("bindings", bindings);
         constructors(input, tupleConstructor("Pair", 2), tupleConstructor("Result", 2));
         try (var context = context()) {
             context.initialize("thc"); context.enter();
@@ -1709,7 +1785,10 @@ class BytecodeGraphBudgetTest {
                     }
                 }.getCallTarget();
                 if (!parkBeforeRecovery) {
-                    assertEquals(capacity ? 0 : 1, root.prepareGraphBudgetRetry(0)); // Transport control, not a graph bailout.
+                    assertEquals(capacity || eager ? 0 : 1, root.prepareGraphBudgetRetry(0)); // Transport control, not a graph bailout.
+                    if (eager) for (var side : regionSides(root)) {
+                        assertTrue(compile(side)); assertTrue(valid(side)); bypass(side);
+                    }
                     assertTrue(compile(target)); bypass(target); assertTrue(valid(target));
                 }
                 assertEquals(0, entries(program));
@@ -1721,7 +1800,7 @@ class BytecodeGraphBudgetTest {
                 context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
                 try {
                     var saved = java.util.Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
-                            Calls.target(target, capacity || recursiveRegion ? new Object[]{0L, prefix, blocked, step} : new Object[]{0L, prefix, blocked})));
+                            Calls.target(target, capacity || recursiveRegion || eager ? new Object[]{0L, prefix, blocked, step} : new Object[]{0L, prefix, blocked})));
                     java.util.Objects.requireNonNull(saved.asyncRequest()).acknowledge();
                     assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
                     answer.complete(saved);
@@ -1734,10 +1813,10 @@ class BytecodeGraphBudgetTest {
                 while (blocked.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
                 if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
                 assertEquals(1, blocked.pendingCounts().getTakers()); assertTrue(prefix.isEmpty());
-                assertEquals(capacity || recursiveRegion ? 64 : 0, calls.get());
+                assertEquals(eager ? 3 : capacity || recursiveRegion ? 64 : 0, calls.get());
                 owner.getThreads().send(java.util.Objects.requireNonNull(owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "case region cut");
                 var saved = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
-                assertEquals(compiled + (parkBeforeRecovery ? 0 : 1), entries(program));
+                assertEquals(compiled + (parkBeforeRecovery ? 0 : eager ? 2 : 1), entries(program));
                 if (parkBeforeRecovery) {
                     context.enter();
                     try {
@@ -1757,7 +1836,7 @@ class BytecodeGraphBudgetTest {
                         var layout = root.getTupleResult().getLayout();
                         assertSame(before, layout.getObject(value, 0)); assertSame(after, layout.getObject(value, 1));
                         assertTrue(prefix.isEmpty(), "Completed caller effect must not replay"); assertTrue(blocked.isEmpty());
-                        assertEquals(capacity || recursiveRegion ? 64 : 0, calls.get(), "completed side calls must not replay");
+                        assertEquals(eager ? 3 : capacity || recursiveRegion ? 64 : 0, calls.get(), "completed side calls must not replay");
                         assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
                         var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
                         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());

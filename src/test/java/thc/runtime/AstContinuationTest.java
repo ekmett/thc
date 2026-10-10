@@ -155,6 +155,119 @@ class AstContinuationTest {
             } finally { if (worker.isAlive()) context.close(true); worker.join(5000); }
         }
     }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void firstCompiledScalarOverapplicationRetainsItsSuffixAfterACalleeCut(boolean tail) throws Exception {
+        var module = directMVarModule(false, false, true, false, false, false, false);
+        var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var bindings = new ArrayList<>((List<Map<String, Object>>) module.get("bindings"));
+        var direct = bindings.getFirst();
+        var lambda = (List<Object>) direct.get("expr");
+        var takeCase = (List<Object>) lambda.get(2);
+        var arm = ((List<List<Object>>) takeCase.get(3)).getFirst();
+        // The MVar effect happens before returning the function that consumes
+        // the saved surplus argument.
+        arm.set(3, list("lam", list(map("id", "extra", "name", "extra", "lifted", false, "rep", longRep)),
+                list("var", "extra", map("rep", longRep)), map("rep", closure, "resultRep", longRep)));
+        takeCase.set(4, map("rep", closure, "binder", map("id", "returned", "rep", tupleRep)));
+        lambda.set(3, map("rep", closure, "resultRep", closure, "entryStrict", list(false, false)));
+        var call = list("app", list("var", "fn", map("rep", closure)),
+                list(list("var", "cell", map("rep", mvarRep)), list("void", map("rep", stateRep)),
+                        list("lit", "int", "37", map("rep", longRep))),
+                list(false, false, false), false, false, map("rep", longRep));
+        var body = tail ? call : list("app", list("prim", "+#"),
+                list(call, list("lit", "int", "5", map("rep", longRep))),
+                list(false, false), false, false, map("rep", longRep));
+        bindings.add(map("id", "caller", "name", "caller", "lifted", true, "rep", closure,
+                "expr", list("lam", list(map("id", "fn", "name", "fn", "lifted", true, "rep", closure),
+                        map("id", "cell", "name", "cell", "lifted", false, "rep", mvarRep)),
+                        body, map("rep", closure, "resultRep", longRep))));
+        module.put("bindings", bindings);
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            final Language language; final Language.State owner; final BytecodeProgram program;
+            final RootCallTarget caller; final Closure function; final RootCallTarget helper; final RootCallTarget resume;
+            try {
+                language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
+                program = new BytecodeProgram(language, module, true); caller = program.entryTarget("caller");
+                function = (Closure) program.entryValue("direct");
+                var targets = new LinkedHashSet<RootCallTarget>(ThreadInventoryCoreEvidence.targets(function.target));
+                var callerTargets = ThreadInventoryCoreEvidence.targets(caller);
+                var helpers = callerTargets.stream().filter(target -> target.getRootNode() instanceof FunctionRoot).toList();
+                assertEquals(1, helpers.size(), "The caller owns one shared scalar application target");
+                helper = helpers.getFirst();
+                targets.addAll(callerTargets);
+                ThreadInventoryCoreEvidence.install(new ArrayList<>(targets));
+                assertEquals(0L, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) {
+                        return force.drainStack((SavedGuestContinuation) frame.getArguments()[0]);
+                    }
+                }.getCallTarget();
+            } finally { context.leave(); }
+            var cell = new ManagedMVar(); var answer = new CompletableFuture<SavedGuestContinuation>();
+            var worker = new Thread(() -> {
+                context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+                try {
+                    Object value = Calls.target(caller, new Object[]{0L, function, cell});
+                    if (value instanceof AstTailYield yielded) value = yielded.getContinuation();
+                    if (value instanceof TailYield yielded) value = yielded.getContinuation();
+                    var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(value));
+                    Objects.requireNonNull(saved.asyncRequest()).acknowledge(); answer.complete(saved);
+                } catch (Throwable failure) { answer.completeExceptionally(failure); }
+                finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+            });
+            worker.start();
+            try {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (cell.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
+                if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
+                assertEquals(1, cell.pendingCounts().getTakers());
+                var request = owner.getThreads().send(Objects.requireNonNull(owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "scalar suffix cut");
+                var saved = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
+                assertSame(request, saved.asyncRequest());
+                assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                // ManagedMVar claims through pollCurrentWithoutYield. The existing
+                // tuple poll-cut control proves compiledCapture's bytecode-poll contract.
+                final CallSegment segment;
+                final AstContinuation helperSaved;
+                if (tail) {
+                    segment = null;
+                    helperSaved = assertInstanceOf(AstContinuation.class, saved);
+                } else {
+                    var suspended = assertInstanceOf(CallSegmentSuspended.class, saved.getYielded());
+                    assertSame(request, suspended.getAsyncRequest());
+                    segment = suspended.getSegment();
+                    helperSaved = assertInstanceOf(AstContinuation.class,
+                            SavedGuestContinuations.savedGuestContinuation(segment.getValue()));
+                    assertSame(caller.getRootNode(), saved.getSourceRoot());
+                    assertSame(saved.getIdentity(), SavedGuestContinuations.savedGuestContinuation(saved.getIdentity()).getIdentity());
+                }
+                assertSame(helper.getRootNode(), helperSaved.getSourceRoot());
+                assertSame(helperSaved, helperSaved.getIdentity());
+                assertSame(request, helperSaved.asyncRequest());
+                assertEquals(3L, ((Number) program.diagnostics().get("compiledEntries")).longValue(),
+                        "The original caller, shared scalar helper and first callee enter compiled code before any execution warmup");
+                context.enter();
+                try {
+                    assertTrue(cell.tryPut("consumed once"));
+                    assertEquals(tail ? 37L : 42L, Calls.target(resume, new Object[]{saved}));
+                    assertTrue(cell.isEmpty(), "The completed MVar prefix must not replay on suffix resume");
+                    assertThrows(RuntimeFault.class, () -> helperSaved.continueWith(Unit.INSTANCE),
+                            "The actual helper activation owns one-shot resumption");
+                    if (segment != null) {
+                        assertEquals(2, segment.getState());
+                        assertEquals(37L, segment.getValue());
+                        assertNull(segment.getOwner());
+                    }
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(caller.getRootNode()));
+                    ThreadInventoryCoreEvidence.released(language);
+                } finally { context.leave(); }
+            } finally { if (worker.isAlive()) context.close(true); worker.join(5000); }
+        }
+    }
     @Test void ordinaryCallerAndEntryRoutesAreCapturedAndConflictingProofsStillFail() {
         try (var context = Context.newBuilder("thc").build()) { context.initialize("thc"); context.enter(); try {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); new Program(language, directMVarModule(false, false, false, false, false, false, false), true); new Program(language, directMVarModule(false, true, false, false, false, false, false), true); new Program(language, directMVarModule(false, false, false, true, false, false, false), true);
