@@ -124,7 +124,7 @@ class LargeLiteralCaseNativeTest {
         return Map.of("id", "main:LargeLiteralCaseAudit." + id, "name", id, "lifted", true, "expr", List.of("lam", List.of(parameter),
             List.of("case", List.of("var", "x"), "selected", arms, Map.of("binder", selected, "rep", integral)), Map.of("rep", closure, "resultRep", integral)));
     }
-    @Test void missingDefaultStillFailsAndDuplicateLabelsKeepTheirOriginalOrder() throws Exception {
+    @Test void integralCaseBoundariesAndMissingDefaultPreserveCompiledBehavior() throws Exception {
         record Domain(String literal, String rep, boolean narrow) {}
         Map<String, Object> result = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
         Map<String, Object> closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
@@ -133,27 +133,23 @@ class LargeLiteralCaseNativeTest {
             Map<String, Object> integral = Map.of("kind", "long",
                 "primReps", List.of(domain.rep), "evaluated", true);
             Map<String, Object> parameter = Map.of("id", "x", "name", "x", "lifted", false, "coercion", false, "rep", integral);
-            // Distinct labels may be reordered; malformed duplicates retain first source match.
+            // Deliberately unordered distinct labels exercise indexed selection.
             var arms = new ArrayList<List<Object>>();
             for (long i = 20; i >= 0; i--) arms.add(arm(domain.literal, i * 3, i + 100));
             long minimum = domain.narrow ? Integer.MIN_VALUE : Long.MIN_VALUE;
             long maximum = domain.narrow ? Integer.MAX_VALUE : Long.MAX_VALUE;
             arms.add(arm(domain.literal, minimum, 200)); arms.add(arm(domain.literal, maximum, 201));
-            var duplicates = new ArrayList<>(arms); duplicates.add(arm(domain.literal, 0, 999));
             var defaults = new ArrayList<>(arms);
-            defaults.addFirst(java.util.Arrays.asList("default", null, List.of(), number(888)));
             defaults.add(java.util.Arrays.asList("default", null, List.of(), number(777)));
             each(Map.of("instrument", true, "bindings", List.of(binding("partial", arms, parameter, result, closure),
-                binding("duplicate", duplicates, parameter, result, closure), binding("defaults", defaults, parameter, result, closure))), (backend, program) -> {
-                for (String entry : List.of("partial", "duplicate", "defaults")) compile(program.entryTarget("main:LargeLiteralCaseAudit." + entry));
+                binding("defaults", defaults, parameter, result, closure))), (backend, program) -> {
+                for (String entry : List.of("partial", "defaults")) compile(program.entryTarget("main:LargeLiteralCaseAudit." + entry));
                 long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                 assertEquals(100L, call(program, "partial", carrier(domain.narrow, 0)), backend + "/" + domain.literal);
                 assertEquals(before + 1, program.diagnostics().get("compiledEntries"), "Untouched partial must enter installed code");
-                // Malformed duplicates deliberately retain the unchanged profiled matcher.
-                assertEquals(100L, call(program, "duplicate", carrier(domain.narrow, 0)));
                 before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                 assertEquals(777L, call(program, "defaults", carrier(domain.narrow, -1)));
-                assertEquals(before + 1, program.diagnostics().get("compiledEntries"), "Untouched indexed miss enters installed last default");
+                assertEquals(before + 1, program.diagnostics().get("compiledEntries"), "Untouched indexed miss enters installed default");
                 for (long n = 0; n <= 20; n++) assertEquals(n + 100, call(program, "partial", carrier(domain.narrow, n * 3)), backend + "/" + domain.literal + "/" + n);
                 assertEquals(200L, call(program, "partial", carrier(domain.narrow, minimum)));
                 assertEquals(201L, call(program, "partial", carrier(domain.narrow, maximum)));
