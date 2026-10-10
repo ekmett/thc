@@ -389,11 +389,14 @@ class SavedGuestContinuationTest {
             } finally { context.leave(); }
         }
     }
-    @Test void wrongContextRejectionPreservesBytecodeTokenAndOuterOwners() {
+    @ParameterizedTest @ValueSource(booleans = {true, false})
+    void wrongContextRejectionPreservesBytecodeTokenAndOuterOwners(boolean sharedEngine) {
         try (var engine = org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true)
                 .option("engine.Compilation", "false").build();
+             var otherEngine = sharedEngine ? null : org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build();
              var owner = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build();
-             var stranger = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build()) {
+             var stranger = org.graalvm.polyglot.Context.newBuilder("thc").engine(sharedEngine ? engine : otherEngine).build()) {
             owner.initialize("thc"); stranger.initialize("thc");
             var tokens = new ContinuationResult[2]; var boundaries = new Object[2];
             Driver driver;
@@ -411,12 +414,13 @@ class SavedGuestContinuationTest {
             } finally { owner.leave(); }
             stranger.enter();
             try {
+                var rejectingDriver = sharedEngine ? driver : new Driver(TruffleLanguage.LanguageReference.create(Language.class).get(null));
                 for (int i = 0; i < tokens.length; i++) {
                     Object boundary = boundaries[i];
                     var alias = SavedGuestContinuations.savedGuestContinuation(tokens[i]);
                     assertThrows(RuntimeFault.class, () -> alias.continueWith(Unit.INSTANCE));
                     assertThrows(RuntimeFault.class, alias::discard);
-                    assertThrows(RuntimeFault.class, () -> driver.force(boundary));
+                    assertThrows(RuntimeFault.class, () -> rejectingDriver.force(boundary));
                     if (boundary instanceof Thunk thunk) {
                         assertEquals(5, thunk.getState()); assertSame(tokens[i], thunk.getValue()); assertNull(thunk.getOwner());
                     } else {

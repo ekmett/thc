@@ -65,9 +65,8 @@ final class BytecodeContinuations {
         if (activation == null) throw fault("Bytecode continuation has no execution provenance");
         return activation;
     }
-    private static void requireOwner(Activation activation, ContinuationResult saved) {
-        if (activation.owner == null || activation.owner.get() != Language.currentState(
-                (Node) saved.getContinuationRootNode().getSourceRootNode()))
+    private static void requireOwner(Activation activation) {
+        if (activation.owner == null || activation.owner.get() != Language.currentState(null))
             throw fault("Bytecode continuation belongs to another execution context");
         for (var request : activation.requests) request.preflightFromSavedActivation();
     }
@@ -75,7 +74,7 @@ final class BytecodeContinuations {
     @TruffleBoundary static void preflight(ContinuationResult saved) {
         var activation = owned(saved);
         synchronized (activation) {
-            requireOwner(activation, saved);
+            requireOwner(activation);
         }
     }
     static void preflight(SavedGuestContinuation saved) {
@@ -105,7 +104,7 @@ final class BytecodeContinuations {
     @TruffleBoundary private static void claim(ContinuationResult saved) {
         var activation = owned(saved);
         synchronized (activation) {
-            requireOwner(activation, saved);
+            requireOwner(activation);
             if (activation.terminal.putIfAbsent(saved, Boolean.TRUE) != null)
                 throw fault("Bytecode continuation was already consumed");
         }
@@ -114,7 +113,7 @@ final class BytecodeContinuations {
         var activation = owned(saved);
         WindowsNativeIo.Request[] requests;
         synchronized (activation) {
-            requireOwner(activation, saved);
+            requireOwner(activation);
             if (activation.terminal.putIfAbsent(saved, Boolean.TRUE) != null) return;
             requests = activation.requests.toArray(WindowsNativeIo.Request[]::new);
             activation.requests.clear();
