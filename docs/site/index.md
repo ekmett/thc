@@ -147,7 +147,7 @@ stable embedding API.
 The [source repository](../../README.md) includes the full
 [documentation](../), [benchmark runners](../../bench/) and
 [test fixtures](../../t/). THC uses the same license as Cadenza:
-**UPL-1.0 AND BSD-3-Clause**; see [LICENSE.txt](../../LICENSE.txt).
+**UPL-1.0 AND BSD-3-Clause**; see [Licensing Terms](../../LICENSE.md).
 
 ## Contact Information
 
