@@ -257,7 +257,15 @@ public class AstStackTest {
         var result = new LinkedHashMap<>(module()); result.put("constructors", List.of(Map.of("id", "Unit", "name", "()", "arity", 0, "tag", 1, "fieldReps", List.of(), "strictFields", List.of(), "fieldLifted", List.of()), Map.of("id", "Pair", "name", "(#,#)", "arity", 2, "tag", 1, "kind", "unboxed-tuple")));
         var bindings = new ArrayList<Object>((List<?>) module().get("bindings")); var binding = new LinkedHashMap<>(binder("caught", closure, true)); binding.put("expr", lambda(List.of(binder("n", longRep, false), binder("tick", closure, true)), body, longRep)); bindings.add(binding);
         if (transaction) {
-            var nested = new LinkedHashMap<>(binder(STMOp.NESTED, boxed, true)); nested.put("expr", unit); bindings.add(nested);
+            // Neither nested atomically nor blocked-owner rescue occurs here. Declare
+            // their lazy dependencies as bottom. BlockedOwners.hs exercises genuine
+            // blocked-owner exceptions; this test observes external delivery and rollback.
+            var lazyException = new LinkedHashMap<>(boxed); lazyException.put("evaluated", false);
+            for (var id : List.of(STMOp.NESTED, CoreBlockedExceptions.STM)) {
+                var dependency = new LinkedHashMap<>(binder(id, lazyException, true));
+                dependency.put("expr", List.of("var", id, Map.of("rep", lazyException)));
+                bindings.add(dependency);
+            }
         }
         result.put("bindings", bindings); return result;
     }
