@@ -441,6 +441,11 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         return preparedRoot(CoreModules.selectedModules(input, entry));
     }
 
+    /** Internal reader-free restore path; serialized inputs still require CBD capabilities. */
+    CallTarget detachedRoot(Map<String,Object> input) {
+        return unitRoot(input, CoreUnitDirectory.detached(input), true);
+    }
+
     /** Ordinary cached sources retain their configured preparation parallelism. */
     RootCallTarget preparedRoot(Map<String,Object> input) {
         return preparedRoot(input, Integer.parseInt(System.getProperty("thc.prepareCodeJobs", "4")));
@@ -568,6 +573,10 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
     }
 
     private CallTarget unitRoot(Map<String, Object> input, CoreUnitDirectory directory) {
+        return unitRoot(input, directory, false);
+    }
+
+    private CallTarget unitRoot(Map<String, Object> input, CoreUnitDirectory directory, boolean detached) {
         boolean explicitProgram = "program".equals(input.get("mode"));
         String entry = input.get("entry") instanceof String value ? value : null;
         require(explicitProgram || entry != null, "Expected entry name");
@@ -587,7 +596,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
             @Override public Object execute(VirtualFrame frame) { return instantiate(); }
             @TruffleBoundary private Object instantiate() {
                 var owner = currentState(this);
-                var program = new CoreUnitProgram(Language.this, directory, input, entry, backend, async, owner);
+                var program = new CoreUnitProgram(Language.this, directory, input, entry, backend, async, owner, detached);
                 try {
                     // Legacy single-entry loads validate before native startup.
                     // Explicit programs defer only entry selection, not registration.

@@ -93,6 +93,15 @@ class CoreUnitLoadTest {
                 assertEquals(kind.equals("function-addr") ? 1L : 43L, entry.execute(1).asLong());
                 assertEquals(reads, count(entry, "coreCompactDataBytesRead"));
             }
+            for (var backend : List.of("ast", "bytecode")) {
+                var detached = CracExecutable.checkpoint(request(manifest, backend), () -> {});
+                long opens = CoreFileMappings.shared.statistics().mappingOpens();
+                try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                    var entry = Main.loadDetachedEntry(context, detached);
+                    assertEquals(kind.equals("function-addr") ? 1L : 43L, entry.execute(0).asLong());
+                }
+                assertEquals(opens, CoreFileMappings.shared.statistics().mappingOpens());
+            }
         }
     }
     @Test void inlinedNativeLabelsDoNotBypassDependencyAmbiguityOrComponentProof() throws Exception {
@@ -112,6 +121,15 @@ class CoreUnitLoadTest {
             for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
                 // Native labels resolve at their first guest use.
                 var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request(manifest, backend)).execute(0));
+                assertTrue(failure.getMessage().contains(expected.get(i)), failure.getMessage());
+            }
+            for (var backend : List.of("ast", "bytecode")) {
+                var failure = assertThrows(RuntimeException.class, () -> {
+                    var detached = CracExecutable.checkpoint(request(manifest, backend), () -> {});
+                    try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                        Main.loadDetachedEntry(context, detached).execute(0);
+                    }
+                });
                 assertTrue(failure.getMessage().contains(expected.get(i)), failure.getMessage());
             }
         }

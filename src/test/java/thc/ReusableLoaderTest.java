@@ -163,6 +163,36 @@ class ReusableLoaderTest {
         return Json.stringify(list("--run-executable", "@" + manifest, "fixture:PreparedIo.entry", "fixture:PreparedIo.stop", "--", "fixture"));
     }
 
+    /** Boundary control only: this callback is not a CRaC checkpoint/restore. */
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void checkpointCoreRunsWithoutCbdAndPropagatesCheckpointFailure(String backend) throws Exception {
+        var args = NativeExecutable.launcherArguments(nativeBinding(ioModule()), new String[0]);
+        var request = CoreModules.request(List.of(args[1]), args[2], true, false, backend, false, true, args[3], false, true);
+        var failure = new IllegalStateException("checkpoint refused");
+        assertSame(failure, assertThrows(IllegalStateException.class,
+            () -> CracExecutable.checkpoint(request, () -> { throw failure; })));
+        var restored = CracExecutable.checkpoint(request, () -> {
+            var mappings = CoreFileMappings.shared.statistics();
+            assertEquals(0, mappings.activeLeases());
+            assertEquals(0, mappings.idleMappings());
+            try {
+                Files.delete(directory.resolve("PreparedIo.cbd"));
+                Files.delete(directory.resolve("packages.json"));
+            } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
+        });
+        long opens = CoreFileMappings.shared.statistics().mappingOpens();
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            assertThrows(PolyglotException.class, () -> context.eval("thc", Json.stringify(restored)),
+                "Detached maps must not become an external Core input protocol");
+            var action = Main.loadDetachedEntry(context, restored);
+            assertTrue(action.invokeMember("runIO").asBoolean());
+            assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO"))
+                .getMessage().contains("already started"));
+        }
+        assertEquals(opens, CoreFileMappings.shared.statistics().mappingOpens(), "Restore must not reopen CBD");
+    }
+
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void executableImagePropertyDoesNotDisableJvmParsing(String backend) throws Exception {
         var app = unit("app", "Main", List.of(binding("app:Main.entry", literal(7))));

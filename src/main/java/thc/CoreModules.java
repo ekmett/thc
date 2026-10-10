@@ -467,6 +467,7 @@ public final class CoreModules {
                     if (admitted.getPackageLink() != null) units.add((String) admitted.getModule().get("unit"));
                     for (var call : CoreCallInventory.mapCalls(binding)) if (call.get("target") instanceof Map<?,?> target &&
                             "static".equals(target.get("kind")) && target.get("unit") instanceof String unit) units.add(unit);
+                    units.addAll(directory.addressProvenance((String) admitted.getModule().get("unit"), binding, consumers, sources::metadata));
                     for (String unit : units) if (foreignUnits.add(unit)) for (var module : directory.getModules())
                         if (module.unit().equals(unit) && module.packageScalarDeclarations()) admit(module);
                     var links = selected.keySet().stream().map(CoreModuleAdmission::getForeignLink).filter(Objects::nonNull).toList();
@@ -517,6 +518,9 @@ public final class CoreModules {
             reachable(with(merger.finish(), "foreignExceptionBridgeUnit", runtimeUnit), entries, true);
             var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "moduleFiles");
             result.put("modules", modules);
+            var unitDependencies = new LinkedHashMap<String,List<String>>();
+            for (var unit : directory.getUnits()) unitDependencies.put(unit.id(), unit.depends());
+            result.put("unitDependencies", unitDependencies);
             if (runtimeUnit != null) result.put("foreignExceptionBridgeUnit", runtimeUnit);
             if (sources.getTargetLayout() != null) result.put("targetLayout", sources.getTargetLayout().document());
             return (Map<String,Object>) detachedValue(result);

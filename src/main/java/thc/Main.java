@@ -180,6 +180,14 @@ public final class Main {
         }
     }
 
+    static Value loadDetachedEntry(Context context, Map<String,Object> core) {
+        context.initialize("thc"); context.enter();
+        try {
+            var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            return context.asValue(language.detachedRoot(core).call());
+        } finally { context.leave(); }
+    }
+
     // Report the actual selector code source, including every compiled class it
     // can consult. This cold audit path never initializes a guest context.
     private static Map<String, String> foreignOwnershipRuntime() throws java.io.IOException {
@@ -230,6 +238,15 @@ public final class Main {
         String[] args = withVerification.arguments();
         boolean verifyArtifacts = withVerification.verifyArtifacts();
         boolean interfaceHelper = withVerification.interfaceHelper();
+        if (args.length > 0 && args[0].equals("--checkpoint-executable")) {
+            require(args.length >= 4, "Usage: thc --checkpoint-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
+            var checkpoint = CracExecutable.checkpointOperation();
+            var guest = launcherArguments(args, 4);
+            var core = CracExecutable.checkpoint(CoreModules.request(modules(args[1]), args[2], true,
+                false, defaultBackend(), false, true, args[3], configuredAsyncExceptions(), verifyArtifacts), checkpoint);
+            runExecutable(guest, interfaceHelper, context -> loadDetachedEntry(context, core));
+            return;
+        }
         if (args.length > 0 && args[0].equals("--run-executable")) {
             require(args.length >= 4, "Usage: thc --run-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 4);
