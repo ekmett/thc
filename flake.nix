@@ -6,7 +6,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/7c8764b7c7b09b34f632464276218ef9090eaa11";
     hide = {
-      url = "github:ekmett/hide/676020b019dd82608ef3dfb75f995946ea385a60";
+      url = "github:ekmett/hide/4e696d91eaa9c2f3535661273b01d396d654e1e0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
