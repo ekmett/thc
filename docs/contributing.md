@@ -57,6 +57,13 @@ subprocess ownership controls without configuring or building guest packages:
 cabal test driver-tests -fdevelopment --test-options=--unit-only --test-show-details=direct
 ```
 
+Producer commands use the driver's shared process-group/job ownership boundary:
+cancellation stops and reaps the owned tree before output/cache scopes end.
+POSIX producers must wait for their descendants before normal exit; the driver
+never signals a reaped leader's potentially reused group ID. Foreground guest
+launches retain terminal input and interrupt behavior and are separate from
+this producer policy. Pipe capture drains EOF before reaping.
+
 Package integration checks retain their focused selectors for explicit runs.
 The driver suite's public-package smoke compares Integer, Text, ByteString and
 memory operations with native GHC on both backends and in both handoff modes.

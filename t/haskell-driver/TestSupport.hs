@@ -1,6 +1,5 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-{-# LANGUAGE CPP #-}
 
 -- |
 -- Module      : TestSupport
@@ -20,11 +19,6 @@ module TestSupport
   ) where
 
 import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
-#ifdef mingw32_HOST_OS
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
-#else
-import Control.Concurrent (threadDelay)
-#endif
 import Control.Exception (bracket, evaluate, finally, mask, onException)
 import Control.Monad (forM, forM_, void)
 import Data.Aeson (Value(..), eitherDecodeStrict', toJSON)
@@ -49,16 +43,13 @@ import System.FilePath ((</>), takeDirectory, takeExtension)
 import System.IO (hClose, hPutStrLn, openTempFile)
 import qualified System.IO as IO
 import System.IO.Error (tryIOError)
-#ifndef mingw32_HOST_OS
-import System.IO.Error (catchIOError, isDoesNotExistError)
-import System.Posix.Signals (sigKILL, signalProcessGroup)
-#endif
 import qualified System.Process as Process
 import System.Process.Internals (ignoreSigPipe, withForkWait)
 import System.Timeout (timeout)
 import Test.HUnit (assertBool, assertEqual)
 import qualified Test.HUnit as HUnit
 import THC.Compact.Module (readModuleValue)
+import THC.Driver.Process (waitOwnedProcess, stopProcessTree)
 
 data Env = Env { root :: FilePath, thcRoot :: FilePath, driver :: FilePath
                , runtime :: FilePath, scratch :: FilePath }
@@ -213,36 +204,6 @@ captureProcess command = bracket (Process.createProcess command
   where
     cleanup (input, output, diagnostic, child) = stopProcessTree child `finally`
       (ignoreSigPipe (mapM_ hClose input) `finally` (mapM_ hClose output `finally` mapM_ hClose diagnostic))
-
-waitOwnedProcess :: Process.ProcessHandle -> IO ExitCode
-#ifdef mingw32_HOST_OS
-waitOwnedProcess child = do
-  -- Unlike getProcessExitCode, waitForProcess keeps and waits for the job.
-  -- A worker leaves the timeout thread free to terminate a blocked native wait.
-  status <- newEmptyMVar
-  withForkWait (Process.waitForProcess child >>= putMVar status) $ \waitChild ->
-    (waitChild >> readMVar status) `onException` stopProcessTree child
-#else
-waitOwnedProcess child = mask $ \restore -> do
-  -- Keep reaping and publishing ClosedHandle atomic with respect to timeout.
-  -- No other thread may reap the PID while cancellation signals its group.
-  let poll = Process.getProcessExitCode child >>= maybe (restore (threadDelay 10000) >> poll) pure
-  poll
-#endif
-
-stopProcessTree :: Process.ProcessHandle -> IO ()
-stopProcessTree child = do
-#ifdef mingw32_HOST_OS
-  -- The job-aware wait runs in a worker, leaving the timeout thread free to
-  -- terminate the entire job even while a native Windows wait is blocked.
-  Process.terminateProcess child
-#else
-  -- create_group makes the unreaped child's PID our private group ID. Never
-  -- signal after the ProcessHandle has been reaped and that ID can be reused.
-  Process.getPid child >>= mapM_ (\pid -> signalProcessGroup sigKILL pid
-    `catchIOError` \problem -> if isDoesNotExistError problem then pure () else ioError problem)
-#endif
-  void (Process.waitForProcess child)
 
 testProcess :: Env -> FilePath -> Maybe String -> FilePath -> [String] -> IO Process.CreateProcess
 testProcess env cwd backend executable arguments = do

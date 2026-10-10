@@ -13,8 +13,8 @@
 -- Tests for test support.
 module TestSupportTests (tests, helperMode) where
 
-import Control.Concurrent (threadDelay)
-import Control.Exception (SomeException, bracket, displayException, finally, try)
+import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, takeMVar, threadDelay, throwTo)
+import Control.Exception (AsyncException(ThreadKilled, UserInterrupt), SomeException, bracket, displayException, finally, fromException, try)
 import Control.Monad (forM_, void, when)
 import Data.Aeson (Value, encode, object, (.=))
 import qualified Data.ByteString as BS
@@ -26,11 +26,12 @@ import System.Directory (createDirectory, createDirectoryIfMissing, createDirect
 import System.Environment (getEnvironment, getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>), takeDirectory)
-import System.IO (hClose, hPutStrLn, openTempFile, stderr)
+import System.IO (IOMode(WriteMode), hClose, hPutStrLn, openTempFile, stderr, withFile)
 import System.Info (os)
 import qualified System.Process as Process
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
+import THC.Driver.Process (runProducer)
 import TestSupport (Env(..), Result(..), assertContains, runExe, withFixtureNamed)
 
 tests :: Test
@@ -107,6 +108,47 @@ tests = TestLabel "driver test support" $ TestList
         after <- BS.readFile writes
         assertEqual "timeout cleanup stops descendant file writes before returning" before after)
         `finally` writeFile stop ""
+  , TestLabel "production process ownership" $ TestCase $ withHarness $ \environment -> do
+      self <- getExecutablePath
+      let directory = root environment
+          command mode = (Process.proc self ["--test-support-producer", mode, directory])
+            { Process.cwd = Just directory }
+      forM_ [("success", ExitSuccess), ("once", ExitFailure 17)] $ \(mode, expected) -> do
+        completed <- timeout 3000000 $ withFile (directory </> "stdout") WriteMode $ \output ->
+          withFile (directory </> "stderr") WriteMode $ \diagnostic ->
+            runProducer (command mode) { Process.std_out = Process.UseHandle output,
+                                        Process.std_err = Process.UseHandle diagnostic }
+        assertEqual "production command preserves exit status" (Just expected) completed
+        assertEqual "production stdout" "descendant stdout\n" =<< readFile (directory </> "stdout")
+        assertEqual "production stderr" "descendant stderr\n" =<< readFile (directory </> "stderr")
+      forM_ [("cancel", ThreadKilled), ("interrupt", UserInterrupt)] $ \(label, exception) -> do
+        let scope = directory </> label
+            writes = scope </> "descendant-writes"
+            stop = scope </> "stop-descendant"
+        createDirectory scope
+        (do
+          finished <- newEmptyMVar
+          worker <- forkFinally (runProducer (Process.proc self
+            ["--test-support-producer", "hold", scope])) (putMVar finished)
+          let await = do
+                started <- doesFileExist writes
+                if started then pure () else threadDelay 10000 >> await
+          ready <- timeout 3000000 await
+          case ready of
+            Nothing -> killThread worker >> assertFailure "production descendant did not become ready"
+            Just () -> pure ()
+          throwTo worker exception
+          outcome <- timeout 3000000 (takeMVar finished)
+          case outcome of
+            Just (Left problem) -> assertEqual "cancellation preserves the asynchronous exception"
+              (Just exception) (fromException problem)
+            other -> assertFailure ("production cancellation did not finish: " ++ show other)
+          before <- BS.readFile writes
+          assertBool "production descendant wrote before cancellation" (not (BS.null before))
+          threadDelay 250000
+          after <- BS.readFile writes
+          assertEqual "production cancellation stops descendant writes before returning" before after)
+          `finally` writeFile stop ""
   ]
   where
     audit :: Value
@@ -132,6 +174,12 @@ helperMode arguments = case arguments of
     -- The timeout case leaves an exited leader whose descendant keeps the
     -- inherited output pipes open. Capture must not reap away group ownership.
     if mode == "hold" then pure () else Process.waitForProcess child >>= exitWith
+  ["--test-support-producer", mode, directory] -> Just $ do
+    self <- getExecutablePath
+    (_, _, _, child) <- Process.createProcess
+      (Process.proc self ["--test-support-writer", if mode == "success" then "once" else mode, directory])
+    status <- Process.waitForProcess child
+    exitWith (if mode == "success" then ExitSuccess else status)
   ["--test-support-writer", "once", _] -> Just $ do
     putStrLn "descendant stdout"
     hPutStrLn stderr "descendant stderr"

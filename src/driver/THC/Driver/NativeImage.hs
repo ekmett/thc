@@ -1,6 +1,5 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
@@ -18,10 +17,7 @@ module THC.Driver.NativeImage
   , buildNativeImage
   ) where
 
-#ifndef mingw32_HOST_OS
-import Control.Concurrent (threadDelay)
-#endif
-import Control.Exception (evaluate, finally, mask, mask_, onException)
+import Control.Exception (evaluate, finally, onException)
 import Control.Monad (forM, forM_, unless, void, when)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), Result(..), eitherDecodeStrict', encode, fromJSON, object, (.=))
@@ -47,14 +43,9 @@ import System.FilePath ((</>), isRelative, makeRelative, normalise, splitDirecto
 import System.Info (arch, os)
 import System.IO (IOMode(..), hClose, hPutStrLn, openTempFile, stderr, withBinaryFile, withFile)
 import System.IO.Error (tryIOError)
-#ifndef mingw32_HOST_OS
-import System.IO.Error (catchIOError, isDoesNotExistError)
-import System.Posix.Signals (sigKILL, signalProcessGroup)
-#endif
 import System.Process
-  ( CreateProcess(..), StdStream(..), proc, readCreateProcessWithExitCode
-  , waitForProcess, withCreateProcess )
-import qualified System.Process as Process
+  ( CreateProcess(..), StdStream(..), proc, readCreateProcessWithExitCode )
+import THC.Driver.Process (runProducer)
 import THC.Driver.Lock (withLock)
 import THC.Driver.Run (runtimeLaunchArguments)
 
@@ -153,10 +144,8 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
       hPutStrLn stderr ("Building native image for " ++ program ++ " in " ++ stage)
       status <- withFile (stage </> "build.stdout") WriteMode $ \stdoutLog ->
         withFile (stage </> "build.stderr") WriteMode $ \stderrLog ->
-          mask_ $ withCreateProcess (proc "bash" arguments) {cwd = Just root, env = Just environment,
-            std_out = UseHandle stdoutLog, std_err = UseHandle stderrLog,
-            create_group = True, use_process_jobs = True} $ \_ _ _ process ->
-              waitProducer process
+          runProducer (proc "bash" arguments) {cwd = Just root, env = Just environment,
+            std_out = UseHandle stdoutLog, std_err = UseHandle stderrLog}
       require (status == ExitSuccess) ("native image producer failed: " ++ show status)
       reported <- artifactReport (stage </> "build-artifacts.json")
       validateJamRuntime stage jam
@@ -352,24 +341,6 @@ artifactTree stage requested = do
       else do
         requireFile "native image artifact" source
         pure [(relative, source, False)]
-
--- Reaping and publishing the closed handle stay atomic against cancellation,
--- so the still-owned PID remains the process group ID until cleanup finishes.
-waitProducer :: Process.ProcessHandle -> IO ExitCode
-waitProducer process = mask $ \restore -> onException (restore wait) stop
-  where
-#ifdef mingw32_HOST_OS
-    wait = waitForProcess process
-    stop = Process.terminateProcess process >> void (waitForProcess process)
-#else
-    wait = mask $ \restore ->
-      let poll = Process.getProcessExitCode process >>= maybe (restore (threadDelay 10000) >> poll) pure
-      in poll
-    stop = do
-      Process.getPid process >>= mapM_ (\pid -> catchIOError (signalProcessGroup sigKILL pid)
-        (\problem -> if isDoesNotExistError problem then pure () else ioError problem))
-      void (waitForProcess process)
-#endif
 
 validateElf :: Bool -> FilePath -> IO ()
 validateElf program path = do

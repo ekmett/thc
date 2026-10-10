@@ -936,6 +936,7 @@ library driver
     THC.Driver.Lock
     THC.Driver.Json
     THC.Driver.Project
+    THC.Driver.Process
     THC.Driver.Run
     THC.Driver.Zip
     THC.Driver.Wired
@@ -975,7 +976,7 @@ executable thc
     filepath >= 1.5.4 && < 1.6,
     process >= 1.6.26 && < 1.7
   default-language: Haskell2010
-  ghc-options: -Wall
+  ghc-options: -Wall -threaded
   if flag(development)
     ghc-options: -Werror
 
