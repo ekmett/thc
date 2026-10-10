@@ -57,6 +57,63 @@ class NativeFileProviderTest {
             if (process.isAlive()) { process.destroyForcibly(); assertTrue(process.waitFor(5, TimeUnit.SECONDS), "Oracle was not reaped"); }
         }
     }
+    @Test void pendingFilesystemResolvesResourcesAndRejectsNativeAcquisition() throws Exception {
+        var selected = Files.createDirectory(directory.resolve("pending"));
+        Files.writeString(selected.resolve("value"), "kept");
+        try (var filesystem = new NativeFileSystem(Set.of(StandardEndpoint.OUTPUT), true)) {
+            assertThrows(IllegalStateException.class, filesystem::getDirectoryOwner);
+            filesystem.setCurrentWorkingDirectory(selected);
+            assertEquals(selected.resolve("value"), filesystem.toAbsolutePath(Path.of("value")));
+            assertEquals(selected.resolve("value").toRealPath(), filesystem.toRealPath(Path.of("value")));
+            assertEquals(4L, filesystem.readAttributes(Path.of("value"), "basic:size").get("size"));
+            try (var channel = filesystem.newByteChannel(Path.of("value"), Set.of(StandardOpenOption.READ))) { assertEquals(4L, channel.size()); }
+            try (var stream = filesystem.newDirectoryStream(Path.of("."), ignored -> true)) { assertEquals(Path.of("./value"), stream.iterator().next()); }
+            assertThrows(IllegalArgumentException.class, () -> filesystem.setCurrentWorkingDirectory(selected.resolve("missing")));
+            assertEquals(selected, filesystem.toAbsolutePath(Path.of("")));
+            var acquisition = new NativeOpenRequest(StandardEndpoint.OUTPUT, Set.of(), (path, anchor) -> { throw new AssertionError("Native request ran before startup"); });
+            assertThrows(IllegalStateException.class, () -> filesystem.newByteChannel(Path.of(""), Set.of(acquisition)));
+            filesystem.startNativeDirectory(); assertNotNull(filesystem.getDirectoryOwner());
+            assertEquals(selected.toRealPath(), filesystem.toAbsolutePath(Path.of("")));
+            filesystem.startNativeDirectory();
+        }
+    }
+    @Test void closedPendingFilesystemCannotStartOrResolveAgain() {
+        var filesystem = new NativeFileSystem(Set.of(), true);
+        filesystem.close(); filesystem.close();
+        assertThrows(IllegalStateException.class, filesystem::startNativeDirectory);
+        assertThrows(IllegalStateException.class, () -> filesystem.toAbsolutePath(Path.of(".")));
+        assertThrows(IllegalStateException.class, () -> filesystem.setCurrentWorkingDirectory(Path.of("/")));
+    }
+    @Test void startupCallbackFailureClosesTheUnstartedContext() {
+        var owner = new Context[1]; var failure = new IllegalStateException("checkpoint refused");
+        assertSame(failure, assertThrows(IllegalStateException.class, () -> NativeFileProvider.createContext(
+                EnumSet.allOf(StandardEndpoint.class), thc.ContextProfile.LAUNCHER, false, false, context -> {
+            owner[0] = context; context.initialize("thc"); context.enter();
+            try {
+                assertNull(Language.currentState().getNativeFiles());
+                assertThrows(SecurityException.class, NativeFileProvider::current);
+                assertTrue(Language.currentState().getEnv().getCurrentWorkingDirectory().isAbsolute());
+            } finally { context.leave(); }
+            throw failure;
+        })));
+        assertNotNull(owner[0]); assertThrows(IllegalStateException.class, owner[0]::enter);
+    }
+    @Test void successfulStartupCallbackRetainsOwnerAndInstallsOrdinaryNativeProvider() throws Exception {
+        var owner = new Language.State[1]; var captured = new Context[1];
+        try (var context = NativeFileProvider.createContext(EnumSet.allOf(StandardEndpoint.class),
+                thc.ContextProfile.LAUNCHER, false, false, preparing -> {
+            captured[0] = preparing; preparing.initialize("thc"); preparing.enter();
+            try { owner[0] = Language.currentState(); assertNull(owner[0].getNativeFiles()); }
+            finally { preparing.leave(); }
+        })) {
+            assertSame(captured[0], context); context.enter();
+            try {
+                assertSame(owner[0], Language.currentState());
+                assertSame(owner[0].getNativeFiles(), NativeFileProvider.current());
+                try (var standard = NativeFileProvider.current().standard(StandardEndpoint.OUTPUT)) { assertTrue(standard.isOpen()); }
+            } finally { context.leave(); }
+        }
+    }
     private Context nativeContext() { return nativeContext(Set.of()); }
     private Context nativeContext(Set<StandardEndpoint> endpoints) { return NativeIO.createContext(endpoints); }
     private <T> T entered(Context context, Callable<T> body) throws Exception {
