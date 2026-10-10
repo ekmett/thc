@@ -73,7 +73,7 @@ prepareDynamicCallbacks root = do
   let cArguments = ["-c","-O2",cSource,"-o",objects </> "callback.o"]
   cCompiled <- execute "native-component" [] ghc cArguments
   captureNativeObject pieces ghc cArguments
-  capturePackageNative root helper libdir ghc ["-dynamic","-odir",objects] "callback-fixture" output
+  capturePackageNative helper libdir ghc ["-dynamic","-odir",objects] "callback-fixture" output
   let staged = output </> "DynamicCallback.cbd"
   copyFile captured staged
   _ <- finishPackageNative ghcPkg pieces output "callback-fixture" (Just [objects </> "callback.o"]) [("DynamicCallback.cbd",staged)]
@@ -126,7 +126,7 @@ prepareStaticExport root output ghc helper libdir pluginDb pluginUnit = do
      "-odir", objects, "-hidir", objects, "-stubdir", objects, source </> "NativeExport.hs"]
   cCompiled <- execute "static-native-component" [] ghc cArguments
   captureNativeObject (capture </> "pieces") ghc cArguments
-  capturePackageNative root helper libdir ghc ["-dynamic", "-I" ++ root </> source </> "cbits", "-odir", objects] unit capture
+  capturePackageNative helper libdir ghc ["-dynamic", "-I" ++ root </> source </> "cbits", "-odir", objects] unit capture
   let staged = output </> "NativeExport.cbd"
   copyFile (capture </> "core/units/u-static-export-fixture/NativeExport.cbd") staged
   _ <- finishPackageNative ghcPkg (capture </> "pieces") capture unit (Just [objects </> "callbacks.o"]) [("NativeExport.cbd",staged)]

@@ -508,8 +508,6 @@ def install(root, prefix, database, support, helper, compact, runtime, ghc, ghc_
         compact=copy(compact, "libexec/thc/thc-compact"), runtime=str(Path(runtime).resolve()),
         targetLayout=copy(root / "src/driver/cbits/target-layout.c", "src/driver/cbits/target-layout.c"),
         bootAbis=boot, registeredAbis={unit: record["abi"] for unit, record in selected.items()})
-    for name in ("adler32.c", "crc32.c", "crc32.h", "zutil.h", "zlib.h", "zconf.h"):
-        copy(root / "nih/pinned/zlib-1.2.11" / name, Path("nih/pinned/zlib-1.2.11") / name)
     for source in (root / "bin").glob("*.py"):
         copy(source, Path("bin") / source.name)
     for resource in AUDIT_RESOURCES:

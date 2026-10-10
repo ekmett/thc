@@ -132,8 +132,7 @@ runGhcProxy arguments = do
       libdir <- lookupEnv "THC_PROXY_INTERFACE_LIBDIR"
       case (helper,libdir) of
         (Just executable,Just selectedLibdir) ->
-          getEnv "THC_PROXY_ROOT" >>= \repository ->
-            capturePackageNative repository executable selectedLibdir compiler (options ++ replayArguments) unit root
+          capturePackageNative executable selectedLibdir compiler (options ++ replayArguments) unit root
         _ -> pure ()
       forM_ view $ \_ -> writeFile ready ""
       when originalBuild (writeFile complete "")
