@@ -2,9 +2,8 @@
 
 THC is licensed under **UPL-1.0 AND BSD-3-Clause**, following Cadenza.
 The rights and obligations of both licenses apply. THC's original contributions
-are copyright (c) 2026, Edward Kmett. See [LICENSE](LICENSE) and the complete
-terms in [LICENSE.txt](LICENSE.txt). Edward Kmett's copyright notice extends
-through 2026; the Oracle notices are unchanged. Third-party components retain
+are copyright (c) 2026, Edward Kmett. See [Licensing Terms](LICENSE.md) for both
+complete license texts. Edward Kmett's copyright notice extends through 2026; the Oracle notices are unchanged. Third-party components retain
 the terms identified below.
 
 ## Jam Lifted API
@@ -58,7 +57,7 @@ than Cadenza's Nat Int capture representation. Cadenza's neutral-value and
 normalization paths are intentionally absent.
 
 Cadenza's license terms and Oracle copyright notices are retained in
-[LICENSE.txt](LICENSE.txt), with Edward Kmett's copyright extended through 2026.
+[Licensing Terms](LICENSE.md), with Edward Kmett's copyright extended through 2026.
 The original notice is retained without modification in
 [nih/licenses/cadenza-LICENSE.txt](nih/licenses/cadenza-LICENSE.txt).
 The incorporated portions and THC's original modifications use the same SPDX

@@ -15,7 +15,7 @@ import com.oracle.truffle.api.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.api.staticobject.StaticShape;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/* Adapted from Cadenza's capture layout. Retained notices: NOTICE.md and LICENSE.txt. */
+/* Adapted from Cadenza's capture layout. Retained notices: NOTICE.md and LICENSE.md. */
 /** Fixed storage metadata for durable selected captures, never an invocation frame. */
 public final class CaptureLayout {
     @CompilationFinal(dimensions = 1) private final CaptureField[] fields;
