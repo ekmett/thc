@@ -9,4 +9,5 @@ final class LongCase extends Case {
         super(scrutinee, binder, alternatives, metrics, proof, delimited);
     }
     @Override protected boolean matches(VirtualFrame frame, Alternative alternative) { return alternative.matchesLong(frame.getLong(binderSlot)); }
+    @Override protected int literalChoice(VirtualFrame frame) { return indexedLiteral(frame.getLong(binderSlot)); }
 }

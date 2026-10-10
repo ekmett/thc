@@ -44,6 +44,21 @@ tuple loans and child-update ownership use the existing continuation protocols.
 Eager outlining alone does not select graph-budget boundaries. An arm's `tailPosition` metadata
 alone does not authorize eliding tuple completion, masks, catches or updates.
 
+## Literal label selection
+
+Cases with a proved Integer or Long binder and more than eight distinct labels
+of that same physical carrier prepare an immutable key-to-arm index. Selection
+reads the carrier once and searches signed primitive keys without an exploded
+loop. Signed ordering preserves Word32/Word bit patterns; Integer and Long
+matching domains remain distinct. Duplicate or mixed labels retain source-order
+matching, and the last default remains authoritative.
+
+Original arm bodies still execute through their typed entries in their owning
+activation, including the saved scrutinee-resumption path and normal binder
+cleanup. The index retains no nodes, frames or context values. This commoning
+bounds label search, not arm-body graph growth: compiled body dispatch still
+contains the original arms and index comparisons.
+
 ## Deferred default-arm extraction
 
 The separate internal `Program` constructor option `deferDefaultArm` keeps an

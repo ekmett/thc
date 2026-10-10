@@ -107,26 +107,58 @@ class LargeLiteralCaseNativeTest {
         });
     }
     private static List<Object> number(long n) { return List.of("lit", "int", Long.toString(n)); }
-    private static List<Object> arm(long n, long result) { return List.of("lit", List.of("int", Long.toString(n)), List.of(), number(result)); }
+    private static List<Object> arm(String kind, long n, long result) {
+        String encoded = switch (kind) {
+            case "word" -> Long.toUnsignedString(n);
+            case "word32" -> Integer.toUnsignedString((int) n);
+            default -> Long.toString(n);
+        };
+        return List.of("lit", List.of(kind, encoded), List.of(), number(result));
+    }
+    private static Object carrier(boolean narrow, long value) {
+        if (narrow) return (int) value;
+        return value;
+    }
     private static Map<String, Object> binding(String id, List<List<Object>> arms, Map<String, Object> parameter, Map<String, Object> integral, Map<String, Object> closure) {
         var selected = new LinkedHashMap<>(parameter); selected.put("id", "selected");
         return Map.of("id", "main:LargeLiteralCaseAudit." + id, "name", id, "lifted", true, "expr", List.of("lam", List.of(parameter),
             List.of("case", List.of("var", "x"), "selected", arms, Map.of("binder", selected, "rep", integral)), Map.of("rep", closure, "resultRep", integral)));
     }
     @Test void missingDefaultStillFailsAndDuplicateLabelsKeepTheirOriginalOrder() throws Exception {
-        Map<String, Object> integral = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
+        record Domain(String literal, String rep, boolean narrow) {}
+        Map<String, Object> result = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
         Map<String, Object> closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
-        Map<String, Object> parameter = Map.of("id", "x", "name", "x", "lifted", false, "coercion", false, "rep", integral);
-        // Deliberately unordered labels. Reordering distinct labels is safe;
-        // malformed duplicates must retain the pre-existing first-match rule.
-        var arms = new ArrayList<List<Object>>();
-        for (long i = 20; i >= 0; i--) arms.add(arm(i * 3, i + 100));
-        var duplicates = new ArrayList<>(arms); duplicates.add(arm(0, 999));
-        each(Map.of("instrument", true, "bindings", List.of(binding("partial", arms, parameter, integral, closure),
-            binding("duplicate", duplicates, parameter, integral, closure))), (backend, program) -> {
-            for (long n = 0; n <= 20; n++) assertEquals(n + 100, call(program, "partial", n * 3), backend + "/" + n);
-            assertEquals(100L, call(program, "duplicate", 0L));
-            assertTrue(Objects.toString(assertThrows(RuntimeFault.class, () -> call(program, "partial", -1L)).getMessage(), "").contains("Non-exhaustive Core case"));
-        });
+        for (var domain : List.of(new Domain("int", "IntRep", false), new Domain("word", "WordRep", false),
+                new Domain("int32", "Int32Rep", true), new Domain("word32", "Word32Rep", true))) {
+            Map<String, Object> integral = Map.of("kind", "long",
+                "primReps", List.of(domain.rep), "evaluated", true);
+            Map<String, Object> parameter = Map.of("id", "x", "name", "x", "lifted", false, "coercion", false, "rep", integral);
+            // Distinct labels may be reordered; malformed duplicates retain first source match.
+            var arms = new ArrayList<List<Object>>();
+            for (long i = 20; i >= 0; i--) arms.add(arm(domain.literal, i * 3, i + 100));
+            long minimum = domain.narrow ? Integer.MIN_VALUE : Long.MIN_VALUE;
+            long maximum = domain.narrow ? Integer.MAX_VALUE : Long.MAX_VALUE;
+            arms.add(arm(domain.literal, minimum, 200)); arms.add(arm(domain.literal, maximum, 201));
+            var duplicates = new ArrayList<>(arms); duplicates.add(arm(domain.literal, 0, 999));
+            var defaults = new ArrayList<>(arms);
+            defaults.addFirst(java.util.Arrays.asList("default", null, List.of(), number(888)));
+            defaults.add(java.util.Arrays.asList("default", null, List.of(), number(777)));
+            each(Map.of("instrument", true, "bindings", List.of(binding("partial", arms, parameter, result, closure),
+                binding("duplicate", duplicates, parameter, result, closure), binding("defaults", defaults, parameter, result, closure))), (backend, program) -> {
+                for (String entry : List.of("partial", "duplicate", "defaults")) compile(program.entryTarget("main:LargeLiteralCaseAudit." + entry));
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                assertEquals(100L, call(program, "partial", carrier(domain.narrow, 0)), backend + "/" + domain.literal);
+                assertEquals(before + 1, program.diagnostics().get("compiledEntries"), "Untouched partial must enter installed code");
+                // Malformed duplicates deliberately retain the unchanged profiled matcher.
+                assertEquals(100L, call(program, "duplicate", carrier(domain.narrow, 0)));
+                before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                assertEquals(777L, call(program, "defaults", carrier(domain.narrow, -1)));
+                assertEquals(before + 1, program.diagnostics().get("compiledEntries"), "Untouched indexed miss enters installed last default");
+                for (long n = 0; n <= 20; n++) assertEquals(n + 100, call(program, "partial", carrier(domain.narrow, n * 3)), backend + "/" + domain.literal + "/" + n);
+                assertEquals(200L, call(program, "partial", carrier(domain.narrow, minimum)));
+                assertEquals(201L, call(program, "partial", carrier(domain.narrow, maximum)));
+                assertTrue(Objects.toString(assertThrows(RuntimeFault.class, () -> call(program, "partial", carrier(domain.narrow, -1))).getMessage(), "").contains("Non-exhaustive Core case"));
+            });
+        }
     }
 }
