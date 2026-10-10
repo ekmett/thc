@@ -54,7 +54,8 @@ public final class CoreDemandBindings {
                 cell.defer(lock, () -> {
                     var binding = definition(id); validateUses(id, binding);
                     var selected = prepare.apply(id, binding);
-                    return new GlobalBinding.Initializer(selected, owner, id, () -> programs.put(id, selected));
+                    programs.put(id, selected);
+                    return new GlobalBinding.Initializer(selected, owner, id, () -> {});
                 });
                 cells.put(id, cell);
             }
@@ -127,6 +128,17 @@ public final class CoreDemandBindings {
         var proof = CoreRepresentations.binder(binding);
         for (var occurrence : uses.getOrDefault(id, List.of())) validateOccurrence(proof, occurrence);
         for (var arguments : calls.getOrDefault(id, List.of())) validateCall(id, arguments);
+    }
+    /** Prepare one demanded program and its local code, leaving native startup
+     * and guest value initialization at the ordinary read boundary. */
+    public ExecutableProgram prepareCode(String id) {
+        var selected = cell(id); if (selected == null) throw new UnsupportedCore("Unresolved external binding " + id);
+        selected.prepareCode();
+        ExecutableProgram program;
+        try (var ownership = lock.acquire()) { program = programs.get(id); }
+        if (program == null) throw new NoSuchElementException("Key " + id + " is missing in the map.");
+        program.prepareCode();
+        return program;
     }
     public ExecutableProgram program(String id) {
         var selected = cell(id); if (selected == null) throw new UnsupportedCore("Unresolved external binding " + id);

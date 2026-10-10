@@ -15,7 +15,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final CoreUnitDirectory directory;
     private final Map<String,Object> input;
     private final String entry, backend;
-    private final boolean async;
+    private final boolean async, detached;
     private final Language.State owner;
     private final List<CoreCompactFile.Counters> compactTotals = new ArrayList<>();
     private final CoreUnitDirectory.Sources sources;
@@ -35,8 +35,11 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final CoreDemandBindings demand;
     private final boolean captureDelimited;
     public CoreUnitProgram(Language language, CoreUnitDirectory directory, Map<String,Object> input, String entry, String backend, boolean async, Language.State owner) {
+        this(language, directory, input, entry, backend, async, owner, false);
+    }
+    CoreUnitProgram(Language language, CoreUnitDirectory directory, Map<String,Object> input, String entry, String backend, boolean async, Language.State owner, boolean detached) {
         this.language = language; this.directory = directory; this.input = input; this.entry = entry;
-        this.backend = backend; this.async = async; this.owner = owner;
+        this.backend = backend; this.async = async; this.owner = owner; this.detached = detached;
         sources = directory.open(Objects.equals(input.get("verifyArtifacts"), true), !Objects.equals(input.get("sourceNotesEnabled"), false), compactTotals::add);
         var modules = new HashSet<String>();
         for (var module : directory.getModules()) {
@@ -45,7 +48,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
             availableModules.add(id);
         }
         try {
-            CoreModules.visitUnitConsumers(input, sources, rawModule -> {
+            java.util.function.Consumer<Map<String,Object>> accept = rawModule -> {
                 var module = (Map<String,Object>) rawModule;
                 String unit = requiredText(module.get("unit"), "Missing loose consumer unit"), name = requiredText(module.get("module"), "Missing loose consumer module");
                 boolean fragment = unit.equals("dependency-closure") && name.equals("THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings");
@@ -56,7 +59,9 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
                     consumerOwners.put(id, module);
                 }
                 addConstructors(module); consumers.add(module);
-            });
+            };
+            if (detached) CoreModules.visitDecodedModules(input, accept);
+            else CoreModules.visitUnitConsumers(input, sources, accept);
             for (var module : consumers) {
                 Object provided = module.get("providedModules");
                 if (provided != null) {
@@ -117,7 +122,10 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private CoreModuleAdmission consumerAdmission(Map<String,Object> module) {
         var admission = consumerAdmissions.get(module);
         if (admission == null) {
-            if (Objects.equals(input.get("verifyArtifacts"), true)) {
+            // Detached selections were verified against their complete originals
+            // before checkpoint. Their retained bindings are only a subset of
+            // the original foreign-call inventory, checked by selected() below.
+            if (!detached && Objects.equals(input.get("verifyArtifacts"), true)) {
                 CoreForeignArtifacts.validateArchive(module); CoreModules.admission(module, null); CoreForeignExceptionBridge.read(module);
             }
             var projected = new LinkedHashMap<>(module); projected.put("bindings", List.of());
@@ -156,45 +164,6 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         }
         return provenance;
     }
-    private static void addressLabels(Object value, Set<String> labels) {
-        if (value instanceof List<?> fields) {
-            if (fields.size() >= 3 && Objects.equals(fields.getFirst(), "lit") &&
-                    (Objects.equals(fields.get(1), "function-addr") || Objects.equals(fields.get(1), "data-addr")) && fields.get(2) instanceof String symbol)
-                labels.add(symbol);
-            else for (Object field : fields) addressLabels(field, labels);
-        } else if (value instanceof Map<?,?> fields) for (Object field : fields.values()) addressLabels(field, labels);
-    }
-    private static void addressOwners(Map<String,Object> module, Set<String> labels, Map<String,String> owners) {
-        if (!(module.get("packageNativeLink") instanceof Map<?,?> link) || !(link.get("abi") instanceof List<?> abi)) return;
-        var addresses = new HashSet<Object>();
-        if (link.get("dataSymbols") instanceof List<?> entries) addresses.addAll(entries);
-        if (link.get("finalizers") instanceof List<?> entries) addresses.addAll(entries);
-        for (Object raw : abi) if (raw instanceof Map<?,?> signature && addresses.contains(signature.get("entry")) &&
-                signature.get("symbol") instanceof String symbol && labels.contains(symbol)) {
-            String unit = requiredText(module.get("unit"), "Missing native label owner");
-            var previous = owners.putIfAbsent(symbol, unit);
-            require(previous == null || previous.equals(unit), "Ambiguous native address declaration: " + symbol);
-        }
-    }
-    private Set<String> addressProvenance(String unit, Object binding) {
-        var labels = new HashSet<String>(); addressLabels(binding, labels);
-        if (labels.isEmpty()) return Set.of();
-        // GHC inlines CLabels without retaining their source unit in the
-        // literal. Consult only declared dependency metadata, never unrelated
-        // units or the original Haskell wrapper's body. Full component/type
-        // admission below remains authoritative; this only selects candidates.
-        var dependencies = new HashSet<String>(); var pending = new ArrayDeque<String>(); pending.add(unit);
-        while (!pending.isEmpty()) {
-            String next = pending.removeFirst();
-            if (dependencies.add(next)) for (var record : directory.getUnits())
-                if (record.id().equals(next)) pending.addAll(record.depends());
-        }
-        var owners = new LinkedHashMap<String,String>();
-        for (var module : directory.getModules()) if (dependencies.contains(module.unit()) && module.packageScalarDeclarations())
-            addressOwners(metadata(module), labels, owners);
-        for (var module : consumers) if (dependencies.contains(module.get("unit"))) addressOwners(module, labels, owners);
-        return new LinkedHashSet<>(owners.values());
-    }
     private Map<String,Object> bridge() {
         if (selectedBridge != null) return selectedBridge;
         String unit = directory.getForeignExceptionBridgeUnit();
@@ -221,7 +190,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
             if (call.get("target") instanceof Map<?, ?> target && "static".equals(target.get("kind"))
                     && target.get("unit") instanceof String unit) foreignUnits.add(unit);
         }
-        foreignUnits.addAll(addressProvenance((String) admitted.getModule().get("unit"), binding));
+        foreignUnits.addAll(directory.addressProvenance((String) admitted.getModule().get("unit"), binding, consumers, this::metadata));
         for (String unit : foreignUnits) {
             packageProvenance(unit).forEach(merger::addPackageProvenance);
             boxedProvenance.get(unit).forEach(merger::addBoxedProvenance);
@@ -242,6 +211,12 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         // demanded cell's execution stage, after lowering ownership ends.
         return selectedBackend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);
     }
+    /** Lower the detached reachable closure without running global initializers or native startup. */
+    void prepareCheckpointCode() {
+        require(detached, "Checkpoint preparation requires detached Core");
+        for (String id : consumerBindings.keySet()) demand.prepareCode(id);
+    }
+
     public List<ManagedExportAdmission> registerStartup() {
         var registrations = new ArrayList<ManagedExportAdmission>(); var pending = new ArrayList<CoreModuleAdmission>();
         for (var module : directory.getModules()) if (module.registrationObligations()) pending.add(admission(module));

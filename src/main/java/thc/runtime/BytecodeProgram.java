@@ -612,6 +612,10 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
     }
 
+    @Override public void prepareCode() {
+        for (var binding : bindings) Objects.requireNonNull(globals.get((String) binding.get("id"))).prepareCode();
+    }
+
     @Override public void initializeGlobals() {
         for (String id : pendingInitializers) Objects.requireNonNull(globals.get(id)).read();
         pendingInitializers = List.of();
@@ -631,6 +635,12 @@ public final class BytecodeProgram implements ExecutableProgram {
         CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
         var expr = (List<Object>) binding.get("expr");
         CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding");
+        if (demand != null && !representation(binding) && "lit".equals(expr.getFirst())
+                && Set.of("data-addr", "function-addr").contains(expr.get(1))) {
+            var scope = new Scope(new FunctionContext(0), sources.binding(binding, null));
+            var target = build("Core native label initialization", scope.function, compile(expr, scope, false), false);
+            return new GlobalBinding.Initializer(target, new Object[]{0L}, metrics, () -> {});
+        }
         if (demand != null && !representation(binding)) return switch ((String) expr.getFirst()) {
             case "lit" -> "rubbish".equals(expr.get(1)) ? rubbishLiterals.decode(RubbishLiterals.proof(expr)) : literal((String) expr.get(1), expr.get(2), CoreRepresentations.expression(expr));
             case "void" -> thc.runtime.Unit.INSTANCE;
@@ -5462,6 +5472,18 @@ public final class BytecodeProgram implements ExecutableProgram {
             case "lit" -> {
                 var kind = (String) expr.get(1);
                 if (kind.equals("rubbish")) yield new RubbishExpression(RubbishLiterals.proof(expr));
+                if (kind.equals("data-addr")) {
+                    var proof = CoreRepresentations.expression(expr);
+                    var symbol = (String) expr.get(2);
+                    var layout = stackTargetLayout instanceof TargetLayout target ? target : null;
+                    CoreDataLabels.requireProof(proof);
+                    yield new ProvenExpression(e -> {
+                        e.builder.beginResolveCDataLabel(symbol, proof);
+                        if (layout == null) e.builder.emitLoadNull();
+                        else e.builder.emitLoadConstant(layout);
+                        e.builder.endResolveCDataLabel();
+                    }, proof);
+                }
                 if (kind.equals("function-addr") && !nativeCallbacks.containsKey(expr.get(2))) {
                     var proof = CoreRepresentations.expression(expr);
                     var symbol = (String) expr.get(2);

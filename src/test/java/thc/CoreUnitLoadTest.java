@@ -93,6 +93,20 @@ class CoreUnitLoadTest {
                 assertEquals(kind.equals("function-addr") ? 1L : 43L, entry.execute(1).asLong());
                 assertEquals(reads, count(entry, "coreCompactDataBytesRead"));
             }
+            for (var backend : List.of("ast", "bytecode")) {
+                long[] opens = {-1};
+                try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                    var entry = CracExecutable.checkpoint(context, request(manifest, backend), () -> {
+                        var mappings = CoreFileMappings.shared.statistics();
+                        assertEquals(0, mappings.activeLeases());
+                        assertEquals(0, mappings.idleMappings());
+                        opens[0] = mappings.mappingOpens();
+                    });
+                    assertEquals(kind.equals("function-addr") ? 1L : 43L, entry.execute(0).asLong());
+                }
+                assertTrue(opens[0] >= 0, "Native label code must reach the checkpoint before linking");
+                assertEquals(opens[0], CoreFileMappings.shared.statistics().mappingOpens());
+            }
         }
     }
     @Test void inlinedNativeLabelsDoNotBypassDependencyAmbiguityOrComponentProof() throws Exception {
@@ -112,6 +126,15 @@ class CoreUnitLoadTest {
             for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
                 // Native labels resolve at their first guest use.
                 var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request(manifest, backend)).execute(0));
+                assertTrue(failure.getMessage().contains(expected.get(i)), failure.getMessage());
+            }
+            for (var backend : List.of("ast", "bytecode")) {
+                var failure = assertThrows(RuntimeException.class, () -> {
+                    var detached = CracExecutable.selectedCore(request(manifest, backend));
+                    try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                        Main.loadDetachedEntry(context, detached).execute(0);
+                    }
+                });
                 assertTrue(failure.getMessage().contains(expected.get(i)), failure.getMessage());
             }
         }

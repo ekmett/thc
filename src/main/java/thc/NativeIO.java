@@ -5,6 +5,7 @@ package thc;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.graalvm.polyglot.Context;
 import thc.runtime.NativeFileProvider;
 import thc.runtime.WindowsDirectoryStreams;
@@ -41,5 +42,12 @@ public final class NativeIO {
         if (WindowsDirectoryStreams.supportedHost()) return WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER,
             new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())));
         return NativeFileProvider.createContext(new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())), ContextProfile.LAUNCHER, supportedPosixHost(), interfaceHelper);
+    }
+    /** Prepare a launcher context before allocating native files or standard endpoints. */
+    static Context commandLineContext(boolean interfaceHelper, Consumer<Context> beforeNativeStartup) {
+        if (WindowsDirectoryStreams.supportedHost())
+            throw new UnsupportedOperationException("Deferred native startup requires a POSIX host");
+        return NativeFileProvider.createContext(new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())),
+            ContextProfile.LAUNCHER, supportedPosixHost(), interfaceHelper, beforeNativeStartup);
     }
 }

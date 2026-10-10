@@ -153,6 +153,33 @@ class DemandPapTest {
         }
     }
     @ParameterizedTest
+    @CsvSource({"ast,false", "ast,true", "bytecode,false", "bytecode,true"})
+    void completeDemandPreparationLeavesCafsUnforcedAndExecutionDoesNotLowerAgain(String backend, boolean async) {
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var definitions = definitions("caf", true);
+                var fixture = new Fixture(language, backend, async, definitions);
+                long roots = 0;
+                for (String id : definitions.keySet()) {
+                    var prepared = fixture.demand.prepareCode(id);
+                    assertNull(fixture.demand.cell(id).peek(), "Preparation cannot run the demanded initializer");
+                    assertEquals(0L, ((Number) prepared.diagnostics().get("thunkEvaluations")).longValue());
+                    roots += ((Number) prepared.rootCounts().get("loweredRootCount")).longValue();
+                }
+                assertTrue(roots > 0, "Preparation must emit executable roots");
+                var head = assertInstanceOf(Thunk.class, fixture.demand.cell("head").read());
+                assertEquals(0, head.getState());
+                assertEquals(7L, fixture.run()); assertEquals(0, head.getState());
+                long after = fixture.demand.preparedPrograms().stream()
+                    .mapToLong(program -> ((Number) program.rootCounts().get("loweredRootCount")).longValue()).sum();
+                assertEquals(roots, after, "First guest call cannot lower another Core body");
+                for (String id : definitions.keySet()) assertEquals(1, fixture.reads.get(id));
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest
     @CsvSource({"ast,false,false", "ast,false,true", "ast,true,false", "ast,true,true",
         "bytecode,false,false", "bytecode,false,true", "bytecode,true,false", "bytecode,true,true"})
     void publishedHeadRefinesBothPreparationOrdersWithoutLoadingItForClassification(String backend, boolean async, boolean early) throws Exception {
