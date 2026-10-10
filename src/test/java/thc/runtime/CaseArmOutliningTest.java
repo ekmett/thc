@@ -155,13 +155,15 @@ public class CaseArmOutliningTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (var program : List.of(code.newInstance(language), code.newInstance(language))) {
+                        assertEquals(2L, count(program, "compiledEntries"), "Both compiled initializer roots enter before guest calls");
+                        long before = count(program, "compiledEntries");
                         long offset = load + 2L;
                         var own = (Closure)program.entryValue("internal"); var outer = (Closure)program.entryValue("external");
                         assertEquals(7, NodeUtil.findAllNodeInstances(own.target.getRootNode(), AstCaseArm.class).size());
                         assertTrue(NodeUtil.findAllNodeInstances(outer.target.getRootNode(), AstCaseArm.class).isEmpty());
                         assertEquals(3L + 18L * offset + 9L, Calls.target(own.target, new Object[]{0L, own.environment, 3L, offset}));
                         assertEquals(9L + 18L * offset + 9L, Calls.target(outer.target, new Object[]{0L, outer.environment, 9L, offset}));
-                        assertEquals(2L, count(program, "localJoinTransfers")); assertEquals(3L, count(program, "compiledEntries"));
+                        assertEquals(2L, count(program, "localJoinTransfers")); assertEquals(before + 3L, count(program, "compiledEntries"));
                         assertEquals(0, count(program, "loweredRootCount")); code.requireInstalledCode(); released(language);
                     }
                 } finally { context.leave(); }
@@ -235,6 +237,8 @@ public class CaseArmOutliningTest {
             }.getCallTarget());
             for (int owner = 0; owner < 2; owner++) {
                 var program = code.newInstance(language); var entry = (Closure)program.entryValue("entry");
+                assertEquals(1L, count(program, "compiledEntries"), "Compiled initializer enters before the tuple caller");
+                long before = count(program, "compiledEntries");
                 var shape = Objects.requireNonNull(((GuestRoot)entry.target.getRootNode()).getTupleResult());
                 var layout = new FrameLayout(); var slots = new int[3];
                 for (int i = 0; i < slots.length; i++) slots[i] = layout.bind("result " + i);
@@ -242,7 +246,7 @@ public class CaseArmOutliningTest {
                 shape.consume(frame, callScalarTestTarget(entry.target,
                     new Object[]{0L, entry.environment, owner == 0 ? 0L : 100L, -128, Float.intBitsToFloat(0x80000000), marker}), slots, 0);
                 assertEquals(-128, frame.getInt(slots[0])); assertEquals(0x80000000, Float.floatToRawIntBits(frame.getFloat(slots[1])));
-                assertSame(marker, frame.getObject(slots[2])); assertEquals(2L, count(program, "compiledEntries"));
+                assertSame(marker, frame.getObject(slots[2])); assertEquals(before + 2L, count(program, "compiledEntries"));
                 code.requireInstalledCode(); released(language);
             }
         });
@@ -271,6 +275,8 @@ public class CaseArmOutliningTest {
                 assertEquals(true, target.getClass().getMethod("prepareForAOT").invoke(target)); compile(target);
             }
             var program = code.newInstance(language); var entry = (Closure) program.entryValue("entry");
+            assertEquals(1L, count(program, "compiledEntries"), "Compiled initializer enters before the tail arm");
+            long before = count(program, "compiledEntries");
             var root = (FunctionRoot) entry.target.getRootNode(); var typed = Objects.requireNonNull(root.getTypedInput());
             var marker = new Closure(null, 0, new RootNode(language) {
                 @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Tail reference was forced"); }
@@ -292,13 +298,13 @@ public class CaseArmOutliningTest {
                 assertEquals(0L, packet.getLong(input, typed.getHeader()));
                 assertEquals(-128, packet.getInt(input, typed.getHeader() + 1));
                 assertSame(marker, packet.getObject(input, typed.getHeader() + 2));
-                assertEquals(1L, count(program, "compiledEntries")); code.requireInstalledCode();
+                assertEquals(before + 1L, count(program, "compiledEntries")); code.requireInstalledCode();
                 var shape = Objects.requireNonNull(root.getTupleResult());
                 var result = TupleResults.ownedTupleResult(Calls.target(transfer.getTarget(), new Object[]{input}), shape);
                 assertEquals(-128, shape.getLayout().getInt(result, 0)); assertSame(marker, shape.getLayout().getObject(result, 1));
                 assertEquals(0, input.getInputMode()); assertFalse(input.getLive()); assertEquals(generation, input.getGeneration());
                 assertNull(packet.getObject(input, 1)); assertNull(packet.getObject(input, typed.getHeader() + 2));
-                assertEquals(3L, count(program, "compiledEntries")); code.requireInstalledCode(); released(language);
+                assertEquals(before + 3L, count(program, "compiledEntries")); code.requireInstalledCode(); released(language);
                 assertThrows(RuntimeFault.class, () -> typed.release(input));
             } finally { typed.releaseChecked(input); }
         });
