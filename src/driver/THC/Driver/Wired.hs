@@ -39,7 +39,8 @@ import System.Exit (ExitCode(..))
 import System.Environment (lookupEnv)
 import qualified System.Info as Host
 import System.FilePath ((</>), makeRelative, replaceExtension, takeDirectory, takeExtension, takeFileName)
-import System.Process (CreateProcess(..), StdStream(UseHandle), createProcess, proc, readProcess, rawSystem, waitForProcess)
+import System.Process (CreateProcess(..), StdStream(UseHandle), proc, readProcess)
+import THC.Driver.Process (runProducer)
 import System.IO (hClose, openTempFile, stderr, stdout)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 import Text.Read (readEither)
@@ -318,7 +319,7 @@ exportPinnedWindowsCore upstream sourceFiles ghc ghcPkg helper expected layoutRe
       pure registered
     oneLine = reverse . dropWhile (`elem` ("\r\n" :: String)) . reverse
     checked program arguments = do
-      status <- rawSystem program arguments
+      status <- runProducer (proc program arguments)
       unless (status == ExitSuccess) (fail ("Windows source build failed: " ++ program ++ " " ++ show arguments))
     graphNode (Object fields) | Just (String name) <- KeyMap.lookup "module" fields,
       Just (Bool boot) <- KeyMap.lookup "boot" fields = case Aeson.fromJSON (String name) of
@@ -359,8 +360,7 @@ exportPinnedUsing packageRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe s
     let output = staging </> "generated" </> replaceExtension path "hs"
         flags = [path, "-o", output] ++ map ("--cflag=-I" ++) includeDirs
     createDirectoryIfMissing True (takeDirectory output)
-    (_, _, _, process) <- createProcess (proc hsc2hs flags) { cwd = Just sourceRoot }
-    status <- waitForProcess process
+    status <- runProducer (proc hsc2hs flags) { cwd = Just sourceRoot }
     when (status /= ExitSuccess) (fail ("GHC source preprocessing failed: " ++ path))
     pure (path, output)
   layoutJson <- probeTargetLayout includeDirs layoutRecipe staging
@@ -378,7 +378,7 @@ exportPinnedUsing packageRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe s
               ["-XNoImplicitPrelude" | path `elem`
                 ["GHC/Internal/Stack/Decode.hs", "GHC/Internal/ExecutionStack/Internal.hsc"]]
             source = maybe (sourceRoot </> path) id (lookup path generated)
-        status <- rawSystem ghc (common ++ flags ++ [source])
+        status <- runProducer (proc ghc (common ++ flags ++ [source]))
         when (status /= ExitSuccess) $ fail ("pinned GHC source export failed: " ++ path)
   forM_ bootSources (compile True)
   forM_ moduleSources (compile False . fst)
@@ -392,8 +392,8 @@ probeTargetLayout includeDirs recipe staging = do
   createDirectoryIfMissing True staging
   let binary = staging </> if Host.os == "mingw32" then "target-layout.exe" else "target-layout"
       receipt = staging </> "target-layout.json"
-  status <- rawSystem layoutCompiler
-    (["-Wall", "-Werror"] ++ map ("-I" ++) includeDirs ++ [recipe, "-o", binary])
+  status <- runProducer (proc layoutCompiler
+    (["-Wall", "-Werror"] ++ map ("-I" ++) includeDirs ++ [recipe, "-o", binary]))
   when (status /= ExitSuccess) (fail "GHC target layout receipt compilation failed")
   writeFile receipt =<< readProcess binary [] ""
   pure receipt
@@ -742,8 +742,7 @@ copyTree source target = do
 
 checkedIn :: FilePath -> FilePath -> [String] -> IO ()
 checkedIn directory program arguments = do
-  (_,_,_,process) <- createProcess (proc program arguments) { cwd = Just directory, std_out = UseHandle stderr }
-  status <- waitForProcess process
+  status <- runProducer (proc program arguments) { cwd = Just directory, std_out = UseHandle stderr }
   unless (status == ExitSuccess) (fail ("pinned library command failed: " ++ program ++ " " ++ show arguments))
 
 digest :: BS.ByteString -> String

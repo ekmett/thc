@@ -29,7 +29,7 @@ import static thc.runtime.AstStacks.astStackScope;
 import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
 
 /* Indexed frames, selective captures, rooted application and self-tail frame
- * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. */
+ * restoration follow Cadenza. See NOTICE.md and LICENSE.md. */
 public final class FunctionRoot extends GuestRoot {
     private static final int[] NO_SCALAR_VOID_INPUTS = new int[0];
     private final String label;

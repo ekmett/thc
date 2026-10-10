@@ -24,7 +24,8 @@ import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), searchPathSeparator)
 import System.IO (stderr)
-import System.Process (CreateProcess(..), StdStream(UseHandle), createProcess, proc, waitForProcess)
+import System.Process (CreateProcess(..), StdStream(UseHandle), proc)
+import THC.Driver.Process (runProducer)
 
 -- | Configure an owned copy of @ghc-boot@ or @ghc@ using its upstream
 -- @Setup.hs@. Arguments start with @configure@ and include Cabal's selected
@@ -81,7 +82,6 @@ configurePinnedCustom release package scratch ghc arguments = do
 
 execute :: FilePath -> Maybe [(String, String)] -> FilePath -> [String] -> IO ()
 execute directory environment program arguments = do
-  (_, _, _, process) <- createProcess (proc program arguments)
+  status <- runProducer (proc program arguments)
     { cwd = Just directory, env = environment, std_out = UseHandle stderr }
-  status <- waitForProcess process
   unless (status == ExitSuccess) (fail ("pinned Setup command failed: " ++ program ++ " " ++ show arguments))

@@ -7,7 +7,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import jam.vm.Lifted;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/* Cadenza-derived closure/PAP convention; upstream notices remain in LICENSE.txt and NOTICE.md. */
+/* Cadenza-derived closure/PAP convention; upstream notices remain in LICENSE.md and NOTICE.md. */
 @CompilerDirectives.ValueType
 public final class Closure implements Lifted {
     public static final Object[] NO_PAP_ARGUMENTS = new Object[0];

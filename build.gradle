@@ -103,7 +103,9 @@ def python = providers.environmentVariable("THC_PYTHON").orElse(windowsHost ? "p
 tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
 // The Windows runtime validates HSC receipts against the producer's same pinned catalog.
 tasks.processResources { from("etc/ghc/9.14.1/windows-ghc-internal.json") { into("thc") } }
+def projectLicenseFiles = ["LICENSE.md", "NOTICE.md"]
 tasks.processResources {
+    from(projectLicenseFiles) { into("META-INF/licenses") }
     from("nih/licenses") {
         include("*.txt")
         into("META-INF/licenses")
@@ -273,6 +275,7 @@ application {
 // Small provider identity files support relocation checks using the platform's
 // existing byte-comparison tools; complete installation hashing belongs to builds.
 distributions.main.contents {
+    from(projectLicenseFiles)
     from(jamHome) {
         include(jamLauncherIdentity)
         into("jam-runtime-identity")

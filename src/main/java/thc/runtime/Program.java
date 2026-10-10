@@ -20,7 +20,7 @@ import static thc.runtime.RuntimeFault.fault;
 import static thc.runtime.Scalar64Primitives.word64Literal;
 
 /* Indexed frames, selective captures, rooted application and self-tail frame
- * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. */
+ * restoration follow Cadenza. See NOTICE.md and LICENSE.md. */
 
 /** Constructs and links the AST backend's executable roots from exported GHC Core.
  * This holder is not a Truffle node or guest closure. */

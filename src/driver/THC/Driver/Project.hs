@@ -61,6 +61,7 @@ import qualified System.Info as Host
 import THC.Driver.Lock (withLock)
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess,
                        readCreateProcessWithExitCode)
+import THC.Driver.Process (runProducer)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
@@ -2796,10 +2797,13 @@ runCommand tool command arguments directory =
 
 runCommandWithEnv :: Bool -> FilePath -> [String] -> FilePath -> Maybe [(String, String)] -> IO ()
 runCommandWithEnv tool command arguments directory environment = do
-  (_, _, _, process) <- createProcess (proc command arguments)
-    { cwd = Just directory, env = environment,
-      std_out = if tool then UseHandle stderr else Inherit }
-  result <- waitForProcess process
+  let commandLine = (proc command arguments)
+        { cwd = Just directory, env = environment,
+          std_out = if tool then UseHandle stderr else Inherit }
+  result <- if tool then runProducer commandLine else do
+    -- Preserve foreground terminal input and interrupt behavior for the guest.
+    (_, _, _, process) <- createProcess commandLine
+    waitForProcess process
   when (result /= ExitSuccess) (fail ("command failed: " ++ command ++ " (" ++ show result ++ ")"))
 
 hasPair :: Eq a => a -> a -> [a] -> Bool

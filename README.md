@@ -17,8 +17,10 @@
 [![OS: Linux · macOS · Windows](https://img.shields.io/static/v1?label=OS&message=Linux+%C2%B7+macOS+%C2%B7+Windows&color=64748b&style=flat)](README.md)
 [![CPU: x86-64 · ARM64](https://img.shields.io/static/v1?label=CPU&message=x86-64+%C2%B7+ARM64&color=64748b&style=flat)](docs/jam-runtime.md)
 
-[![license: UPL-1.0 AND BSD-3-Clause](https://img.shields.io/static/v1?label=license&message=UPL-1.0+AND+BSD-3-Clause&color=007ec6&style=flat)](LICENSE)
+[![license: UPL-1.0 AND BSD-3-Clause](https://img.shields.io/static/v1?label=license&message=UPL-1.0+AND+BSD-3-Clause&color=007ec6&style=flat)](LICENSE.md)
 [![Contributor Covenant: 2.0](https://img.shields.io/static/v1?label=Contributor+Covenant&message=2.0&color=007ec6&style=flat&logo=contributorcovenant&logoColor=white)](CODE_OF_CONDUCT.md)
+
+[![coverage](https://img.shields.io/codecov/c/github/ekmett/thc?logo=codecov&logoColor=%23ffffff)](https://app.codecov.io/github/ekmett/thc/)
 
 [![docs: read](https://img.shields.io/static/v1?label=docs&message=read&color=007ec6&style=flat)](https://ekmett.github.io/thc/)
 <!-- badges:end -->
@@ -308,7 +310,7 @@ The older runtime experiments live on the
 ## License
 
 THC uses the same license as Cadenza: **UPL-1.0 AND BSD-3-Clause**.
-See [LICENSE.txt](LICENSE.txt) and [NOTICE.md](NOTICE.md) for the terms and
+See [Licensing Terms](LICENSE.md) and [NOTICE.md](NOTICE.md) for the terms and
 attribution notices.
 
 Unless you explicitly state otherwise, contributions submitted for inclusion
