@@ -144,6 +144,80 @@ def batch_blobs(repo, oids):
     return result
 
 
+
+def haskell_test_owners(source):
+    """Derive ordinary test ownership from direct Cabal source declarations.
+
+    This is a conservative source inventory, not a Cabal evaluator. Unresolved imports or
+    conditional source fields require the full lane, as do consumers outside
+    the ordinary suites. Never infer ownership merely from a directory name.
+    """
+    if "\t" in source:
+        return {}
+    components, common, fields, field = [], {}, None, None
+    relevant = {"hs-source-dirs", "main-is", "other-modules", "exposed-modules", "import"}
+    for raw in source.splitlines():
+        line = raw.split("--", 1)[0].rstrip()
+        if not line:
+            continue
+        if not line.startswith(" "):
+            match = re.fullmatch(r"(test-suite|executable|library|foreign-library|benchmark|common)(?:\s+(\S+))?", line)
+            fields = {} if match else None
+            field = None
+            if match and match[1] == "common":
+                if not match[2] or match[2] in common:
+                    return {}
+                common[match[2]] = fields
+            elif match:
+                owner = match[2] if match[1] == "test-suite" else None
+                components.append((owner, fields))
+            continue
+        if fields is None:
+            continue
+        match = re.match(r"( +)([a-z-]+)\s*:\s*(.*)", line)
+        if match:
+            field = match[2]
+            if field in relevant:
+                if len(match[1]) != 2 or field in fields:
+                    return {}
+                fields[field] = match[3]
+        elif line.startswith("    ") and field in relevant:
+            fields[field] += " " + line.strip()
+        else:
+            field = None
+    def inherited(fields, seen=()):
+        result = dict(fields)
+        for name in fields.get("import", "").replace(",", " ").split():
+            if name in seen or name not in common:
+                raise ValueError("unresolved or cyclic Cabal import")
+            for key, value in inherited(common[name], (*seen, name)).items():
+                if key != "import":
+                    result[key] = result.get(key, "") + " " + value
+        return result
+
+    owners = {}
+    for owner, fields in components:
+        try:
+            fields = inherited(fields)
+        except ValueError:
+            return {}
+        tokens = {key: value.replace(",", " ").split() for key, value in fields.items()}
+        if any(not re.fullmatch(r"[A-Za-z0-9_./-]+", item)
+               for items in tokens.values() for item in items):
+            return {}
+        modules = tokens.get("other-modules", []) + tokens.get("exposed-modules", [])
+        sources = tokens.get("main-is", []) + [m.replace(".", "/") + ext
+                                                for m in modules for ext in (".hs", ".lhs")]
+        for directory in tokens.get("hs-source-dirs", ["."]):
+            for name in sources:
+                path = PurePosixPath(directory, name)
+                if path.is_absolute() or ".." in path.parts:
+                    return {}
+                owners.setdefault(str(path), set()).add(owner)
+    return {path: suites for path, suites in owners.items()
+            if path.startswith("t/") and suites <= HASKELL_TESTS.keys()}
+
+
 def python_test(path):
     name = PurePosixPath(path).name
     # Historical snapshots are data, not runnable test sources. Changes to these
@@ -698,6 +772,10 @@ def select(repo, base_ref, head_ref, *, cadence=None):
         records = paths_from_diff(git(repo, "diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", "--find-renames", base, head, "--"))
     if git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all"):
         widen("dirty-checkout")
+    try:
+        haskell_owners = haskell_test_owners(text("thc.cabal")) if "thc.cabal" in files else {}
+    except (SelectionError, UnicodeError):
+        haskell_owners = {}
     selected_junit = set(policy["smoke"]["junit"] if policy else [])
     selected_python = set(policy["smoke"]["python"] if policy else [])
     selected_haskell = set(policy["smoke"].get("haskell", []) if policy else [])
@@ -757,6 +835,8 @@ def select(repo, base_ref, head_ref, *, cadence=None):
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
                 affected_haskell.update(group.get("haskell", []))
+            elif path in haskell_owners:
+                affected_haskell.update(haskell_owners[path])
             elif junit_source(path):
                 info = infos.get(path)
                 if not info or not info[0]:

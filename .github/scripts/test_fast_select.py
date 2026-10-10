@@ -420,20 +420,39 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(result, self.plan())
 
 
-    def test_store_project_tests_select_driver_suite_without_full_jvm_run(self):
-        path = "t/haskell-driver/StoreProjectTests.hs"
-        policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
-        self.policy["owners"][path] = policy["owners"][path]
-        self.write(select.POLICY, json.dumps(self.policy))
-        self.write(path, "module StoreProjectTests where\nexample = False\n")
+    def test_declared_haskell_helper_selects_owning_suite(self):
+        path = "t/haskell-driver/RunOptionsTests.hs"
+        self.write("thc.cabal", "test-suite driver-tests\n"
+                   "  hs-source-dirs: t/haskell-driver\n  main-is: Main.hs\n"
+                   "  other-modules: RunOptionsTests\n")
+        self.write(path, "module RunOptionsTests where\nexample = False\n")
         self.base = self.commit()
-        self.write(path, "module StoreProjectTests where\nexample = True\n")
+        self.write(path, "module RunOptionsTests where\nexample = True\n")
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result["reasons"])
         self.assertEqual(["driver-tests"], result["haskell"]["suites"])
         self.assertEqual(["example.SmokeTest"], result["junit"]["classes"])
         self.assertEqual([], result["affected"]["junit"])
+
+    def test_haskell_source_ownership_keeps_unknown_consumers_conservative(self):
+        cabal = ("test-suite driver-tests\n  hs-source-dirs: t/shared\n"
+                 "  other-modules:\n    Local.Helper\n    Shared\n"
+                 "test-suite compact-core-tests\n  hs-source-dirs: t/shared\n"
+                 "  other-modules: Shared\n")
+        owners = select.haskell_test_owners(cabal)
+        self.assertEqual({"driver-tests"}, owners["t/shared/Local/Helper.hs"])
+        self.assertEqual({"driver-tests", "compact-core-tests"}, owners["t/shared/Shared.hs"])
+        self.assertNotIn("t/shared/Unlisted.hs", owners)
+        other = "test-suite nightly-only\n  hs-source-dirs: t/shared\n  other-modules: Shared\n"
+        self.assertNotIn("t/shared/Shared.hs", select.haskell_test_owners(cabal + other))
+        self.assertEqual(owners, select.haskell_test_owners(cabal + "common shared\n  hs-source-dirs: t/shared\n"))
+        imported = cabal.replace("  hs-source-dirs: t/shared", "  import: shared")
+        self.assertEqual(owners, select.haskell_test_owners(imported + "common shared\n  hs-source-dirs: t/shared\n"))
+        self.assertFalse(select.haskell_test_owners(imported))
+        actual = Path(__file__).resolve().parents[2] / "thc.cabal"
+        self.assertEqual({"driver-tests"}, select.haskell_test_owners(actual.read_text())["t/haskell-driver/RunOptionsTests.hs"])
+        self.assertFalse(select.haskell_test_owners(cabal.replace("  other-modules:", "  if os(windows)\n    other-modules:", 1)))
 
     def full_core_addition(self):
         before = ("cabal-version: 3.0\nname: example\nversion: 0.1\n"
