@@ -14,9 +14,10 @@ concurrency:
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    # Installed builds and a cold consumer are expected to take 10–15 minutes,
-    # before variable upload time. Keep acquisition separate from runtime guards.
-    timeout-minutes: 30
+    # The measured cold CI image build takes 25 minutes; allow 35–40 minutes
+    # for build, load, cold consumer and upload, with a 90-minute job guard.
+    # Keep acquisition separate from the direct runtime guards below.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7.0.1
         with:
