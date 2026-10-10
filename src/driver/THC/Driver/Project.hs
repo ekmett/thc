@@ -520,7 +520,11 @@ prepareProjectInterfaceView context producer installedPolicy ghcSource registere
   let supportFor identifier = case [record | record <- support, jsonField record "id" == Just identifier] of
         [record] -> Just record
         _ -> Nothing
-  originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
+  originalRegistrations <- case installedUnits of
+    [] -> pure []
+    _ -> do
+      discover <- registrationSnapshot originalContext
+      mapM (discover . unitId) installedUnits
   validateReexports originalRegistrations
   forM_ originalRegistrations $ \registrationUnit -> do
     planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
@@ -550,7 +554,11 @@ acquireProjectInstalled admission context layout installedPolicy byId installedU
         [record] -> Just record
         _ -> Nothing
   traceAdmission "installed-original-registration-start" Nothing
-  originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
+  originalRegistrations <- case installedUnits of
+    [] -> pure []
+    _ -> do
+      discover <- registrationSnapshot originalContext
+      mapM (discover . unitId) installedUnits
   validateReexports originalRegistrations
   forM_ originalRegistrations $ \registrationUnit -> do
     planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
@@ -558,8 +566,12 @@ acquireProjectInstalled admission context layout installedPolicy byId installedU
       ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
   traceAdmission "installed-original-registration-end" Nothing
   traceAdmission "installed-selected-registration-start" Nothing
+  let selectedContext unit = if supportFor (unitId unit) == Nothing then helperContext else originalContext
+  snapshots <- forM (nub (map selectedContext installedUnits)) $ \snapshotContext ->
+    (,) snapshotContext <$> registrationSnapshot snapshotContext
   registrations <- forM installedUnits $ \unit ->
-    discoverInstalled (if supportFor (unitId unit) == Nothing then helperContext else originalContext) (unitId unit)
+    maybe (fail "missing selected installed registration snapshot") ($ unitId unit)
+      (lookup (selectedContext unit) snapshots)
   validateReexports registrations
   traceAdmission "installed-selected-registration-end" Nothing
   traceAdmission "installed-input-snapshot-start" Nothing
@@ -831,14 +843,22 @@ runBuiltProject action project working thcRoot runtime output native target proj
           contextAbi context == contextAbi selectionContext && contextPlatform context == contextPlatform selectionContext
     finalPrepared@(originalContext, finalHelper, _) <- prepareProjectInterfaceView context producer
       installedPolicy ghcSource registeredLibrary byId installedUnits
-    currentRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
+    currentRegistrations <- case installedUnits of
+      [] -> pure []
+      _ -> do
+        discover <- registrationSnapshot originalContext
+        mapM (discover . unitId) installedUnits
     currentInputSnapshot <- forM inputSnapshot $ \(path, _) -> (,) path <$> digestFile path
     (installed, acquiredContext, interfaceInputs) <-
       if samePreparation && currentInputSnapshot == [(path, digestHex digest) | (path, digest) <- inputSnapshot] && preparedInterfaces == finalPrepared && currentRegistrations == originalRegistrations then do
-        forM_ (Map.elems initialInstalled) $ \(registrationUnit, _) -> do
-          let observedContext = if registrationUnit `elem` originalRegistrations
-                then originalContext else finalHelper
-          current <- discoverInstalled observedContext (registeredId registrationUnit)
+        let registrations = map fst (Map.elems initialInstalled)
+            observedContext registrationUnit = if registrationUnit `elem` originalRegistrations
+              then originalContext else finalHelper
+        snapshots <- forM (nub (map observedContext registrations)) $ \snapshotContext ->
+          (,) snapshotContext <$> registrationSnapshot snapshotContext
+        forM_ registrations $ \registrationUnit -> do
+          current <- maybe (fail "missing final installed registration snapshot") ($ registeredId registrationUnit)
+            (lookup (observedContext registrationUnit) snapshots)
           require (current == registrationUnit) "selected installed interface view changed during native build"
         pure (initialInstalled, initialHelper, initialInputs)
       else do

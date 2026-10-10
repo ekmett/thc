@@ -18,7 +18,7 @@ module THC.Driver.Installed
   , installedCompilerIdentity, installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, prepareInstalledDemand, probeInstalled, prepareInstalledProbe, probeClosure
   , prepareInstalledDemandWithAdmission, prepareInstalledProbeWithAdmission, acquireInstalledWithAdmission, acquireInstalledWithJobsAndAdmission
-  , installedInputSnapshot
+  , installedInputSnapshot, registrationSnapshot
   , emptyRegistration, modulelessRegistration
   , boundedInterfaceProcess, boundedInterfaceProcessIn, boundedInterfaceProcessInput
   ) where
@@ -434,10 +434,13 @@ installedInputSnapshot scopes = forM paths $ \path -> withBinaryFile path ReadMo
       installedHelper context : (installedLibdir context </> "settings") :
         concatMap (map snd . installedInterfaces) units) scopes))
 
--- Read one fresh registration snapshot. ghc-pkg dump uses the same expanded
--- record format as describe; only selected records have their interfaces
--- inspected. Keep duplicate IDs until selection so unrelated DB entries do not
--- change the requested closure's admission contract.
+-- | Read one fresh package-database snapshot and return its selected-unit reader.
+-- The reader preserves requested IDs and rejects missing or duplicate records;
+-- every call reads the selected unit's current interface filesystem state.
+-- It retains registration text only for this observation boundary: call
+-- 'registrationSnapshot' again after consuming inputs to check freshness.
+-- @ghc-pkg dump@ uses the same expanded record format as @describe@. Unselected
+-- records have no interface inspection and duplicate IDs remain until selection.
 registrationSnapshot :: InstalledContext -> IO (String -> IO InstalledUnit)
 registrationSnapshot context = do
   output <- command (installedPackageTool context)
