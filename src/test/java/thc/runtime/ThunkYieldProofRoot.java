@@ -35,6 +35,14 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
         super(language, descriptor);
     }
 
+    /** Deliberate creation-side provenance for these owning Force producers. */
+    @Operation public static final class RecordContinuationOwner {
+        @Specialization public static Object record(VirtualFrame frame, Object marker, @Bind("$node") Node node) {
+            BytecodeContinuations.recordOwner(frame.materialize(), node);
+            return marker;
+        }
+    }
+
     @Operation
     @ConstantOperand(type = AtomicInteger.class, name = "effects")
     @ConstantOperand(type = AtomicInteger.class, name = "compiledEffects")
@@ -255,9 +263,9 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
             b.beginStoreLocal(number); b.emitLoadConstant(42L); b.endStoreLocal();
             b.beginStoreLocal(reference); b.emitLoadConstant(marker); b.endStoreLocal();
             b.emitEffect(effects, compiledEffects);
-            b.beginYield(); b.emitLoadConstant("first"); b.endYield();
+            b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant("first"); b.endRecordContinuationOwner(); b.endYield();
             b.emitPause(gate);
-            b.beginYield(); b.emitLoadConstant("second"); b.endYield();
+            b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant("second"); b.endRecordContinuationOwner(); b.endYield();
             b.beginReturn();
             b.beginFinish(); b.emitLoadLocal(number); b.emitLoadLocal(reference); b.endFinish();
             b.endReturn();
@@ -287,9 +295,9 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
             b.beginStoreLocal(childResult); b.emitCallChild(child, childForceTarget); b.endStoreLocal();
             b.beginStoreLocal(childResult);
                 b.beginResumeChild();
-                    b.beginYield();
+                    b.beginYield(); b.beginRecordContinuationOwner();
                     b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly();
-                    b.endYield();
+                    b.endRecordContinuationOwner(); b.endYield();
                 b.endResumeChild();
             b.endStoreLocal();
             b.endTryCatch();
@@ -356,13 +364,13 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
             b.beginStoreLocal(childResult);
             b.beginResumeChild();
             b.beginReenterLogicalMask(probe);
-            b.beginYield();
+            b.beginYield(); b.beginRecordContinuationOwner();
             b.beginParkLogicalMask(probe);
             b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly();
             b.emitLoadLocal(outerPrior);
             b.emitLoadLocal(active);
             b.endParkLogicalMask();
-            b.endYield();
+            b.endRecordContinuationOwner(); b.endYield();
             b.emitLoadLocal(active);
             b.endReenterLogicalMask();
             b.endResumeChild();

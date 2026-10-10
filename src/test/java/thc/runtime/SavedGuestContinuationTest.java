@@ -239,7 +239,7 @@ class SavedGuestContinuationTest {
                         var transaction = b.createLocal("saved transaction", FrameSlotKind.Object);
                         slot[0] = LocalAccessor.constantOf(transaction);
                         b.beginStaticStoreObject(transaction); b.emitCurrentTransaction(); b.endStaticStoreObject();
-                        b.beginYield(); b.emitLoadConstant(marker); b.endYield();
+                        b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(marker); b.endRecordContinuationOwner(); b.endYield();
                         b.emitEnterRoot(metrics);
                         b.beginReturn(); b.emitCurrentTransaction(); b.endReturn();
                         b.endRoot();
@@ -270,11 +270,282 @@ class SavedGuestContinuationTest {
         }
     }
 
+    private static ContinuationResult rawToken(Language language) { return rawToken(language, Unit.INSTANCE); }
+    private static ContinuationResult rawToken(Language language, Object marker) {
+        var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+            b.beginRoot(); b.beginReturn();
+            b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(marker); b.endRecordContinuationOwner(); b.endYield();
+            b.endReturn(); b.endRoot();
+        }).getNode(0);
+        return assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+    }
+    @Test void bytecodeAliasesShareTerminalResumeAndDiscard() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean discard : new boolean[]{false, true}) {
+                    var token = rawToken(language);
+                    var first = SavedGuestContinuations.savedGuestContinuation(token);
+                    var alias = SavedGuestContinuations.savedGuestContinuation(token);
+                    assertSame(token, first.getIdentity()); assertSame(token, alias.getIdentity());
+                    if (discard) first.discard(); else assertEquals(41L, first.continueWith(41L));
+                    alias.discard(); alias.discard();
+                    assertThrows(RuntimeFault.class, () -> alias.continueWith(42L));
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void bytecodeDistinctTokensAndCopiedFramesRemainIndependent() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var first = rawToken(language);
+                var sameFrame = ContinuationResult.create(first.getContinuationRootNode(), first.getFrame(), first.getResult());
+                var copied = ContinuationResult.create(first.getContinuationRootNode(),
+                    DelimitedContinuations.copyContinuationFrame(first.getFrame()), first.getResult());
+                assertNotSame(first, sameFrame); assertSame(first.getFrame(), sameFrame.getFrame());
+                SavedGuestContinuations.savedGuestContinuation(first).discard();
+                assertEquals(17L, SavedGuestContinuations.savedGuestContinuation(sameFrame).continueWith(17L));
+                assertEquals(23L, SavedGuestContinuations.savedGuestContinuation(copied).continueWith(23L));
+            } finally { context.leave(); }
+        }
+    }
+    @Test void bytecodeAliasRacesEnterOneSuffixAcrossThreads() throws Exception {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc");
+            try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                for (boolean discard : new boolean[]{false, true}) {
+                    context.enter();
+                    ContinuationResult token;
+                    try { token = rawToken(TruffleLanguage.LanguageReference.create(Language.class).get(null)); }
+                    finally { context.leave(); }
+                    var start = new java.util.concurrent.CountDownLatch(1);
+                    var resumer = executor.submit(() -> {
+                        context.enter();
+                        try {
+                            var alias = SavedGuestContinuations.savedGuestContinuation(token); start.await();
+                            try { assertEquals(31L, alias.continueWith(31L)); return true; }
+                            catch (RuntimeFault terminal) { return false; }
+                        } finally { context.leave(); }
+                    });
+                    var competitor = executor.submit(() -> {
+                        context.enter();
+                        try {
+                            var alias = SavedGuestContinuations.savedGuestContinuation(token); start.await();
+                            if (discard) { alias.discard(); return false; }
+                            try { assertEquals(31L, alias.continueWith(31L)); return true; }
+                            catch (RuntimeFault terminal) { return false; }
+                        } finally { context.leave(); }
+                    });
+                    start.countDown();
+                    int entered = (resumer.get(10, java.util.concurrent.TimeUnit.SECONDS) ? 1 : 0) +
+                        (competitor.get(10, java.util.concurrent.TimeUnit.SECONDS) ? 1 : 0);
+                    if (discard) assertTrue(entered <= 1); else assertEquals(1, entered);
+                    context.enter();
+                    try {
+                        var alias = SavedGuestContinuations.savedGuestContinuation(token);
+                        assertThrows(RuntimeFault.class, () -> alias.continueWith(31L)); alias.discard();
+                    } finally { context.leave(); }
+                }
+            }
+        }
+    }
+    @Test void bytecodeGuestFailureCannotReopenItsClaim() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var payload = new Object();
+                var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                    b.beginRoot(); b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE);
+                    b.endRecordContinuationOwner(); b.endYield();
+                    b.beginReturn(); b.beginRaise(false); b.emitLoadConstant(payload); b.endRaise(); b.endReturn(); b.endRoot();
+                }).getNode(0);
+                var token = assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                var first = SavedGuestContinuations.savedGuestContinuation(token);
+                assertSame(payload, assertThrows(GuestException.class, () -> first.continueWith(Unit.INSTANCE)).getPayload());
+                var alias = SavedGuestContinuations.savedGuestContinuation(token);
+                assertThrows(RuntimeFault.class, () -> alias.continueWith(Unit.INSTANCE)); alias.discard();
+            } finally { context.leave(); }
+        }
+    }
+    @Test void bytecodeMissingProvenanceRejectsWithoutAdoption() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                // Raw upstream ABI remains usable; adaptation must not adopt this unstamped token.
+                var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                    b.beginRoot(); b.beginReturn(); b.beginYield(); b.emitLoadConstant(Unit.INSTANCE);
+                    b.endYield(); b.endReturn(); b.endRoot();
+                }).getNode(0);
+                var token = assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                var alias = SavedGuestContinuations.savedGuestContinuation(token);
+                assertThrows(RuntimeFault.class, () -> alias.continueWith(41L));
+                assertThrows(RuntimeFault.class, alias::discard);
+                assertEquals(41L, token.continueWith(41L));
+            } finally { context.leave(); }
+        }
+    }
+    @Test void wrongContextRejectionPreservesBytecodeTokenAndOuterOwners() {
+        try (var engine = org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build();
+             var owner = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build();
+             var stranger = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build()) {
+            owner.initialize("thc"); stranger.initialize("thc");
+            var tokens = new ContinuationResult[2]; var boundaries = new Object[2];
+            Driver driver;
+            owner.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                driver = new Driver(language);
+                for (int i = 0; i < tokens.length; i++) {
+                    tokens[i] = rawToken(language);
+                    if (i == 0) {
+                        var thunk = new Thunk(((RootNode) tokens[i].getContinuationRootNode().getSourceRootNode()).getCallTarget(), null);
+                        thunk.setTarget(null); thunk.setValue(tokens[i]); thunk.setState(5); boundaries[i] = thunk;
+                    } else boundaries[i] = new CallSegment(tokens[i]);
+                }
+            } finally { owner.leave(); }
+            stranger.enter();
+            try {
+                for (int i = 0; i < tokens.length; i++) {
+                    Object boundary = boundaries[i];
+                    var alias = SavedGuestContinuations.savedGuestContinuation(tokens[i]);
+                    assertThrows(RuntimeFault.class, () -> alias.continueWith(Unit.INSTANCE));
+                    assertThrows(RuntimeFault.class, alias::discard);
+                    assertThrows(RuntimeFault.class, () -> driver.force(boundary));
+                    if (boundary instanceof Thunk thunk) {
+                        assertEquals(5, thunk.getState()); assertSame(tokens[i], thunk.getValue()); assertNull(thunk.getOwner());
+                    } else {
+                        var segment = (CallSegment) boundary;
+                        assertEquals(5, segment.getState()); assertSame(tokens[i], segment.getValue()); assertNull(segment.getOwner());
+                    }
+                }
+            } finally { stranger.leave(); }
+            owner.enter();
+            try {
+                for (int i = 0; i < tokens.length; i++) {
+                    assertSame(Unit.INSTANCE, driver.force(boundaries[i]));
+                    var alias = SavedGuestContinuations.savedGuestContinuation(tokens[i]);
+                    assertThrows(RuntimeFault.class, () -> alias.continueWith(Unit.INSTANCE));
+                }
+            } finally { owner.leave(); }
+        }
+    }
+
+    @Test void wrongContextCannotRouteABytecodeMVarWaitThroughOuterOwners() throws Exception {
+        try (var engine = org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build();
+             var owner = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build();
+             var stranger = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build();
+             var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            owner.initialize("thc"); stranger.initialize("thc");
+            for (int route = 0; route < 5; route++) {
+                Driver driver; ContinuationResult token; Object boundary; ManagedMVar.Request request;
+                PendingWait pending; GuestThreads threads; var cell = new ManagedMVar();
+                owner.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    driver = new Driver(language); driver.getCallTarget();
+                    threads = Language.currentState().getThreads();
+                    threads.enterCurrent(null, true, true, null); threads.installSuspensionBoundary(new GuestWakePort());
+                    request = new ManagedMVar.Request(cell, ManagedMVar.Operation.TAKE, null, driver);
+                    pending = assertThrows(PendingWait.class, () -> ManagedMVar.awaitAt(request, driver));
+                    var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                        b.beginRoot(); b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(pending);
+                        b.endRecordContinuationOwner(); b.endYield();
+                        b.beginResumePendingWait(); b.emitLoadConstant(pending); b.endResumePendingWait();
+                        b.beginReturn(); b.emitLoadConstant(73L); b.endReturn(); b.endRoot();
+                    }).getNode(0);
+                    token = assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                    var child = new Thunk(root.getCallTarget(), null);
+                    child.setTarget(null); child.setValue(token); child.setState(5);
+                    if (route == 0) boundary = child;
+                    else if (route == 1) boundary = new CallSegment(token);
+                    else if (route == 2) {
+                        var source = new LifetimeOwner(language);
+                        var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, source.getFrameDescriptor());
+                        var ast = new AstContinuation(source, new ThunkSuspended(child), MaskingState.UNMASKED,
+                            frame, List.of((activation, input) -> ((ChildResume) input).takeValue()), StackAnnotationState.EMPTY);
+                        boundary = parked(source.getCallTarget(), ast);
+                    } else {
+                        var wait = new Force.DriverWait(driver.force, root, new CallSegment(token), pending, false, new Metrics(false));
+                        boundary = route == 3 ? wait : parked(root.getCallTarget(), wait);
+                    }
+                } finally { owner.leave(); }
+                try {
+                    final Object parked = boundary;
+                    var rejected = executor.submit(() -> {
+                        stranger.enter();
+                        var foreignThreads = Language.currentState().getThreads(); foreignThreads.enterCurrent(null, true, true, null);
+                        try {
+                            return assertThrows(RuntimeFault.class, () -> {
+                                if (parked instanceof SavedGuestContinuation saved) saved.continueWith(Unit.INSTANCE);
+                                else driver.force(parked);
+                            });
+                        } finally { foreignThreads.leaveCurrent(); stranger.leave(); }
+                    });
+                    try { assertTrue(rejected.get(5, java.util.concurrent.TimeUnit.SECONDS).getMessage().contains("execution context")); }
+                    finally { rejected.cancel(true); }
+                    assertEquals(ManagedMVar.RequestState.PENDING, request.getState()); assertTrue(request.isQueued());
+                    assertFalse(pending.abandoned());
+                    if (boundary instanceof Thunk thunk) { assertEquals(5, thunk.getState()); assertNull(thunk.getOwner()); }
+                    else if (boundary instanceof CallSegment segment) { assertEquals(5, segment.getState()); assertSame(token, segment.getValue()); assertNull(segment.getOwner()); }
+                    owner.enter();
+                    try {
+                        assertTrue(cell.tryPut(73L));
+                        assertEquals(73L, boundary instanceof SavedGuestContinuation saved ? saved.continueWith(Unit.INSTANCE) : driver.force(boundary));
+                        assertEquals(ManagedMVar.RequestState.COMMITTED, request.getState()); assertFalse(request.isQueued());
+                        var alias = SavedGuestContinuations.savedGuestContinuation(token);
+                        assertThrows(RuntimeFault.class, () -> alias.continueWith(Unit.INSTANCE));
+                    } finally { owner.leave(); }
+                } finally {
+                    owner.enter(); try { request.cancel(); threads.leaveCurrent(); } finally { owner.leave(); }
+                }
+            }
+        }
+    }
+
+    @Test void rejectedCapturedRequestKeepsPendingStateAndParkedParent() {
+        try (var engine = org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build();
+             var owner = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build();
+             var stranger = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build()) {
+            owner.initialize("thc"); stranger.initialize("thc");
+            Driver driver; CallSegment parent; ContinuationResult token; CapturedAsyncRequest request;
+            owner.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                driver = new Driver(language); token = rawToken(language); parent = new CallSegment(token);
+                request = new CapturedAsyncRequest(Language.currentState().getCapturedAsyncRequests(), parent,
+                    new CallSegment(rawToken(language)), Unit.INSTANCE);
+            } finally { owner.leave(); }
+            stranger.enter();
+            try {
+                assertThrows(RuntimeFault.class, () -> driver.deliver(request));
+                assertEquals(CapturedRequestState.PENDING, request.getState());
+                assertEquals(5, parent.getState()); assertSame(token, parent.getValue()); assertNull(parent.getOwner());
+            } finally { stranger.leave(); }
+            owner.enter();
+            try {
+                assertSame(Unit.INSTANCE, driver.force(parent));
+                // A valid-context stale-parent failure still settles the pending request.
+                assertThrows(RuntimeFault.class, () -> driver.deliver(request));
+                assertEquals(CapturedRequestState.FAILED, request.getState());
+            } finally { owner.leave(); }
+        }
+    }
+
     private static final class Driver extends RootNode {
         @Child private Force force = new Force(new Metrics(false));
         Driver() { super(null); }
-        @Override public Object execute(VirtualFrame frame) { return force.execute(frame, frame.getArguments()[0]); }
-        Object force(Thunk thunk) { return Calls.target(getCallTarget(), new Object[]{thunk}); }
+        Driver(Language language) { super(language); }
+        @Override public Object execute(VirtualFrame frame) { return frame.getArguments()[0] instanceof CallSegment segment ? force.executeInitialization(segment) : force.execute(frame, frame.getArguments()[0]); }
+        Object force(Object boundary) { return Calls.target(getCallTarget(), new Object[]{boundary}); }
+        Object deliver(CapturedAsyncRequest request) { return force.deliverAtCapturedIOHandler(request); }
     }
     private static final class Saved implements SavedGuestContinuation {
         private final Object savedRoot, savedYield;
@@ -288,7 +559,7 @@ class SavedGuestContinuationTest {
         @Override public Object getIdentity() { return this; }
         @Override public Object continueWith(Object input) { resumes++; return resume.apply(input); }
     }
-    private Thunk parked(RootCallTarget target, Saved saved) {
+    private Thunk parked(RootCallTarget target, SavedGuestContinuation saved) {
         var thunk = new Thunk(target, null);
         thunk.setTarget(null); thunk.setEnvironment(null); thunk.setValue(saved); thunk.setState(5);
         return thunk;

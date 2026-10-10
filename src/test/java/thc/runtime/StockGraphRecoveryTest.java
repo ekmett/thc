@@ -326,9 +326,9 @@ class StockGraphRecoveryTest {
                         b.endCallCaseRegion(); b.endStaticStoreLong(); b.emitLabel(complete);
                         b.emitCheckpointArmed(prefixes);
                         b.beginIfThen(); b.emitPollAsync(request); b.beginBlock();
-                        b.beginReenterPendingAsyncMask(activeMask); b.beginYield();
+                        b.beginReenterPendingAsyncMask(activeMask); b.beginYield(); b.beginRecordContinuationOwner();
                         b.emitParkPendingAsyncMask(request, entryMask, activeMask);
-                        b.endYield(); b.endReenterPendingAsyncMask(); b.endBlock(); b.endIfThen();
+                        b.endRecordContinuationOwner(); b.endYield(); b.endReenterPendingAsyncMask(); b.endBlock(); b.endIfThen();
                         b.emitCheckpointArmed(suffixes);
                         b.beginReturn(); b.emitFinishTuple(new BytecodeTupleSlots(tuple, new LocalAccessor[]{
                                 LocalAccessor.constantOf(result), LocalAccessor.constantOf(ref)})); b.endReturn();
@@ -671,7 +671,7 @@ class StockGraphRecoveryTest {
                         b.beginRoot(); b.beginBlock();
                         if (installedEntry) {
                             b.emitCheckpointArmed(entries);
-                            b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                            b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                         }
                         var counter = b.createLocal("counter", FrameSlotKind.Long);
                         var total = b.createLocal("total", FrameSlotKind.Long);

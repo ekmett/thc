@@ -192,7 +192,7 @@ class CoreContinuationNativeTest {
         return BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
             b.beginRoot(); b.beginReturn(); b.beginResumeApplication();
             b.emitLoadConstant(suspended);
-            b.beginYield(); b.emitLoadConstant(suspended); b.endYield();
+            b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(suspended); b.endRecordContinuationOwner(); b.endYield();
             b.endResumeApplication(); b.endReturn(); b.endRoot();
         }).getNode(0).getCallTarget();
     }
@@ -456,8 +456,8 @@ class CoreContinuationNativeTest {
                 var callee = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
                     b.beginRoot(); var visited = b.createLocal("visited", "primitive"); b.beginBlock();
                     b.beginStoreLocal(visited); b.emitCheckpointArmed(checkpoint); b.endStoreLocal();
-                    b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
-                    b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                     b.beginReturn(); b.emitLoadConstant(lazy); b.endReturn(); b.endBlock(); b.endRoot();
                 }).getNode(0).getCallTarget();
                 var continuation = (ContinuationResult) Calls.target(callee, new Object[]{0L});
@@ -471,7 +471,7 @@ class CoreContinuationNativeTest {
                 var layout = new DataLayout(language, "proof.LazyBox", "LazyBox", new String[]{"LiftedRep"});
                 var caller = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
                     b.beginRoot(); b.beginReturn(); b.beginConstruct(layout); b.beginResumeApplication();
-                    b.emitLoadConstant(suspended); b.beginYield(); b.emitLoadConstant(suspended); b.endYield();
+                    b.emitLoadConstant(suspended); b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(suspended); b.endRecordContinuationOwner(); b.endYield();
                     b.endResumeApplication(); b.endConstruct(); b.endReturn(); b.endRoot();
                 }).getNode(0).getCallTarget();
                 var parent = new Thunk(caller, null); var driver = new Driver();
@@ -575,9 +575,9 @@ class CoreContinuationNativeTest {
             var pair = entered(context, () -> {
                 var target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
                     b.beginRoot(); var prior = b.createLocal("prior mask", "object");
-                    b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                     b.beginStoreLocal(prior); b.emitEnterMask(MaskingState.MASKED_INTERRUPTIBLE); b.endStoreLocal();
-                    b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                     b.beginReturn(); b.emitLoadConstant(1L); b.endReturn(); b.endRoot();
                 }).getNode(0).getCallTarget();
                 var segment = new CallSegment((ContinuationResult) Calls.target(target, new Object[]{0L}));
@@ -614,7 +614,7 @@ class CoreContinuationNativeTest {
                     var slots = new BytecodeTupleSlots(tuple, new LocalAccessor[]{LocalAccessor.constantOf(field)});
                     var prior = b.createLocal("prior mask", "object");
                     b.beginStoreLocal(field); b.emitLoadConstant(marker); b.endStoreLocal();
-                    b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(Unit.INSTANCE); b.endRecordContinuationOwner(); b.endYield();
                     b.beginStoreLocal(prior); b.emitEnterMask(MaskingState.MASKED_INTERRUPTIBLE); b.endStoreLocal();
                     b.beginReturn(); b.emitFinishTuple(slots); b.endReturn(); b.endRoot();
                 }).getNode(0).getCallTarget();
@@ -654,7 +654,7 @@ class CoreContinuationNativeTest {
                     b.endStoreLocal(); b.beginBlock(); b.beginStoreLocal(suspended);
                     b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly(); b.endStoreLocal();
                     b.beginStoreLocal(result); b.beginResumeForcedLocal(local, true); b.emitLoadLocal(suspended);
-                    b.beginYield(); b.emitLoadLocal(suspended); b.endYield(); b.endResumeForcedLocal();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadLocal(suspended); b.endRecordContinuationOwner(); b.endYield(); b.endResumeForcedLocal();
                     b.endStoreLocal(); b.endBlock(); b.endTryCatch(); b.emitLoadLocal(result);
                     b.endBlock(); b.endReturn(); b.endBlock(); b.endRoot();
                 }).getNode(0).getCallTarget();

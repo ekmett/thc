@@ -34,6 +34,12 @@ public final class CapturedAsyncRequests {
         return request;
     }
 
+    /** Context authority is this request manager, even if its parent already advanced. */
+    synchronized void requireOwner(com.oracle.truffle.api.nodes.Node node) {
+        if (closed || thc.Language.currentState(node).getCapturedAsyncRequests() != this)
+            throw RuntimeFault.fault("Captured async request belongs to another execution context");
+    }
+
     synchronized void finished(CapturedAsyncRequest request) {
         active.remove(request);
         byParent.remove(request.getParent(), request);

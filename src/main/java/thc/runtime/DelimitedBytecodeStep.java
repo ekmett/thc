@@ -11,7 +11,7 @@ public final class DelimitedBytecodeStep implements DelimitedTransferStep {
     private final TupleShape shape;
     public DelimitedBytecodeStep(ContinuationResult saved, TupleShape shape) { this.saved = saved; this.shape = shape; }
     @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
-        Object answer = ContinuationResult.create(saved.getContinuationRootNode(), frame, saved.getResult()).continueWith(input);
+        Object answer = BytecodeContinuations.view(ContinuationResult.create(saved.getContinuationRootNode(), frame, saved.getResult())).continueWith(input);
         DelimitedControl.captureBytecode(answer, shape); return answer;
     }
     @Override public Object finish(Object result, DelimitedActionSite site) { return site.finish(result, shape); }

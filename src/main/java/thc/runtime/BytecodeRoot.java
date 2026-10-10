@@ -954,12 +954,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             StackAnnotations.set(node, prior);
         }
     }
+    /** Marker-preserving stamp for direct cuts that do not park annotations. */
+    @Operation public static final class RecordContinuationOwner {
+        @Specialization public static Object record(VirtualFrame frame, Object marker, @Bind("$node") Node node) {
+            BytecodeContinuations.recordOwner(frame.materialize(), node);
+            return marker;
+        }
+    }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "rootEntry")
     @ConstantOperand(type = LocalAccessor.class, name = "active")
     public static final class ParkAnnotations {
         @Specialization public static Object park(VirtualFrame frame, LocalAccessor rootEntry,
                 LocalAccessor active, Object marker, @Bind("$node") Node node) {
+            BytecodeContinuations.recordOwner(frame.materialize(), node);
             // Delimited capture unwinds through explicit annotation-return steps.
             if (!(marker instanceof DelimitedCut)) {
                 BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
