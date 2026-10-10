@@ -135,60 +135,36 @@ and the copied/parent-frame bytecode OSR implementations. `testOsrSourceOwnershi
 checks actual compiled wrappers and clone ownership. The accessor is read-only;
 the budget recovery forwarding and scheduler behavior below are separate.
 
-The pinned API/runtime pair also provides an opt-in recovery hook for a real
-graph-size bailout. `RootNode.getGraphBudgetGeneration()` supplies the logical
-boundary generation captured when a compilation task is submitted. After the
-existing block-compilation fallback, `prepareGraphBudgetRetry(failedGeneration)`
-may acknowledge a strictly newer generation only when a real structural
-compilation boundary has changed. The default returns the failed generation and
-preserves ordinary failure handling. This is not a profile hint or permission to
-retry an unchanged graph. A language implementation must have a finite extraction
-plan and use normal thread-safe AST replacement/invalidation protocols.
+## Terminal compilation targets
 
-The callback runs on the compiler thread. It must not access a current guest
-context, execute guest code, initialize a context-bound root, train a profile, or
-submit/wait for compilation. Explicit synchronous compilation can submit the
-changed root only after the failed task completes. Background compilation leaves
-the changed root eligible for a later request; it does not submit another task
-inside the callback. A successful recovery does not mark the caller permanently
-failed or universally uninlinable. Non-budget failures and exhausted plans retain
-the existing policy. Clones sample their current generation on each new task.
+The `terminal1` runtime overlay retires a physical target after permanent failure
+or graph-budget overflow. Explicit compilation, OSR admission and direct queue
+submission reject retired targets. Queued work checks retirement before entering
+the compiler. Recovery must publish a different target; neither partial-block
+fallback nor the old graph-budget hooks rearm the failed target. The API hooks
+remain link-compatible with existing producers.
 
-OSR wrappers forward the generation and recovery hooks to their actual source
-root. Loop and bytecode OSR select and submit a task under the existing AST lock,
-then perform any foreground wait outside that lock, so a compiler-thread recovery
-can use ordinary node replacement. A cold per-request handle retains only its
-target, exact task and pre-submission recovery count, not a frame or context.
-Only a completed failure with a real newer generation permits the existing
-foreground retry. Background compilation remains nonwaiting and never submits
-recursively from its failure callback.
+THC also retires nonpermanent compilation failures through its context-owned
+listener. Cancellation is an abandoned task and does not trigger that recovery.
+At fresh entry, THC extracts a smaller function/side trace or enters a cold
+trampoline. Existing activations and saved continuations keep their original
+body and program counter. See [AST recovery](../../docs/ast-case-boundaries.md).
 
-A loop target is published only after actual submission. Replacement still
-invalidates/cancels it, but the exact target remains reserved through foreground
-completion, including the interval between a failed task and its structural retry.
-Other callers continue normal interpreter work during that interval. The
-reservation is cleared in finally and is not copied to cloned loops; ordinary
-validity/failure handling then applies. Bytecode OSR retains its existing target
-map, preparation, frame transfer and single-compilation exclusion. Even a task
-that fails before submission returns reaches foreground completion, preserving
-its original failure delivery.
-THC AST function roots and eligible bytecode case decisions opt into this
-hook with finite, preprepared side targets. Bytecode recovery retains the original
-target and instruction positions. A pinned, source-checked lowering of its private
-choice instruction selects the reduced region before operand-stack escape
-analysis: a late-folded Boolean alone still exposes the old body to the early
-graph-size listener. This bridge changes no ordinary guest branch profiles.
-Side calls preserve the caller's Bloom protocol without introducing a new catcher.
-Besides wide constructor decisions, bytecode can preprepare a small exact-wide-
-integral decision whose arms have substantial local syntax. This bounded
-preparation filter does not predict graph size or identify a cold default: only
-an actual budget bailout activates the side targets. Literal order, duplicate
-labels and the original default are retained. An ambient join does not exclude
-a region unless that region references the join's activation.
-A singleton-default exact-wide-integral case can also prepare its substantial
-continuation body as one side target. Its scrutinee stays in the caller and is
-evaluated exactly once; a large scrutinee alone does not qualify a tiny body.
-This is a suffix cut, not an assertion that a default arm is cold.
+`compiler.DiagnoseFailure=false` prevents compiler-internal diagnostic retries,
+including with `Throw`, `Diagnose` and `ExitVM` reporting. If omitted, those
+reporting actions retain their upstream diagnostic default. Admission control
+does not interrupt a compiler invocation that has already started. The launcher
+sets the explicit opt-out and a speculative graph budget of 1,000 nodes.
+
+OSR selection and submission remain under the owner's AST lock; any foreground
+wait occurs outside it. The request retains its exact target and task, not a
+frame or context. The target reservation lasts through completion and is cleared
+in finally. Replacement still invalidates/cancels it. Bytecode OSR retains its
+existing target map, preparation, frame transfer and single-compilation exclusion.
+`testOsrScheduling` checks those lock and publication contracts independently.
+`testTerminalTarget` covers explicit admission, queued retirement, real graph
+failure, the OSR submission wrapper and diagnostic opt-out. THC's
+`StockGraphRecoveryTest` covers fresh language targets and saved-frame recovery.
 
 Bytecode local-ID capacity is a separate preparation-time constraint. If the
 pinned builder reports local-ID overflow in a prepared constructor side, the

@@ -38,18 +38,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Timeout;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(90)
 class StockGraphRecoveryTest {
-    @BeforeAll static void requireStockRuntime() {
-        var origin = Truffle.getRuntime().getClass().getProtectionDomain().getCodeSource().getLocation().getPath();
-        org.junit.jupiter.api.Assumptions.assumeTrue(origin.endsWith("/truffle-runtime-25.3.4.1.jar"),
-                "requires -Pthc.stockTruffle=true; the overlay retries inside compilation instead");
-    }
     @Test void stockAstOsrCallbackExposesOriginalOwnerThroughPublicChildren() { ownership(false); }
     @Test void stockBytecodeOsrCallbackExposesOriginalOwnerThroughPublicChildren() { ownership(true); }
     @Test void terminalStockFailureRecoversOnlyFreshEntryWithoutReplayingEffects() {
@@ -158,26 +152,35 @@ class StockGraphRecoveryTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var root = new FunctionRoot(language, new FrameLayout().build(), "transient failure", null,
-                            new int[0], new int[0], new int[0], new AstSameFrameArm(new Heavy(new long[4096],
-                            new AtomicInteger(), new AtomicReference<RootNode>())), new Metrics(true));
-                    var target = (OptimizedCallTarget) root.getCallTarget();
-                    var service = Language.currentState().getGraphRecovery();
-                    // Callback controls exercise flags independently of the actual compiler tests.
-                    service.failed(target,
-                            "jdk.graal.compiler.core.common.CancellationBailoutException: Compilation cancelled",
-                            true, false);
-                    assertNull(root.graphFailure.get());
-                    service.failed(target,
-                            "jdk.vm.ci.code.BailoutException: transient compilation failure", true, false);
-                    assertNotNull(root.graphFailure.get(), "even a nonpermanent failed graph must be retired");
-                    assertEquals("jdk.vm.ci.code.BailoutException: transient compilation failure", root.graphFailure.get().reason());
-                    assertTrue(root.graphFailure.get().bailout()); assertFalse(root.graphFailure.get().permanent());
-                    assertFalse(target.canBeInlined(), "retired code cannot be absorbed into a caller's graph");
-                    assertEquals(0, root.prepareGraphBudgetRetry(0), "the failed source must not extract and rearm itself");
-                    assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
-                    assertNotNull(recovered(root), "a transient failure also installs a smaller fresh entry");
-                    assertFalse(root.isCloningAllowed(), "the failed source cannot be split into unchanged retryable clones");
+                    for (boolean shared : List.of(false, true)) {
+                        var root = new FunctionRoot(language, new FrameLayout().build(), "transient failure", null,
+                                new int[0], new int[0], new int[0], new AstSameFrameArm(new Heavy(new long[4096],
+                                new AtomicInteger(), new AtomicReference<RootNode>())), new Metrics(true));
+                        if (shared) root.shareCompilationOwnership();
+                        var target = (OptimizedCallTarget) root.getCallTarget();
+                        var service = Language.currentState().getGraphRecovery();
+                        // Callback controls exercise flags independently of the actual compiler tests.
+                        service.failed(target,
+                                "jdk.graal.compiler.core.common.CancellationBailoutException: Compilation cancelled",
+                                true, false);
+                        assertNull(root.graphFailure.get());
+                        service.failed(target,
+                                "jdk.vm.ci.code.BailoutException: transient compilation failure", true, false);
+                        assertTrue(root.compilationFailureObserved, "owned and shared failed targets must be terminal");
+                        if (shared) {
+                            assertNull(root.graphFailure.get(), "shared code cannot publish context-owned recovery");
+                        } else {
+                            assertNotNull(root.graphFailure.get(), "even a nonpermanent failed graph must be retired");
+                            assertEquals("jdk.vm.ci.code.BailoutException: transient compilation failure", root.graphFailure.get().reason());
+                            assertTrue(root.graphFailure.get().bailout()); assertFalse(root.graphFailure.get().permanent());
+                        }
+                        assertFalse(target.canBeInlined(), "retired code cannot be absorbed into a caller's graph");
+                        assertEquals(0, root.prepareGraphBudgetRetry(0), "the failed source must not extract and rearm itself");
+                        assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
+                        if (shared) assertNull(recovered(root), "shared code stays unowned after failure");
+                        else assertNotNull(recovered(root), "a transient failure also installs a smaller fresh entry");
+                        assertFalse(root.isCloningAllowed(), "the failed source cannot be split into unchanged retryable clones");
+                    }
                 } finally { context.leave(); }
             }
         }

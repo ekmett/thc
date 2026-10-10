@@ -95,12 +95,14 @@ remaining inline, scalar raw-bit preservation, caller clones and context-local
 side targets. Explicit callback unit controls are distinct from the test that
 provokes the compiler's actual budget failure.
 
-## Stock-runtime entry recovery
+## Fresh-entry recovery
 
 The launcher uses a 1,000-node speculative graph budget and disables diagnostic
 recompilation. Every actual compilation failure retires its physical target,
 including a transient bailout. Its original reason and flags remain in the
-context-owned receipt; a later success does not erase a failure. Cancellation
+context-owned receipt; a later success does not erase a failure. Shared prepared
+roots are also retired, but no context claims their recovery or publishes a
+replacement for them. Cancellation
 is reported separately as an abandoned task, not a successfully or unsuccessfully
 compiled graph, and does not request recovery.
 
@@ -120,13 +122,11 @@ an unchanged retryable clone. Existing body executions and parked continuations
 keep their frame, program counter and lexical cleanup. See the
 [stock-runtime workflow](contributing.md) for eligibility and limitations.
 
-The application stops automatic hotness admission and the older overlay's
-same-target recovery hook. Stock Truffle's explicit `compile()` entry bypasses
-its terminal failure flag. Stock engine actions `Throw`, `Diagnose` and `ExitVM`
-also force diagnostic recompilation even with `compiler.DiagnoseFailure=false`;
-the launcher's default `Print` action avoids that retry. Preventing those runtime
-and compiler entry points requires the supplier's retirement policy. Application
-recovery alone does not establish the full never-retry contract.
+The pinned terminal runtime rejects explicit submissions and queued work for
+retired targets, and honors the launcher's diagnostic-retry opt-out. Stock
+Truffle still bypasses its terminal flag at explicit `compile()` entry and
+forces diagnostic retries for `Throw`, `Diagnose` and `ExitVM`; application-only
+recovery on stock Truffle does not establish the full never-retry contract.
 
 ## Internal tail-spill compaction
 

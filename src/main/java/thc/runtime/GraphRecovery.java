@@ -86,8 +86,8 @@ public final class GraphRecovery implements AutoCloseable {
     }
 
     void failed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanent) {
-        if (cancelled(reason)) return;
-        ContextRoot root = owned(target);
+        if (closed || cancelled(reason)) return;
+        ContextRoot root = source(target.getRootNode());
         if (root == null) return;
         root.compilationFailureObserved = true;
         if (target.getRootNode() instanceof ContextRoot physicalRoot) physicalRoot.compilationFailureObserved = true;
@@ -96,6 +96,9 @@ public final class GraphRecovery implements AutoCloseable {
         // Do not invoke graph-size block compilation recovery on this physical target.
         target.onCompilationFailed(() -> reason, true, true, true, false);
         if (target.isValid()) target.invalidate("retired after compilation failure");
+        // Retirement belongs to the physical code, including shared prepared roots.
+        // Only its owning context may retain receipts or publish a replacement.
+        if (owned(target) == null) return;
         Failure observed;
         Failure updated;
         do {
