@@ -26,7 +26,7 @@ module THC.Driver.Installed
 import Control.Concurrent (ThreadId, forkIOWithUnmask)
 import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newEmptyMVar, newMVar, putMVar, readMVar)
 import Control.Exception (SomeException, evaluate, finally, mask, mask_, onException, throwIO, try)
-import Control.Monad (filterM, foldM, forM, forM_, replicateM_, unless)
+import Control.Monad (filterM, foldM, forM, forM_, replicateM_, unless, when)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -59,7 +59,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Error (lenientDecode)
 import THC.Compact.Module (readModuleMetadata)
-import THC.Driver.Admission (Admission, localAdmission, withAdmission)
+import THC.Driver.Admission (Admission, localAdmission, withAdmission, traceAdmission)
 import THC.Driver.Process (drainWorkers, waitOwnedProcess, stopProcessTree)
 
 data InterfaceWay = DynamicInterfaces | VanillaInterfaces deriving (Eq, Show)
@@ -390,8 +390,12 @@ prepareInstalledProbeWithAdmission :: Admission -> InstalledContext -> Installed
 prepareInstalledProbeWithAdmission admission context requested = do
   previous <- newIORef Nothing
   pure $ do
+    traceAdmission "installed-probe-closure-start" Nothing
     units <- probeClosure context requested
+    traceAdmission "installed-probe-closure-end" Nothing
+    traceAdmission "installed-probe-snapshot-before-start" Nothing
     before@(helperHash : _) <- probeSnapshot context units
+    traceAdmission "installed-probe-snapshot-before-end" Nothing
     cached <- readIORef previous
     case cached of
       Just (oldUnits, oldSnapshot, value) | units == oldUnits && before == oldSnapshot -> do
@@ -399,7 +403,9 @@ prepareInstalledProbeWithAdmission admission context requested = do
         pure (helperHash, value)
       _ -> do
         value <- probeInstalledUnits admission context requested units
+        traceAdmission "installed-probe-snapshot-after-start" Nothing
         after <- probeSnapshot context units
+        traceAdmission "installed-probe-snapshot-after-end" Nothing
         unless (before == after) (fail "installed probe inputs changed during interface probe")
         checkProbeRegistrations context units
         writeIORef previous (Just (units, after, value))
@@ -415,16 +421,18 @@ probeSnapshot context units = forM paths $ \path -> withBinaryFile path ReadMode
     paths = installedHelper context : concatMap (map snd . installedInterfaces) units
 
 -- | Snapshot the actual helper/settings/interface bytes consumed by an already
--- selected dependency-closed registration scope. Keep consumed paths, not
--- resolved symlink destinations; fresh registration checks remain separate.
-installedInputSnapshot :: InstalledContext -> [InstalledUnit] -> IO [(FilePath, BS.ByteString)]
-installedInputSnapshot context units = forM paths $ \path -> withBinaryFile path ReadMode $ \handle -> do
+-- selected dependency-closed registration scopes. Observe each consumed path
+-- once in this phase, including a helper shared by several views. Keep distinct
+-- path identities; fresh registration checks and later byte rehashes remain.
+installedInputSnapshot :: [(InstalledContext, [InstalledUnit])] -> IO [(FilePath, BS.ByteString)]
+installedInputSnapshot scopes = forM paths $ \path -> withBinaryFile path ReadMode $ \handle -> do
   bytes <- BL.hGetContents handle
   digest <- evaluate (SHA.hashlazy bytes)
   pure (path, digest)
   where
-    paths = sort (nub (installedHelper context : (installedLibdir context </> "settings") :
-      concatMap (map snd . installedInterfaces) units))
+    paths = sort (nub (concatMap (\(context, units) ->
+      installedHelper context : (installedLibdir context </> "settings") :
+        concatMap (map snd . installedInterfaces) units) scopes))
 
 -- Read one fresh registration snapshot. ghc-pkg dump uses the same expanded
 -- record format as describe; only selected records have their interfaces
@@ -495,6 +503,7 @@ probeInstalledInventory admission context requested@(requestedUnit : _) units = 
       arguments = ["--libdir", installedLibdir context, "--unit", requestedUnit,
                    "--way", interfaceWayName (installedInterfaceWay context), "--probe-inventory"] ++
         concatMap (\db -> ["--package-db", db]) (helperDatabases context)
+  traceAdmission "installed-inventory-ready" Nothing
   (status, output, diagnostic) <- withAdmission admission $ boundedAdmittedInterfaceProcessInput
     (installedHelper context) arguments (BL.toStrict (encode request))
   response <- either (fail . ("invalid interface probe: " ++)) pure (eitherDecodeStrict' output)
@@ -684,7 +693,10 @@ boundedInterfaceProcessInputWithOwnership ownsTree directory executable argument
               pending <- drainWorkers =<< readIORef workers
               mapM_ throwIO pending
             await result = readMVar result >>= either throwIO pure
-            run = case (input, output, diagnostic) of
+            run = do
+              when ownsTree (traceAdmission "admitted-helper-spawned" Nothing)
+              runPipes
+            runPipes = case (input, output, diagnostic) of
               (Just stdinPipe, Just stdoutPipe, Just stderrPipe) -> do
                 hSetBinaryMode stdinPipe True
                 hSetBinaryMode stdoutPipe True
@@ -697,6 +709,7 @@ boundedInterfaceProcessInputWithOwnership ownsTree directory executable argument
                   out <- await outputResult
                   err <- await diagnosticResult
                   status <- waitOwnedProcess child
+                  when ownsTree (traceAdmission "admitted-helper-reaped" Nothing)
                   either (fail . show) (const (pure ())) (Text.decodeUtf8' err)
                   pure (status, out, err)
               _ -> fail "installed-Core helper pipes were unavailable"

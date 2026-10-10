@@ -18,6 +18,7 @@ module THC.Driver.Admission
   ( Admission
   , localAdmission
   , withAdmission
+  , traceAdmission
   , waitForNative
   , withBuildAdmission
   , publishBuildSemaphore
@@ -322,6 +323,9 @@ release (BorrowedSemaphore semaphore) =
 
 -- Explicit diagnostic evidence for the genuine one-token check. No trace is
 -- emitted during ordinary builds and no raw pointer/handle is exposed.
+-- | Emit an owner event only with @THC_TRACE_BUILD_ADMISSION=1@. Budget
+-- events carry the actual name; readiness phase events use no name. This
+-- observes no files, targets or process state.
 traceAdmission :: String -> Maybe String -> IO ()
 traceAdmission event name = do
   enabled <- lookupEnv "THC_TRACE_BUILD_ADMISSION"

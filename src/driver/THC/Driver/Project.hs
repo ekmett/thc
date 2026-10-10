@@ -62,7 +62,7 @@ import THC.Driver.Lock (withLock)
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess,
                        readCreateProcessWithExitCode)
 import THC.Driver.Process (runProducer)
-import THC.Driver.Admission (Admission, localAdmission, waitForNative, withBuildAdmission)
+import THC.Driver.Admission (Admission, localAdmission, waitForNative, withBuildAdmission, traceAdmission)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
@@ -549,18 +549,23 @@ acquireProjectInstalled admission context layout installedPolicy byId installedU
   let supportFor identifier = case [record | record <- support, jsonField record "id" == Just identifier] of
         [record] -> Just record
         _ -> Nothing
+  traceAdmission "installed-original-registration-start" Nothing
   originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
   validateReexports originalRegistrations
   forM_ originalRegistrations $ \registrationUnit -> do
     planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
     require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
       ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+  traceAdmission "installed-original-registration-end" Nothing
+  traceAdmission "installed-selected-registration-start" Nothing
   registrations <- forM installedUnits $ \unit ->
     discoverInstalled (if supportFor (unitId unit) == Nothing then helperContext else originalContext) (unitId unit)
   validateReexports registrations
-  originalInputs <- installedInputSnapshot originalContext originalRegistrations
-  helperInputs <- installedInputSnapshot helperContext registrations
-  let inputSnapshot = sort (nub (originalInputs ++ helperInputs))
+  traceAdmission "installed-selected-registration-end" Nothing
+  traceAdmission "installed-input-snapshot-start" Nothing
+  inputSnapshot <- installedInputSnapshot
+    [(originalContext, originalRegistrations), (helperContext, registrations)]
+  traceAdmission "installed-input-snapshot-end" Nothing
   retained <- case capturedPath of
     Nothing -> pure Nothing
     Just path -> do
