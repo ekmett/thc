@@ -32,8 +32,8 @@ public final class Evaluate extends Expr {
         return result;
     }
     @Override public Object execute(VirtualFrame frame) {
-        if (AstControl.INSTANCE.captures(this)) return executeAsync(frame);
         CoreRepresentation proof = value.getRepresentation();
+        if (!proof.getEvaluated() && AstControl.INSTANCE.captures(this)) return executeAsync(frame);
         if (proof.isInt()) return value.executeRequiredInt(frame);
         if (proof.isLong()) return value.executeRequiredLong(frame);
         if (proof.isFloat()) return value.executeRequiredFloat(frame);
