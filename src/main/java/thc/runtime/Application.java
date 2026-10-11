@@ -12,7 +12,7 @@ final class Application extends Expr {
     private final ArgumentLayout inputLayout;
     @Child private PreparedDispatch dispatch;
     Application(Expr function, Expr[] arguments, boolean tail, Metrics metrics) {
-        setRepresentation(new CoreRepresentation(CoreKind.UNKNOWN, true, false, null, null, null, null, null, null));
+        setRepresentation(CoreRepresentation.UNKNOWN);
         this.function = new Evaluate(function, metrics);
         this.arguments = arguments;
         var proofs = new ArrayList<CoreRepresentation>(arguments.length);

@@ -23,15 +23,19 @@ final class FunctionBody extends Node {
     FunctionBody(Expr expression, Metrics metrics, CoreRepresentation result, TupleShape tuple, int[] tupleSlots, boolean initializer) {
         this(expression, metrics, result, tuple, tupleSlots, initializer, false);
     }
-    /** Internal application roots transport a lazy value; ordinary functions still demand their result. */
+    /** Returning a lifted value does not demand it. */
     FunctionBody(Expr expression, Metrics metrics, CoreRepresentation result, TupleShape tuple, int[] tupleSlots,
                  boolean initializer, boolean rawResult) {
         this.initializer = initializer; this.rawResult = rawResult;
-        value = initializer || rawResult ? expression : new Evaluate(expression, metrics);
+        value = expression;
         this.tuple = tuple; this.tupleSlots = tupleSlots;
         if (tuple != null) value.prepareTuple(tupleSlots, 0);
         CoreRepresentation effective = result.getKind() == CoreKind.UNKNOWN ? expression.getRepresentation() : result;
-        resultKind = effective.getKind();
+        // A data/function type says what a demanded value will be, not that the
+        // returned reference is already a DataValue/Closure rather than a thunk.
+        resultKind = !expression.getRepresentation().getEvaluated() &&
+            (effective.getKind() == CoreKind.DATA || effective.getKind() == CoreKind.CLOSURE)
+            ? CoreKind.OBJECT : effective.getKind();
         exactInt = effective.isInt();
         boolean exactLong = resultKind == CoreKind.LONG && !exactInt;
         genericResult = result.getPresent() && !exactLong;
