@@ -75,8 +75,7 @@ public final class GenericInputCall extends Node {
                     if (isTail || exact && tupleBounce != null) throw transfer;
                     answer = loop.execute(transfer, metrics);
                 }
-                result = AstControl.captures(this) ? AstControl.complete(this, answer, target,
-                    resultShape) : answer;
+                result = AstControl.complete(this, answer, target, resultShape);
             } catch (TailCall transfer) {
                 if (isTail) throw transfer;
                 if (exact && tupleBounce != null) {

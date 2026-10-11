@@ -100,7 +100,7 @@ final class InputCallArm extends Node {
                 answer = loop.execute(transfer);
                 needsCompletion = true;
             }
-            result = needsCompletion && AstControl.captures(this) ? AstControl.complete(this, answer, target,
+            result = needsCompletion ? AstControl.complete(this, answer, target,
                 arity == count && destination != null ? root.getTupleResult() : null) : answer;
         } catch (TailCall transfer) {
             if (isTail) throw transfer;

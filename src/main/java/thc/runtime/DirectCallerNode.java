@@ -68,7 +68,7 @@ public final class DirectCallerNode extends Node {
                 normalProfile.enter();
             } catch (TailCall tail) { if (tupleResult != null) throw tail; tailProfile.enter(); result = loop.execute(tail); }
         }
-        return AstControl.captures(this) ? AstControl.complete(this, result, target, tupleResult) : result;
+        return AstControl.complete(this, result, target, tupleResult);
     }
     public static DirectCallerNode create(RootCallTarget target, Metrics metrics) { return new DirectCallerNode(target, metrics); }
 }
