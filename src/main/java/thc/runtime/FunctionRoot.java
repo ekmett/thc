@@ -388,8 +388,8 @@ public final class FunctionRoot extends GuestRoot {
     @Override public boolean getAsynchronousExceptions() { return enableAsync; }
     public boolean getEnableDelimited() { return enableDelimited; }
     public boolean getCapturesContinuations() { return capturesContinuations; }
-    /** Shared AOT code must observe admission without retiring its installed target. */
-    public boolean usesRuntimeAsyncAdmission() { return programSlot >= 0; }
+    /** Prepared AOT code must observe admission without retiring its installed target. */
+    public boolean usesRuntimeAsyncAdmission() { return programSlot >= 0 || preparedForAOT; }
     public boolean getStackCapture() { return stackCapture; }
     public FunctionRootRole getRole() { return role; }
     public HandoffEntry getHandoff$org_intelligence_thc() { return handoff; }

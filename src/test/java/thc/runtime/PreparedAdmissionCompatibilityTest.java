@@ -63,6 +63,55 @@ class PreparedAdmissionCompatibilityTest {
             } finally { context.leave(); }
         }
     }
+    @org.junit.jupiter.api.Test
+    void ordinaryAotRetainsItsFirstInstallationAcrossOriginAndMailboxAdmission() throws Exception {
+        try (var context = context("platform")) {
+            context.initialize("thc"); context.enter();
+            final Program program;
+            final OptimizedCallTarget target;
+            final Value entry;
+            final long address;
+            final int installations;
+            try {
+                var owner = Language.currentState();
+                owner.admitGuestOrigin();
+                program = new Program(language(), module());
+                target = (OptimizedCallTarget) program.entryTarget("identity");
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT());
+                target.compile(true); target.waitForCompilation();
+                assertTrue(target.isValidLastTier()); assertFalse(target.wasExecuted());
+                address = target.getCodeAddress(); installations = target.getSuccessfulCompilationCount();
+                assertNotEquals(0L, address);
+                assertTrue(owner.getSingleGuestOriginAssumption().isValid(), "Preparation must not admit concurrency");
+                entry = context.asValue(new EntryValue(program, "identity", 1));
+            } finally { context.leave(); }
+            // A real public entry from a different origin admits concurrency before
+            // the first guest call. It must enter the original cold installation.
+            assertEquals(42L, CompletableFuture.supplyAsync(() -> entry.execute(42L).asLong()).get(10, TimeUnit.SECONDS));
+            context.enter();
+            try {
+                var owner = Language.currentState(); var threads = owner.getThreads();
+                assertTrue(owner.isGuestConcurrencyAdmitted()); assertFalse(owner.getSingleGuestOriginAssumption().isValid());
+                assertTrue(target.isValidLastTier(), "Origin admission cannot retire ordinary AOT code");
+                assertEquals(address, target.getCodeAddress()); assertEquals(installations, target.getSuccessfulCompilationCount());
+                assertEquals(1L, program.diagnostics().get("compiledEntries"), "The first guest call must enter installed code");
+                threads.enterCurrent();
+                try {
+                    var request = threads.send(threads.currentIdentity(), "ordinary AOT mailbox admission");
+                    var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
+                        Calls.target(target, new Object[]{0L, 43L})));
+                    assertSame(request, saved.asyncRequest()); request.acknowledge();
+                    Object result = new RootNode(language()) {
+                        @Child private Force force = new Force(new Metrics(false), true);
+                        @Override public Object execute(VirtualFrame frame) { return force.drainStack(saved, null); }
+                    }.getCallTarget().call();
+                    assertEquals(43L, result);
+                    assertTrue(target.isValidLastTier(), "Mailbox publication cannot retire ordinary AOT code");
+                    assertEquals(address, target.getCodeAddress()); assertEquals(installations, target.getSuccessfulCompilationCount());
+                } finally { threads.leaveCurrent(); }
+            } finally { context.leave(); }
+        }
+    }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void checkpointCompilationRetainsInstallationsWithoutRunningGuestCode(String backend) {
         try (var context = context("platform")) {

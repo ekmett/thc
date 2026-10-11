@@ -45,12 +45,14 @@ from the physical Java entrant assumption, which Loom itself can invalidate.
 Generic thread construction and Truffle thread initialization do not admit guest
 concurrency. Other contexts retain independent assumptions.
 
-Prepared reusable AST roots also retain capture from first lowering, including
+Prepared reusable AST roots retain capture from first lowering, including
 their declared materializable-frame and polymorphic-completion AOT contracts.
-Their default-off ordinary polls read an irreversible volatile admission bit,
+Ordinary AST roots explicitly prepared for AOT use the same runtime admission
+policy. Their default-off ordinary polls read an irreversible volatile admission bit,
 not the invalidatable origin assumption. Admission sets that bit before
 invalidating ordinary code or publishing guest effects, so prepared installed
-targets need not retire or fall back to interpretation. Sequential public caller
+targets need not retire or fall back to interpretation. Ordinary JIT roots keep
+their speculative origin assumption. Sequential public caller
 changes and instantiation after a transition remain supported. Nested entries
 still cannot upgrade an enclosing activation that actually lacks capture
 capability. Persisted Native Image acceptance requires the pinned provider and
@@ -131,8 +133,9 @@ After its admission guard and existing scheduling checkpoint, a speculative
 ordinary poll can skip mailbox lookup while its context has never published an async request.
 This separate monotone assumption invalidates under the thread registry lock
 before an accepted send or resumed request is queued; it never resets after a
-queue drains. Explicit eager polling and prepared reusable AST roots keep their
-runtime polling policy and do not use this context assumption. Mandatory delivery
+queue drains. Explicit eager polling, prepared reusable AST roots and ordinary
+AST roots explicitly prepared for AOT keep their runtime polling policy and do
+not use this context assumption. Mandatory delivery
 cuts remain unconditional.
 
 Once a request has been published, ordinary polls read the Truffle
