@@ -21,6 +21,9 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.Arrays;
 import java.util.List;
 import static thc.runtime.RuntimeFault.fault;
@@ -32,6 +35,28 @@ import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
  * restoration follow Cadenza. See NOTICE.md and LICENSE.md. */
 public final class FunctionRoot extends GuestRoot {
     private static final int[] NO_SCALAR_VOID_INPUTS = new int[0];
+    private static final MethodHandle ARGUMENT_COUNT = argumentCountIntrinsic();
+    private static MethodHandle argumentCountIntrinsic() {
+        try {
+            return MethodHandles.publicLookup().findStatic(com.oracle.truffle.api.nodes.RootNode.class,
+                "assumeArgumentCount", MethodType.methodType(Object[].class, Object[].class, int.class));
+        } catch (NoSuchMethodException stockApi) { return null; }
+        catch (IllegalAccessException failure) { throw new ExceptionInInitializerError(failure); }
+    }
+    @CompilationFinal private int ordinaryArgumentCount = -1;
+    @Override protected void prepareForCall() {
+        super.prepareForCall();
+        var proofs = getInputProofs();
+        if (proofs != null)
+            ordinaryArgumentCount = getEntryArgumentOffset() + ArgumentLayout.width(getInputLayout(), proofs.size());
+    }
+    /** PAP and overapplication handling precede entry; the complete ABI fixes this length. */
+    private Object[] ordinaryArguments(Object[] arguments) {
+        if (ordinaryArgumentCount < 0 || ARGUMENT_COUNT == null) return arguments;
+        try { return (Object[]) ARGUMENT_COUNT.invokeExact(arguments, ordinaryArgumentCount); }
+        catch (RuntimeException | Error failure) { throw failure; }
+        catch (Throwable impossible) { throw CompilerDirectives.shouldNotReachHere(impossible); }
+    }
     private final String label;
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] environmentSlots;
@@ -179,6 +204,12 @@ public final class FunctionRoot extends GuestRoot {
         configureTupleResult(tuple);
         configureScalarResult(body.getRepresentation().refine(resultProof));
         // Establish mandatory carriers before publishing the root, never on its first compiled call.
+        if (captureLayout != null) for (int i = 0; i < environmentSlots.length; i++) {
+            FrameSlotKind kind = captureLayout.fixedFrameKind(i);
+            if (kind == FrameSlotKind.Illegal) continue;
+            int[] vectorSlots = i < environmentVectorSlots.length ? environmentVectorSlots[i] : null;
+            initialize(descriptor, vectorSlots == null ? environmentSlots[i] : vectorSlots[0], kind);
+        }
         if (inputLayout != null) for (int i = 0; i < argumentSlots.length; i++) {
             if (capturesContinuations && contains(getStrictArgumentPositions(), argumentIndices[i] + getEntryArgumentOffset())) {
                 initialize(descriptor, argumentSlots[i], FrameSlotKind.Object);
@@ -384,6 +415,7 @@ public final class FunctionRoot extends GuestRoot {
         scalarVoidIndices = indices;
     }
     @ExplodeLoop public void buildFrame(Object[] arguments, VirtualFrame frame) {
+        arguments = ordinaryArguments(arguments);
         int offset = captureLayout == null ? 1 : 2;
         for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(arguments[index + offset]);
         for (int i = 0; i < argumentSlots.length; i++) {
@@ -622,7 +654,7 @@ public final class FunctionRoot extends GuestRoot {
         catch (AstCapture cut) { return finishCapture(cut, initialCaptureFrame(frame, deferredBloom)); }
     }
     private void initializeBloom(VirtualFrame frame) {
-        if (!(frame.getArguments()[0] instanceof Long inherited)) throw fault("Invalid bloom argument");
+        if (!(ordinaryArguments(frame.getArguments())[0] instanceof Long inherited)) throw fault("Invalid bloom argument");
         frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(inherited));
     }
     private MaterializedFrame initialCaptureFrame(VirtualFrame frame, boolean deferredBloom) {

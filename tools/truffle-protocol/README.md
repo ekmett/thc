@@ -67,6 +67,22 @@ independent of the completion declaration below. Declaring materialization can r
 virtualization; no ordinary-allocation or native-image performance claim follows
 from the focused JVM controls.
 
+## Exact scalar argument count
+
+`RootNode.assumeArgumentCount` exposes the existing runtime array-length intrinsic
+through the patched API. It returns the original array, with its caller-guaranteed
+exact length visible during compilation; it neither copies nor evaluates arguments.
+Interpreter assertions check the declaration. The artifact suffix includes `args1`.
+
+THC lambda entry is exactly saturated. Application handling constructs PAPs for
+short applications and applies overapplication suffixes to the returned function.
+Before target publication, a declared AST root derives the scalar packet length
+from its complete logical input proofs and physical `ArgumentLayout`, plus the
+bloom and optional capture headers. Unused or erased local slots do not determine
+arity. Typed packets and dense pending-loan entry keep their separate conventions.
+The optional API is resolved once; stock Truffle retains ordinary checked reads.
+This does not seed argument profiles, request AOT preparation, or execute a warmup.
+
 ## Polymorphic root completion
 
 A resumable root can return its ordinary scalar/tuple result or a saved

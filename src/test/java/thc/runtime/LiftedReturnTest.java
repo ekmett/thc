@@ -157,6 +157,34 @@ class LiftedReturnTest {
         }
     }
 
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void saturatedCapturedEntryRetainsUnusedFormals(String backend) {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var input = map("bindings", list(map("id", "keep", "name", "keep", "arity", 2,
+                    "lifted", true, "rep", CLOSURE, "expr",
+                    list("lam", list(parameter("x"), parameter("unused")),
+                        list("lam", list(parameter("ignored")), variable("x"), map("rep", CLOSURE, "resultRep", INT)),
+                        map("rep", CLOSURE, "resultRep", CLOSURE)))));
+                ExecutableProgram program = backend.equals("ast") ? new Program(language(), input) : new BytecodeProgram(language(), input);
+                var value = answer(); var evaluations = new AtomicInteger(); var thunk = delayed(value, evaluations);
+                var closure = assertInstanceOf(Closure.class,
+                    Calls.target(program.entryTarget("keep"), new Object[]{0L, thunk, value}));
+                assertEquals(1, closure.arity);
+                var target = (OptimizedCallTarget) closure.target;
+                assertFalse(target.wasExecuted()); target.compile(true); target.waitForCompilation();
+                assertTrue(target.isValidLastTier());
+                long address = target.getCodeAddress();
+                long entries = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                assertSame(thunk, Calls.target(target, new Object[]{0L, closure.environment, value}));
+                assertEquals(entries + 1, program.diagnostics().get("compiledEntries"));
+                assertEquals(address, target.getCodeAddress()); assertTrue(target.isValidLastTier());
+                assertEquals(0, evaluations.get());
+            } finally { context.leave(); }
+        }
+    }
+
     @Test
     void localReturnWithStrictIngressSpillsBeforeDemand() {
         try (var context = context()) {

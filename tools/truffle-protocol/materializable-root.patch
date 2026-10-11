@@ -24,10 +24,23 @@ index 50d7717a..e84d5db3 100644
          this.callTarget = callTarget;
  
          // Call notifyOnLoad() after the callTarget field is set, so the invariant that if a
-@@ -516,6 +519,27 @@ public abstract class RootNode extends ExecutableNode {
+@@ -516,6 +519,40 @@ public abstract class RootNode extends ExecutableNode {
          // no default implementation
      }
  
++    /**
++     * Exposes the caller-guaranteed exact argument count to the compiler.
++     * The caller must supply a non-null array of the declared length. Returns
++     * the same array without copying, profiling, or evaluating any argument.
++     */
++    public static Object[] assumeArgumentCount(Object[] arguments, int count) {
++        if (CompilerDirectives.inInterpreter()) {
++            assert arguments != null && arguments.length == count;
++        }
++        return NodeAccessor.RUNTIME.castArrayFixedLength(arguments, count);
++    }
++
++
 +    /**
 +     * Declares that this root's frames may materialize before any interpreted
 +     * execution observes a capture. The declaration is read after prepareForCall

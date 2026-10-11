@@ -87,6 +87,15 @@ public final class CaptureLayout {
     public int getStorageSize() { return offsets[offsets.length - 1]; }
     public int fieldWidth(int index) { return offsets[index + 1] - offsets[index]; }
     public boolean isVector(int index) { return fields[index].vector != null; }
+    /** Declared frame carrier, or Illegal when the environment selects Long versus Object. */
+    FrameSlotKind fixedFrameKind(int index) {
+        var field = fields[index];
+        if (field.exactInt != null) return FrameSlotKind.Int;
+        if (field.exactLong) return FrameSlotKind.Long;
+        if (field.exactFloat) return FrameSlotKind.Float;
+        if (field.exactDouble) return FrameSlotKind.Double;
+        return field.primitiveEligible ? FrameSlotKind.Illegal : FrameSlotKind.Object;
+    }
     public CoreRepresentation vectorProof(int index) { return fields[index].vector == null ? null : fields[index].vector.getProof(); }
     public CoreRepresentation vectorProof$org_intelligence_thc(int index) { return vectorProof(index); }
     public Object checkAllocationKey(Object key) {

@@ -93,7 +93,7 @@ def materializableApiJar = tasks.register("materializableApiJar", Jar) {
     group = "build"
     description = "Build pinned API source classes with declared materialization and completion contracts."
     archiveBaseName.set("thc-truffle-api")
-    archiveVersion.set("$materializableApiVersion-protocol3-carrier1")
+    archiveVersion.set("$materializableApiVersion-protocol3-carrier1-args1")
     destinationDirectory.set(layout.buildDirectory.dir("materializable-api"))
     preserveFileTimestamps = false
     reproducibleFileOrder = true
@@ -115,7 +115,7 @@ def materializableApiJar = tasks.register("materializableApiJar", Jar) {
             manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
         }
         manifest.attributes(["Implementation-Title": "THC declared root protocol Truffle API",
-            "Implementation-Version": "$materializableApiVersion-protocol3-carrier1",
+            "Implementation-Version": "$materializableApiVersion-protocol3-carrier1-args1",
             "Upstream-Source-SHA256": "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064"])
     }
 }
