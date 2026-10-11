@@ -65,6 +65,9 @@ identities. The backing files must remain at those paths with the same inodes;
 copying them elsewhere and replacing the originals does not preserve loader
 identity. Restored JVM exit and a failed restore do not delete image-owned files.
 New extractions after restore retain ordinary JVM cleanup.
+This ownership path supports repeated restores of one image. Taking a new
+checkpoint from a restored process is not supported: a descendant image would
+also need to retain the original image's native backing dependencies.
 Checkpoint and restore callbacks cannot extract new THC native libraries while
 ownership transfer is pending; initialize them before entering the checkpoint
 operation or after it returns. THC rejects late extraction instead of omitting
