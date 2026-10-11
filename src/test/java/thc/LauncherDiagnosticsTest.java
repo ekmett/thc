@@ -110,6 +110,14 @@ public class LauncherDiagnosticsTest {
                 Json.stringify(List.of("--run-executable", "modules", "entry", "", "--", "ghc"))))
             assertThrows(IllegalArgumentException.class, () -> NativeExecutable.launcherArguments(invalid, guest));
     }
+    @Test public void checkpointLauncherLeavesGuestArgumentsForRestore() {
+        var failure = assertThrows(IllegalArgumentException.class, () -> Main.main(new String[]{
+            "--checkpoint-executable", "unused.cbd", "u:Main.main", "base:Top.flush", "--", "prebound-name", "arg"}));
+        assertTrue(failure.getMessage().contains("supply guest arguments on restore"));
+        assertThrows(IllegalStateException.class, () -> CracExecutable.main(new String[]{"program", "arg"}),
+            "A fresh JVM cannot prebind restore arguments outside a checkpointed launcher");
+    }
+
     @Test public void nativeExecutableRetainsBoundArtifactVerificationAndOpaqueGuestArguments() {
         var guest = new String[] {"--verify-artifacts", "", "--", "a b.hs"};
         for (var binding : List.of(

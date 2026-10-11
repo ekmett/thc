@@ -182,12 +182,12 @@ public final class Main {
 
     /** Shared command-line authority, argv and one-shot entry/shutdown lifecycle. */
     static void runExecutable(ProgramArguments guest, boolean interfaceHelper, java.util.function.Function<Context,Value> load) {
-        runExecutable(guest, interfaceHelper, null, load);
+        runExecutable(() -> guest, interfaceHelper, null, load);
     }
-    static void runExecutable(ProgramArguments guest, boolean interfaceHelper,
+    static void runExecutable(java.util.function.Supplier<ProgramArguments> guest, boolean interfaceHelper,
             java.util.function.Consumer<Context> beforeNativeStartup, java.util.function.Function<Context,Value> load) {
         try (Context context = executionContext(true, interfaceHelper, beforeNativeStartup)) {
-            initializeArguments(context, guest);
+            initializeArguments(context, guest.get());
             var action = load.apply(context);
             check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
             if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
@@ -253,12 +253,11 @@ public final class Main {
         boolean verifyArtifacts = withVerification.verifyArtifacts();
         boolean interfaceHelper = withVerification.interfaceHelper();
         if (args.length > 0 && args[0].equals("--checkpoint-executable")) {
-            require(args.length >= 4, "Usage: thc --checkpoint-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
+            require(args.length == 4, "Usage: thc --checkpoint-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY; supply guest arguments on restore");
             var checkpoint = CracExecutable.checkpointOperation();
-            var guest = launcherArguments(args, 4);
             var request = CoreModules.request(modules(args[1]), args[2], true,
                 false, defaultBackend(), false, true, args[3], configuredAsyncExceptions(), verifyArtifacts);
-            CracExecutable.run(guest, interfaceHelper, request, checkpoint);
+            CracExecutable.run(interfaceHelper, request, checkpoint);
             return;
         }
         if (args.length > 0 && args[0].equals("--run-executable")) {

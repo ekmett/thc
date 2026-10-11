@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
 import java.util.Map;
+import java.util.List;
 
 /** Program linkage and context-bound host entrypoints shared across Core backends. */
 public interface ExecutableProgram {
@@ -17,6 +18,8 @@ public interface ExecutableProgram {
     Object entryValue(String name);
     /** Lower all admitted local bindings without guest or native initialization. */
     default void prepareCode() {}
+    /** Observe retained executable roots without lowering, demanding values or running guest code. */
+    default List<RootCallTarget> compilationTargets() { return List.of(); }
     /** Link this demanded program after inert lowering, on its exact context owner. */
     default void initializeNative(thc.Language.State owner) {}
     /** Complete staged ordinary global initialization after native constructors. */

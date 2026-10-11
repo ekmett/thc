@@ -44,6 +44,101 @@ class PreparedAdmissionCompatibilityTest {
         return builder.build();
     }
     private static Language language() { return TruffleLanguage.LanguageReference.create(Language.class).get(null); }
+    @org.junit.jupiter.api.Test
+    void ordinaryAstPreparesDeclaredCarriersBeforeItsFirstCompilation() {
+        try (var context = context("platform")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var program = new Program(language(), module());
+                var target = (OptimizedCallTarget) program.entryTarget("identity");
+                assertFalse(target.wasExecuted());
+                assertTrue(target.prepareForAOT(), "Ordinary AST code must admit preparation without guest warmup");
+                target.compile(true); target.waitForCompilation();
+                assertTrue(target.isValidLastTier()); assertNotEquals(0, target.getCodeAddress());
+                assertFalse(target.wasExecuted());
+                long entries = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                assertEquals(42L, Calls.target(target, new Object[]{0L, 42L}));
+                assertEquals(entries + 1, program.diagnostics().get("compiledEntries"), "The first call must enter installed code");
+                assertTrue(target.isValidLastTier());
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void checkpointCompilationRetainsInstallationsWithoutRunningGuestCode(String backend) {
+        try (var context = context("platform")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var input = module();
+                var bindings = new java.util.ArrayList<Object>((List<?>) input.get("bindings"));
+                bindings.add(map("id", "cold", "name", "cold", "arity", 0,
+                    "lifted", true, "expr", list("app", list("prim", "+#"),
+                    list(list("lit", "int", "20", map("rep", LONG)), list("lit", "int", "22", map("rep", LONG))),
+                    list(false, false), false, false, map("rep", LONG))));
+                input.put("bindings", bindings);
+                ExecutableProgram program = backend.equals("ast") ? new Program(language(), input) : new BytecodeProgram(language(), input);
+                program.prepareCode();
+                var entry = new EntryValue(program, "identity", 1);
+                var guest = (OptimizedCallTarget) program.entryTarget("identity");
+                var cold = assertInstanceOf(Thunk.class, program.entryValue("cold"));
+                var inventory = program.compilationTargets();
+                assertTrue(inventory.contains(guest)); assertTrue(inventory.contains(cold.getTarget()));
+                assertFalse(guest.wasExecuted()); assertFalse(((OptimizedCallTarget) cold.getTarget()).wasExecuted());
+                var executed = inventory.stream().map(target -> ((OptimizedCallTarget) target).wasExecuted()).toList();
+                var report = entry.prepareCheckpointCompilation();
+                assertTrue(((Number) report.get("installed")).intValue() > 0);
+                assertTrue(guest.isValidLastTier()); assertNotEquals(0, guest.getCodeAddress());
+                long address = guest.getCodeAddress(); int installations = guest.getSuccessfulCompilationCount();
+                assertEquals(executed, inventory.stream().map(target -> ((OptimizedCallTarget) target).wasExecuted()).toList(),
+                    "Compilation cannot execute additional guest roots, including initialization wrappers");
+                assertEquals(0L, program.diagnostics().get("thunkEvaluations")); assertEquals(0, cold.getState());
+                // The real provider calls these same APIs on either side of CRIU.
+                var restored = entry.verifyCheckpointCompilation();
+                assertEquals(true, restored.get("sameTargets")); assertEquals(true, restored.get("installedCodeSurvived"));
+                assertEquals(report.get("targets"), restored.get("targets"));
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                assertEquals(42L, context.asValue(entry).execute(42L).asLong());
+                assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,
+                    "The first guest invocation enters installed code without warmup");
+                assertTrue(guest.isValidLastTier()); assertEquals(address, guest.getCodeAddress());
+                assertEquals(installations, guest.getSuccessfulCompilationCount());
+                assertEquals(0, cold.getState()); assertEquals(0L, program.diagnostics().get("thunkEvaluations"));
+                assertThrows(IllegalStateException.class, entry::prepareCheckpointCompilation,
+                    "Preparation is only admitted before the first guest invocation");
+            } finally { context.leave(); }
+        }
+    }
+    @org.junit.jupiter.api.Test
+    void checkpointCompilationReportsRejectionAndRefusesToRepairLostInstallations() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var program = new Program(language(), module());
+                var entry = new EntryValue(program, "identity", 1);
+                var report = entry.prepareCheckpointCompilation();
+                assertEquals(0, report.get("installed"));
+                assertEquals(report.get("targetCount"), report.get("rejected"));
+                assertEquals(report, entry.prepareCheckpointCompilation(), "A second request must not retry rejected targets");
+                assertEquals(true, entry.verifyCheckpointCompilation().get("sameTargets"));
+                assertFalse(((OptimizedCallTarget) program.entryTarget("identity")).wasExecuted());
+            } finally { context.leave(); }
+        }
+        try (var context = context("platform")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var program = new Program(language(), module());
+                var entry = new EntryValue(program, "identity", 1);
+                entry.prepareCheckpointCompilation();
+                var target = (OptimizedCallTarget) program.entryTarget("identity");
+                assertTrue(target.isValidLastTier()); int installations = target.getSuccessfulCompilationCount();
+                target.invalidate("checkpoint survival negative control");
+                assertThrows(IllegalStateException.class, entry::verifyCheckpointCompilation);
+                assertEquals(false, entry.prepareCheckpointCompilation().get("installedCodeSurvived"));
+                assertFalse(target.isValidLastTier()); assertEquals(installations, target.getSuccessfulCompilationCount());
+                assertFalse(target.wasExecuted());
+            } finally { context.leave(); }
+        }
+    }
     @SuppressWarnings("unchecked") private static List<OptimizedCallTarget> targets(Program.PreparedCode code) throws Exception {
         var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
         return (List<OptimizedCallTarget>) field.get(code);

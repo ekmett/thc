@@ -113,7 +113,7 @@ public final class Program implements ExecutableProgram {
         this.language = language; this.enableAsync = true; this.outlineCaseArms = outlineCaseArms;
         eagerAsyncPolls = enableAsync;
         this.reusableCode = reusableCode;
-        this.codeTargets = reusableCode && prepared == null ? Collections.synchronizedList(new ArrayList<>()) : List.of();
+        this.codeTargets = prepared == null ? Collections.synchronizedList(new ArrayList<>()) : prepared.targets;
         this.codeIdentity = prepared == null ? new Object() : prepared.identity;
         this.contextOwner = reusableCode ? thc.Language.currentState() : null;
         this.deferDefaultArm = deferDefaultArm;
@@ -247,6 +247,13 @@ public final class Program implements ExecutableProgram {
 
     @Override public void prepareCode() {
         for (Map<String,Object> binding : bindings) required(globals, (String) binding.get("id")).prepareCode();
+    }
+
+    @Override public synchronized List<RootCallTarget> compilationTargets() {
+        var targets = new ArrayList<RootCallTarget>();
+        synchronized (codeTargets) { targets.addAll(codeTargets); }
+        targets.addAll(hostEntries.values());
+        return List.copyOf(targets);
     }
 
     @Override public void initializeGlobals() {
@@ -906,6 +913,7 @@ public final class Program implements ExecutableProgram {
                 FunctionRootRole.PASS_THROUGH, true, false, true);
             side.configureForeignExceptionBridge(foreignExceptionBridge);
             candidate.node.prepare(side.getCallTarget(), prepared);
+            codeTargets.add(side.getCallTarget());
             constructedRootCount.incrementAndGet();
         }
         constructedRootCount.incrementAndGet();
@@ -920,7 +928,7 @@ public final class Program implements ExecutableProgram {
                 used, captures != null, this::dataLayout, sources, body.getCoreSourceLocation()));
         }
         RootCallTarget target = root.getCallTarget();
-        if (reusableCode) codeTargets.add(target);
+        codeTargets.add(target);
         return new FunctionSpec(target, captures, captureSources);
     }
     private boolean sameFrameCandidate(List<Object> expression, Scope scope) {
@@ -1181,6 +1189,7 @@ public final class Program implements ExecutableProgram {
                 new int[0], new int[0], new int[0], body, metrics, new CoreRepresentation[0], body.getRepresentation(),
                 rootSource(body), new boolean[0], null, null, new int[0], null, false, new int[0][], false,
                 FunctionRootRole.FUNCTION, outlineCaseArms).getCallTarget();
+            codeTargets.add(target);
             constructedRootCount.incrementAndGet();
             return new DiagnosticUnavailable(target, message, metrics);
         }
