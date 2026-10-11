@@ -105,6 +105,8 @@ jobs:
         env:
           THC_CACHE_HOME: ${{ runner.temp }}/thc-cold-acquisition
         run: cabal test driver-tests -fdevelopment --test-options=--acquire-project-only --test-show-details=direct
+      - name: Check that the private Cabal capture fallback uses the selected Cabal
+        run: cabal test driver-tests -fdevelopment --test-options=--selected-cabal-only --test-show-details=direct
       - name: Prepare fresh library source and native oracles
         run: python3 bin/prepare-library-tests.py
       - name: Package verified library inputs and installed runtime
