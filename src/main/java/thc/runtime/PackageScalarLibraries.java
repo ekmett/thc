@@ -56,19 +56,14 @@ public final class PackageScalarLibraries {
             String system = System.getProperty("os.name");
             boolean windows = system.startsWith("Windows");
             String suffix = windows ? ".dll" : system.startsWith("Mac") ? ".dylib" : ".so";
-            var file = Files.createTempFile("thc-rts-float-", suffix);
-            try {
-                try (var stream = PackageScalarLibraries.class.getResourceAsStream("/thc/cbits/rts-float" + suffix)) {
-                    if (stream == null) throw fault("Missing original RTS floating support");
-                    Files.copy(stream, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                }
-                String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
-                return env.parseInternal(Source.newBuilder("nfi",
-                    (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", "rts-float").build()).call();
-            } finally {
-                if (windows) file.toFile().deleteOnExit();
-                else Files.deleteIfExists(file);
+            var file = NativeLibraryFiles.createTempFile("thc-rts-float-", suffix);
+            try (var stream = PackageScalarLibraries.class.getResourceAsStream("/thc/cbits/rts-float" + suffix)) {
+                if (stream == null) throw fault("Missing original RTS floating support");
+                Files.copy(stream, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
+            String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+            return env.parseInternal(Source.newBuilder("nfi",
+                (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", "rts-float").build()).call();
         });
         pointerOperations = new FutureTask<>(() -> {
             byte[] bytes;
@@ -181,25 +176,19 @@ public final class PackageScalarLibraries {
         return loadNative(bytes, suffix, name, null);
     }
     private Object loadNative(byte[] bytes, String suffix, String name, String unit) throws Exception {
-        var file = Files.createTempFile("thc-package-native-", suffix);
+        var file = NativeLibraryFiles.createTempFile("thc-package-native-", suffix);
         boolean windows = System.getProperty("os.name").startsWith("Windows");
-        try {
-            Files.write(file, bytes);
-            // Keep unused native references lazy and handles in Sulong's context registry.
-            env.initializeLanguage(env.getInternalLanguages().get("llvm"));
-            var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
-            if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
-            String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
-            Object handle = env.parseInternal(Source.newBuilder("nfi",
-                (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", name).build()).call();
-            nativeContext.addLibraryHandles(handle);
-            if (windows && unit != null) synchronized (this) { nativeImages.put(unit, file); }
-            return handle;
-        } finally {
-            // Windows keeps loaded DLLs locked; Unix mappings survive unlink.
-            if (windows) file.toFile().deleteOnExit();
-            else Files.deleteIfExists(file);
-        }
+        Files.write(file, bytes);
+        // Keep unused native references lazy and handles in Sulong's context registry.
+        env.initializeLanguage(env.getInternalLanguages().get("llvm"));
+        var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
+        if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
+        String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+        Object handle = env.parseInternal(Source.newBuilder("nfi",
+            (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", name).build()).call();
+        nativeContext.addLibraryHandles(handle);
+        if (windows && unit != null) synchronized (this) { nativeImages.put(unit, file); }
+        return handle;
     }
     /** RTS transfers borrow the selected package's already-loaded CRT/WinSock
      * namespace. A path supplied by the guest cannot select another provider. */

@@ -26,18 +26,31 @@ public final class CracExecutable {
     // linkable there, but reject it before reading any application input.
     static Runnable checkpointOperation() {
         final java.lang.reflect.Method checkpoint;
+        final Class<?> restoreFailure;
         try {
             checkpoint = Class.forName("jdk.crac.Core").getMethod("checkpointRestore");
+            restoreFailure = Class.forName("jdk.crac.RestoreException");
         } catch (ReflectiveOperationException missing) {
             throw new IllegalStateException("--checkpoint-executable requires a CRaC-capable Jam JDK with jdk.crac available; the ordinary Jam JDK cannot checkpoint", missing);
         }
         return () -> {
+            var option = java.lang.management.ManagementFactory.getPlatformMXBean(
+                com.sun.management.HotSpotDiagnosticMXBean.class).getVMOption("CRaCCheckpointTo").getValue();
+            if (option == null || option.isBlank() || option.contains("%"))
+                throw new IllegalStateException("THC checkpoint native backing requires a literal CRaCCheckpointTo path");
+            final thc.runtime.NativeLibraryFiles.Checkpoint ownership;
+            try { ownership = thc.runtime.NativeLibraryFiles.retainForCheckpoint(java.nio.file.Path.of(option)); }
+            catch (java.io.IOException failure) { throw new IllegalStateException("Cannot retain native backing for checkpoint", failure); }
             try { checkpoint.invoke(null); }
             catch (InvocationTargetException failed) {
+                // A failed restore still leaves the original image reusable.
+                try { ownership.checkpointFailed(restoreFailure.isInstance(failed.getCause())); }
+                catch (java.io.IOException cleanup) { failed.getCause().addSuppressed(cleanup); }
                 throw new IllegalStateException("CRaC checkpoint failed; guest main was not started", failed.getCause());
             } catch (IllegalAccessException inaccessible) {
+                try { ownership.checkpointFailed(false); } catch (java.io.IOException cleanup) { inaccessible.addSuppressed(cleanup); }
                 throw new IllegalStateException("Cannot access jdk.crac.Core.checkpointRestore", inaccessible);
-            }
+            } finally { ownership.finish(); }
         };
     }
 

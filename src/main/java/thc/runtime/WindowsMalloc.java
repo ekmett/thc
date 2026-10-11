@@ -57,8 +57,7 @@ final class WindowsMalloc {
                 bytes = stream.readAllBytes();
             }
             check(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)).equals(document.get("dllSha256")));
-            var library = Files.createTempFile("thc-malloc-", ".dll");
-            library.toFile().deleteOnExit();
+            var library = NativeLibraryFiles.createTempFile("thc-malloc-", ".dll");
             Files.write(library, bytes);
             var lookup = SymbolLookup.libraryLookup(library, Arena.global());
             var abi = linker.downcallHandle(lookup.find("thc_windows_malloc_abi").orElseThrow(), FunctionDescriptor.of(JAVA_LONG));
