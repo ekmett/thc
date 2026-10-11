@@ -170,22 +170,24 @@ public class LauncherDiagnosticsTest {
             "boundary", "synthetic", "constructors", List.of(),
             "bindings", List.of(Map.of("id", "entry", "name", "entry", "arity", 1, "lifted", true, "expr", expression)));
         var source = CoreCbdTestSupport.writeModel(directory.resolve("scalar.cbd"), module);
-        var oldBackend = System.getProperty("thc.backend"); var oldOut = System.out; var oldErr = System.err;
+        var oldBackend = System.getProperty("thc.backend"); var oldDiagnostics = System.getProperty("thc.diagnostics"); var oldOut = System.out; var oldErr = System.err;
         try {
-            for (var backend : List.of("ast", "bytecode")) for (boolean compiled : new boolean[] {false, true}) {
+            for (var backend : List.of("ast", "bytecode")) for (boolean compiled : new boolean[] {false, true})
+                    for (String setting : compiled ? Collections.<String>singletonList(null) : Arrays.asList(null, "true")) {
                 var out = new ByteArrayOutputStream(); var err = new ByteArrayOutputStream();
                 try (var stdout = new PrintStream(out, true, StandardCharsets.UTF_8); var stderr = new PrintStream(err, true, StandardCharsets.UTF_8)) {
-                    System.setProperty("thc.backend", backend); System.setOut(stdout); System.setErr(stderr);
+                    System.setProperty("thc.backend", backend); property("thc.diagnostics", setting); System.setOut(stdout); System.setErr(stderr);
                     var args = new ArrayList<>(List.of(source.toAbsolutePath().toString(), "entry", "7")); if (compiled) args.add("--compile"); Main.main(args.toArray(String[]::new));
                 }
                 assertEquals("8", out.toString(StandardCharsets.UTF_8).trim()); var diagnostics = (Map<?, ?>) Json.parse(err.toString(StandardCharsets.UTF_8).trim());
+                assertEquals(compiled || "true".equals(setting), diagnostics.get("instrumented"));
                 if (compiled) {
                     var call = (Map<?, ?>) diagnostics.get("firstInstalledCall");
                     assertTrue(((Number) call.get("compiledEntriesAfter")).longValue() > ((Number) call.get("compiledEntriesBefore")).longValue());
                     var installation = (Map<?, ?>) diagnostics.get("explicitCompilation"); assertEquals(true, installation.get("sameTargets")); assertEquals(true, installation.get("validLastTier"));
                 } else { assertFalse(diagnostics.containsKey("firstInstalledCall")); assertFalse(diagnostics.containsKey("explicitCompilation")); }
             }
-        } finally { System.setOut(oldOut); System.setErr(oldErr); property("thc.backend", oldBackend); }
+        } finally { System.setOut(oldOut); System.setErr(oldErr); property("thc.backend", oldBackend); property("thc.diagnostics", oldDiagnostics); }
     }
     private String[] concat(String[]... parts) { var result = new ArrayList<String>(); for (var part : parts) Collections.addAll(result, part); return result.toArray(String[]::new); }
     @Test public void artifactVerificationIsExplicitAndNeverConsumesGuestArguments() {
@@ -248,7 +250,7 @@ public class LauncherDiagnosticsTest {
             var output = launch(mode, backend, "true"); long nonemptyLines = 0;
             for (var line : output.split("\\r\\n|\\r|\\n")) if (!line.isEmpty()) nonemptyLines++;
             assertEquals(1L, nonemptyLines, mode + "/" + backend);
-            var metrics = (Map<?, ?>) Json.parse(output.trim()); assertEquals(backend, metrics.get("backend")); assertEquals(0L, ((Number) metrics.get("unsupportedTraps")).longValue());
+            var metrics = (Map<?, ?>) Json.parse(output.trim()); assertEquals(backend, metrics.get("backend")); assertEquals(true, metrics.get("instrumented")); assertEquals(0L, ((Number) metrics.get("unsupportedTraps")).longValue());
         }
     }
     @Test public void executableAsyncDefaultAndOverridesReachTheRunningProgram() throws Throwable {

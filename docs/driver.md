@@ -320,9 +320,12 @@ reusing the application's runtime unit when present. Ordinary Haskell `catch`,
 `finally` and `bracket` can then handle eligible foreign failures. Missing or
 ambiguous bridge identity is a link error; raw embedding must supply that support.
 
-To append runtime metrics after a successful IO launch, set
-`JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"`. Normal guest stderr contains
-no metrics report. Embedded callers can read the `diagnostics` member directly.
+To collect and append runtime metrics after a successful IO launch, set
+`JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"`. Ordinary JVM CLI execution and
+executable checkpoints disable counter instrumentation by default. Normal guest
+stderr contains no metrics report. The scalar `--compile` diagnostic retains
+counters to verify its first installed call. Embedded callers choose instrumentation
+through the load APIs and can read the `diagnostics` member directly.
 
 The launcher chooses Truffle's compiler pool, single-tier threshold (10 000),
 compilation timeout (30 s) and graph budget (`compiler.MaximumGraalGraphSize`,

@@ -252,10 +252,11 @@ public final class Main {
         String[] args = withVerification.arguments();
         boolean verifyArtifacts = withVerification.verifyArtifacts();
         boolean interfaceHelper = withVerification.interfaceHelper();
+        boolean instrument = Boolean.getBoolean("thc.diagnostics");
         if (args.length > 0 && args[0].equals("--checkpoint-executable")) {
             require(args.length == 4, "Usage: thc --checkpoint-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY; supply guest arguments on restore");
             var checkpoint = CracExecutable.checkpointOperation();
-            var request = CoreModules.request(modules(args[1]), args[2], true,
+            var request = CoreModules.request(modules(args[1]), args[2], instrument,
                 false, defaultBackend(), false, true, args[3], configuredAsyncExceptions(), verifyArtifacts);
             CracExecutable.run(interfaceHelper, request, checkpoint);
             return;
@@ -263,7 +264,7 @@ public final class Main {
         if (args.length > 0 && args[0].equals("--run-executable")) {
             require(args.length >= 4, "Usage: thc --run-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 4);
-            runExecutable(guest, interfaceHelper, context -> loadEntry(context, modules(args[1]), args[2], true,
+            runExecutable(guest, interfaceHelper, context -> loadEntry(context, modules(args[1]), args[2], instrument,
                 defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts));
             return;
         }
@@ -272,7 +273,7 @@ public final class Main {
             var guest = launcherArguments(args, 3);
             try (Context context = executionContext(true, interfaceHelper)) {
                 initializeArguments(context, guest);
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], instrument, defaultBackend(), true, null, configuredAsyncExceptions(), verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "IO main did not complete");
                 if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
             }
@@ -280,10 +281,11 @@ public final class Main {
         }
         require(args.length >= 3, "Usage: thc MODULE.cbd[,MODULE.cbd...] ENTRY INTEGER [--compile]");
         long input = Long.parseLong(args[2]);
+        boolean compiled = Arrays.asList(args).subList(3, args.length).contains("--compile");
         try (Context context = executionContext(false, interfaceHelper)) {
-            var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), verifyArtifacts);
+            var function = loadEntry(context, modules(args[0]), args[1], instrument || compiled, defaultBackend(), false, null, configuredAsyncExceptions(), verifyArtifacts);
             Long before = null;
-            if (Arrays.asList(args).subList(3, args.length).contains("--compile")) {
+            if (compiled) {
                 // Training precedes installation; never settle or retry the first installed call.
                 for (int i = 0; i < 40; i++) function.execute(input + (i & 3)).asLong();
                 function.invokeMember("compile");
