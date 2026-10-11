@@ -113,7 +113,7 @@ public final class Program implements ExecutableProgram {
         this.language = language; this.enableAsync = true; this.outlineCaseArms = outlineCaseArms;
         eagerAsyncPolls = enableAsync;
         this.reusableCode = reusableCode;
-        this.codeTargets = reusableCode && prepared == null ? Collections.synchronizedList(new ArrayList<>()) : List.of();
+        this.codeTargets = prepared == null ? Collections.synchronizedList(new ArrayList<>()) : prepared.targets;
         this.codeIdentity = prepared == null ? new Object() : prepared.identity;
         this.contextOwner = reusableCode ? thc.Language.currentState() : null;
         this.deferDefaultArm = deferDefaultArm;
@@ -247,6 +247,13 @@ public final class Program implements ExecutableProgram {
 
     @Override public void prepareCode() {
         for (Map<String,Object> binding : bindings) required(globals, (String) binding.get("id")).prepareCode();
+    }
+
+    @Override public synchronized List<RootCallTarget> compilationTargets() {
+        var targets = new ArrayList<RootCallTarget>();
+        synchronized (codeTargets) { targets.addAll(codeTargets); }
+        targets.addAll(hostEntries.values());
+        return List.copyOf(targets);
     }
 
     @Override public void initializeGlobals() {
@@ -906,6 +913,7 @@ public final class Program implements ExecutableProgram {
                 FunctionRootRole.PASS_THROUGH, true, false, true);
             side.configureForeignExceptionBridge(foreignExceptionBridge);
             candidate.node.prepare(side.getCallTarget(), prepared);
+            codeTargets.add(side.getCallTarget());
             constructedRootCount.incrementAndGet();
         }
         constructedRootCount.incrementAndGet();
@@ -920,7 +928,7 @@ public final class Program implements ExecutableProgram {
                 used, captures != null, this::dataLayout, sources, body.getCoreSourceLocation()));
         }
         RootCallTarget target = root.getCallTarget();
-        if (reusableCode) codeTargets.add(target);
+        codeTargets.add(target);
         return new FunctionSpec(target, captures, captureSources);
     }
     private boolean sameFrameCandidate(List<Object> expression, Scope scope) {
@@ -1181,6 +1189,7 @@ public final class Program implements ExecutableProgram {
                 new int[0], new int[0], new int[0], body, metrics, new CoreRepresentation[0], body.getRepresentation(),
                 rootSource(body), new boolean[0], null, null, new int[0], null, false, new int[0][], false,
                 FunctionRootRole.FUNCTION, outlineCaseArms).getCallTarget();
+            codeTargets.add(target);
             constructedRootCount.incrementAndGet();
             return new DiagnosticUnavailable(target, message, metrics);
         }
@@ -1337,6 +1346,8 @@ public final class Program implements ExecutableProgram {
             // Keep argument preparation and the actual local jump in this region.
             if (sameFrameCandidate(args.get(i), scope)) nodes[i] = new AstSameFrameArm(nodes[i]);
         }
+        // Join proofs establish physical carriers before publication, including
+        // ordinary roots compiled cold. Unknown carriers keep their existing widening.
         int[][] typedTemps = new int[nodes.length][];
         int[] temps = new int[nodes.length];
         for (int i = 0; i < nodes.length; i++) {
@@ -1344,8 +1355,7 @@ public final class Program implements ExecutableProgram {
                 typedTemps[i] = new int[ArgumentLayout.leaves(target.getProofs()[i]).size()];
                 for (int j = 0; j < typedTemps[i].length; j++) typedTemps[i][j] = scope.layout.bind("<join typed argument " + i + " field " + j + ">", FrameLayout.carrierKind(ArgumentLayout.leaves(target.getProofs()[i]).get(j)));
                 temps[i] = -1;
-            } else temps[i] = scope.layout.bind("<join argument " + i + ">", reusableCode ?
-                FrameLayout.carrierKind(target.getProofs()[i]) : FrameSlotKind.Illegal);
+            } else temps[i] = scope.layout.bind("<join argument " + i + ">", FrameLayout.carrierKind(target.getProofs()[i]));
         }
         return new LocalJoinCall((thc.Language) language, target, nodes, temps, codeMetrics(), typedTemps);
     }
@@ -1394,7 +1404,7 @@ public final class Program implements ExecutableProgram {
                     for (int j = 0; j < lanes.length; j++) lanes[j] = scope.layout.bind(parameter.get("id") + " join typed field " + j, FrameLayout.carrierKind(ArgumentLayout.leaves(proof).get(j)));
                     scope.bindTuple((String) parameter.get("id"), evaluated(proof, true), lanes);
                 } else scope.bind((String) parameter.get("id"), !lifted && !Boolean.TRUE.equals(parameter.get("coercion")),
-                    proof, false, null, null, reusableCode ? FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal);
+                    proof, false, null, null, FrameLayout.carrierKind(proof));
             }
             bodyScopes.add(scope);
         }
@@ -1445,8 +1455,8 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < tupleSlots.length; i++) tupleSlots[i] = local.layout.bind("<join tuple result " + i + ">", FrameLayout.carrierKind(tuple.getLeaves()[i]));
         Expr[] nodes = new Expr[bodies.size() + 1]; nodes[0] = entry;
         for (int i = 0; i < bodies.size(); i++) nodes[i + 1] = bodies.get(i);
-        return new LocalJoinRegion(identity, local.layout.bind("<join selector>", reusableCode ? FrameSlotKind.Long : FrameSlotKind.Illegal),
-            local.layout.bind("<join result>", reusableCode ? FrameLayout.carrierKind(result) : FrameSlotKind.Illegal),
+        return new LocalJoinRegion(identity, local.layout.bind("<join selector>", FrameSlotKind.Long),
+            local.layout.bind("<join result>", FrameLayout.carrierKind(result)),
             nodes, result, recursive, tuple, tupleSlots, delimited);
     }
     private DataLayout dataLayout(String id) {

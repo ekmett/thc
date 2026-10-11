@@ -3,7 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
-import jam.vm.Lifted;
+import thc.vm.Lifted;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 

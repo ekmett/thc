@@ -4,7 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.RootNode;
-import jam.vm.Lifted;
+import thc.vm.Lifted;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.Language;

@@ -1,5 +1,11 @@
 # JAM runtime integration
 
+The VM sources now belong to THC under `src/vm`, with the `thc.vm` Java API,
+`thc_vm_*` native ABI and `thc::vm` CMake export. See [building the VM](vm/build.md).
+The installation pin below still identifies the existing Jam-branded releases.
+Those bytes and hashes must be replaced together after qualifying a new provider;
+renaming the source does not qualify a new runtime.
+
 THC is migrating to JAM-patched GraalVM for JVM execution and JAM-patched
 SubstrateVM for native executables. The purpose is general `System.Mem.Weak`
 semantics, including keys held by Java code and finalizers that can resurrect

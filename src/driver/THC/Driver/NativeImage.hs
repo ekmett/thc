@@ -150,9 +150,9 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
       reported <- artifactReport (stage </> "build-artifacts.json")
       validateJamRuntime stage jam
       let groups = reported ++ case linkage of
-            JamShared libraries -> [("jam_runtime", ["program.jam"]),
-              ("shared_libraries", map ("program.jam" </>) libraries)]
-            JamStatic -> [("jam_metadata", ["program.jam"])]
+            JamShared libraries -> [("jam_runtime", ["program.thc"]),
+              ("shared_libraries", map ("program.thc" </>) libraries)]
+            JamStatic -> [("jam_metadata", ["program.thc"])]
       require (elem "program" [normalise path | ("executables", paths) <- groups, path <- paths])
         "native image artifact report does not declare program as an executable"
       entries <- fmap concat $ forM groups $ \(kind, paths) ->
@@ -219,29 +219,29 @@ data JamLinkage = JamShared [FilePath] | JamStatic
 
 jamRuntimeInputs :: FilePath -> IO (JamLinkage, [(Maybe FilePath, FilePath, String)])
 jamRuntimeInputs jdk = do
-  let declaration = jdk </> "lib/jam/native-image-libraries.txt"
+  let declaration = jdk </> "lib/thc/native-image-libraries.txt"
   exists <- doesPathExist declaration
   link <- fromRight False <$> tryIOError (pathIsSymbolicLink declaration)
   let static = exists || link
   (linkage, native) <- if static then do
-    manifest <- ownedFile "lib/jam/native-image-libraries.txt"
+    manifest <- ownedFile "lib/thc/native-image-libraries.txt"
     libraries <- staticManifest manifest
     archives <- forM libraries $ \name -> do
-      source <- ownedFile ("lib/jam/static" </> ("lib" ++ name ++ ".a"))
+      source <- ownedFile ("lib/thc/static" </> ("lib" ++ name ++ ".a"))
       header <- withBinaryFile source ReadMode $ \handle -> BS.hGet handle 8
       require (header == "!<arch>\n") ("native image JAM input is not a self-contained static archive: " ++ source)
       pure (Nothing, source)
     pure (JamStatic, (Nothing, manifest) : archives)
   else do
-    manifest <- ownedFile "lib/jam/runtime-libraries.txt"
+    manifest <- ownedFile "lib/thc/runtime-libraries.txt"
     libraries <- runtimeManifest manifest
     shared <- forM libraries $ \name -> do
-      source <- ownedFile ("lib/jam" </> name)
-      pure (Just ("program.jam" </> name), source)
-    pure (JamShared libraries, (Just "program.jam/runtime-libraries.txt", manifest) : shared)
-  legal <- artifactTree jdk "legal/jam-vm"
-  let notices = [(Just ("program.jam/legal" </> makeRelative "legal/jam-vm" relative), source)
-        | (relative, source, False) <- legal, takeDirectory relative == "legal/jam-vm"]
+      source <- ownedFile ("lib/thc" </> name)
+      pure (Just ("program.thc" </> name), source)
+    pure (JamShared libraries, (Just "program.thc/runtime-libraries.txt", manifest) : shared)
+  legal <- artifactTree jdk "legal/thc-vm"
+  let notices = [(Just ("program.thc/legal" </> makeRelative "legal/thc-vm" relative), source)
+        | (relative, source, False) <- legal, takeDirectory relative == "legal/thc-vm"]
   require (not (null notices)) "native image JAM package has no runtime notices"
   inputs <- forM (native ++ notices) $ \(relative, source) -> do
     digest <- hashFile source
@@ -257,7 +257,7 @@ jamRuntimeInputs jdk = do
 staticManifest :: FilePath -> IO [FilePath]
 staticManifest path = do
   names <- libraryManifest path
-  require (take 1 names == ["jam-vm-static"] && all valid names)
+  require (take 1 names == ["thc-vm-static"] && all valid names)
     ("native image JAM static manifest has invalid library names: " ++ path)
   pure names
   where
@@ -287,16 +287,16 @@ runtimeManifest path = do
 
 validateJamRuntime :: FilePath -> (JamLinkage, [(Maybe FilePath, FilePath, String)]) -> IO ()
 validateJamRuntime stage (linkage, inputs) = do
-  tree <- artifactTree stage "program.jam"
+  tree <- artifactTree stage "program.thc"
   let files = Map.fromList [(relative, source) | (relative, source, False) <- tree]
-      manifest = "program.jam/runtime-libraries.txt"
+      manifest = "program.thc/runtime-libraries.txt"
   case linkage of
     JamShared libraries -> do
       declared <- runtimeManifest (stage </> manifest)
       require (declared == libraries) "native image JAM runtime manifest differs from its package"
     JamStatic -> do
-      requireFile "native image JAM linkage declaration" (stage </> "program.jam/linkage.txt")
-      declared <- readFile (stage </> "program.jam/linkage.txt")
+      requireFile "native image JAM linkage declaration" (stage </> "program.thc/linkage.txt")
+      declared <- readFile (stage </> "program.thc/linkage.txt")
       require (declared == "static\n") "native image JAM linkage declaration differs from its static package"
   forM_ inputs $ \(relative, source, digest) -> do
     current <- hashFile source

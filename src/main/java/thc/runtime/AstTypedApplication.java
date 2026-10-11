@@ -42,15 +42,23 @@ public final class AstTypedApplication extends Expr {
             proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
     }
     @Override public void prepareTuple(int[] slots, int offset) {
-        if (metrics != null || shape == null) return;
+        if (shape == null) return;
         if (vector != null) { slots = vectorSlots; offset = 0; }
-        if (dispatch != null) {
+        if (destinationSlots != null) {
             if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
             return;
         }
         destinationSlots = slots; destinationOffset = offset;
-        dispatch = new InputDispatch(operands.getSource(), operands.getLayout().getLogicalArity(), tail, null,
+        if (metrics == null) dispatch = new InputDispatch(operands.getSource(), operands.getLayout().getLogicalArity(), tail, null,
             new AstTupleDestination(shape, slots, offset));
+    }
+    /** Adopt only the aggregate destination already determined during lowering. */
+    void prepareForAOT() {
+        if (dispatch == null && destinationSlots != null) atomic(() -> {
+            if (dispatch == null) dispatch = insert(new InputDispatch(operands.getSource(), operands.getLayout().getLogicalArity(), tail, metrics,
+                new AstTupleDestination(shape, destinationSlots, destinationOffset)));
+            return null;
+        });
     }
     @Override public Object execute(VirtualFrame frame) {
         if (vector != null) {

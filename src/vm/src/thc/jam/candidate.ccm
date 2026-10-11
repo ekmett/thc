@@ -1,0 +1,141 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett <ekmett@gmail.com>
+// SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
+
+module;
+#include <atomic>
+#include <cstdint>
+#include <new>
+#include <span>
+#include <stdexcept>
+#include <vector>
+export module thc.jam:candidate;
+
+export namespace thc {
+/// \brief Optional owner retention between unreachable-major selection and normal-time rescue.
+/// Minors retain every owner. Majors first classify armed owners without retaining
+/// them, then rescue the entire unreachable batch before ordinary weak retirement.
+/// \pre All operations except epoch() are serialized with mutators and collection.
+/// Trace callbacks drain their frontier and must not reenter this registry.
+class candidate_registry {
+  enum class state : std::uint8_t { armed, selected, claimed, dead };
+  static constexpr std::uint32_t none = 0xffffffffu;
+  static constexpr std::uint32_t last_generation = 0x7fffffffu;
+  static constexpr std::uint64_t last_epoch = 0x7fffffffffffffffull;
+  struct candidate {
+    std::uint64_t wait = 0;
+    std::uint32_t owner = 0, generation = 0, slot = 0;
+    state status = state::dead;
+  };
+  std::vector<candidate> entries;
+  std::vector<std::uint32_t> live;
+  mutable std::vector<std::uint32_t> scratch;
+  std::uint32_t free_head = none;
+  std::atomic<std::uint64_t> published_epoch{0};
+  // A restarted collection must still publish selections made by its failed predecessor.
+  bool pending_publication = false;
+
+  [[nodiscard]] candidate * find(std::uint64_t ticket, std::uint64_t wait) noexcept {
+    auto index = static_cast<std::uint32_t>(ticket) - 1u;
+    auto * entry = index < entries.size() ? &entries[index] : nullptr;
+    return entry && entry->status != state::dead && entry->generation == (ticket >> 32)
+      && entry->wait == wait ? entry : nullptr;
+  }
+public:
+  /// \brief Whether there are any retained or armed registrations.
+  [[nodiscard]] bool empty() const noexcept { return live.empty(); }
+  /// \brief Reserve a positive ticket; zero reports invalid input or metadata exhaustion.
+  /// Failure leaves every existing registration and claim unchanged.
+  [[nodiscard]] std::uint64_t arm(std::uint32_t owner, std::uint64_t wait) noexcept {
+    if (!owner || !wait || wait > last_epoch) return 0;
+    bool added = false;
+    try {
+      auto index = free_head;
+      if (index == none) {
+        if (entries.size() == none) return 0;
+        index = static_cast<std::uint32_t>(entries.size());
+        entries.emplace_back(); added = true;
+      }
+      live.reserve(entries.capacity());
+      scratch.reserve(entries.capacity());
+      auto & entry = entries[index];
+      if (!added) free_head = entry.slot;
+      entry.owner = owner; entry.wait = wait;
+      entry.status = state::armed;
+      entry.slot = static_cast<std::uint32_t>(live.size());
+      live.push_back(index);
+      return (std::uint64_t{entry.generation} << 32) | (std::uint64_t{index} + 1);
+    } catch (std::bad_alloc const &) {
+    } catch (std::length_error const &) {
+    }
+    if (added) entries.pop_back();
+    return 0;
+  }
+  /// \brief Claim a selected owner once, retaining it until complete().
+  [[nodiscard]] std::uint32_t poll(std::uint64_t ticket, std::uint64_t wait) noexcept {
+    auto * entry = find(ticket, wait);
+    if (!entry || entry->status != state::selected) return 0;
+    entry->status = state::claimed;
+    return entry->owner;
+  }
+  /// \brief Claim an armed or selected owner for ordinary wakeup or cancellation.
+  /// Null does not revoke another claimant or undo a committed guest operation.
+  [[nodiscard]] std::uint32_t disarm(std::uint64_t ticket, std::uint64_t wait) noexcept {
+    auto * entry = find(ticket, wait);
+    if (!entry || entry->status == state::claimed) return 0;
+    entry->status = state::claimed;
+    return entry->owner;
+  }
+  /// \brief Release only an exact claimed registration; stale completion is harmless.
+  /// The claimant first establishes ordinary strong ownership or terminal cancellation.
+  void complete(std::uint64_t ticket, std::uint64_t wait) noexcept {
+    auto * entry = find(ticket, wait);
+    if (!entry || entry->status != state::claimed) return;
+    live[entry->slot] = live.back();
+    entries[live.back()].slot = entry->slot;
+    live.pop_back();
+    entry->owner = 0; entry->wait = 0; entry->status = state::dead;
+    if (entry->generation == last_generation) return; // Never wrap into a stale ticket.
+    ++entry->generation;
+    entry->slot = free_head;
+    free_head = static_cast<std::uint32_t>(entry - entries.data());
+  }
+  /// \brief Root every minor owner, or only selected/claimed owners during a major.
+  void roots(bool minor, auto && trace) const noexcept {
+    scratch.clear();
+    for (auto index : live) {
+      auto const & entry = entries[index];
+      if (minor || entry.status != state::armed) scratch.push_back(entry.owner);
+    }
+    if (!scratch.empty()) trace(std::span<std::uint32_t const>{scratch});
+  }
+  /// \brief Snapshot all unmarked armed owners before tracing any rescued owner.
+  void select(auto && marked, auto && trace) noexcept {
+    scratch.clear();
+    for (auto index : live) {
+      auto & entry = entries[index];
+      if (entry.status != state::armed || marked(entry.owner)) continue;
+      entry.status = state::selected;
+      scratch.push_back(entry.owner);
+    }
+    if (!scratch.empty()) {
+      pending_publication = true;
+      trace(std::span<std::uint32_t const>{scratch});
+    }
+  }
+  /// \brief Repair all owners after successful forwarding preparation.
+  void forward(auto && forward) noexcept {
+    for (auto index : live) entries[index].owner = forward(entries[index].owner);
+  }
+  /// \brief Publish a completed batch only after compaction and canonical heap publication.
+  void publish() noexcept {
+    if (!pending_publication) return;
+    auto const previous = published_epoch.load(std::memory_order_relaxed);
+    published_epoch.store(previous == last_epoch ? previous : previous + 1, std::memory_order_release);
+    pending_publication = false;
+  }
+  /// \brief Acquire the batch epoch; at signed-long saturation consumers scan every poll.
+  [[nodiscard]] std::uint64_t epoch() const noexcept {
+    return published_epoch.load(std::memory_order_acquire);
+  }
+};
+}

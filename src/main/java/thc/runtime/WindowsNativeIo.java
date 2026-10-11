@@ -386,8 +386,8 @@ public final class WindowsNativeIo implements AutoCloseable {
                 }
                 if (!HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)).equals(receipt.get("dllSha256")))
                     throw fault("Windows IO boundary DLL hash differs from its ABI receipt");
-                var file = Files.createTempFile("thc-windows-io-", ".dll");
-                file.toFile().deleteOnExit(); Files.write(file, bytes);
+                var file = NativeLibraryFiles.createTempFile("thc-windows-io-", ".dll");
+                Files.write(file, bytes);
                 var lookup = SymbolLookup.libraryLookup(file, Arena.global());
                 var linker = Linker.nativeLinker();
                 var abi = call(linker, lookup, "abi", FunctionDescriptor.of(JAVA_LONG));

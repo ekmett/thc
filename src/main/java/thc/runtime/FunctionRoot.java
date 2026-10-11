@@ -324,14 +324,30 @@ public final class FunctionRoot extends GuestRoot {
             throw fault("Prepared continuation belongs to another program context");
     }
     boolean isPreparedForAOT() { return preparedForAOT; }
+    private static void prepareAotDispatch(Node node) {
+        if (node instanceof AstTypedApplication application) application.prepareForAOT();
+        else if (node instanceof TupleApplication application) application.prepareForAOT();
+        else if (node instanceof InputDispatch input) input.prepareForAOT();
+        else if (node instanceof TupleDispatch tuple) tuple.prepareForAOT();
+        for (Node child : node.getChildren()) prepareAotDispatch(child);
+    }
     @Override protected ExecutionSignature prepareForAOT() {
-        // Only the admitted owner-free real-lowerer family is prepared here.
+        // The existing loop handles self transfers from the first guest entry.
+        // Cold compilation must not discover recursion by retiring that entry.
+        hasSelfTail = true;
+        prepareAotDispatch(this);
         // Frame carriers were established structurally before target publication;
         // no context lookup, guest execution or observed-profile seeding is needed.
-        if (programSlot < 0) return null;
         // An outlined reusable arm also returns an internal TailCall for its
         // owning caller to rethrow. This physical root result is not the guest ABI.
         Class<?> resultClass = capturesContinuations || role == FunctionRootRole.PASS_THROUGH ? null : numericClass(getScalarResultProof());
+        if (handoff != null) {
+            // One physical root accepts an ordinary packet or an empty packet
+            // carrying a pending loan, and may return a private completion token.
+            // Each ingress retains its own exact arity, layout and loan checks.
+            preparedForAOT = true;
+            return ExecutionSignature.create(null, null);
+        }
         if (getTypedInput() != null) {
             // Narrow scalars already use the typed packet calling convention.
             // Its generated storage class varies; retain exact layout/owner checks.
@@ -339,17 +355,20 @@ public final class FunctionRoot extends GuestRoot {
             return ExecutionSignature.create(resultClass, new Class<?>[]{null});
         }
         List<CoreRepresentation> inputs = getInputProofs();
+        if (inputs == null) inputs = Arrays.asList(argumentProofs);
         ArgumentLayout input = getInputLayout();
         Class<?>[] signature = new Class<?>[getEntryArgumentOffset() + ArgumentLayout.width(input, inputs.size())];
         signature[0] = Long.class;
         // ExecutionSignature requires an exact runtime class, not a superclass.
         // StaticShape selects the concrete CapturedFrame subclass; keep its
         // existing authenticated layout/owner checks, without inventing a class.
-        signature[1] = null;
+        if (getEntryArgumentOffset() == 2) signature[1] = null;
         for (int i = 0; i < inputs.size(); i++) {
             CoreRepresentation proof = inputs.get(i);
             if (proof.isEmptyTuple()) continue;
             Class<?> carrier = proof.getKind() == CoreKind.VOID ? Unit.class : numericClass(proof);
+            if (capturesContinuations && contains(getStrictArgumentPositions(), getEntryArgumentOffset() + i))
+                carrier = null; // Deferred strict ingress may still carry a lazy thunk.
             // Lifted data/functions may arrive as a lazy thunk or a value.
             // Keep the existing constructor/captured-program owner checks;
             // these alternatives do not have one exact signature class.

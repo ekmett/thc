@@ -14,6 +14,11 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
@@ -54,6 +59,81 @@ class CoreProofJoinTest {
     }
     private long run(Program program, long n) { return (Long) Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("entry"), new Object[]{n}}); }
     private long count(Program program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
+    @Test void firstCompiledSelfTailLoopRetainsItsColdInstallation() {
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = new FrameLayout();
+                int remaining = layout.bind("remaining", FrameSlotKind.Long);
+                var compiledCompletion = new java.util.concurrent.atomic.AtomicBoolean();
+                Expr body = new Expr() {
+                    @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                    @Override public long executeLong(VirtualFrame frame) {
+                        long n = frame.getLong(remaining);
+                        if (n == 0) { compiledCompletion.set(CompilerDirectives.inCompiledCode()); return 42L; }
+                        frame.setLong(remaining, n - 1);
+                        throw AstSelfCall.INSTANCE;
+                    }
+                };
+                var proof = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"));
+                body.setRepresentation(proof);
+                var metrics = new Metrics(true);
+                var root = new FunctionRoot(language, layout.build(), "cold self tail", null, new int[0],
+                    new int[]{remaining}, new int[]{0}, body, metrics, new CoreRepresentation[]{proof}, proof,
+                    null, new boolean[]{false}, null, null, new int[0], null, false, new int[0][], false,
+                    FunctionRootRole.FUNCTION, false);
+                var target = (OptimizedCallTarget) root.getCallTarget();
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT());
+                target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                long address = target.getCodeAddress(); int installations = target.getSuccessfulCompilationCount();
+                assertFalse(target.wasExecuted()); assertEquals(0L, metrics.getSelfTailReentries());
+                assertEquals(42L, Calls.target(target, new Object[]{0L, 1_000L}));
+                assertTrue(compiledCompletion.get(), "The first recursive call must finish in its original compiled loop");
+                assertEquals(1_000L, metrics.getSelfTailReentries());
+                assertTrue(target.isValidLastTier()); assertEquals(address, target.getCodeAddress());
+                assertEquals(installations, target.getSuccessfulCompilationCount());
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"long", "int", "float", "double"})
+    void firstCompiledLocalJoinRetainsItsDeclaredCarrierAndInstallation(String carrier) {
+        String kind = carrier.equals("int") ? "long" : carrier;
+        String primRep = switch (carrier) { case "int" -> "Int32Rep"; case "float" -> "FloatRep"; case "double" -> "DoubleRep"; default -> "IntRep"; };
+        var proof = map("kind", kind, "primReps", list(primRep), "evaluated", true);
+        var parameter = map("id", "answer", "name", "answer", "lifted", false, "rep", proof);
+        var join = with(bind("done", list("lam", list(parameter), list("var", "answer", meta(proof)),
+            map("rep", closure, "resultRep", proof)), 1), "joinResultRep", proof);
+        var body = list("let", true, list(join), list("app", list("var", "done", meta(closure)),
+            list(list("var", "input", meta(proof))), list(false), false, false, meta(proof)), meta(proof));
+        var input = with(parameter, "id", "input", "name", "input");
+        var entry = bind("entry", list("lam", list(input), body, map("rep", closure, "resultRep", proof)));
+        Object value = switch (carrier) { case "int" -> Integer.valueOf(42); case "float" -> Float.valueOf(42.5f); case "double" -> Double.valueOf(42.5); default -> Long.valueOf(42); };
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, map("bindings", list(entry), "instrument", true));
+                var target = (OptimizedCallTarget) program.entryTarget("entry");
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT());
+                target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                long address = target.getCodeAddress(); int installations = target.getSuccessfulCompilationCount();
+                assertFalse(target.wasExecuted()); assertEquals(0L, count(program, "localJoinTransfers"));
+                // The host caller takes the empty-packet pending-loan ingress
+                // for an eligible dense Long root; other carriers use their
+                // ordinary or typed-packet ingress to this same original target.
+                assertEquals(value, Calls.target(program.hostEntryTarget(1),
+                    new Object[]{program.entryValue("entry"), new Object[]{value}}));
+                assertEquals(1L, count(program, "compiledEntries")); assertEquals(1L, count(program, "localJoinTransfers"));
+                assertTrue(target.isValidLastTier(), "The first join must not discover its frame carrier during execution");
+                assertEquals(address, target.getCodeAddress()); assertEquals(installations, target.getSuccessfulCompilationCount());
+            } finally { context.leave(); }
+        }
+    }
     private void compile(Program program) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); var target = program.entryTarget("entry"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     private static final class CloneCaller extends RootNode {
         @Child private DirectCallNode call;
