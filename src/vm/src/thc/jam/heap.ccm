@@ -1,0 +1,387 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett <ekmett@gmail.com>
+// SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
+
+module;
+#include <hint.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <cstdio>
+#include <cstdlib>
+#include <new>
+#include <span>
+#include <vector>
+#include <atomic>
+#include <optional>
+#include <mutex>
+#include <unordered_map>
+export module thc.jam:heap;
+import jam;
+import :weak;
+import :candidate;
+
+namespace thc::detail {
+[[noreturn]] inline void invalid(char const * message) noexcept {
+  std::fprintf(stderr, "jam-vm: %s\n", message);
+  std::abort();
+}
+inline jam::heap_options options(std::size_t prefix, std::size_t old_bytes,
+                                std::size_t young_bytes, std::size_t reserve,
+                                std::size_t workers) noexcept {
+  constexpr auto page = JAM_PAGE_BYTES;
+  if (!prefix || !old_bytes || !young_bytes || !reserve || !workers ||
+      prefix % page || old_bytes % page || young_bytes % page || reserve % page ||
+      prefix > (1ull << 34) || reserve > (1ull << 34) - prefix ||
+      old_bytes > (1ull << 34) - prefix - reserve ||
+      young_bytes > (1ull << 34) - prefix - reserve ||
+      prefix + old_bytes < reserve || prefix + young_bytes < reserve)
+    invalid("invalid fixed generation geometry");
+  auto generation = [&](std::size_t bytes) noexcept {
+    auto const capacity = jam::units::pages{(prefix + bytes + reserve) / page};
+    return jam::generation_options{.capacity = capacity,
+      .reserve = jam::units::pages{reserve / page}, .maximum = capacity, .shrink_shift = 0};
+  };
+  jam::heap_options result;
+  result.old = generation(old_bytes);
+  result.young = generation(young_bytes);
+  result.workers = workers;
+  result.minor_collections = 0; // The host schedules epochs.
+  return result;
+}
+}
+
+export namespace thc {
+/// \brief Host-owned jam heap: two canonical windows, original rings and SIMD kernels.
+/// encode(p)=(p-base)/8, decode(o)=base+8*o; bit31 selects the young window.
+/// A retaining minor fixes every old offset; a major preserves the generation bit.
+/// \pre Mutators are stopped or the host allocation lock is held. An inaccessible
+/// reservation (placeholders on Windows) spans both generations through
+/// base+16GiB+prefix+young_bytes.
+class hosted_heap {
+public:
+  /// \brief Exact source slot and its holder; the VM supplies reference policy.
+  struct remembered_slot {
+    std::uint64_t slot;
+    std::uint32_t holder;
+    bool compressed;
+    std::uint64_t base_slot = 0;
+  };
+private:
+  std::mutex remembered_lock;
+  std::unordered_map<std::uint64_t, remembered_slot> remembered;
+  using generation = jam::heap::host::generation;
+  jam::heap storage;
+  jam::heap::host host;
+  weak_registry registry;
+  candidate_registry candidate_roots;
+  std::byte * const base;
+  std::size_t const prefix_words;
+  std::size_t const words[2];
+  struct immortal_range { std::uint64_t first, limit; };
+  std::vector<immortal_range> immortals;
+  std::atomic<std::size_t> attached_threads{0};
+  bool minor = false;
+  bool collecting = false;
+  [[nodiscard]] bool immortal(std::uint32_t at) const noexcept {
+    for (auto const & range : immortals)
+      if (at >= range.first && at < range.limit) return true;
+    return false;
+  }
+  void publish(bool old_moved = true) noexcept {
+    for (unsigned young = old_moved ? 0 : 1; young != 2; ++young)
+      host.publish(young ? generation::young : generation::old,
+                   base + (young ? young_displacement : 0) + prefix_words * 8,
+                   prefix_words, words[young]);
+  }
+public:
+  static constexpr std::uint32_t young_bit = 0x80000000u;
+  static constexpr std::size_t young_displacement = 1ull << 34;
+  /// \brief Per-VM-thread heap binding, inactive while that thread is outside its VM.
+  /// Enter/leave run on the executing OS thread and nest in LIFO order. An inactive
+  /// descriptor may be destroyed by another thread; the heap outlives every descriptor.
+  class thread_scope {
+    hosted_heap & owner;
+    std::optional<jam::heap_scope> binding;
+    thread_scope * previous = nullptr;
+    inline static thread_local thread_scope * active = nullptr;
+  public:
+    explicit thread_scope(hosted_heap & owner) noexcept : owner(owner) {
+      owner.attached_threads.fetch_add(1, std::memory_order_relaxed);
+    }
+    ~thread_scope() noexcept {
+      if (binding) detail::invalid("destroying an active VM thread heap scope");
+      owner.attached_threads.fetch_sub(1, std::memory_order_relaxed);
+    }
+    thread_scope(thread_scope const &) = delete;
+    thread_scope & operator=(thread_scope const &) = delete;
+    /// \brief Bind this thread's heap; repeated entry while current is a no-op.
+    void enter() noexcept {
+      if (binding) {
+        if (active != this || !owner.current()) detail::invalid("VM thread scope entered on the wrong thread");
+        return;
+      }
+      previous = active;
+      binding.emplace(owner.storage);
+      active = this;
+    }
+    /// \brief Restore the enclosing heap before publishing the thread as native.
+    void leave() noexcept {
+      if (!binding) return;
+      if (active != this || !owner.current()) detail::invalid("VM thread scopes must leave in LIFO order on their executing thread");
+      binding.reset();
+      active = previous;
+      previous = nullptr;
+    }
+  };
+  /// \brief Construct fixed-capacity generations and publish their usable cells.
+  hosted_heap(void * address, std::size_t prefix, std::size_t old_bytes,
+              std::size_t young_bytes, std::size_t reserve, std::size_t workers) noexcept
+      : storage(detail::options(prefix, old_bytes, young_bytes, reserve, workers)),
+        host(storage, prefix / 8),
+        base(static_cast<std::byte *>(address)), prefix_words(prefix / 8),
+        words{old_bytes / 8, young_bytes / 8} {
+    if (!base || reinterpret_cast<std::uintptr_t>(base) % JAM_PAGE_BYTES)
+      detail::invalid("compressed base must be page aligned and nonzero");
+    publish();
+  }
+  ~hosted_heap() noexcept {
+    if (attached_threads.load(std::memory_order_relaxed)) detail::invalid("heap destroyed with attached VM thread descriptors");
+    for (unsigned young = 0; young != 2; ++young)
+      host.unpublish(base + (young ? young_displacement : 0) + prefix_words * 8,
+                     words[young]);
+  }
+  /// \brief Whether Jam's actual dynamic heap binding selects this heap.
+  [[nodiscard]] bool current() const noexcept { return jam::heap::current() == &storage; }
+  /// \brief Allocate raw words, returning null on capacity exhaustion.
+  [[nodiscard]] std::uint32_t allocate(std::size_t count, bool young) noexcept {
+    if (!count || count > prefix_words + words[young] - used(young)) return 0;
+    return host.allocate(young ? generation::young : generation::old, count);
+  }
+  /// \brief Allocated cells including the selected generation's guard.
+  [[nodiscard]] std::size_t used(bool young) const noexcept {
+    return (young ? storage.young() : storage.old()).used();
+  }
+  /// \brief Private ring origin in cells, for diagnostics.
+  [[nodiscard]] std::size_t origin(bool young) const noexcept {
+    return (young ? storage.young() : storage.old()).start();
+  }
+  /// \brief Enable the optional start side channel before an instrumented major.
+  /// Allocation failure leaves tracking disabled and the heap unchanged.
+  [[nodiscard]] bool track_starts() noexcept {
+    try { host.track_starts(); return true; }
+    catch (std::bad_alloc const &) { return false; }
+  }
+  /// \brief Whether the VM has enabled explicit object-start recording.
+  [[nodiscard]] bool tracks_starts() const noexcept { return host.tracks_starts(); }
+  /// \brief VM tracer/allocation hook, never inferred from raw allocation extents.
+  void record_start(std::uint32_t at) noexcept { host.record_start(at); }
+  /// \brief Borrow canonical start bits through the allocated high-water mark.
+  [[nodiscard]] std::span<std::uint32_t const> starts(bool young) const noexcept {
+    auto result = host.starts(young ? generation::young : generation::old);
+    return result.empty() ? result : result.first((used(young) + 31) / 32);
+  }
+  /// \brief Record old source slots without reading concurrently mutable targets.
+  /// Slots/stride use four-byte units. The barrier covers completed writes, including
+  /// initializing stores; the holder is retained only as policy metadata, never a root.
+  /// A zero holder denotes a known strong slot (for example an arraycopy stub).
+  /// A bulk write takes the registry lock once. Mutators cannot safepoint in this call.
+  void remember(std::uint32_t holder, std::uint64_t first, std::size_t count,
+                std::size_t stride, bool compressed) noexcept {
+    if (first / 2 < prefix_words || first / 2 >= prefix_words + words[0]) return;
+    if ((holder & young_bit) || (holder && immortal(holder))) return;
+    if ((holder && (holder < prefix_words || holder >= prefix_words + words[0])) ||
+        stride < (compressed ? 1u : 2u) || first < std::uint64_t(holder) * 2 ||
+        first > (prefix_words + words[0]) * 2 ||
+        (count && (first > (prefix_words + words[0]) * 2 - (compressed ? 1 : 2) ||
+          count - 1 > ((prefix_words + words[0]) * 2 - first - (compressed ? 1 : 2)) / stride)))
+      detail::invalid("invalid remembered source range");
+    std::lock_guard lock{remembered_lock};
+    for (std::size_t i = 0; i != count; ++i) {
+      auto slot = first + i * stride;
+      remembered.insert_or_assign(slot, remembered_slot{slot, holder, compressed});
+    }
+  }
+  /// \brief Retire exact source slots without reading their former contents.
+  /// Continuation thaw uses this for discarded frames and argument intervals.
+  void forget(std::uint64_t first, std::size_t count) noexcept {
+    if (first / 2 < prefix_words || first / 2 >= prefix_words + words[0]) return;
+    if (count > (prefix_words + words[0]) * 2 - first)
+      detail::invalid("invalid retired source range");
+    std::lock_guard lock{remembered_lock};
+    for (std::size_t i = 0; i != count; ++i) remembered.erase(first + i);
+  }
+  /// \brief Record an interior reference together with its ordinary base slot.
+  /// The VM's existing reference visitor supplies both locations and their encoding.
+  void remember_derived(std::uint32_t holder, std::uint64_t base_slot,
+                        std::uint64_t slot, bool compressed) noexcept {
+    if (!holder || (holder & young_bit) || immortal(holder)) return;
+    remember(holder, base_slot, 1, compressed ? 1 : 2, compressed);
+    remember(holder, slot, 1, compressed ? 1 : 2, compressed);
+    std::lock_guard lock{remembered_lock};
+    remembered.at(slot).base_slot = base_slot;
+  }
+  /// \brief Snapshot exact source locations at a safepoint; callbacks may trace.
+  /// No old objects are enumerated. The VM distinguishes Reference.referent from
+  /// ordinary fields using the recorded holder and applies its own weak policy.
+  [[nodiscard]] std::vector<remembered_slot> remembered_slots() const noexcept {
+    if (!collecting) detail::invalid("remembered slots require a collection safepoint");
+    std::vector<remembered_slot> result;
+    result.reserve(remembered.size());
+    for (auto const & [slot, entry] : remembered) result.push_back(entry);
+    return result;
+  }
+  /// \brief Name of jam's admitted scalar or SIMD compaction kernel.
+  [[nodiscard]] char const * compactor() const noexcept { return storage.compactor_name(); }
+  /// \brief Admit permanent image or metadata references outside both moving arenas.
+  /// The host must trace their outgoing edges separately and keep their addresses stable.
+  void add_immortal_range(std::uint32_t first, std::uint64_t limit) noexcept {
+    if (collecting || !first || first >= limit || limit > (1ull << 32))
+      detail::invalid("invalid immortal reference range");
+    for (unsigned young = 0; young != 2; ++young) {
+      auto const low = (young ? std::uint64_t{young_bit} : 0) + prefix_words;
+      if (first < low + words[young] && limit > low)
+        detail::invalid("immortal reference range overlaps a moving arena");
+    }
+    immortals.push_back({first, limit});
+  }
+  /// \brief Borrow the serialized generalized weak registry.
+  template<class Self> [[nodiscard]] auto & weaks(this Self & self) noexcept { return self.registry; }
+  /// \brief Borrow the serialized optional owner-rescue registry.
+  template<class Self> [[nodiscard]] auto & candidates(this Self & self) noexcept { return self.candidate_roots; }
+  /// \brief Retain pending weak finalizers and the candidate roots for this epoch.
+  void weak_roots(auto && trace) noexcept {
+    registry.roots(trace);
+    if (!candidate_roots.empty()) candidate_roots.roots(minor, trace);
+  }
+  /// \brief Rescue major candidates after ordinary closure but before weak retirement.
+  void weak_close(auto && trace) noexcept {
+    auto live = [&](std::uint32_t at) noexcept { return marked(at); };
+    if (!minor && !candidate_roots.empty()) {
+      registry.trace_live(live, trace);
+      candidate_roots.select(live, trace);
+    }
+    registry.close(live, trace);
+  }
+  /// \brief Begin major or minor marking, retaining ordinary old liveness in a minor.
+  void begin(bool minor_epoch) noexcept {
+    minor = minor_epoch;
+    if (!minor) remembered.clear(); // The major marker records surviving source slots.
+    host.begin(minor);
+    collecting = true;
+    registry.begin();
+  }
+  /// \brief Scanner capability; batched fields are absolute four-byte slot indices.
+  /// Slot indices need 33 bits because a young cell's generation bit is shifted left.
+  class visitor {
+    hosted_heap & owner;
+    jam::heap::visitor & underlying;
+    bool old_owners;
+  public:
+    /// \brief Bind a capability to the current jam tracing callback.
+    visitor(hosted_heap & owner, jam::heap::visitor & underlying, bool old_owners) noexcept
+        : owner(owner), underlying(underlying), old_owners(old_owners) {}
+    /// \brief Claim a full extent; dirty old owner jobs are already deduplicated by the VM.
+    [[nodiscard]] bool claim(std::uint32_t at, std::size_t count) noexcept {
+      if (owner.minor && old_owners && !(at & young_bit)) return true;
+      return underlying.claim(at, count);
+    }
+    /// \brief Trace wide/external targets without declaring narrow source slots.
+    void targets(std::span<std::uint32_t const> targets) noexcept {
+      for (auto at : targets)
+        if (!owner.immortal(at)) underlying.target(at);
+      underlying.poll();
+    }
+    /// \brief Declare all narrow fields; follow only strong edges in this policy pass.
+    void fields(std::span<std::uint64_t const> slots, bool follow) noexcept {
+      for (auto slot : slots) {
+        if (!owner.immortals.empty()) {
+          std::uint32_t target;
+          std::memcpy(&target, owner.base + slot * 4, sizeof(target));
+          if (owner.immortal(target)) continue;
+        }
+        auto const cell = static_cast<std::uint32_t>(slot / 2);
+        auto const half = static_cast<unsigned>(slot % 2);
+        if (follow) underlying.field(cell, half);
+        else owner.storage.pointer(cell, half);
+      }
+      underlying.poll();
+    }
+  };
+  /// \brief Drain roots with jam's work frontier. Old-owner tracing is serial and explicit.
+  template<class Scan>
+  void trace(std::span<std::uint32_t const> roots, Scan && scan,
+             std::size_t workers = 1, bool old_owners = false) noexcept {
+    if (old_owners && (!minor || workers != 1)) detail::invalid("invalid old-owner scan");
+    std::vector<std::uint32_t> managed;
+    if (!immortals.empty()) {
+      managed.reserve(roots.size());
+      for (auto at : roots) if (!immortal(at)) managed.push_back(at);
+      roots = managed;
+    }
+    host.trace(roots, [&](jam::heap::visitor & underlying, std::uint32_t at) noexcept {
+      visitor visit{*this, underlying, old_owners};
+      scan(visit, at);
+    }, workers, old_owners);
+  }
+  using pin = jam::heap::host::pin;
+  /// \brief Register a complete movable object; native access uses the side alias.
+  [[nodiscard]] pin * pin_object(std::uint32_t at, std::size_t count) noexcept { return host.pin_object(at, count); }
+  /// \brief Release one stable-address registration outside collection.
+  void unpin(pin * value) noexcept { host.unpin(value); }
+  /// \brief Trace registrations before resolving reference policy.
+  template<class Scan> void trace_pins(Scan && scan) noexcept {
+    std::vector<std::uint32_t> roots;
+    host.visit_pins([&](std::uint32_t at) noexcept { roots.push_back(at); });
+    trace(roots, scan);
+  }
+  /// \brief Retained padding to format before walking the collected Java heap.
+  [[nodiscard]] auto gaps() const noexcept { return host.gaps(); }
+  /// \brief Query epoch liveness after all tracing workers have drained.
+  [[nodiscard]] bool marked(std::uint32_t at) const noexcept { return immortal(at) || host.marked(at); }
+  /// \brief Freeze destinations and repair the registry; failed promotion changes no handles.
+  [[nodiscard]] bool prepare(bool promote) noexcept {
+    if (!host.prepare(promote)) return false;
+    registry.forward([&](std::uint32_t at) noexcept { return forward(at); });
+    candidate_roots.forward([&](std::uint32_t at) noexcept { return forward(at); });
+    // Repair the sparse remembered set, not the old heap. Read before root repair.
+    decltype(remembered) next;
+    if (!(minor && promote)) {
+      next.reserve(remembered.size());
+      for (auto const & [slot, entry] : remembered) {
+        auto source = entry.holder ? entry.holder : static_cast<std::uint32_t>(slot / 2);
+        auto destination_source = forward(source);
+        if (!destination_source) continue;
+        auto holder = entry.holder ? destination_source : 0;
+        auto target_slot = entry.base_slot ? entry.base_slot : slot;
+        std::uint32_t target;
+        if (entry.compressed) {
+          std::memcpy(&target, base + target_slot * 4, sizeof(target));
+        } else {
+          std::uintptr_t address;
+          std::memcpy(&address, base + target_slot * 4, sizeof(address));
+          target = address ? static_cast<std::uint32_t>((address - reinterpret_cast<std::uintptr_t>(base)) / 8) : 0;
+        }
+        if (!(target & young_bit) || immortal(target) || !(forward(target) & young_bit)) continue;
+        auto destination = std::uint64_t(destination_source) * 2 + slot - std::uint64_t(source) * 2;
+        auto base_slot = entry.base_slot ? std::uint64_t(holder) * 2 + entry.base_slot - std::uint64_t(entry.holder) * 2 : 0;
+        next.emplace(destination, remembered_slot{destination, holder, entry.compressed, base_slot});
+      }
+    }
+    remembered.swap(next);
+    return true;
+  }
+  /// \brief Resolve an offset using frozen tables; null and dead targets resolve to null.
+  [[nodiscard]] std::uint32_t forward(std::uint32_t at) const noexcept {
+    return immortal(at) ? at : host.forward(at);
+  }
+  /// \brief Move and republish changed canonical windows; native side aliases remain fixed.
+  void finish() noexcept {
+    bool old_moved = !minor;
+    if (minor) host.visit_pins([&](std::uint32_t at) noexcept { old_moved |= (at & young_bit) != 0; });
+    host.finish();
+    publish(old_moved);
+    collecting = false;
+    candidate_roots.publish();
+  }
+};
+}

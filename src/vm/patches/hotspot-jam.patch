@@ -1,0 +1,3597 @@
+--- a/make/autoconf/jvm-features.m4
++++ b/make/autoconf/jvm-features.m4
+@@ -44,7 +44,7 @@
+ m4_define(jvm_features_valid, m4_normalize( \
+     ifdef([custom_jvm_features_valid], custom_jvm_features_valid) \
+     \
+-    cds compiler1 compiler2 dtrace epsilongc g1gc jfr jni-check \
++    cds compiler1 compiler2 dtrace epsilongc g1gc jamgc jfr jni-check \
+     jvmci jvmti link-time-opt management minimal opt-size parallelgc \
+     serialgc services shenandoahgc vm-structs zero zgc \
+ ))
+@@ -60,6 +60,7 @@
+ m4_define(jvm_feature_desc_dtrace, [enable dtrace support])
+ m4_define(jvm_feature_desc_epsilongc, [include the epsilon (no-op) garbage collector])
+ m4_define(jvm_feature_desc_g1gc, [include the G1 garbage collector])
++m4_define(jvm_feature_desc_jamgc, [include the jam generational garbage collector (requires external jam library)])
+ m4_define(jvm_feature_desc_jfr, [enable JDK Flight Recorder (JFR)])
+ m4_define(jvm_feature_desc_jni_check, [enable -Xcheck:jni support])
+ m4_define(jvm_feature_desc_jvmci, [enable JVM Compiler Interface (JVMCI)])
+@@ -380,6 +381,12 @@
+   JVM_FEATURES_CHECK_SHENANDOAHGC
+   JVM_FEATURES_CHECK_ZGC
+ 
++  # Jam has an external C++26 runtime and is enabled explicitly by its host build.
++  JVM_FEATURES_PLATFORM_FILTER="$JVM_FEATURES_PLATFORM_FILTER jamgc"
++  if test "x$OPENJDK_TARGET_CPU_BITS" != x64; then
++    JVM_FEATURES_PLATFORM_UNAVAILABLE="$JVM_FEATURES_PLATFORM_UNAVAILABLE jamgc"
++  fi
++
+ ])
+ 
+ ################################################################################
+@@ -410,7 +417,7 @@
+   if test "x$variant" = "xclient"; then
+     JVM_FEATURES_VARIANT_FILTER="compiler2 jvmci link-time-opt opt-size"
+   elif test "x$variant" = "xminimal"; then
+-    JVM_FEATURES_VARIANT_FILTER="cds compiler2 dtrace epsilongc g1gc \
++    JVM_FEATURES_VARIANT_FILTER="cds compiler2 dtrace epsilongc g1gc jamgc \
+         jfr jni-check jvmci jvmti management parallelgc services \
+         shenandoahgc vm-structs zgc"
+     if test "x$OPENJDK_TARGET_CPU" = xarm ; then
+--- a/make/hotspot/lib/JvmFeatures.gmk
++++ b/make/hotspot/lib/JvmFeatures.gmk
+@@ -151,6 +151,11 @@
+ ifneq ($(call check-jvm-feature, epsilongc), true)
+   JVM_CFLAGS_FEATURES += -DINCLUDE_EPSILONGC=0
+   JVM_EXCLUDE_PATTERNS += gc/epsilon
++endif
++
++ifneq ($(call check-jvm-feature, jamgc), true)
++  JVM_CFLAGS_FEATURES += -DINCLUDE_JAMGC=0
++  JVM_EXCLUDE_PATTERNS += gc/jam
+ endif
+ 
+ ifneq ($(call check-jvm-feature, zgc), true)
+--- a/src/hotspot/cpu/aarch64/gc/jam/jamBarrierSetAssembler_aarch64.cpp
++++ b/src/hotspot/cpu/aarch64/gc/jam/jamBarrierSetAssembler_aarch64.cpp
+@@ -0,0 +1,57 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include "asm/macroAssembler.inline.hpp"
++#include "gc/jam/jamBarrierSet.hpp"
++#include "gc/jam/jamHeap.hpp"
++#include "gc/jam/jamBarrierSetAssembler.hpp"
++#define __ masm->
++void JamBarrierSetAssembler::oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
++                                         Address dst, Register val, Register tmp1, Register tmp2, Register tmp3) {
++  if ((decorators & IN_HEAP) != 0) {
++    Label done;
++    if (tmp1 != noreg && tmp2 != noreg && tmp1 != tmp2 &&
++        tmp1 != val && tmp2 != val && !dst.uses(tmp1) && !dst.uses(tmp2)) {
++      __ lea(tmp1, dst);
++      __ mov(tmp2, (address)JamHeap::heap()->young_begin());
++      __ cmp(tmp1, tmp2);
++      __ br(Assembler::HS, done);
++    }
++    __ push_call_clobbered_registers();
++    __ lea(rscratch2, dst);
++    __ stp(dst.base(), rscratch2, Address(Pre(sp, -2 * wordSize)));
++    __ ldp(c_rarg0, c_rarg1, Address(Post(sp, 2 * wordSize)));
++    __ mov(c_rarg2, 1);
++    __ call_VM_leaf(CAST_FROM_FN_PTR(address, JamBarrierSet::record_narrow), c_rarg0, c_rarg1, c_rarg2);
++    __ pop_call_clobbered_registers();
++    __ bind(done);
++  }
++  BarrierSetAssembler::store_at(masm, decorators, type, dst, val, tmp1, tmp2, tmp3);
++}
++void JamBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet,
++                                         Register start, Register count, Register tmp, RegSet) {
++  Label done;
++  if (tmp != noreg && tmp != start && tmp != count) {
++    __ mov(tmp, (address)JamHeap::heap()->young_begin());
++    __ cmp(start, tmp);
++    __ br(Assembler::HS, done);
++  }
++  __ push_call_clobbered_registers();
++  __ stp(start, count, Address(Pre(sp, -2 * wordSize)));
++  __ ldp(c_rarg0, c_rarg1, Address(Post(sp, 2 * wordSize)));
++  __ call_VM_leaf(CAST_FROM_FN_PTR(address, JamBarrierSet::record_array), c_rarg0, c_rarg1);
++  __ pop_call_clobbered_registers();
++  __ bind(done);
++}
++
++void JamBarrierSetAssembler::tlab_allocate(MacroAssembler* masm, Register obj,
++    Register var_size_in_bytes, int con_size_in_bytes, Register t1, Register t2, Label& slow_case) {
++  BarrierSetAssembler::tlab_allocate(masm, obj, var_size_in_bytes, con_size_in_bytes, t1, t2, slow_case);
++  Label done;
++  __ mov(rscratch1, (address)&JamHeap::_track_starts);
++  __ ldrb(rscratch1, Address(rscratch1));
++  __ cbz(rscratch1, done);
++  __ push_call_clobbered_registers();
++  __ mov(c_rarg0, obj);
++  __ call_VM_leaf(CAST_FROM_FN_PTR(address, JamHeap::record_start), c_rarg0);
++  __ pop_call_clobbered_registers();
++  __ bind(done);
++}
+--- a/src/hotspot/cpu/x86/gc/jam/jamBarrierSetAssembler_x86.cpp
++++ b/src/hotspot/cpu/x86/gc/jam/jamBarrierSetAssembler_x86.cpp
+@@ -0,0 +1,62 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include "asm/macroAssembler.inline.hpp"
++#include "gc/jam/jamBarrierSet.hpp"
++#include "gc/jam/jamHeap.hpp"
++#include "gc/jam/jamBarrierSetAssembler.hpp"
++#define __ masm->
++void JamBarrierSetAssembler::oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
++                                         Address dst, Register val, Register tmp1, Register tmp2, Register tmp3) {
++  if ((decorators & IN_HEAP) != 0) {
++    Label done;
++    if (tmp1 != noreg && tmp2 != noreg && tmp1 != tmp2 &&
++        tmp1 != val && tmp2 != val && !dst.uses(tmp1) && !dst.uses(tmp2)) {
++      __ lea(tmp1, dst);
++      __ movptr(tmp2, (intptr_t)JamHeap::heap()->young_begin());
++      __ cmpptr(tmp1, tmp2);
++      __ jcc(Assembler::aboveEqual, done);
++    }
++    // Register before the store: the leaf call cannot safepoint and never loads the slot.
++    __ push_call_clobbered_registers();
++    __ push(dst.base());
++    __ lea(tmp1, dst);
++    __ push(tmp1);
++    __ pop(c_rarg1);
++    __ pop(c_rarg0);
++    __ movptr(c_rarg2, 1);
++    __ call_VM_leaf(CAST_FROM_FN_PTR(address, JamBarrierSet::record_narrow), c_rarg0, c_rarg1, c_rarg2);
++    __ pop_call_clobbered_registers();
++    __ bind(done);
++  }
++  BarrierSetAssembler::store_at(masm, decorators, type, dst, val, tmp1, tmp2, tmp3);
++}
++void JamBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet,
++                                         Register start, Register count, Register tmp) {
++  Label done;
++  if (tmp != noreg && tmp != start && tmp != count) {
++    __ movptr(tmp, (intptr_t)JamHeap::heap()->young_begin());
++    __ cmpptr(start, tmp);
++    __ jcc(Assembler::aboveEqual, done);
++  }
++  __ push_call_clobbered_registers();
++  __ push(start);
++  __ push(count);
++  __ pop(c_rarg1);
++  __ pop(c_rarg0);
++  __ call_VM_leaf(CAST_FROM_FN_PTR(address, JamBarrierSet::record_array), c_rarg0, c_rarg1);
++  __ pop_call_clobbered_registers();
++  __ bind(done);
++}
++
++void JamBarrierSetAssembler::tlab_allocate(MacroAssembler* masm, Register obj,
++    Register var_size_in_bytes, int con_size_in_bytes, Register t1, Register t2, Label& slow_case) {
++  BarrierSetAssembler::tlab_allocate(masm, obj, var_size_in_bytes, con_size_in_bytes, t1, t2, slow_case);
++  Label done;
++  __ movptr(t1, (intptr_t)&JamHeap::_track_starts);
++  __ cmpb(Address(t1, 0), 0);
++  __ jcc(Assembler::equal, done);
++  __ push_call_clobbered_registers();
++  __ movptr(c_rarg0, obj);
++  __ call_VM_leaf(CAST_FROM_FN_PTR(address, JamHeap::record_start), c_rarg0);
++  __ pop_call_clobbered_registers();
++  __ bind(done);
++}
+--- a/src/hotspot/os/windows/os_windows.cpp
++++ b/src/hotspot/os/windows/os_windows.cpp
+@@ -3300,6 +3300,91 @@
+   return map_or_reserve_memory_aligned(size, alignment, fd, mem_tag);
+ }
+ 
++#if INCLUDE_JAMGC
++// HeapReserver owns one candidate at a time and releases unsuccessful probes
++// before trying another. Keep the original extent even after the compressed-oop
++// guard is trimmed from the ReservedHeapSpace exposed to the collector.
++static char* volatile jam_heap_placeholder_base = nullptr;
++static size_t jam_heap_placeholder_size = 0;
++
++char* os::win32::reserve_jam_heap(char* requested_address, size_t bytes, size_t alignment) {
++  assert(UseJamGC, "Jam reservation only");
++  assert(is_aligned(requested_address, alignment), "requested address alignment");
++  assert(is_aligned(bytes, os::vm_allocation_granularity()), "reservation size alignment");
++  guarantee(Atomic::load_acquire(&jam_heap_placeholder_base) == nullptr,
++            "release the previous Jam heap reservation before another probe");
++  if (SimulateFullAddressSpace) return nullptr;
++
++  // Like ZGC, resolve the Windows 10 placeholder API at runtime. Other collectors
++  // keep their existing OS admission and do not require a new import library.
++  typedef PVOID (WINAPI *VirtualAlloc2Fn)(HANDLE, PVOID, SIZE_T, ULONG, ULONG, MEM_EXTENDED_PARAMETER*, ULONG);
++  static HMODULE const kernelbase = GetModuleHandleW(L"KernelBase.dll");
++  static VirtualAlloc2Fn const allocate = kernelbase == nullptr ? nullptr :
++    reinterpret_cast<VirtualAlloc2Fn>(GetProcAddress(kernelbase, "VirtualAlloc2"));
++  if (allocate == nullptr) {
++    vm_exit_during_initialization("Jam requires Windows version 1803 or later for heap placeholders");
++  }
++
++  // Address requirements avoid the release/reacquire loop used for ordinary
++  // Windows reservations. An exact requested address must omit this parameter.
++  MEM_ADDRESS_REQUIREMENTS requirements = {};
++  requirements.Alignment = alignment;
++  MEM_EXTENDED_PARAMETER parameter = {};
++  parameter.Type = MemExtendedParameterAddressRequirements;
++  parameter.Pointer = &requirements;
++  char* const base = static_cast<char*>(allocate(GetCurrentProcess(), requested_address, bytes,
++    MEM_RESERVE | MEM_RESERVE_PLACEHOLDER, PAGE_NOACCESS,
++    requested_address == nullptr ? &parameter : nullptr, requested_address == nullptr ? 1 : 0));
++  if (base == nullptr) {
++    PreserveLastError ple;
++    log_debug(gc, heap, coops)("Jam placeholder reservation failed at " PTR_FORMAT
++                              " for %zu bytes (error %u)", p2i(requested_address), bytes, (uint)ple.v);
++    return nullptr;
++  }
++  assert(is_aligned(base, alignment), "VirtualAlloc2 must satisfy alignment");
++  assert(requested_address == nullptr || base == requested_address, "exact address required");
++  jam_heap_placeholder_size = bytes;
++  Atomic::release_store(&jam_heap_placeholder_base, base);
++  MemTracker::record_virtual_memory_reserve(base, bytes, CALLER_PC, mtJavaHeap);
++  log_debug(os, map)("Reserved Jam placeholders " RANGE_FORMAT, RANGE_FORMAT_ARGS(base, bytes));
++  return base;
++}
++
++static bool release_jam_heap(char* base, size_t bytes) {
++  if (bytes != jam_heap_placeholder_size) {
++    log_error(gc)("Release the complete Jam heap reservation, including its compressed-oop guard");
++    return false;
++  }
++  // After jam_vm_destroy, every published window has been restored to a
++  // placeholder. Never unmap a live alias or consume a neighboring reservation.
++  size_t remaining = bytes;
++  char* cursor = base;
++  unsigned regions = 0;
++  while (remaining != 0) {
++    MEMORY_BASIC_INFORMATION info = {};
++    if (!VirtualQuery(cursor, &info, sizeof(info)) || info.AllocationBase != cursor ||
++        info.State != MEM_RESERVE || info.RegionSize == 0 || info.RegionSize > remaining) {
++      log_error(gc)("Jam heap aliases must be unpublished before releasing their reservation");
++      return false;
++    }
++    cursor += info.RegionSize;
++    remaining -= info.RegionSize;
++    ++regions;
++  }
++  if (regions > 1 && !virtualFree(base, bytes, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS)) {
++    return false;
++  }
++  // Clear ownership before making the addresses available to another allocator.
++  // os::release_memory supplies NMT locking and records the release on success.
++  Atomic::release_store(&jam_heap_placeholder_base, (char*)nullptr);
++  if (!virtualFree(base, 0, MEM_RELEASE)) {
++    Atomic::release_store(&jam_heap_placeholder_base, base);
++    return false;
++  }
++  return true;
++}
++#endif // INCLUDE_JAMGC
++
+ char* os::pd_reserve_memory(size_t bytes, bool exec) {
+   return pd_attempt_reserve_memory_at(nullptr /* addr */, bytes, exec);
+ }
+@@ -3573,6 +3658,12 @@
+ }
+ 
+ bool os::pd_release_memory(char* addr, size_t bytes) {
++#if INCLUDE_JAMGC
++  char* const jam_base = Atomic::load_acquire(&jam_heap_placeholder_base);
++  if (jam_base != nullptr && addr == jam_base) {
++    return release_jam_heap(addr, bytes);
++  }
++#endif
+   // Given a range we are to release, we require a mapping to start at the beginning of that range;
+   //  if NUMA or LP we allow the range to contain multiple mappings, which have to cover the range
+   //  completely; otherwise the range must match an OS mapping exactly.
+--- a/src/hotspot/os/windows/os_windows.hpp
++++ b/src/hotspot/os/windows/os_windows.hpp
+@@ -61,6 +61,11 @@
+ 
+  public:
+   // Windows-specific interface:
++#if INCLUDE_JAMGC
++  // Reserve the canonical Jam heap as placeholders. The full range, including
++  // its compressed-oop guard, must survive until all Jam aliases are removed.
++  static char* reserve_jam_heap(char* requested_address, size_t bytes, size_t alignment);
++#endif
+   static void   initialize_system_info();
+   static void   setmode_streams();
+   static bool   is_windows_11_or_greater();
+--- a/src/hotspot/share/c1/c1_Runtime1.cpp
++++ b/src/hotspot/share/c1/c1_Runtime1.cpp
+@@ -39,6 +39,9 @@
+ #include "compiler/compilationPolicy.hpp"
+ #include "compiler/disassembler.hpp"
+ #include "compiler/oopMap.hpp"
++#if INCLUDE_JAMGC
++#include "gc/jam/jamBarrierSet.hpp"
++#endif
+ #include "gc/shared/barrierSet.hpp"
+ #include "gc/shared/c1/barrierSetC1.hpp"
+ #include "gc/shared/collectedHeap.hpp"
+@@ -324,6 +327,7 @@
+ #define FUNCTION_CASE(a, f) \
+   if ((intptr_t)a == CAST_FROM_FN_PTR(intptr_t, f))  return #f
+ 
++  JAMGC_ONLY(FUNCTION_CASE(entry, JamBarrierSet::record_narrow);)
+   FUNCTION_CASE(entry, os::javaTimeMillis);
+   FUNCTION_CASE(entry, os::javaTimeNanos);
+   FUNCTION_CASE(entry, SharedRuntime::OSR_migration_end);
+--- a/src/hotspot/share/gc/jam/c1/jamBarrierSetC1.cpp
++++ b/src/hotspot/share/gc/jam/c1/jamBarrierSetC1.cpp
+@@ -0,0 +1,78 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include "gc/jam/c1/jamBarrierSetC1.hpp"
++#include "gc/jam/jamBarrierSet.hpp"
++#include "gc/jam/jamHeap.hpp"
++#include "c1/c1_LIRGenerator.hpp"
++#include "c1/c1_LIRAssembler.hpp"
++#include "c1/c1_MacroAssembler.hpp"
++#include "c1/c1_CodeStubs.hpp"
++#include "asm/macroAssembler.inline.hpp"
++class JamPostBarrierStub : public CodeStub {
++  LIR_Opr _owner;
++  LIR_Opr _slot;
++public:
++  JamPostBarrierStub(LIR_Opr owner, LIR_Opr slot) : _owner(owner), _slot(slot) {}
++  void visit(LIR_OpVisitState* visitor) override {
++    visitor->do_slow_case();
++    visitor->do_input(_owner);
++    visitor->do_input(_slot);
++  }
++  void emit_code(LIR_Assembler* ce) override {
++    MacroAssembler* masm = ce->masm();
++    masm->bind(*entry());
++    masm->push_call_clobbered_registers();
++#ifdef AARCH64
++    masm->stp(_owner->as_register(), _slot->as_pointer_register(), Address(Pre(sp, -2 * wordSize)));
++    masm->ldp(c_rarg0, c_rarg1, Address(Post(sp, 2 * wordSize)));
++    masm->mov(c_rarg2, 1);
++#else
++    masm->push(_owner->as_register());
++    masm->push(_slot->as_pointer_register());
++    masm->pop(c_rarg1);
++    masm->pop(c_rarg0);
++    masm->movptr(c_rarg2, 1);
++#endif
++    masm->call_VM_leaf(CAST_FROM_FN_PTR(address, JamBarrierSet::record_narrow), c_rarg0, c_rarg1, c_rarg2);
++    masm->pop_call_clobbered_registers();
++#ifdef AARCH64
++    masm->b(*continuation());
++#else
++    masm->jmp(*continuation());
++#endif
++  }
++#ifndef PRODUCT
++  void print_name(outputStream* out) const override { out->print("JamPostBarrierStub"); }
++#endif
++};
++
++#ifdef ASSERT
++#define __ gen->lir(__FILE__, __LINE__)->
++#else
++#define __ gen->lir()->
++#endif
++LIR_Opr JamBarrierSetC1::resolve_address(LIRAccess& access, bool resolve_in_register) {
++  bool write = (access.decorators() & ACCESS_WRITE) != 0;
++  return BarrierSetC1::resolve_address(access, resolve_in_register || (write && access.is_oop()));
++}
++void JamBarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr, LIR_Opr) {
++  if ((access.decorators() & IN_HEAP) == 0) return;
++  LIRGenerator* gen = access.gen();
++  LIR_Opr slot = access.resolved_addr();
++  if (slot->is_address()) {
++    LIR_Opr pointer = gen->new_pointer_register();
++    __ leal(slot, pointer);
++    slot = pointer;
++  }
++  LIR_Opr owner = access.base().opr();
++  if (!owner->is_register()) {
++    LIR_Opr reg = gen->new_register(T_OBJECT);
++    __ move(owner, reg);
++    owner = reg;
++  }
++  LIR_Opr last_before_young = gen->new_pointer_register();
++  __ move(LIR_OprFact::intptrConst((intptr_t)JamHeap::heap()->young_begin() - 1), last_before_young);
++  CodeStub* slow = new JamPostBarrierStub(owner, slot);
++  __ cmp(lir_cond_belowEqual, slot, last_before_young);
++  __ branch(lir_cond_belowEqual, slow);
++  __ branch_destination(slow->continuation());
++}
+--- a/src/hotspot/share/gc/jam/c1/jamBarrierSetC1.hpp
++++ b/src/hotspot/share/gc/jam/c1/jamBarrierSetC1.hpp
+@@ -0,0 +1,8 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "gc/shared/c1/modRefBarrierSetC1.hpp"
++class JamBarrierSetC1 : public ModRefBarrierSetC1 {
++protected:
++  LIR_Opr resolve_address(LIRAccess& access, bool resolve_in_register) override;
++  void post_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val) override;
++};
+--- a/src/hotspot/share/gc/jam/c2/jamBarrierSetC2.cpp
++++ b/src/hotspot/share/gc/jam/c2/jamBarrierSetC2.cpp
+@@ -0,0 +1,84 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include "gc/jam/c2/jamBarrierSetC2.hpp"
++#include "gc/jam/jamBarrierSet.hpp"
++#include "opto/graphKit.hpp"
++#include "opto/runtime.hpp"
++#include "opto/macro.hpp"
++#include "opto/castnode.hpp"
++#include "gc/jam/jamHeap.hpp"
++Node* JamBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue& val) const {
++  Node* store = BarrierSetC2::store_at_resolved(access, val);
++  if (access.is_oop() && (access.decorators() & (IN_HEAP | ON_UNKNOWN_OOP_REF)) != 0) {
++    assert(access.is_parse_access(), "Reference stores require a parse access");
++    post_barrier(static_cast<C2ParseAccess&>(access).kit(), access.base(), access.addr().node(), val.node(), true);
++  }
++  return store;
++}
++void JamBarrierSetC2::post_barrier(GraphKit* kit, Node* obj, Node* adr, Node*, bool) const {
++  Node* young = kit->longcon((jlong)JamHeap::heap()->young_begin());
++  Node* slot = kit->gvn().transform(new CastP2XNode(kit->control(), adr));
++  Node* cmp = kit->gvn().transform(new CmpULNode(slot, young));
++  Node* below_young = kit->gvn().transform(new BoolNode(cmp, BoolTest::lt));
++  Node* memory = kit->reset_memory();
++  kit->set_all_memory(memory);
++  IfNode* branch = kit->create_and_map_if(kit->control(), below_young, PROB_UNLIKELY(0.9), COUNT_UNKNOWN);
++  Node* skip = kit->gvn().transform(new IfFalseNode(branch));
++  kit->set_control(kit->gvn().transform(new IfTrueNode(branch)));
++  const Type** fields = TypeTuple::fields(4);
++  fields[TypeFunc::Parms] = TypeInstPtr::BOTTOM;
++  fields[TypeFunc::Parms + 1] = TypeRawPtr::BOTTOM;
++  fields[TypeFunc::Parms + 2] = TypeLong::LONG;
++  fields[TypeFunc::Parms + 3] = Type::HALF;
++  const TypeFunc* type = TypeFunc::make(TypeTuple::make(TypeFunc::Parms + 4, fields), TypeTuple::make(TypeFunc::Parms, TypeTuple::fields(0)));
++  kit->make_runtime_call(GraphKit::RC_LEAF, type,
++      CAST_FROM_FN_PTR(address, JamBarrierSet::record_narrow), "jam_remember", TypePtr::BOTTOM,
++      obj, adr, kit->longcon(1), kit->top());
++  RegionNode* region = new RegionNode(3);
++  region->init_req(1, skip);
++  region->init_req(2, kit->control());
++  PhiNode* merged = new PhiNode(region, Type::MEMORY, TypePtr::BOTTOM);
++  merged->init_req(1, memory);
++  merged->init_req(2, kit->reset_memory());
++  kit->set_control(kit->gvn().transform(region));
++  kit->set_all_memory(kit->gvn().transform(merged));
++}
++
++void JamBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac) const {
++  clone_in_runtime(phase, ac, CAST_FROM_FN_PTR(address, JamBarrierSet::clone), "jam_clone");
++}
++
++bool JamBarrierSetC2::is_gc_barrier_node(Node* node) const {
++  return node->is_CallLeaf() &&
++      node->as_CallLeaf()->entry_point() == CAST_FROM_FN_PTR(address, JamBarrierSet::record_narrow);
++}
++
++Node* JamBarrierSetC2::obj_allocate(PhaseMacroExpand* macro, Node* mem, Node* toobig_false,
++    Node* size_in_bytes, Node*& i_o, Node*& needgc_ctrl, Node*& fast_oop_ctrl,
++    Node*& fast_oop_rawmem, intx prefetch_lines) const {
++  Node* obj = BarrierSetC2::obj_allocate(macro, mem, toobig_false, size_in_bytes,
++      i_o, needgc_ctrl, fast_oop_ctrl, fast_oop_rawmem, prefetch_lines);
++  Node* guard = macro->makecon(TypeRawPtr::make((address)&JamHeap::_track_starts));
++  Node* enabled = macro->make_load(fast_oop_ctrl, fast_oop_rawmem, guard, 0, TypeInt::BOOL, T_BOOLEAN);
++  Node* test = macro->transform_later(new CmpINode(enabled, macro->intcon(0)));
++  Node* condition = macro->transform_later(new BoolNode(test, BoolTest::ne));
++  Node* branch = macro->transform_later(new IfNode(fast_oop_ctrl, condition, PROB_UNLIKELY_MAG(4), COUNT_UNKNOWN));
++  Node* yes = macro->transform_later(new IfTrueNode(branch->as_If()));
++  Node* no = macro->transform_later(new IfFalseNode(branch->as_If()));
++  const Type** fields = TypeTuple::fields(1);
++  fields[TypeFunc::Parms] = TypeRawPtr::BOTTOM;
++  const TypeFunc* type = TypeFunc::make(TypeTuple::make(TypeFunc::Parms + 1, fields),
++      TypeTuple::make(TypeFunc::Parms, TypeTuple::fields(0)));
++  Node* call = macro->make_leaf_call(yes, fast_oop_rawmem, type,
++      CAST_FROM_FN_PTR(address, JamHeap::record_start), "jam_record_start", TypeRawPtr::BOTTOM, obj);
++  macro->transform_later(call);
++  Node* region = new RegionNode(3);
++  region->init_req(1, no);
++  region->init_req(2, macro->transform_later(new ProjNode(call, TypeFunc::Control)));
++  macro->transform_later(region);
++  Node* memory = new PhiNode(region, Type::MEMORY, TypeRawPtr::BOTTOM);
++  memory->init_req(1, fast_oop_rawmem);
++  memory->init_req(2, macro->transform_later(new ProjNode(call, TypeFunc::Memory)));
++  fast_oop_ctrl = region;
++  fast_oop_rawmem = macro->transform_later(memory);
++  return obj;
++}
+--- a/src/hotspot/share/gc/jam/c2/jamBarrierSetC2.hpp
++++ b/src/hotspot/share/gc/jam/c2/jamBarrierSetC2.hpp
+@@ -0,0 +1,17 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "gc/shared/c2/modRefBarrierSetC2.hpp"
++class JamBarrierSetC2 : public ModRefBarrierSetC2 {
++protected:
++  Node* store_at_resolved(C2Access& access, C2AccessValue& val) const override;
++  void post_barrier(GraphKit* kit, Node* obj, Node* adr, Node* val, bool precise) const override;
++public:
++  Node* obj_allocate(PhaseMacroExpand* macro, Node* mem, Node* toobig_false, Node* size_in_bytes,
++                     Node*& i_o, Node*& needgc_ctrl, Node*& fast_oop_ctrl, Node*& fast_oop_rawmem,
++                     intx prefetch_lines) const override;
++  bool is_gc_barrier_node(Node* node) const override;
++  void clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac) const override;
++  bool array_copy_requires_gc_barriers(bool, BasicType type, bool is_clone, bool, ArrayCopyPhase) const override {
++    return is_clone || is_reference_type(type);
++  }
++};
+--- a/src/hotspot/share/gc/jam/jamArguments.cpp
++++ b/src/hotspot/share/gc/jam/jamArguments.cpp
+@@ -0,0 +1,98 @@
++/*
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#include "gc/jam/jamArguments.hpp"
++#include "gc/jam/jamHeap.hpp"
++#include "gc/shared/gcArguments.hpp"
++#include "gc/shared/tlab_globals.hpp"
++#include "logging/log.hpp"
++#include "runtime/globals.hpp"
++#include "runtime/globals_extension.hpp"
++#include "runtime/java.hpp"
++
++size_t JamArguments::conservative_max_heap_alignment() {
++  return MAX2(size_t(os::vm_allocation_granularity()), size_t(os::vm_page_size()));
++}
++
++void JamArguments::initialize() {
++  GCArguments::initialize();
++
++  assert(UseJamGC, "Sanity");
++  FLAG_SET_ERGO(ReduceInitialCardMarks, false);
++
++  if (!UseCompressedOops || ObjectAlignmentInBytes != 8 || UseLargePages ||
++      UseCompactObjectHeaders || AllocateHeapAt != nullptr) {
++    vm_exit_during_initialization("Jam requires compressed oops, eight-byte alignment, ordinary headers and normal anonymous pages");
++  }
++  if (InitialHeapSize != MaxHeapSize) {
++    vm_exit_during_initialization("Jam requires a fixed heap: use equal -Xms and -Xmx");
++  }
++  if (FLAG_IS_DEFAULT(HeapBaseMinAddress)) {
++    // A non-default origin makes the reserver attempt this exact address.
++    // macOS can reject low disjoint addresses and return a zero-based heap;
++    // prefer 2 TiB there, then validate the actual encoding after reservation.
++#ifdef __APPLE__
++    FLAG_SET_ERGO(HeapBaseMinAddress, size_t(1) << 41);
++#else
++    FLAG_SET_ERGO(HeapBaseMinAddress, 32 * G);
++#endif
++  }
++  if (FLAG_IS_DEFAULT(ClassUnloading)) {
++    FLAG_SET_DEFAULT(ClassUnloading, false);
++  }
++  if (ClassUnloading) {
++    vm_exit_during_initialization("Jam does not yet support class unloading");
++  }
++
++  if (JamMaxTLABSize < MinTLABSize) {
++    log_warning(gc)("JamMaxTLABSize < MinTLABSize, adjusting it to %zu", MinTLABSize);
++    JamMaxTLABSize = MinTLABSize;
++  }
++
++  if (!JamElasticTLAB && JamElasticTLABDecay) {
++    log_warning(gc)("Disabling JamElasticTLABDecay because JamElasticTLAB is disabled");
++    FLAG_SET_DEFAULT(JamElasticTLABDecay, false);
++  }
++
++#ifdef COMPILER2
++  // Enable loop strip mining: there are still non-GC safepoints, no need to make it worse
++  if (FLAG_IS_DEFAULT(UseCountedLoopSafepoints)) {
++    FLAG_SET_DEFAULT(UseCountedLoopSafepoints, true);
++    if (FLAG_IS_DEFAULT(LoopStripMiningIter)) {
++      FLAG_SET_DEFAULT(LoopStripMiningIter, 1000);
++    }
++  }
++#endif
++}
++
++void JamArguments::initialize_alignments() {
++  size_t page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
++  size_t align = MAX2(os::vm_allocation_granularity(), page_size);
++  SpaceAlignment = align;
++  HeapAlignment  = align;
++}
++
++CollectedHeap* JamArguments::create_heap() {
++  return new JamHeap();
++}
+--- a/src/hotspot/share/gc/jam/jamArguments.hpp
++++ b/src/hotspot/share/gc/jam/jamArguments.hpp
+@@ -0,0 +1,41 @@
++/*
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_JAMARGUMENTS_HPP
++#define SHARE_GC_JAM_JAMARGUMENTS_HPP
++
++#include "gc/shared/gcArguments.hpp"
++
++class CollectedHeap;
++
++class JamArguments : public GCArguments {
++private:
++  virtual void initialize_alignments();
++
++  virtual void initialize();
++  virtual size_t conservative_max_heap_alignment();
++  virtual CollectedHeap* create_heap();
++};
++
++#endif // SHARE_GC_JAM_JAMARGUMENTS_HPP
+--- a/src/hotspot/share/gc/jam/jamBarrierSet.cpp
++++ b/src/hotspot/share/gc/jam/jamBarrierSet.cpp
+@@ -0,0 +1,133 @@
++/*
++ * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#include "gc/jam/jamBarrierSet.hpp"
++#include "gc/jam/jamHeap.hpp"
++#include "gc/jam/jamThreadLocalData.hpp"
++#include "gc/shared/barrierSet.hpp"
++#include "gc/jam/jamBarrierSetAssembler.hpp"
++#include "runtime/javaThread.hpp"
++#include "oops/oop.inline.hpp"
++#include "oops/access.inline.hpp"
++#include "runtime/interfaceSupport.inline.hpp"
++#include "memory/iterator.inline.hpp"
++#include "utilities/ostream.hpp"
++#ifdef COMPILER1
++#include "gc/jam/c1/jamBarrierSetC1.hpp"
++#endif
++#ifdef COMPILER2
++#include "gc/jam/c2/jamBarrierSetC2.hpp"
++#endif
++
++JamBarrierSet::JamBarrierSet() : ModRefBarrierSet(
++          make_barrier_set_assembler<JamBarrierSetAssembler>(),
++          make_barrier_set_c1<JamBarrierSetC1>(),
++          make_barrier_set_c2<JamBarrierSetC2>(),
++          BarrierSet::FakeRtti(BarrierSet::JamBarrierSet)) {}
++
++void JamBarrierSet::record(oop owner, void* slot, size_t count, bool compressed) {
++  JamHeap* heap = JamHeap::heap();
++  // Check the source, never the concurrently mutable value stored in the slot.
++  if (!heap->is_in_reserved(slot) || heap->is_in_young(slot)) return;
++  uintptr_t base = (uintptr_t)CompressedOops::base();
++  jam_vm_remember(heap->jam(), owner == nullptr ? 0 : CompressedOops::narrow_oop_value(owner),
++                  ((uintptr_t)slot - base) / 4, count, compressed ? 1 : 2, compressed);
++}
++
++void JamBarrierSet::forget(address start, address end) {
++  JamHeap* heap = JamHeap::heap();
++  if (start == end || !heap->is_in_reserved(start) || heap->is_in_young(start)) return;
++  assert(end >= start && is_aligned(start, 4) && is_aligned(end, 4), "retired slot range");
++  jam_vm_forget(heap->jam(), ((uintptr_t)start - (uintptr_t)CompressedOops::base()) / 4,
++                (end - start) / 4);
++}
++
++void JamBarrierSet::record_narrow(oopDesc* owner, void* slot, size_t count) {
++  record(cast_to_oop(owner), slot, count, true);
++}
++
++void JamBarrierSet::record_array(void* slot, size_t count) {
++  record(nullptr, slot, count, UseCompressedOops);
++}
++
++class JamRememberFields : public BasicOopIterateClosure {
++  oop _owner;
++public:
++  explicit JamRememberFields(oop owner) : _owner(owner) {}
++  void do_oop(narrowOop* slot) override { JamBarrierSet::record(_owner, slot, 1, true); }
++  void do_oop(oop* slot) override { JamBarrierSet::record(_owner, slot, 1, false); }
++  ReferenceIterationMode reference_iteration_mode() override { return DO_FIELDS; }
++};
++
++void JamBarrierSet::write_region(MemRegion mr) {
++  if (mr.is_empty() || JamHeap::heap()->is_in_young(mr.start())) return;
++  // The clone hook supplies one fully formatted object, not an allocation run.
++  oop owner = cast_to_oop(mr.start());
++  JamRememberFields fields(owner);
++  owner->oop_iterate(&fields);
++}
++
++void JamBarrierSet::on_thread_create(Thread *thread) {
++  JamThreadLocalData::create(thread, JamHeap::heap()->jam());
++  // The initial thread is created before the heap; set_barrier_set calls us
++  // later on that same thread. Other Thread objects are created by a parent.
++  if (thread == Thread::current_or_null()) {
++    on_thread_start(thread);
++  }
++}
++
++void JamBarrierSet::on_thread_destroy(Thread *thread) {
++  // Initialization may fail before attach/detach. Normal SMR destruction can
++  // run on a different thread and therefore must only free an inactive context.
++  if (JamThreadLocalData::context_active(thread)) {
++    JamThreadLocalData::leave(thread);
++  }
++  JamThreadLocalData::destroy(thread);
++}
++
++void JamBarrierSet::on_thread_start(Thread* thread) {
++  JamThreadLocalData::enter(thread);
++  assert(jam_vm_thread_current(JamHeap::heap()->jam()), "Jam heap must be bound on the executing OS thread");
++}
++
++void JamBarrierSet::on_thread_attach(Thread* thread) {
++  ModRefBarrierSet::on_thread_attach(thread);
++  // Threads::add for a Java-created thread executes on its creator. JNI
++  // attachment and NonJavaThread startup execute on the attached thread.
++  if (thread == Thread::current_or_null()) {
++    on_thread_start(thread);
++  }
++}
++
++void JamBarrierSet::on_thread_detach(Thread* thread) {
++  ModRefBarrierSet::on_thread_detach(thread);
++  JamThreadLocalData::leave(thread);
++}
++
++void JamBarrierSet::print_on(outputStream* st) const { st->print("Jam exact source slots"); }
++
++JRT_LEAF(void, JamBarrierSet::clone(oopDesc* src, oopDesc* dst, size_t words))
++  HeapAccess<>::clone(src, dst, words);
++JRT_END
+--- a/src/hotspot/share/gc/jam/jamBarrierSet.hpp
++++ b/src/hotspot/share/gc/jam/jamBarrierSet.hpp
+@@ -0,0 +1,90 @@
++/*
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_JAMBARRIERSET_HPP
++#define SHARE_GC_JAM_JAMBARRIERSET_HPP
++
++#include "gc/shared/modRefBarrierSet.inline.hpp"
++
++// Remember exact source slots; target headers supply tracing policy.
++class JamBarrierSet: public ModRefBarrierSet {
++  friend class VMStructs;
++
++public:
++  JamBarrierSet();
++  void print_on(outputStream* st) const override;
++
++  static void record(oop owner, void* slot, size_t count, bool compressed);
++  static void forget(address start, address end);
++  static void record_narrow(oopDesc* owner, void* slot, size_t count);
++  static void clone(oopDesc* src, oopDesc* dst, size_t words);
++  static void record_array(void* slot, size_t count);
++  void write_region(MemRegion mr) override;
++  void write_region(JavaThread*, MemRegion mr) override { write_region(mr); }
++  void write_ref_array(HeapWord* start, size_t count) { record_array(start, count); }
++
++  template <DecoratorSet decorators, typename T>
++  void write_ref_field_post(T* slot) { record(nullptr, slot, 1, sizeof(T) == sizeof(narrowOop)); }
++
++  virtual void on_thread_create(Thread* thread);
++  virtual void on_thread_destroy(Thread* thread);
++  virtual void on_thread_start(Thread* thread);
++  virtual void on_thread_attach(Thread* thread);
++  virtual void on_thread_detach(Thread* thread);
++
++  template <DecoratorSet decorators, typename BarrierSetT = JamBarrierSet>
++  class AccessBarrier: public ModRefBarrierSet::AccessBarrier<decorators, BarrierSetT> {
++    typedef BarrierSet::AccessBarrier<decorators, BarrierSetT> Raw;
++  public:
++    static void oop_store_in_heap_at(oop base, ptrdiff_t offset, oop value) {
++      auto* slot = AccessInternal::oop_field_addr<decorators>(base, offset);
++      Raw::oop_store(slot, value);
++      record(base, slot, 1, sizeof(*slot) == sizeof(narrowOop));
++    }
++    static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop value) {
++      auto* slot = AccessInternal::oop_field_addr<decorators>(base, offset);
++      oop result = Raw::oop_atomic_xchg(slot, value);
++      record(base, slot, 1, sizeof(*slot) == sizeof(narrowOop));
++      return result;
++    }
++    static oop oop_atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, oop expected, oop value) {
++      auto* slot = AccessInternal::oop_field_addr<decorators>(base, offset);
++      oop result = Raw::oop_atomic_cmpxchg(slot, expected, value);
++      if (result == expected) record(base, slot, 1, sizeof(*slot) == sizeof(narrowOop));
++      return result;
++    }
++  };
++};
++
++template<>
++struct BarrierSet::GetName<JamBarrierSet> {
++  static const BarrierSet::Name value = BarrierSet::JamBarrierSet;
++};
++
++template<>
++struct BarrierSet::GetType<BarrierSet::JamBarrierSet> {
++  typedef ::JamBarrierSet type;
++};
++
++#endif // SHARE_GC_JAM_JAMBARRIERSET_HPP
+--- a/src/hotspot/share/gc/jam/jamBarrierSetAssembler.hpp
++++ b/src/hotspot/share/gc/jam/jamBarrierSetAssembler.hpp
+@@ -0,0 +1,18 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "gc/shared/modRefBarrierSetAssembler.hpp"
++class JamBarrierSetAssembler : public ModRefBarrierSetAssembler {
++public:
++  void tlab_allocate(MacroAssembler* masm, Register obj, Register var_size_in_bytes,
++                     int con_size_in_bytes, Register t1, Register t2, Label& slow_case) override;
++protected:
++  void oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
++                    Address dst, Register val, Register tmp1, Register tmp2, Register tmp3) override;
++#ifdef AARCH64
++  void gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
++                    Register start, Register count, Register tmp, RegSet saved_regs) override;
++#else
++  void gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
++                    Register start, Register count, Register tmp) override;
++#endif
++};
+--- a/src/hotspot/share/gc/jam/jamHeap.cpp
++++ b/src/hotspot/share/gc/jam/jamHeap.cpp
+@@ -0,0 +1,804 @@
++/*
++ * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2017, 2022, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#include "gc/jam/jamHeap.hpp"
++#include "gc/jam/jamInitLogger.hpp"
++#include "gc/jam/jamMemoryPool.hpp"
++#include "gc/jam/jamThreadLocalData.hpp"
++#include "classfile/classLoaderDataGraph.hpp"
++#include "code/codeCache.hpp"
++#include "compiler/oopMap.hpp"
++#include "gc/shared/continuationGCSupport.inline.hpp"
++#include "gc/shared/gcArguments.hpp"
++#include "gc/shared/gcId.hpp"
++#include "gc/shared/gcLocker.inline.hpp"
++#include "gc/shared/gcTimer.hpp"
++#include "gc/shared/gcTraceTime.inline.hpp"
++#include "gc/shared/gcVMOperations.hpp"
++#include "gc/shared/isGCActiveMark.hpp"
++#include "gc/shared/locationPrinter.inline.hpp"
++#include "gc/shared/oopStorageSet.inline.hpp"
++#include "gc/shared/referenceProcessor.hpp"
++#include "gc/shared/referenceProcessorPhaseTimes.hpp"
++#include "gc/shared/strongRootsScope.hpp"
++#include "gc/shared/weakProcessor.hpp"
++#include "logging/log.hpp"
++#include "memory/allocation.hpp"
++#include "memory/allocation.inline.hpp"
++#include "memory/iterator.inline.hpp"
++#include "memory/metaspaceUtils.hpp"
++#include "memory/resourceArea.hpp"
++#include "memory/universe.hpp"
++#include "oops/compressedOops.inline.hpp"
++#include "oops/oop.inline.hpp"
++#include "runtime/atomic.hpp"
++#include "runtime/globals.hpp"
++#include "runtime/init.hpp"
++#include "runtime/java.hpp"
++#include "runtime/javaThread.hpp"
++#include "runtime/safepoint.hpp"
++#include "runtime/threads.hpp"
++#include "runtime/vmThread.hpp"
++#include "services/memoryService.hpp"
++#include "utilities/growableArray.hpp"
++#include "utilities/count_trailing_zeros.hpp"
++#include "utilities/resizeableResourceHash.hpp"
++#include "classfile/javaClasses.inline.hpp"
++#include "oops/instanceKlass.hpp"
++#include "utilities/ostream.hpp"
++
++bool JamHeap::_track_starts = false;
++
++static const size_t jam_young_displacement = size_t(1) << 34;
++
++jint JamHeap::initialize() {
++  size_t align = HeapAlignment;
++  size_t init_byte_size = align_up(InitialHeapSize, align);
++  size_t max_byte_size  = align_up(MaxHeapSize, align);
++
++  if (max_byte_size < 2 * align) {
++    vm_exit_during_initialization("Jam requires room for two aligned generations");
++  }
++  size_t young_bytes = JamYoungSize == 0
++                    ? MAX2(align, align_down(max_byte_size / 4, align))
++                    : align_up(JamYoungSize, align);
++  if (young_bytes >= max_byte_size) {
++    vm_exit_during_initialization("JamYoungSize must leave space for old objects");
++  }
++  size_t old_bytes = max_byte_size - young_bytes;
++  // The generation bit denotes a 16 GiB virtual displacement, not physical capacity.
++  ReservedHeapSpace heap_rs = Universe::reserve_heap(jam_young_displacement + young_bytes, align);
++  size_t prefix = heap_rs.noaccess_prefix();
++  if (JamReserve > (size_t(1) << 34)) {
++    vm_exit_during_initialization("Jam reserve exceeds the 16 GiB arena limit");
++  }
++  size_t reserve = align_up(JamReserve, os::vm_page_size());
++  if (init_byte_size != max_byte_size || CompressedOops::base() == nullptr ||
++      CompressedOops::shift() != 3 || prefix == 0 ||
++      CompressedOops::base() != (address)heap_rs.compressed_oop_base() ||
++      prefix + old_bytes + reserve > jam_young_displacement ||
++      prefix + young_bytes + reserve > jam_young_displacement ||
++      reserve > prefix + MIN2(old_bytes, young_bytes)) {
++    log_error(gc)("Jam heap encoding: heap=[" PTR_FORMAT "," PTR_FORMAT
++      "), compressed base=" PTR_FORMAT ", reservation base=" PTR_FORMAT ", shift=%d",
++      p2i(heap_rs.base()), p2i(heap_rs.end()), p2i(CompressedOops::base()),
++      p2i(heap_rs.compressed_oop_base()), CompressedOops::shift());
++    log_error(gc)("Jam heap sizes: prefix=%zu, initial=%zu, maximum=%zu, reserve=%zu, HeapBaseMinAddress=" PTR_FORMAT,
++      prefix, init_byte_size, max_byte_size, reserve, (uintptr_t)HeapBaseMinAddress);
++    vm_exit_during_initialization("Jam requires fixed, nonzero-base shift-three generations below 16 GiB each including their guards and reserve");
++  }
++  // VirtualSpace records the reservation only. Jam owns and maps the backing.
++  _virtual_space.initialize(heap_rs, 0);
++  _jam = jam_vm_create(CompressedOops::base(), prefix, old_bytes, young_bytes,
++                       reserve, JamWorkers);
++  MemRegion old_region((HeapWord*)heap_rs.base(), old_bytes / HeapWordSize);
++  MemRegion young_region((HeapWord*)(heap_rs.base() + jam_young_displacement), young_bytes / HeapWordSize);
++
++  initialize_reserved_region(heap_rs);
++
++  _space = new ContiguousSpace();
++  _space->initialize(old_region, /* clear_space = */ false, /* mangle_space = */ false);
++  _space->set_top(_space->bottom());
++  _young_space = new ContiguousSpace();
++  _young_space->initialize(young_region, false, false);
++  _young_space->set_top(_young_space->bottom());
++  GCLocker::initialize();
++
++  // Precompute hot fields
++  _max_tlab_size = MIN3(CollectedHeap::max_tlab_size(), align_object_size(JamMaxTLABSize / HeapWordSize),
++                       young_bytes / HeapWordSize);
++  _step_counter_update = MIN2<size_t>(max_byte_size / 16, JamUpdateCountersStep);
++  _step_heap_print = (JamPrintHeapSteps == 0) ? SIZE_MAX : (max_byte_size / JamPrintHeapSteps);
++  _decay_time_ns = (int64_t) JamTLABDecayTime * NANOSECS_PER_MILLISEC;
++
++  // Enable monitoring
++  _monitoring_support = new JamMonitoringSupport(this);
++  _last_counter_update = 0;
++  _last_heap_print = 0;
++
++  // Verification can run before a diagnostic preparation boundary.
++  if (VerifyDuringStartup || VerifyBeforeGC || VerifyAfterGC || VerifyDuringGC || VerifyBeforeExit) {
++    guarantee(jam_vm_track_starts(_jam), "Unable to allocate Jam object-start metadata");
++    _track_starts = true;
++  }
++
++  // Install barrier set
++  JamBarrierSet* barriers = new JamBarrierSet();
++  BarrierSet::set_barrier_set(barriers);
++
++  // All done, print out the configuration
++  JamInitLogger::print();
++  log_info(gc)("Jam collector: %s, %u copy workers, serial VM scanner",
++               jam_vm_compactor(_jam), JamWorkers);
++  log_info(gc)("Jam generations: old=%zu, young=%zu usable bytes; virtual displacement=%zu",
++               old_bytes, young_bytes, jam_young_displacement);
++
++  return JNI_OK;
++}
++
++void JamHeap::initialize_serviceability() {
++  _pool = new JamMemoryPool(this);
++  _memory_manager.add_pool(_pool);
++}
++
++GrowableArray<GCMemoryManager*> JamHeap::memory_managers() {
++  GrowableArray<GCMemoryManager*> memory_managers(1);
++  memory_managers.append(&_memory_manager);
++  return memory_managers;
++}
++
++GrowableArray<MemoryPool*> JamHeap::memory_pools() {
++  GrowableArray<MemoryPool*> memory_pools(1);
++  memory_pools.append(_pool);
++  return memory_pools;
++}
++
++size_t JamHeap::unsafe_max_tlab_alloc(Thread* thr) const {
++  // Return max allocatable TLAB size, and let allocation path figure out
++  // the actual allocation size. Note: result should be in bytes.
++  return _max_tlab_size * HeapWordSize;
++}
++
++JamHeap* JamHeap::heap() {
++  return named_heap<JamHeap>(CollectedHeap::Jam);
++}
++
++HeapWord* JamHeap::allocate_work(size_t size, bool young, bool verbose) {
++  assert(is_object_aligned(size), "Allocation size should be aligned: %zu", size);
++
++  HeapWord* res;
++  {
++    MutexLocker ml(Heap_lock);
++    uint32_t at = jam_vm_allocate(_jam, size, young);
++    if (at == 0) return nullptr;
++    res = (HeapWord*)(CompressedOops::base() + size_t(at) * HeapWordSize);
++    (young ? _young_space : _space)->set_top(res + size);
++  }
++
++  size_t used = this->used();
++
++  // Allocation successful, update counters
++  if (verbose) {
++    size_t last = _last_counter_update;
++    if ((used - last >= _step_counter_update) && Atomic::cmpxchg(&_last_counter_update, last, used) == last) {
++      _monitoring_support->update_counters();
++    }
++  }
++
++  // ...and print the occupancy line, if needed
++  if (verbose) {
++    size_t last = _last_heap_print;
++    if ((used - last >= _step_heap_print) && Atomic::cmpxchg(&_last_heap_print, last, used) == last) {
++      print_heap_info(used);
++      print_metaspace_info();
++    }
++  }
++
++  assert(is_object_aligned(res), "Object should be aligned: " PTR_FORMAT, p2i(res));
++  return res;
++}
++
++HeapWord* JamHeap::allocate_new_tlab(size_t min_size,
++                                         size_t requested_size,
++                                         size_t* actual_size) {
++  Thread* thread = Thread::current();
++
++  // Defaults in case elastic paths are not taken
++  bool fits = true;
++  size_t size = requested_size;
++  size_t ergo_tlab = requested_size;
++  int64_t time = 0;
++
++  if (JamElasticTLAB) {
++    ergo_tlab = JamThreadLocalData::ergo_tlab_size(thread);
++
++    if (JamElasticTLABDecay) {
++      int64_t last_time = JamThreadLocalData::last_tlab_time(thread);
++      time = (int64_t) os::javaTimeNanos();
++
++      assert(last_time <= time, "time should be monotonic");
++
++      // If the thread had not allocated recently, retract the ergonomic size.
++      // This conserves memory when the thread had initial burst of allocations,
++      // and then started allocating only sporadically.
++      if (last_time != 0 && (time - last_time > _decay_time_ns)) {
++        ergo_tlab = 0;
++        JamThreadLocalData::set_ergo_tlab_size(thread, 0);
++      }
++    }
++
++    // If we can fit the allocation under current TLAB size, do so.
++    // Otherwise, we want to elastically increase the TLAB size.
++    fits = (requested_size <= ergo_tlab);
++    if (!fits) {
++      size = (size_t) (ergo_tlab * JamTLABElasticity);
++    }
++  }
++
++  // Always honor boundaries
++  size = clamp(size, min_size, _max_tlab_size);
++
++  // Always honor alignment
++  size = align_up(size, MinObjAlignment);
++
++  // Check that adjustments did not break local and global invariants
++  assert(is_object_aligned(size),
++         "Size honors object alignment: %zu", size);
++  assert(min_size <= size,
++         "Size honors min size: %zu <= %zu", min_size, size);
++  assert(size <= _max_tlab_size,
++         "Size honors max size: %zu <= %zu", size, _max_tlab_size);
++  assert(size <= CollectedHeap::max_tlab_size(),
++         "Size honors global max size: %zu <= %zu", size, CollectedHeap::max_tlab_size());
++
++  if (log_is_enabled(Trace, gc)) {
++    ResourceMark rm;
++    log_trace(gc)("TLAB size for \"%s\" (Requested: %zuK, Min: %zu"
++                          "K, Max: %zuK, Ergo: %zuK) -> %zuK",
++                  thread->name(),
++                  requested_size * HeapWordSize / K,
++                  min_size * HeapWordSize / K,
++                  _max_tlab_size * HeapWordSize / K,
++                  ergo_tlab * HeapWordSize / K,
++                  size * HeapWordSize / K);
++  }
++
++  // All prepared, let's do it!
++  HeapWord* res = allocate_or_collect_work(size, true);
++
++  if (res != nullptr) {
++    // Allocation successful
++    *actual_size = size;
++    if (JamElasticTLABDecay) {
++      JamThreadLocalData::set_last_tlab_time(thread, time);
++    }
++    if (JamElasticTLAB && !fits) {
++      // If we requested expansion, this is our new ergonomic TLAB size
++      JamThreadLocalData::set_ergo_tlab_size(thread, size);
++    }
++  } else {
++    // Allocation failed, reset ergonomics to try and fit smaller TLABs
++    if (JamElasticTLAB) {
++      JamThreadLocalData::set_ergo_tlab_size(thread, 0);
++    }
++  }
++
++  return res;
++}
++
++HeapWord* JamHeap::mem_allocate(size_t size, bool *gc_overhead_limit_was_exceeded) {
++  *gc_overhead_limit_was_exceeded = false;
++  return allocate_or_collect_work(size);
++}
++
++HeapWord* JamHeap::allocate_loaded_archive_space(size_t size) {
++  // Cannot use verbose=true because Metaspace is not initialized
++  return allocate_work(size, true, /* verbose = */false);
++}
++
++void JamHeap::record_start(oopDesc* obj) {
++  jam_vm_record_start(heap()->jam(), CompressedOops::narrow_oop_value(cast_to_oop(obj)));
++}
++
++void JamHeap::object_iterate(ObjectClosure *cl) {
++  assert(SafepointSynchronize::is_at_safepoint(), "Must stop mutators");
++  guarantee(_track_starts, "Heap iteration requires diagnostic preparation");
++  for (int young = 0; young != 2; ++young) {
++    size_t count;
++    uint32_t const* bits = jam_vm_start_bits(_jam, young, &count);
++    for (size_t i = 0; i < count; ++i) {
++      uint32_t word = bits[i];
++      while (word != 0) {
++        unsigned bit = count_trailing_zeros(word);
++        uint32_t at = uint32_t(i * 32 + bit) | (young ? uint32_t(1) << 31 : 0);
++        cl->do_object(CompressedOops::decode(narrowOop(at)));
++        word &= word - 1;
++      }
++    }
++  }
++}
++
++void JamHeap::print_heap_on(outputStream *st) const {
++  st->print_cr("Jam Heap");
++
++  StreamIndentor si(st, 1);
++
++  st->print_cr("Jam published heap: %zu usable bytes, old/young ring origins %zu/%zu words",
++               capacity(), jam_vm_origin(_jam, false), jam_vm_origin(_jam, true));
++
++  if (_space != nullptr) {
++    st->print_cr("Old space:");
++
++    StreamIndentor si(st, 1);
++    _space->print_on(st, "");
++    st->print_cr("Young space:");
++    _young_space->print_on(st, "");
++  }
++}
++
++bool JamHeap::print_location(outputStream* st, void* addr) const {
++  return BlockLocationPrinter<JamHeap>::print_location(st, addr);
++}
++
++void JamHeap::print_tracing_info() const {
++  print_heap_info(used());
++  print_metaspace_info();
++}
++
++void JamHeap::print_heap_info(size_t used) const {
++  size_t reserved  = max_capacity();
++  size_t committed = capacity();
++
++  if (reserved != 0) {
++    log_info(gc)("Heap: %zu%s reserved, %zu%s (%.2f%%) committed, "
++                 "%zu%s (%.2f%%) used",
++            byte_size_in_proper_unit(reserved),  proper_unit_for_byte_size(reserved),
++            byte_size_in_proper_unit(committed), proper_unit_for_byte_size(committed),
++            committed * 100.0 / reserved,
++            byte_size_in_proper_unit(used),      proper_unit_for_byte_size(used),
++            used * 100.0 / reserved);
++  } else {
++    log_info(gc)("Heap: no reliable data");
++  }
++}
++
++void JamHeap::print_metaspace_info() const {
++  MetaspaceCombinedStats stats = MetaspaceUtils::get_combined_statistics();
++  size_t reserved  = stats.reserved();
++  size_t committed = stats.committed();
++  size_t used      = stats.used();
++
++  if (reserved != 0) {
++    log_info(gc, metaspace)("Metaspace: %zu%s reserved, %zu%s (%.2f%%) committed, "
++                            "%zu%s (%.2f%%) used",
++            byte_size_in_proper_unit(reserved),  proper_unit_for_byte_size(reserved),
++            byte_size_in_proper_unit(committed), proper_unit_for_byte_size(committed),
++            committed * 100.0 / reserved,
++            byte_size_in_proper_unit(used),      proper_unit_for_byte_size(used),
++            used * 100.0 / reserved);
++  } else {
++    log_info(gc, metaspace)("Metaspace: no reliable data");
++  }
++}
++
++// The VM describes objects and policy; jam owns marking queues and relocation.
++struct JamScanState {
++  JamHeap* heap;
++  bool minor;
++  GrowableArray<oop*> wide_slots;
++  GrowableArray<narrowOop*> old_slots;
++  JamScanState(JamHeap* h, bool m)
++    : heap(h), minor(m), wide_slots(64, mtGC), old_slots(256, mtGC) {}
++};
++
++class JamFields : public BasicOopIterateClosure {
++  JamScanState* _state;
++  jam_vm_visit* _visit;
++  bool _follow;
++  oop _owner;
++  uint64_t _slots[128];
++  size_t _count;
++public:
++  JamFields(JamScanState* state, jam_vm_visit* visit, bool follow, oop owner)
++    : BasicOopIterateClosure(follow ? state->heap->ref_processor() : nullptr),
++      _state(state), _visit(visit), _follow(follow), _owner(owner), _count(0) {}
++
++  void flush() {
++    if (_count != 0) {
++      jam_vm_fields(_visit, _slots, _count, _follow);
++      _count = 0;
++    }
++  }
++  void do_oop(narrowOop* p) override {
++    guarantee(_state->heap->is_in_reserved(p), "Expected an in-heap narrow slot");
++    uintptr_t delta = (uintptr_t)p - (uintptr_t)CompressedOops::base();
++    guarantee(delta % sizeof(narrowOop) == 0, "Jam pointer slot must be aligned");
++    if (!_follow) JamBarrierSet::record(_owner, p, 1, true);
++    if (!_follow && _state->minor && !_state->heap->is_in_young(p)) {
++      _state->old_slots.append(p);
++    }
++    _slots[_count++] = uint64_t(delta / sizeof(narrowOop));
++    if (_count == ARRAY_SIZE(_slots)) flush();
++  }
++  void do_oop(oop* p) override {
++    guarantee(_state->heap->is_in_reserved(p), "Expected an in-heap wide slot");
++    if (!_follow) {
++      JamBarrierSet::record(_owner, p, 1, false);
++      _state->wide_slots.append(p);
++    } else {
++      oop value = RawAccess<>::oop_load(p);
++      if (value != nullptr) {
++        uint32_t target = CompressedOops::narrow_oop_value(value);
++        jam_vm_targets(_visit, &target, 1);
++      }
++    }
++  }
++  ReferenceIterationMode reference_iteration_mode() override {
++    return _follow ? DO_DISCOVERY : DO_FIELDS;
++  }
++};
++
++static void jam_scan(void* raw, jam_vm_visit* visit, uint32_t at) {
++  JamScanState* state = static_cast<JamScanState*>(raw);
++  oop obj = CompressedOops::decode_not_null(CompressedOops::narrow_oop_cast(at));
++  size_t words = obj->size();
++  if (!jam_vm_claim(visit, at, words)) return;
++
++  if (jam_vm_tracks_starts(state->heap->jam())) jam_vm_record_start(state->heap->jam(), at);
++
++  // Relativize stack-internal pointers before the record becomes movable.
++  ContinuationGCSupport::transform_stack_chunk(obj);
++  JamFields declared(state, visit, false, obj);
++  obj->oop_iterate(&declared);
++  declared.flush();
++  JamFields followed(state, visit, true, obj);
++  obj->oop_iterate(&followed);
++  followed.flush();
++}
++
++class JamIsAlive : public BoolObjectClosure {
++public:
++  bool do_object_b(oop obj) override {
++    return obj != nullptr && jam_vm_marked(JamHeap::heap()->jam(),
++                                            CompressedOops::narrow_oop_value(obj));
++  }
++};
++
++static AlwaysTrueClosure jam_subject;
++static JamIsAlive jam_is_alive;
++
++void JamHeap::post_initialize() {
++  CollectedHeap::post_initialize();
++  _ref_processor = new ReferenceProcessor(&jam_subject, 1, 1, false,
++                                           &jam_is_alive);
++}
++
++void JamHeap::trace_external(uint32_t const* roots, size_t count) {
++  assert(_jam_scan_state != nullptr && SafepointSynchronize::is_at_safepoint(),
++         "External tracing requires the active collection");
++  jam_vm_trace(_jam, roots, count, jam_scan, _jam_scan_state, 1);
++}
++
++static void jam_remembered(void* raw, uint32_t holder, uint64_t slot_offset,
++                           int compressed, uint64_t base_slot) {
++  JamScanState* state = static_cast<JamScanState*>(raw);
++  address slot = CompressedOops::base() + slot_offset * sizeof(narrowOop);
++  guarantee(base_slot == 0, "HotSpot stack chunks relativize derived references before publication");
++  oop target;
++  if (compressed) {
++    state->old_slots.append((narrowOop*)slot);
++    target = RawAccess<>::oop_load((narrowOop*)slot);
++  } else {
++    state->wide_slots.append((oop*)slot);
++    target = RawAccess<>::oop_load((oop*)slot);
++  }
++  if (target == nullptr) return;
++  if (holder != 0) {
++    oop owner = CompressedOops::decode_not_null(CompressedOops::narrow_oop_cast(holder));
++    if (owner->klass()->is_instance_klass()) {
++      ReferenceType type = InstanceKlass::cast(owner->klass())->reference_type();
++      if (type != REF_NONE && slot == cast_from_oop<address>(owner) + java_lang_ref_Reference::referent_offset() &&
++          state->heap->ref_processor()->discover_reference(owner, type)) return;
++    }
++  }
++  uint32_t at = CompressedOops::narrow_oop_value(target);
++  state->heap->trace_external(&at, 1);
++}
++
++void JamHeap::trace_remembered_slots() {
++  jam_vm_remembered(_jam, jam_remembered, _jam_scan_state);
++}
++
++class JamRoots : public OopClosure {
++  GrowableArray<uint32_t> _roots;
++  template<class T> void apply(T* p) {
++    T value = RawAccess<>::oop_load(p);
++    if (!CompressedOops::is_null(value)) {
++      _roots.append(CompressedOops::narrow_oop_value(value));
++    }
++  }
++public:
++  JamRoots() : _roots(1024, mtGC) {}
++  void do_oop(oop* p) override { apply(p); }
++  void do_oop(narrowOop* p) override { apply(p); }
++  void trace(JamHeap* heap) {
++    if (_roots.length() != 0) heap->trace_external(_roots.adr_at(0), _roots.length());
++  }
++};
++
++class JamKeepAlive : public OopClosure {
++  template<class T> void apply(T* p) {
++    T value = RawAccess<>::oop_load(p);
++    if (!CompressedOops::is_null(value)) {
++      uint32_t at = CompressedOops::narrow_oop_value(value);
++      JamHeap::heap()->trace_external(&at, 1);
++    }
++  }
++public:
++  void do_oop(oop* p) override { apply(p); }
++  void do_oop(narrowOop* p) override { apply(p); }
++};
++
++class JamComplete : public VoidClosure {
++public:
++  // KeepAlive drains synchronously before returning.
++  void do_void() override {}
++};
++
++class JamFinalizers : public VoidClosure {
++  JamScanState* _state;
++public:
++  explicit JamFinalizers(JamScanState* state) : _state(state) {}
++  void do_void() override {
++    jam_vm_weak_finalizers(_state->heap->jam(), jam_scan, _state);
++  }
++};
++
++class JamRefProc : public RefProcProxyTask {
++  JamKeepAlive _keep_alive;
++  JamComplete _complete;
++public:
++  JamRefProc() : RefProcProxyTask("JamRefProc", 1) {}
++  void work(uint worker_id) override {
++    assert(worker_id == 0, "VM reference processing is serial");
++    BarrierEnqueueDiscoveredFieldClosure enqueue;
++    _rp_task->rp_work(0, &jam_is_alive, &_keep_alive, &enqueue, &_complete);
++  }
++};
++
++class JamAdjust : public OopClosure {
++  ResizeableResourceHashtable<void*, bool, AnyObj::C_HEAP, mtGC> _seen{1009, 0x3fffffff};
++  bool _minor;
++  template<class T> void apply(T* p) {
++    JamHeap* heap = JamHeap::heap();
++    if (sizeof(T) == sizeof(narrowOop) && heap->is_in_reserved(p) &&
++        (!_minor || heap->is_in_young(p))) return;
++    T value = RawAccess<>::oop_load(p);
++    if (CompressedOops::is_null(value) || _seen.get(p) != nullptr) return;
++    _seen.put(p, true);
++    _seen.maybe_grow();
++    uint32_t at = CompressedOops::narrow_oop_value(value);
++    uint32_t next = jam_vm_forward(JamHeap::heap()->jam(), at);
++    oop target = next == 0 ? nullptr : cast_to_oop(CompressedOops::base() + size_t(next) * HeapWordSize);
++    RawAccess<>::oop_store(p, target);
++  }
++public:
++  explicit JamAdjust(bool minor) : _minor(minor) {}
++  void do_oop(oop* p) override { apply(p); }
++  void do_oop(narrowOop* p) override { apply(p); }
++};
++
++static void jam_roots(OopClosure* closure, bool adjust) {
++  StrongRootsScope scope(0);
++  CLDToOopClosure clds(closure, ClassLoaderData::_claim_none);
++  NMethodToOopClosure code(closure, adjust);
++  ClassLoaderDataGraph::cld_do(&clds);
++  // The full code-cache traversal below owns all nmethod slots.
++  Threads::oops_do(closure, nullptr);
++  OopStorageSet::strong_oops_do(closure);
++  CodeCache::nmethods_do(&code);
++}
++
++class VM_JamCollect : public VM_GC_Operation {
++  bool _minor;
++  bool _promote;
++  bool _track_starts;
++public:
++  VM_JamCollect(uint count, uint full_count, GCCause::Cause cause, bool minor, bool promote, bool track_starts = false)
++    : VM_GC_Operation(count, cause, full_count, !minor), _minor(minor), _promote(promote), _track_starts(track_starts) {}
++  bool skip_operation() const override {
++    return _track_starts ? JamHeap::_track_starts : VM_GC_Operation::skip_operation();
++  }
++  VMOp_Type type() const override { return VMOp_JamCollect; }
++  void doit() override {
++    JamHeap* heap = JamHeap::heap();
++    GCCauseSetter cause(heap, _gc_cause);
++    if (_track_starts) {
++      guarantee(jam_vm_track_starts(heap->jam()), "Unable to allocate Jam object-start metadata");
++      Atomic::release_store(&JamHeap::_track_starts, true);
++    }
++    heap->do_collection(_minor, _promote,
++                        !_minor && (_gc_cause == GCCause::_allocation_failure ||
++                                     _gc_cause == GCCause::_metadata_GC_clear_soft_refs));
++  }
++};
++
++void JamHeap::prepare_for_object_iteration() {
++  if (Atomic::load_acquire(&_track_starts)) return;
++  assert(!SafepointSynchronize::is_at_safepoint(), "Prepare before retaining raw oops");
++  uint count, full_count;
++  {
++    MutexLocker ml(Heap_lock);
++    count = total_collections();
++    full_count = total_full_collections();
++  }
++  VM_JamCollect operation(count, full_count, GCCause::_heap_inspection, false, false, true);
++  VMThread::execute(&operation);
++}
++
++HeapWord* JamHeap::allocate_or_collect_work(size_t size, bool tlab, bool verbose) {
++  bool young = size <= _young_space->capacity() / HeapWordSize;
++  if (tlab && !young) return nullptr;
++  HeapWord* result = allocate_work(size, young, verbose);
++  if (result == nullptr && is_init_completed()) {
++    if (young) {
++      bool promote;
++      {
++        MutexLocker ml(Heap_lock);
++        promote = (_minor_collections + 1) % JamPromoteEvery == 0;
++      }
++      collect_generation(true, promote, GCCause::_allocation_failure);
++      result = allocate_work(size, true, verbose);
++    }
++    if (result == nullptr) {
++      collect_generation(false, false, GCCause::_allocation_failure);
++      result = allocate_work(size, young, verbose);
++    }
++  }
++  if (result == nullptr && young && !tlab) result = allocate_work(size, false, verbose);
++  return result;
++}
++
++void JamHeap::pin_object(JavaThread* thread, oop obj) { GCLocker::enter(thread); }
++void JamHeap::unpin_object(JavaThread* thread, oop obj) { GCLocker::exit(thread); }
++
++void JamHeap::collect(GCCause::Cause cause) {
++  collect_generation(false, false, cause);
++}
++
++void JamHeap::collect_generation(bool minor, bool promote, GCCause::Cause cause) {
++  if (SafepointSynchronize::is_at_safepoint()) {
++    GCCauseSetter cause_scope(this, cause);
++    do_collection(minor, promote, !minor && cause == GCCause::_metadata_GC_clear_soft_refs);
++    return;
++  }
++  uint count;
++  uint full_count;
++  {
++    MutexLocker ml(Heap_lock);
++    count = total_collections();
++    full_count = total_full_collections();
++  }
++  VM_JamCollect operation(count, full_count, cause, minor, promote);
++  VMThread::execute(&operation);
++}
++
++void JamHeap::do_full_collection(bool clear_all_soft_refs) {
++  do_collection(false, false, clear_all_soft_refs);
++}
++
++size_t JamHeap::collections(int kind) const {
++  assert(Heap_lock->owned_by_self(), "Counters require the heap lock");
++  return kind == 0 ? _minor_collections : kind == 1 ? _promotions : _major_collections;
++}
++
++void JamHeap::do_collection(bool minor, bool promote, bool clear_all_soft_refs) {
++  assert(SafepointSynchronize::is_at_safepoint(), "Must stop mutators");
++  assert(Heap_lock->is_locked(), "Must serialize heap operations");
++  assert(!GCLocker::is_active(), "Must wait for JNI critical regions");
++  IsSTWGCActiveMark active;
++  SvcGCMarker marker(minor ? SvcGCMarker::MINOR : SvcGCMarker::FULL);
++  GCIdMark gc_id;
++  STWGCTimer timer;
++  timer.register_gc_start();
++  GCTraceTime(Info, gc) time(minor ? "Jam minor collection" : "Jam major collection", nullptr, gc_cause(), true);
++  TraceMemoryManagerStats management(&_memory_manager, gc_cause(),
++      minor ? "end of minor GC" : "end of major GC");
++  increment_total_collections(!minor);
++  const bool should_verify = total_collections() >= VerifyGCStartAt;
++  if (should_verify && VerifyBeforeGC) {
++    prepare_for_verify();
++    Universe::verify("Before GC");
++  }
++  ensure_parsability(true);
++  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::clear());
++
++  JamScanState state(this, minor);
++  _jam_scan_state = &state;
++  jam_vm_begin(_jam, minor);
++  _ref_processor->start_discovery(clear_all_soft_refs);
++  if (minor) trace_remembered_slots();
++  jam_vm_weak_roots(_jam, jam_scan, &state);
++  JamRoots roots;
++  jam_roots(&roots, false);
++  roots.trace(this);
++  jam_vm_weak_close(_jam, jam_scan, &state);
++
++  JamRefProc task;
++  JamFinalizers finalizers(&state);
++  ReferenceProcessorPhaseTimes ref_times(&timer, _ref_processor->max_num_queues());
++  _ref_processor->process_discovered_references(task, ref_times, &finalizers);
++  ref_times.print_all_references();
++  DoNothingClosure noop;
++  WeakProcessor::weak_oops_do(&jam_is_alive, &noop);
++
++  bool promoted = minor && promote;
++  if (!jam_vm_prepare(_jam, promoted)) {
++    guarantee(promoted, "Only insufficient promotion space can fail preparation");
++    promoted = false;
++    guarantee(jam_vm_prepare(_jam, false), "In-generation compaction must fit");
++  }
++  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::set_active(false));
++  JamAdjust adjust(minor);
++  jam_roots(&adjust, true);
++  WeakProcessor::oops_do(&adjust);
++  _ref_processor->weak_oops_do(&adjust);
++  for (int i = 0; i < state.wide_slots.length(); ++i) {
++    adjust.do_oop(state.wide_slots.at(i));
++  }
++  for (int i = 0; i < state.old_slots.length(); ++i) {
++    adjust.do_oop(state.old_slots.at(i));
++  }
++  jam_vm_finish(_jam);
++  _space->set_top((HeapWord*)(CompressedOops::base() + jam_vm_used(_jam, false) * HeapWordSize));
++  _young_space->set_top((HeapWord*)(CompressedOops::base() + jam_young_displacement +
++                                   jam_vm_used(_jam, true) * HeapWordSize));
++  // Promoted bases must be inside the published old space before validation.
++  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::update_pointers());
++  if (minor) ++_minor_collections; else ++_major_collections;
++  if (promoted) ++_promotions;
++  log_debug(gc)("Jam collections: minor=%zu, promotion=%zu, major=%zu; old=%zu, young=%zu bytes",
++                _minor_collections, _promotions, _major_collections, _space->used(), _young_space->used());
++  _jam_scan_state = nullptr;
++  resize_all_tlabs();
++  update_capacity_and_used_at_gc();
++  if (!minor) record_whole_heap_examined_timestamp();
++  MetaspaceGC::compute_new_size();
++  _last_counter_update = used();
++  _last_heap_print = used();
++  _monitoring_support->update_counters();
++  if (should_verify && VerifyAfterGC) Universe::verify("After GC");
++  timer.register_gc_end();
++}
++
++void JamHeap::prepare_for_verify() { ensure_parsability(false); }
++
++void JamHeap::verify(VerifyOption option) {
++  class VerifyObjects : public ObjectClosure {
++    void do_object(oop obj) override { oopDesc::verify(obj); }
++  } verify_objects;
++  object_iterate(&verify_objects);
++
++}
+--- a/src/hotspot/share/gc/jam/jamHeap.hpp
++++ b/src/hotspot/share/gc/jam/jamHeap.hpp
+@@ -0,0 +1,175 @@
++/*
++ * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2017, 2022, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_JAMHEAP_HPP
++#define SHARE_GC_JAM_JAMHEAP_HPP
++
++#include "gc/jam/jamBarrierSet.hpp"
++#include "gc/jam/jamMonitoringSupport.hpp"
++#include "gc/shared/collectedHeap.hpp"
++#include "gc/shared/softRefPolicy.hpp"
++#include "gc/shared/space.hpp"
++#include "memory/virtualspace.hpp"
++#include "services/memoryManager.hpp"
++#include "jam_vm.h"
++
++class ReferenceProcessor;
++struct JamScanState;
++
++class JamHeap : public CollectedHeap {
++  friend class VMStructs;
++private:
++  JamMonitoringSupport* _monitoring_support;
++  MemoryPool* _pool;
++  GCMemoryManager _memory_manager;
++  ContiguousSpace* _space;
++  ContiguousSpace* _young_space;
++  size_t _minor_collections;
++  size_t _promotions;
++  size_t _major_collections;
++  VirtualSpace _virtual_space;
++  jam_vm* _jam;
++  ReferenceProcessor* _ref_processor;
++  JamScanState* _jam_scan_state;
++  size_t _max_tlab_size;
++  size_t _step_counter_update;
++  size_t _step_heap_print;
++  int64_t _decay_time_ns;
++  volatile size_t _last_counter_update;
++  volatile size_t _last_heap_print;
++
++public:
++  static JamHeap* heap();
++
++  JamHeap() :
++          _memory_manager("Jam Heap"),
++          _space(nullptr),
++          _young_space(nullptr),
++          _minor_collections(0),
++          _promotions(0),
++          _major_collections(0),
++          _jam(nullptr),
++          _ref_processor(nullptr),
++          _jam_scan_state(nullptr) {};
++
++  Name kind() const override {
++    return CollectedHeap::Jam;
++  }
++
++  const char* name() const override {
++    return "Jam";
++  }
++
++  jint initialize() override;
++  void post_initialize() override;
++  void initialize_serviceability() override;
++
++  GrowableArray<GCMemoryManager*> memory_managers() override;
++  GrowableArray<MemoryPool*> memory_pools() override;
++
++  size_t max_capacity() const override { return capacity(); }
++  size_t capacity()     const override { return _space->capacity() + _young_space->capacity(); }
++  size_t used()         const override { return _space->used() + _young_space->used(); }
++
++  bool is_in(const void* p) const override {
++    return _space->is_in(p) || _young_space->is_in(p);
++  }
++
++  bool is_in_young(const void* p) const { return _young_space->is_in(p); }
++  HeapWord* young_begin() const {
++    assert(_young_space->end() == reserved_region().end(), "Young space ends the reservation");
++    return _young_space->bottom();
++  }
++  // Fresh young TLAB chunks need no barrier; old chunks can acquire young oops.
++  bool requires_barriers(stackChunkOop obj) const override { return !is_in_young(obj); }
++
++  // Allocation
++  HeapWord* allocate_work(size_t size, bool young, bool verbose = true);
++  HeapWord* allocate_or_collect_work(size_t size, bool tlab = false, bool verbose = true);
++  HeapWord* mem_allocate(size_t size, bool* gc_overhead_limit_was_exceeded) override;
++  HeapWord* allocate_new_tlab(size_t min_size,
++                              size_t requested_size,
++                              size_t* actual_size) override;
++
++  // TLAB allocation
++  size_t tlab_capacity(Thread* thr)         const override { return _young_space->capacity(); }
++  size_t tlab_used(Thread* thr)             const override { return _young_space->used(); }
++  size_t max_tlab_size()                    const override { return _max_tlab_size; }
++  size_t unsafe_max_tlab_alloc(Thread* thr) const override;
++
++  void collect(GCCause::Cause cause) override;
++  void do_full_collection(bool clear_all_soft_refs) override;
++  void collect_generation(bool minor, bool promote, GCCause::Cause cause);
++  void do_collection(bool minor, bool promote, bool clear_all_soft_refs);
++  size_t collections(int kind) const;
++  jam_vm* jam() const { return _jam; }
++  ReferenceProcessor* ref_processor() const { return _ref_processor; }
++  void trace_external(uint32_t const* roots, size_t count);
++
++  // Heap walking support
++  void prepare_for_object_iteration() override;
++  void object_iterate(ObjectClosure* cl) override;
++  static bool _track_starts;
++  static void record_start(oopDesc* obj);
++
++  // Moving collection waits for JNI critical regions through GCLocker.
++  void pin_object(JavaThread* thread, oop obj) override;
++  void unpin_object(JavaThread* thread, oop obj) override;
++
++  // No support for block parsing.
++  HeapWord* block_start(const void* addr) const { return nullptr;  }
++  bool block_is_obj(const HeapWord* addr) const { return false; }
++
++  // No GC threads
++  void gc_threads_do(ThreadClosure* tc) const override {}
++
++  // No nmethod handling
++  void register_nmethod(nmethod* nm) override {}
++  void unregister_nmethod(nmethod* nm) override {}
++  void verify_nmethod(nmethod* nm) override {}
++
++  void prepare_for_verify() override;
++  void verify(VerifyOption option) override;
++
++  MemRegion reserved_region() const { return _reserved; }
++  bool is_in_reserved(const void* addr) const { return _reserved.contains(addr); }
++
++  // Support for loading objects from CDS archive into the heap
++  bool can_load_archived_objects() const override { return false; }
++  HeapWord* allocate_loaded_archive_space(size_t size) override;
++
++  void print_heap_on(outputStream* st) const override;
++  void print_gc_on(outputStream* st) const override {}
++  void print_tracing_info() const override;
++  bool print_location(outputStream* st, void* addr) const override;
++
++private:
++  void print_heap_info(size_t used) const;
++  void print_metaspace_info() const;
++  void trace_remembered_slots();
++
++};
++
++#endif // SHARE_GC_JAM_JAMHEAP_HPP
+--- a/src/hotspot/share/gc/jam/jamInitLogger.cpp
++++ b/src/hotspot/share/gc/jam/jamInitLogger.cpp
+@@ -0,0 +1,63 @@
++/*
++ * Copyright (c) 2020, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#include "gc/jam/jamHeap.hpp"
++#include "gc/jam/jamInitLogger.hpp"
++#include "gc/shared/tlab_globals.hpp"
++#include "logging/log.hpp"
++#include "runtime/globals.hpp"
++#include "runtime/globals_extension.hpp"
++#include "utilities/globalDefinitions.hpp"
++
++void JamInitLogger::print_gc_specific() {
++  if (UseTLAB) {
++    size_t max_tlab = JamHeap::heap()->max_tlab_size() * HeapWordSize;
++    log_info(gc, init)("TLAB Size Max: " EXACTFMT, EXACTFMTARGS(max_tlab));
++    if (JamElasticTLAB) {
++      log_info(gc, init)("TLAB Size Elasticity: %.2fx", JamTLABElasticity);
++    }
++    if (JamElasticTLABDecay) {
++      log_info(gc, init)("TLAB Size Decay Time: %zums", JamTLABDecayTime);
++    }
++  } else {
++    log_info(gc, init)("TLAB: Disabled");
++  }
++
++  // Suggest that non-resizable heap might be better for some configurations.
++  // We are not adjusting the heap size by ourselves, because it affects startup time.
++  if (InitialHeapSize != MaxHeapSize) {
++    log_info(gc)("Consider setting -Xms equal to -Xmx to avoid resizing hiccups");
++  }
++
++  // Suggest that AlwaysPreTouch might be better for some configurations.
++  // We are not turning this on by ourselves, because it affects startup time.
++  if (FLAG_IS_DEFAULT(AlwaysPreTouch) && !AlwaysPreTouch) {
++    log_info(gc)("Consider enabling -XX:+AlwaysPreTouch to avoid memory commit hiccups");
++  }
++}
++
++void JamInitLogger::print() {
++  JamInitLogger init_log;
++  init_log.print_all();
++}
+--- a/src/hotspot/share/gc/jam/jamInitLogger.hpp
++++ b/src/hotspot/share/gc/jam/jamInitLogger.hpp
+@@ -0,0 +1,39 @@
++/*
++ * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2020, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_JAMINITLOGGER_HPP
++#define SHARE_GC_JAM_JAMINITLOGGER_HPP
++
++#include "gc/shared/gcInitLogger.hpp"
++
++class JamInitLogger : public GCInitLogger {
++protected:
++  void print_gc_specific() override;
++
++public:
++  static void print();
++};
++
++#endif // SHARE_GC_JAM_JAMINITLOGGER_HPP
+--- a/src/hotspot/share/gc/jam/jamMemoryPool.cpp
++++ b/src/hotspot/share/gc/jam/jamMemoryPool.cpp
+@@ -0,0 +1,45 @@
++/*
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#include "gc/jam/jamHeap.hpp"
++#include "gc/jam/jamMemoryPool.hpp"
++#include "gc/shared/gc_globals.hpp"
++
++JamMemoryPool::JamMemoryPool(JamHeap* heap) :
++        CollectedMemoryPool("Jam Heap",
++                            heap->capacity(),
++                            heap->max_capacity(),
++                            false),
++        _heap(heap) {
++  assert(UseJamGC, "sanity");
++}
++
++MemoryUsage JamMemoryPool::get_memory_usage() {
++  size_t initial_sz = initial_size();
++  size_t max_sz     = max_size();
++  size_t used       = used_in_bytes();
++  size_t committed  = committed_in_bytes();
++
++  return MemoryUsage(initial_sz, used, committed, max_sz);
++}
+--- a/src/hotspot/share/gc/jam/jamMemoryPool.hpp
++++ b/src/hotspot/share/gc/jam/jamMemoryPool.hpp
+@@ -0,0 +1,45 @@
++/*
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_JAMMEMORYPOOL_HPP
++#define SHARE_GC_JAM_JAMMEMORYPOOL_HPP
++
++#include "gc/jam/jamHeap.hpp"
++#include "services/memoryPool.hpp"
++#include "services/memoryUsage.hpp"
++#include "utilities/macros.hpp"
++
++class JamMemoryPool : public CollectedMemoryPool {
++private:
++  JamHeap* _heap;
++
++public:
++  JamMemoryPool(JamHeap* heap);
++  size_t committed_in_bytes() { return _heap->capacity();     }
++  size_t used_in_bytes()      { return _heap->used();         }
++  size_t max_size()     const { return _heap->max_capacity(); }
++  MemoryUsage get_memory_usage();
++};
++
++#endif // SHARE_GC_JAM_JAMMEMORYPOOL_HPP
+--- a/src/hotspot/share/gc/jam/jamMonitoringSupport.cpp
++++ b/src/hotspot/share/gc/jam/jamMonitoringSupport.cpp
+@@ -0,0 +1,114 @@
++/*
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#include "gc/jam/jamHeap.hpp"
++#include "gc/jam/jamMonitoringSupport.hpp"
++#include "gc/shared/generationCounters.hpp"
++#include "memory/allocation.hpp"
++#include "memory/metaspaceCounters.hpp"
++#include "memory/resourceArea.hpp"
++#include "runtime/perfData.hpp"
++#include "services/memoryService.hpp"
++
++class JamSpaceCounters: public CHeapObj<mtGC> {
++  friend class VMStructs;
++
++private:
++  PerfVariable* _capacity;
++  PerfVariable* _used;
++  char*         _name_space;
++
++public:
++  JamSpaceCounters(const char* name,
++                 int ordinal,
++                 size_t max_size,
++                 size_t initial_capacity,
++                 GenerationCounters* gc) {
++    if (UsePerfData) {
++      EXCEPTION_MARK;
++      ResourceMark rm;
++
++      const char* cns = PerfDataManager::name_space(gc->name_space(), "space", ordinal);
++
++      _name_space = NEW_C_HEAP_ARRAY(char, strlen(cns)+1, mtGC);
++      strcpy(_name_space, cns);
++
++      const char* cname = PerfDataManager::counter_name(_name_space, "name");
++      PerfDataManager::create_string_constant(SUN_GC, cname, name, CHECK);
++
++      cname = PerfDataManager::counter_name(_name_space, "maxCapacity");
++      PerfDataManager::create_constant(SUN_GC, cname, PerfData::U_Bytes, (jlong)max_size, CHECK);
++
++      cname = PerfDataManager::counter_name(_name_space, "capacity");
++      _capacity = PerfDataManager::create_variable(SUN_GC, cname, PerfData::U_Bytes, initial_capacity, CHECK);
++
++      cname = PerfDataManager::counter_name(_name_space, "used");
++      _used = PerfDataManager::create_variable(SUN_GC, cname, PerfData::U_Bytes, (jlong) 0, CHECK);
++
++      cname = PerfDataManager::counter_name(_name_space, "initCapacity");
++      PerfDataManager::create_constant(SUN_GC, cname, PerfData::U_Bytes, initial_capacity, CHECK);
++    }
++  }
++
++  ~JamSpaceCounters() {
++    FREE_C_HEAP_ARRAY(char, _name_space);
++  }
++
++  inline void update_all(size_t capacity, size_t used) {
++    _capacity->set_value(capacity);
++    _used->set_value(used);
++  }
++};
++
++class JamGenerationCounters : public GenerationCounters {
++private:
++  JamHeap* _heap;
++public:
++  JamGenerationCounters(JamHeap* heap) :
++          GenerationCounters("Heap", 1, 1, 0, heap->max_capacity(), heap->capacity()),
++          _heap(heap)
++  {};
++
++  void update_all() {
++    GenerationCounters::update_all(_heap->capacity());
++  }
++};
++
++JamMonitoringSupport::JamMonitoringSupport(JamHeap* heap) {
++  _heap_counters  = new JamGenerationCounters(heap);
++  _space_counters = new JamSpaceCounters("Heap", 0, heap->max_capacity(), 0, _heap_counters);
++}
++
++void JamMonitoringSupport::update_counters() {
++  MemoryService::track_memory_usage();
++
++  if (UsePerfData) {
++    JamHeap* heap = JamHeap::heap();
++    size_t used = heap->used();
++    size_t capacity = heap->capacity();
++    _heap_counters->update_all();
++    _space_counters->update_all(capacity, used);
++    MetaspaceCounters::update_performance_counters();
++  }
++}
+--- a/src/hotspot/share/gc/jam/jamMonitoringSupport.hpp
++++ b/src/hotspot/share/gc/jam/jamMonitoringSupport.hpp
+@@ -0,0 +1,44 @@
++/*
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_JAMMONITORINGSUPPORT_HPP
++#define SHARE_GC_JAM_JAMMONITORINGSUPPORT_HPP
++
++#include "memory/allocation.hpp"
++
++class JamGenerationCounters;
++class JamSpaceCounters;
++class JamHeap;
++
++class JamMonitoringSupport : public CHeapObj<mtGC> {
++private:
++  JamGenerationCounters* _heap_counters;
++  JamSpaceCounters* _space_counters;
++
++public:
++  JamMonitoringSupport(JamHeap* heap);
++  void update_counters();
++};
++
++#endif // SHARE_GC_JAM_JAMMONITORINGSUPPORT_HPP
+--- a/src/hotspot/share/gc/jam/jamThreadLocalData.hpp
++++ b/src/hotspot/share/gc/jam/jamThreadLocalData.hpp
+@@ -0,0 +1,97 @@
++/*
++ * Copyright (c) 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_JAMTHREADLOCALDATA_HPP
++#define SHARE_GC_JAM_JAMTHREADLOCALDATA_HPP
++
++#include "gc/shared/gc_globals.hpp"
++#include "runtime/javaThread.hpp"
++#include "utilities/debug.hpp"
++#include "jam_vm.h"
++
++class JamThreadLocalData {
++private:
++  size_t _ergo_tlab_size;
++  int64_t _last_tlab_time;
++  jam_vm_thread* _context;
++  bool _context_active;
++
++  explicit JamThreadLocalData(jam_vm* heap) :
++          _ergo_tlab_size(0),
++          _last_tlab_time(0),
++          _context(jam_vm_thread_create(heap)),
++          _context_active(false) {
++    guarantee(_context != nullptr, "Unable to allocate Jam thread context");
++  }
++
++  static JamThreadLocalData* data(Thread* thread) {
++    assert(UseJamGC, "Sanity");
++    return thread->gc_data<JamThreadLocalData>();
++  }
++
++public:
++  static void create(Thread* thread, jam_vm* heap) {
++    new (data(thread)) JamThreadLocalData(heap);
++  }
++
++  static void destroy(Thread* thread) {
++    guarantee(!data(thread)->_context_active, "Jam thread context must be inactive before destruction");
++    jam_vm_thread_destroy(data(thread)->_context);
++    data(thread)->~JamThreadLocalData();
++  }
++
++  static bool context_active(Thread* thread) {
++    return data(thread)->_context_active;
++  }
++
++  static void enter(Thread* thread) {
++    guarantee(thread == Thread::current_or_null(), "Jam context must be entered by its own thread");
++    jam_vm_thread_enter(data(thread)->_context);
++    data(thread)->_context_active = true;
++  }
++
++  static void leave(Thread* thread) {
++    guarantee(thread == Thread::current_or_null(), "Jam context must be left by its own thread");
++    jam_vm_thread_leave(data(thread)->_context);
++    data(thread)->_context_active = false;
++  }
++
++  static size_t ergo_tlab_size(Thread *thread) {
++    return data(thread)->_ergo_tlab_size;
++  }
++
++  static int64_t last_tlab_time(Thread *thread) {
++    return data(thread)->_last_tlab_time;
++  }
++
++  static void set_ergo_tlab_size(Thread *thread, size_t val) {
++    data(thread)->_ergo_tlab_size = val;
++  }
++
++  static void set_last_tlab_time(Thread *thread, int64_t time) {
++    data(thread)->_last_tlab_time = time;
++  }
++};
++
++#endif // SHARE_GC_JAM_JAMTHREADLOCALDATA_HPP
+--- a/src/hotspot/share/gc/jam/jamWeak.cpp
++++ b/src/hotspot/share/gc/jam/jamWeak.cpp
+@@ -0,0 +1,172 @@
++// SPDX-FileCopyrightText: 2026 Edward Kmett
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include "classfile/vmSymbols.hpp"
++#include "gc/jam/jamHeap.hpp"
++#include "jvm.h"
++#include "oops/access.inline.hpp"
++#include "oops/compressedOops.inline.hpp"
++#include "oops/typeArrayOop.inline.hpp"
++#include "runtime/handles.inline.hpp"
++#include "runtime/interfaceSupport.inline.hpp"
++#include "runtime/jniHandles.inline.hpp"
++#include "runtime/mutexLocker.hpp"
++
++static JamHeap* jam_weak_heap(TRAPS) {
++  if (!UseJamGC) {
++    THROW_MSG_NULL(vmSymbols::java_lang_UnsupportedOperationException(),
++                   "Generalized weak associations require the Jam collector");
++  }
++  return JamHeap::heap();
++}
++
++static uint32_t jam_weak_offset(jobject value) {
++  return CompressedOops::narrow_oop_value(JNIHandles::resolve(value));
++}
++
++static oop jam_weak_object(uint32_t value) {
++  return CompressedOops::decode(CompressedOops::narrow_oop_cast(value));
++}
++
++JVM_ENTRY(jlong, JVM_JamWeakCreate(JNIEnv* env, jclass ignored,
++                                 jobject key, jobject value, jobject finalizer))
++  JamHeap* heap = jam_weak_heap(CHECK_0);
++  if (key == nullptr) {
++    THROW_MSG_0(vmSymbols::java_lang_NullPointerException(), "weak key");
++  }
++  uint64_t token;
++  {
++    MutexLocker lock(Heap_lock);
++    // Acquiring the lock may safepoint; resolve all arguments only afterward.
++    token = jam_vm_weak_create(heap->jam(), jam_weak_offset(key),
++                               jam_weak_offset(value), jam_weak_offset(finalizer));
++  }
++  if (token == 0) {
++    THROW_MSG_0(vmSymbols::java_lang_OutOfMemoryError(), "Jam weak registration metadata exhausted");
++  }
++  return jlong(token);
++JVM_END
++
++JVM_ENTRY(jobject, JVM_JamWeakDeref(JNIEnv* env, jclass ignored, jlong token))
++  JamHeap* heap = jam_weak_heap(CHECK_NULL);
++  Handle result;
++  {
++    MutexLocker lock(Heap_lock);
++    result = Handle(THREAD, jam_weak_object(jam_vm_weak_value(heap->jam(), uint64_t(token))));
++  }
++  return JNIHandles::make_local(THREAD, result());
++JVM_END
++
++JVM_ENTRY(jobject, JVM_JamWeakTake(JNIEnv* env, jclass ignored, jlongArray token_out))
++  JamHeap* heap = jam_weak_heap(CHECK_NULL);
++  if (token_out == nullptr) {
++    THROW_MSG_NULL(vmSymbols::java_lang_NullPointerException(), "finalizer token output");
++  }
++  typeArrayHandle output(THREAD, typeArrayOop(JNIHandles::resolve(token_out)));
++  if (output->length() == 0) {
++    THROW_MSG_NULL(vmSymbols::java_lang_IllegalArgumentException(), "token output needs one element");
++  }
++  Handle result;
++  {
++    MutexLocker lock(Heap_lock);
++    uint64_t token;
++    uint32_t at = jam_vm_weak_take(heap->jam(), &token);
++    output->long_at_put(0, jlong(token));
++    result = Handle(THREAD, jam_weak_object(at));
++  }
++  return JNIHandles::make_local(THREAD, result());
++JVM_END
++
++JVM_ENTRY(jobject, JVM_JamWeakFinalize(JNIEnv* env, jclass ignored, jlong token))
++  JamHeap* heap = jam_weak_heap(CHECK_NULL);
++  Handle result;
++  {
++    MutexLocker lock(Heap_lock);
++    result = Handle(THREAD, jam_weak_object(jam_vm_weak_finalize(heap->jam(), uint64_t(token))));
++  }
++  return JNIHandles::make_local(THREAD, result());
++JVM_END
++
++JVM_ENTRY(void, JVM_JamWeakComplete(JNIEnv* env, jclass ignored, jlong token))
++  JamHeap* heap = jam_weak_heap(CHECK);
++  MutexLocker lock(Heap_lock);
++  jam_vm_weak_complete(heap->jam(), uint64_t(token));
++JVM_END
++
++JVM_ENTRY(jlong, JVM_JamCandidateArm(JNIEnv* env, jclass ignored,
++                                   jobject owner, jlong wait_generation))
++  JamHeap* heap = jam_weak_heap(CHECK_0);
++  if (owner == nullptr) {
++    THROW_MSG_0(vmSymbols::java_lang_NullPointerException(), "candidate owner");
++  }
++  if (wait_generation <= 0) {
++    THROW_MSG_0(vmSymbols::java_lang_IllegalArgumentException(), "candidate wait generation must be positive");
++  }
++  uint64_t ticket;
++  {
++    MutexLocker lock(Heap_lock);
++    ticket = jam_vm_candidate_arm(heap->jam(), jam_weak_offset(owner), uint64_t(wait_generation));
++  }
++  if (ticket == 0) {
++    THROW_MSG_0(vmSymbols::java_lang_OutOfMemoryError(), "Jam candidate registration metadata exhausted");
++  }
++  return jlong(ticket);
++JVM_END
++
++static jobject jam_candidate_claim(jclass klass, jlong ticket, jlong wait_generation,
++                                   bool disarm, TRAPS) {
++  JamHeap* heap = jam_weak_heap(CHECK_NULL);
++  if (ticket <= 0 || wait_generation <= 0) return nullptr;
++  // Reserve the return handle before changing ownership; the class is a temporary root.
++  jobject result = JNIHandles::make_local(THREAD, JNIHandles::resolve_non_null(klass),
++                                          AllocFailStrategy::RETURN_NULL);
++  if (result == nullptr) {
++    THROW_MSG_NULL(vmSymbols::java_lang_OutOfMemoryError(), "Jam candidate return handle exhausted");
++  }
++  MutexLocker lock(Heap_lock);
++  uint32_t at = disarm
++    ? jam_vm_candidate_disarm(heap->jam(), uint64_t(ticket), uint64_t(wait_generation))
++    : jam_vm_candidate_poll(heap->jam(), uint64_t(ticket), uint64_t(wait_generation));
++  if (at == 0) {
++    JNIHandles::destroy_local(result);
++    return nullptr;
++  }
++  // Local JNI handles are untagged; this store cannot allocate or safepoint.
++  NativeAccess<>::oop_store(reinterpret_cast<oop*>(result), jam_weak_object(at));
++  return result;
++}
++
++JVM_ENTRY(jobject, JVM_JamCandidatePoll(JNIEnv* env, jclass klass, jlong ticket, jlong wait_generation))
++  return jam_candidate_claim(klass, ticket, wait_generation, false, THREAD);
++JVM_END
++
++JVM_ENTRY(jobject, JVM_JamCandidateDisarm(JNIEnv* env, jclass klass, jlong ticket, jlong wait_generation))
++  return jam_candidate_claim(klass, ticket, wait_generation, true, THREAD);
++JVM_END
++
++JVM_ENTRY(void, JVM_JamCandidateComplete(JNIEnv* env, jclass ignored, jlong ticket, jlong wait_generation))
++  JamHeap* heap = jam_weak_heap(CHECK);
++  if (ticket <= 0 || wait_generation <= 0) return;
++  MutexLocker lock(Heap_lock);
++  jam_vm_candidate_complete(heap->jam(), uint64_t(ticket), uint64_t(wait_generation));
++JVM_END
++
++JVM_ENTRY(jlong, JVM_JamCandidateEpoch(JNIEnv* env, jclass ignored))
++  JamHeap* heap = jam_weak_heap(CHECK_0);
++  return jlong(jam_vm_candidate_epoch(heap->jam()));
++JVM_END
++
++JVM_ENTRY(void, JVM_JamCollect(JNIEnv* env, jclass ignored, jboolean minor, jboolean promote))
++  JamHeap* heap = jam_weak_heap(CHECK);
++  // VM_GC_Operation acquires Heap_lock itself, and honors JNI critical regions.
++  heap->collect_generation(minor, promote, GCCause::_java_lang_system_gc);
++JVM_END
++
++JVM_ENTRY(jlong, JVM_JamCollections(JNIEnv* env, jclass ignored, jint kind))
++  JamHeap* heap = jam_weak_heap(CHECK_0);
++  if (kind < 0 || kind > 2) {
++    THROW_MSG_0(vmSymbols::java_lang_IllegalArgumentException(), "collection kind must be 0, 1 or 2");
++  }
++  MutexLocker lock(Heap_lock);
++  return jlong(heap->collections(kind));
++JVM_END
+--- a/src/hotspot/share/gc/jam/jam_globals.hpp
++++ b/src/hotspot/share/gc/jam/jam_globals.hpp
+@@ -0,0 +1,103 @@
++/*
++ * Copyright (c) 2020, 2024, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_JAM_GLOBALS_HPP
++#define SHARE_GC_JAM_JAM_GLOBALS_HPP
++
++#include "runtime/globals_shared.hpp"
++
++//
++// Defines all globals flags used by the Jam GC.
++//
++
++#define GC_JAM_FLAGS(develop,                                           \
++                         develop_pd,                                        \
++                         product,                                           \
++                         product_pd,                                        \
++                         range,                                             \
++                         constraint)                                        \
++                                                                            \
++  product(size_t, JamPrintHeapSteps, 20, EXPERIMENTAL,                  \
++          "Print heap occupancy stats with this number of steps. "          \
++          "0 turns the printing off.")                                      \
++          range(0, max_intx)                                                \
++                                                                            \
++  product(size_t, JamUpdateCountersStep, 1 * M, EXPERIMENTAL,           \
++          "Update heap occupancy counters after allocating this much "      \
++          "memory. Higher values would make allocations faster at "         \
++          "the expense of lower resolution in heap counters.")              \
++          range(1, max_intx)                                                \
++                                                                            \
++  product(size_t, JamMaxTLABSize, 4 * M, EXPERIMENTAL,                  \
++          "Max TLAB size to use with Jam GC. Larger value improves "    \
++          "performance at the expense of per-thread memory waste. This "    \
++          "asks TLAB machinery to cap TLAB sizes at this value.")           \
++          range(1, max_intx)                                                \
++                                                                            \
++  product(bool, JamElasticTLAB, true, EXPERIMENTAL,                     \
++          "Use elastic policy to manage TLAB sizes. This conserves memory " \
++          "for non-actively allocating threads, even when they request "    \
++          "large TLABs for themselves. Active threads would experience "    \
++          "smaller TLABs until policy catches up.")                         \
++                                                                            \
++  product(bool, JamElasticTLABDecay, true, EXPERIMENTAL,                \
++          "Use timed decays to shrink TLAB sizes. This conserves memory "   \
++          "for the threads that allocate in bursts of different sizes, "    \
++          "for example the small/rare allocations coming after the initial "\
++          "large burst.")                                                   \
++                                                                            \
++  product(double, JamTLABElasticity, 1.1, EXPERIMENTAL,                 \
++          "Multiplier to use when deciding on next TLAB size. Larger value "\
++          "improves performance at the expense of per-thread memory waste. "\
++          "Lower value improves memory footprint, but penalizes actively "  \
++          "allocating threads.")                                            \
++          range(1.0, DBL_MAX)                                               \
++                                                                            \
++  product(size_t, JamTLABDecayTime, 1000, EXPERIMENTAL,                 \
++          "TLAB sizing policy decays to initial size after thread had not " \
++          "allocated for this long. Time is in milliseconds. Lower value "  \
++          "improves memory footprint, but penalizes actively allocating "   \
++          "threads.")                                                       \
++          range(1, max_intx)                                                \
++                                                                            \
++  product(size_t, JamReserve, 1 * M, EXPERIMENTAL,                    \
++          "Private circular-heap reserve for jam compaction.")              \
++          range(1, max_intx)                                                \
++                                                                            \
++  product(size_t, JamYoungSize, 0, EXPERIMENTAL,                      \
++          "Usable young capacity; zero selects one quarter of the heap.") \
++          range(0, max_intx)                                                \
++                                                                            \
++  product(uint, JamPromoteEvery, 3, EXPERIMENTAL,                     \
++          "Attempt whole-nursery promotion every this many minor GCs.")   \
++          range(1, 1000)                                                    \
++                                                                            \
++  product(uint, JamWorkers, 1, EXPERIMENTAL,                          \
++          "Jam copy workers; HotSpot object scanning remains serial.")     \
++          range(1, 64)
++
++// end of GC_JAM_FLAGS
++
++#endif // SHARE_GC_JAM_JAM_GLOBALS_HPP
+--- a/src/hotspot/share/gc/jam/vmStructs_jam.hpp
++++ b/src/hotspot/share/gc/jam/vmStructs_jam.hpp
+@@ -0,0 +1,47 @@
++/*
++ * Copyright (c) 2018, Red Hat Inc. All rights reserved.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++#ifndef SHARE_GC_JAM_VMSTRUCTS_JAM_HPP
++#define SHARE_GC_JAM_VMSTRUCTS_JAM_HPP
++
++#include "gc/jam/jamHeap.hpp"
++#include "gc/shared/space.hpp"
++#include "memory/virtualspace.hpp"
++
++#define VM_STRUCTS_JAMGC(nonstatic_field,                       \
++                            volatile_nonstatic_field,               \
++                            static_field)                           \
++  nonstatic_field(JamHeap, _virtual_space, VirtualSpace)        \
++  nonstatic_field(JamHeap, _space, ContiguousSpace*)             \
++  nonstatic_field(JamHeap, _young_space, ContiguousSpace*)
++
++#define VM_TYPES_JAMGC(declare_type,                            \
++                          declare_toplevel_type,                    \
++                          declare_integer_type)                     \
++  declare_type(JamHeap, CollectedHeap)
++
++#define VM_INT_CONSTANTS_JAMGC(declare_constant,                \
++                                  declare_constant_with_value)
++
++#endif // SHARE_GC_JAM_VMSTRUCTS_JAM_HPP
+--- a/src/hotspot/share/gc/shared/barrierSet.hpp
++++ b/src/hotspot/share/gc/shared/barrierSet.hpp
+@@ -128,6 +128,9 @@
+   virtual void on_slowpath_allocation_exit(JavaThread* thread, oop new_obj) {}
+   virtual void on_thread_create(Thread* thread) {}
+   virtual void on_thread_destroy(Thread* thread) {}
++  // Called by call_run() on the new OS thread before its subclass startup.
++  // The initial thread and threads attached through JNI do not use call_run().
++  virtual void on_thread_start(Thread* thread) {}
+ 
+   // These perform BarrierSet-related initialization/cleanup before the thread
+   // is added to or removed from the corresponding set of threads. The
+--- a/src/hotspot/share/gc/shared/barrierSetConfig.hpp
++++ b/src/hotspot/share/gc/shared/barrierSetConfig.hpp
+@@ -31,6 +31,7 @@
+ #define FOR_EACH_CONCRETE_BARRIER_SET_DO(f)          \
+   f(CardTableBarrierSet)                             \
+   EPSILONGC_ONLY(f(EpsilonBarrierSet))               \
++  JAMGC_ONLY(f(JamBarrierSet))                       \
+   G1GC_ONLY(f(G1BarrierSet))                         \
+   SHENANDOAHGC_ONLY(f(ShenandoahBarrierSet))         \
+   ZGC_ONLY(f(ZBarrierSet))
+--- a/src/hotspot/share/gc/shared/barrierSetConfig.inline.hpp
++++ b/src/hotspot/share/gc/shared/barrierSetConfig.inline.hpp
+@@ -33,6 +33,9 @@
+ #if INCLUDE_EPSILONGC
+ #include "gc/epsilon/epsilonBarrierSet.hpp"
+ #endif
++#if INCLUDE_JAMGC
++#include "gc/jam/jamBarrierSet.hpp"
++#endif
+ #if INCLUDE_G1GC
+ #include "gc/g1/g1BarrierSet.inline.hpp"
+ #endif
+--- a/src/hotspot/share/gc/shared/collectedHeap.hpp
++++ b/src/hotspot/share/gc/shared/collectedHeap.hpp
+@@ -191,7 +191,8 @@
+     G1,
+     Epsilon,
+     Z,
+-    Shenandoah
++    Shenandoah,
++    Jam
+   };
+ 
+  protected:
+@@ -392,6 +393,8 @@
+   virtual GrowableArray<MemoryPool*> memory_pools() = 0;
+ 
+   // Iterate over all objects, calling "cl.do_object" on each.
++  // Called by diagnostic VM-operation prologues before retaining raw oops.
++  virtual void prepare_for_object_iteration() {}
+   virtual void object_iterate(ObjectClosure* cl) = 0;
+ 
+   virtual ParallelObjectIteratorImpl* parallel_object_iterator(uint thread_num) {
+--- a/src/hotspot/share/gc/shared/gcConfig.cpp
++++ b/src/hotspot/share/gc/shared/gcConfig.cpp
+@@ -30,6 +30,9 @@
+ #if INCLUDE_EPSILONGC
+ #include "gc/epsilon/epsilonArguments.hpp"
+ #endif
++#if INCLUDE_JAMGC
++#include "gc/jam/jamArguments.hpp"
++#endif
+ #if INCLUDE_G1GC
+ #include "gc/g1/g1Arguments.hpp"
+ #endif
+@@ -57,6 +60,7 @@
+ };
+ 
+    EPSILONGC_ONLY(static EpsilonArguments    epsilonArguments;)
++       JAMGC_ONLY(static JamArguments        jamArguments;)
+         G1GC_ONLY(static G1Arguments         g1Arguments;)
+   PARALLELGC_ONLY(static ParallelArguments   parallelArguments;)
+     SERIALGC_ONLY(static SerialArguments     serialArguments;)
+@@ -67,6 +71,7 @@
+ // line flag, CollectedHeap::Name and GCArguments instance.
+ static const IncludedGC IncludedGCs[] = {
+    EPSILONGC_ONLY_ARG(IncludedGC(UseEpsilonGC,       CollectedHeap::Epsilon,    epsilonArguments,    "epsilon gc"))
++       JAMGC_ONLY_ARG(IncludedGC(UseJamGC,           CollectedHeap::Jam,        jamArguments,        "jam gc"))
+         G1GC_ONLY_ARG(IncludedGC(UseG1GC,            CollectedHeap::G1,         g1Arguments,         "g1 gc"))
+   PARALLELGC_ONLY_ARG(IncludedGC(UseParallelGC,      CollectedHeap::Parallel,   parallelArguments,   "parallel gc"))
+     SERIALGC_ONLY_ARG(IncludedGC(UseSerialGC,        CollectedHeap::Serial,     serialArguments,     "serial gc"))
+@@ -87,6 +92,7 @@
+ 
+ void GCConfig::fail_if_non_included_gc_is_selected() {
+   NOT_EPSILONGC(   FAIL_IF_SELECTED(UseEpsilonGC));
++  NOT_JAMGC(       FAIL_IF_SELECTED(UseJamGC));
+   NOT_G1GC(        FAIL_IF_SELECTED(UseG1GC));
+   NOT_PARALLELGC(  FAIL_IF_SELECTED(UseParallelGC));
+   NOT_SERIALGC(    FAIL_IF_SELECTED(UseSerialGC));
+--- a/src/hotspot/share/gc/shared/gcConfiguration.cpp
++++ b/src/hotspot/share/gc/shared/gcConfiguration.cpp
+@@ -33,6 +33,9 @@
+ #include "utilities/debug.hpp"
+ 
+ GCName GCConfiguration::young_collector() const {
++  if (UseJamGC) {
++    return JamMinor;
++  }
+   if (UseG1GC) {
+     return G1New;
+   }
+@@ -58,6 +61,9 @@
+ }
+ 
+ GCName GCConfiguration::old_collector() const {
++  if (UseJamGC) {
++    return JamMajor;
++  }
+   if (UseG1GC) {
+     return G1Old;
+   }
+@@ -83,18 +89,22 @@
+ }
+ 
+ uint GCConfiguration::num_parallel_gc_threads() const {
++  JAMGC_ONLY(if (UseJamGC) return JamWorkers;)
+   return ParallelGCThreads;
+ }
+ 
+ uint GCConfiguration::num_concurrent_gc_threads() const {
++  if (UseJamGC) return 0;
+   return ConcGCThreads;
+ }
+ 
+ bool GCConfiguration::uses_dynamic_gc_threads() const {
++  if (UseJamGC) return false;
+   return UseDynamicNumberOfGCThreads;
+ }
+ 
+ bool GCConfiguration::is_explicit_gc_concurrent() const {
++  if (UseJamGC) return false;
+   return ExplicitGCInvokesConcurrent;
+ }
+ 
+--- a/src/hotspot/share/gc/shared/gcName.hpp
++++ b/src/hotspot/share/gc/shared/gcName.hpp
+@@ -41,6 +41,8 @@
+   ShenandoahYoung,
+   ShenandoahOld,
+   NA,
++  JamMinor,
++  JamMajor,
+   GCNameEndSentinel
+ };
+ 
+@@ -61,6 +63,8 @@
+       case ShenandoahYoung: return "Shenandoah Young";
+       case ShenandoahOld: return "Shenandoah Old";
+       case NA: return "N/A";
++      case JamMinor: return "Jam Minor";
++      case JamMajor: return "Jam Major";
+       default: ShouldNotReachHere(); return nullptr;
+     }
+   }
+--- a/src/hotspot/share/gc/shared/gcVMOperations.cpp
++++ b/src/hotspot/share/gc/shared/gcVMOperations.cpp
+@@ -57,6 +57,11 @@
+   Heap_lock->unlock();
+ }
+ 
++bool VM_Verify::doit_prologue() {
++  Universe::heap()->prepare_for_object_iteration();
++  return VM_GC_Sync_Operation::doit_prologue();
++}
++
+ void VM_Verify::doit() {
+   Universe::heap()->prepare_for_verify();
+   Universe::verify();
+@@ -95,7 +100,7 @@
+ 
+ static bool should_use_gclocker() {
+   // Only Serial and Parallel use GCLocker to synchronize with threads in JNI critical-sections, in order to handle pinned objects.
+-  return UseSerialGC || UseParallelGC;
++  return UseSerialGC || UseParallelGC || UseJamGC;
+ }
+ 
+ bool VM_GC_Operation::doit_prologue() {
+@@ -146,6 +151,7 @@
+ }
+ 
+ bool VM_GC_HeapInspection::doit_prologue() {
++  Universe::heap()->prepare_for_object_iteration();
+   if (_full_gc && (UseZGC || UseShenandoahGC)) {
+     // ZGC and Shenandoah cannot perform a synchronous GC cycle from within the VM thread.
+     // So VM_GC_HeapInspection::collect() is a noop. To respect the _full_gc
+--- a/src/hotspot/share/gc/shared/gcVMOperations.hpp
++++ b/src/hotspot/share/gc/shared/gcVMOperations.hpp
+@@ -97,6 +97,7 @@
+ 
+ class VM_Verify : public VM_GC_Sync_Operation {
+  public:
++  bool doit_prologue() override;
+   VMOp_Type type() const { return VMOp_Verify; }
+   void doit();
+ };
+--- a/src/hotspot/share/gc/shared/gc_globals.hpp
++++ b/src/hotspot/share/gc/shared/gc_globals.hpp
+@@ -30,6 +30,9 @@
+ #if INCLUDE_EPSILONGC
+ #include "gc/epsilon/epsilon_globals.hpp"
+ #endif
++#if INCLUDE_JAMGC
++#include "gc/jam/jam_globals.hpp"
++#endif
+ #if INCLUDE_G1GC
+ #include "gc/g1/g1_globals.hpp"
+ #endif
+@@ -61,6 +64,14 @@
+     range,                                                                  \
+     constraint))                                                            \
+                                                                             \
++  JAMGC_ONLY(GC_JAM_FLAGS(                                                 \
++    develop,                                                                \
++    develop_pd,                                                             \
++    product,                                                                \
++    product_pd,                                                             \
++    range,                                                                  \
++    constraint))                                                            \
++                                                                            \
+   G1GC_ONLY(GC_G1_FLAGS(                                                    \
+     develop,                                                                \
+     develop_pd,                                                             \
+@@ -114,6 +125,9 @@
+                                                                             \
+   product(bool, UseEpsilonGC, false, EXPERIMENTAL,                          \
+           "Use the Epsilon (no-op) garbage collector")                      \
++                                                                            \
++  product(bool, UseJamGC, false, EXPERIMENTAL,                               \
++          "Use the jam generational garbage collector")                     \
+                                                                             \
+   product(bool, UseZGC, false,                                              \
+           "Use the Z garbage collector")                                    \
+--- a/src/hotspot/share/gc/shared/memAllocator.cpp
++++ b/src/hotspot/share/gc/shared/memAllocator.cpp
+@@ -27,6 +27,9 @@
+ #include "gc/shared/allocTracer.hpp"
+ #include "gc/shared/collectedHeap.hpp"
+ #include "gc/shared/memAllocator.hpp"
++#if INCLUDE_JAMGC
++#include "gc/jam/jamHeap.hpp"
++#endif
+ #include "gc/shared/threadLocalAllocBuffer.inline.hpp"
+ #include "gc/shared/tlab_globals.hpp"
+ #include "memory/universe.hpp"
+@@ -230,6 +233,7 @@
+ }
+ 
+ void MemAllocator::Allocation::notify_allocation() {
++  JAMGC_ONLY(if (UseJamGC && JamHeap::_track_starts) JamHeap::record_start(obj());)
+   notify_allocation_low_memory_detector();
+   notify_allocation_jfr_sampler();
+   notify_allocation_dtrace_sampler();
+--- a/src/hotspot/share/gc/shared/referenceProcessor.cpp
++++ b/src/hotspot/share/gc/shared/referenceProcessor.cpp
+@@ -179,7 +179,8 @@
+ #endif
+ 
+ ReferenceProcessorStats ReferenceProcessor::process_discovered_references(RefProcProxyTask& proxy_task,
+-                                                                          ReferenceProcessorPhaseTimes& phase_times) {
++                                                                          ReferenceProcessorPhaseTimes& phase_times,
++                                                                          VoidClosure* before_final_keep_alive) {
+ 
+   double start_time = os::elapsedTime();
+ 
+@@ -202,6 +203,9 @@
+ 
+   {
+     RefProcTotalPhaseTimesTracker tt(KeepAliveFinalRefsPhase, &phase_times);
++    if (before_final_keep_alive != nullptr) {
++      before_final_keep_alive->do_void();
++    }
+     process_final_keep_alive(proxy_task, phase_times);
+   }
+ 
+--- a/src/hotspot/share/gc/shared/referenceProcessor.hpp
++++ b/src/hotspot/share/gc/shared/referenceProcessor.hpp
+@@ -414,9 +414,12 @@
+   virtual bool discover_reference(oop obj, ReferenceType rt);
+ 
+   // Process references found during GC (called by the garbage collector)
++  // The optional hook retains runtime finalizers after soft/weak/final death
++  // decisions and before finalizer keep-alive and phantom processing.
+   ReferenceProcessorStats
+   process_discovered_references(RefProcProxyTask& proxy_task,
+-                                ReferenceProcessorPhaseTimes& phase_times);
++                                ReferenceProcessorPhaseTimes& phase_times,
++                                VoidClosure* before_final_keep_alive = nullptr);
+ 
+   // If a discovery is in process that is being superseded, abandon it: all
+   // the discovered lists will be empty, and all the objects on them will
+--- a/src/hotspot/share/gc/shared/vmStructs_gc.hpp
++++ b/src/hotspot/share/gc/shared/vmStructs_gc.hpp
+@@ -32,6 +32,9 @@
+ #include "gc/shared/space.hpp"
+ #if INCLUDE_EPSILONGC
+ #include "gc/epsilon/vmStructs_epsilon.hpp"
++#endif
++#if INCLUDE_JAMGC
++#include "gc/jam/vmStructs_jam.hpp"
+ #endif
+ #if INCLUDE_G1GC
+ #include "gc/g1/vmStructs_g1.hpp"
+@@ -57,6 +60,9 @@
+   EPSILONGC_ONLY(VM_STRUCTS_EPSILONGC(nonstatic_field,                                                                               \
+                                       volatile_nonstatic_field,                                                                      \
+                                       static_field))                                                                                 \
++  JAMGC_ONLY(VM_STRUCTS_JAMGC(nonstatic_field,                                                                                        \
++                               volatile_nonstatic_field,                                                                             \
++                               static_field))                                                                                        \
+   G1GC_ONLY(VM_STRUCTS_G1GC(nonstatic_field,                                                                                         \
+                             volatile_nonstatic_field,                                                                                \
+                             static_field))                                                                                           \
+@@ -109,6 +115,9 @@
+   EPSILONGC_ONLY(VM_TYPES_EPSILONGC(declare_type,                         \
+                                     declare_toplevel_type,                \
+                                     declare_integer_type))                \
++  JAMGC_ONLY(VM_TYPES_JAMGC(declare_type,                                 \
++                             declare_toplevel_type,                       \
++                             declare_integer_type))                       \
+   G1GC_ONLY(VM_TYPES_G1GC(declare_type,                                   \
+                           declare_toplevel_type,                          \
+                           declare_integer_type))                          \
+@@ -167,6 +176,8 @@
+                             declare_constant_with_value)                    \
+   EPSILONGC_ONLY(VM_INT_CONSTANTS_EPSILONGC(declare_constant,               \
+                                             declare_constant_with_value))   \
++  JAMGC_ONLY(VM_INT_CONSTANTS_JAMGC(declare_constant,                      \
++                                     declare_constant_with_value))          \
+   G1GC_ONLY(VM_INT_CONSTANTS_G1GC(declare_constant,                         \
+                                   declare_constant_with_value))             \
+   PARALLELGC_ONLY(VM_INT_CONSTANTS_PARALLELGC(declare_constant,             \
+@@ -197,6 +208,7 @@
+   declare_constant(CollectedHeap::Serial)                                   \
+   declare_constant(CollectedHeap::Parallel)                                 \
+   declare_constant(CollectedHeap::G1)                                       \
++  declare_constant(CollectedHeap::Jam)                                      \
+ 
+ #define VM_LONG_CONSTANTS_GC(declare_constant)                              \
+   ZGC_ONLY(VM_LONG_CONSTANTS_Z(declare_constant))
+--- a/src/hotspot/share/include/jvm.h
++++ b/src/hotspot/share/include/jvm.h
+@@ -117,6 +117,45 @@
+ 
+ JNIEXPORT void JNICALL
+ JVM_GC(void);
++
++/* Experimental jam generalized-weak bridge. Tokens are stable native IDs;
++ * managed objects are passed only through ordinary JNI local references. */
++JNIEXPORT jlong JNICALL
++JVM_JamWeakCreate(JNIEnv *env, jclass ignored, jobject key, jobject value, jobject finalizer);
++
++JNIEXPORT jobject JNICALL
++JVM_JamWeakDeref(JNIEnv *env, jclass ignored, jlong token);
++
++JNIEXPORT jobject JNICALL
++JVM_JamWeakTake(JNIEnv *env, jclass ignored, jlongArray token_out);
++
++JNIEXPORT jobject JNICALL
++JVM_JamWeakFinalize(JNIEnv *env, jclass ignored, jlong token);
++
++JNIEXPORT void JNICALL
++JVM_JamWeakComplete(JNIEnv *env, jclass ignored, jlong token);
++
++/* Optional retention candidates; ticket and wait generation must both match. */
++JNIEXPORT jlong JNICALL
++JVM_JamCandidateArm(JNIEnv *env, jclass ignored, jobject owner, jlong wait_generation);
++
++JNIEXPORT jobject JNICALL
++JVM_JamCandidatePoll(JNIEnv *env, jclass klass, jlong ticket, jlong wait_generation);
++
++JNIEXPORT jobject JNICALL
++JVM_JamCandidateDisarm(JNIEnv *env, jclass klass, jlong ticket, jlong wait_generation);
++
++JNIEXPORT void JNICALL
++JVM_JamCandidateComplete(JNIEnv *env, jclass ignored, jlong ticket, jlong wait_generation);
++
++JNIEXPORT jlong JNICALL
++JVM_JamCandidateEpoch(JNIEnv *env, jclass ignored);
++
++JNIEXPORT void JNICALL
++JVM_JamCollect(JNIEnv *env, jclass ignored, jboolean minor, jboolean promote);
++
++JNIEXPORT jlong JNICALL
++JVM_JamCollections(JNIEnv *env, jclass ignored, jint kind);
+ 
+ /* Returns the number of real-time milliseconds that have elapsed since the
+  * least-recently-inspected heap object was last inspected by the garbage
+--- a/src/hotspot/share/jvmci/jvmciCompilerToVM.cpp
++++ b/src/hotspot/share/jvmci/jvmciCompilerToVM.cpp
+@@ -33,6 +33,7 @@
+ #include "compiler/compilerOracle.hpp"
+ #include "compiler/disassembler.hpp"
+ #include "compiler/oopMap.hpp"
++#include "gc/shared/collectedHeap.hpp"
+ #include "interpreter/bytecodeStream.hpp"
+ #include "interpreter/linkResolver.hpp"
+ #include "interpreter/oopMapCache.hpp"
+@@ -1158,6 +1159,17 @@
+ 
+   CodeBlob* cb = nullptr;
+   JVMCIObject installed_code_handle = JVMCIENV->wrap(installed_code);
++  if (Universe::heap()->kind() == CollectedHeap::Jam &&
++      JVMCIENV->isa_HotSpotNmethod(installed_code_handle)) {
++    // Check the compiler inside this runtime/isolate, including an older libgraal.
++    // Runtime stubs can be installed during compiler construction; Java methods
++    // must not become executable without the compiler admitting Jam's barriers.
++    bool supported = JVMCIENV->runtime()->is_gc_supported(JVMCIENV, CollectedHeap::Jam);
++    if (JVMCI_HAS_PENDING_EXCEPTION) return 0;
++    if (!supported) {
++      JVMCI_THROW_MSG_0(InternalError, "JVMCI compiler does not support Jam GC");
++    }
++  }
+   JVMCIPrimitiveArray speculations_handle = JVMCIENV->wrap(speculations_obj);
+ 
+   int speculations_len = JVMCIENV->get_length(speculations_handle);
+--- a/src/hotspot/share/jvmci/jvmciCompilerToVMInit.cpp
++++ b/src/hotspot/share/jvmci/jvmciCompilerToVMInit.cpp
+@@ -387,6 +387,7 @@
+   do_bool_flag(UseSerialGC)                                                \
+   do_bool_flag(UseZGC)                                                     \
+   do_bool_flag(UseEpsilonGC)                                               \
++  do_bool_flag(UseJamGC)                                                   \
+   COMPILER2_PRESENT(do_bool_flag(UseMontgomeryMultiplyIntrinsic))          \
+   COMPILER2_PRESENT(do_bool_flag(UseMontgomerySquareIntrinsic))            \
+   COMPILER2_PRESENT(do_bool_flag(UseMulAddIntrinsic))                      \
+--- a/src/hotspot/share/jvmci/jvmci_globals.cpp
++++ b/src/hotspot/share/jvmci/jvmci_globals.cpp
+@@ -230,7 +230,9 @@
+ }
+ 
+ bool JVMCIGlobals::gc_supports_jvmci() {
+-  return UseSerialGC || UseParallelGC || UseG1GC || UseZGC || UseShenandoahGC || UseEpsilonGC;
++  // Jam supports JVMCI metadata. Code installation checks that the compiler
++  // in the current runtime also supports the selected collector.
++  return UseSerialGC || UseParallelGC || UseG1GC || UseZGC || UseShenandoahGC || UseEpsilonGC || UseJamGC;
+ }
+ 
+ void JVMCIGlobals::check_jvmci_supported_gc() {
+--- a/src/hotspot/share/jvmci/vmStructs_jvmci.cpp
++++ b/src/hotspot/share/jvmci/vmStructs_jvmci.cpp
+@@ -26,6 +26,10 @@
+ #include "code/compiledIC.hpp"
+ #include "compiler/compileBroker.hpp"
+ #include "gc/shared/collectedHeap.hpp"
++#if INCLUDE_JAMGC
++#include "gc/jam/jamBarrierSet.hpp"
++#include "gc/jam/jamHeap.hpp"
++#endif
+ #include "jvmci/jvmciCodeInstaller.hpp"
+ #include "jvmci/jvmciCompilerToVM.hpp"
+ #include "jvmci/jvmciRuntime.hpp"
+@@ -60,6 +64,7 @@
+ #endif
+ 
+ #define VM_STRUCTS(nonstatic_field, static_field, unchecked_nonstatic_field, volatile_nonstatic_field) \
++  JAMGC_ONLY(static_field(JamHeap, _track_starts, bool)) \
+   static_field(CompilerToVM::Data,             oopDesc_klass_offset_in_bytes,          int)                                          \
+   static_field(CompilerToVM::Data,             arrayOopDesc_length_offset_in_bytes,    int)                                          \
+                                                                                                                                      \
+@@ -672,6 +677,7 @@
+   declare_constant(CollectedHeap::Parallel)                               \
+   declare_constant(CollectedHeap::G1)                                     \
+   declare_constant(CollectedHeap::Epsilon)                                \
++  declare_constant(CollectedHeap::Jam)                                    \
+   declare_constant(CollectedHeap::Z)                                      \
+   declare_constant(CollectedHeap::Shenandoah)                             \
+                                                                           \
+@@ -854,6 +860,8 @@
+ 
+ 
+ #define VM_ADDRESSES(declare_address, declare_preprocessor_address, declare_function, declare_function_with_value) \
++  JAMGC_ONLY(declare_function(JamHeap::record_start))                       \
++  JAMGC_ONLY(declare_function(JamBarrierSet::record_narrow))                \
+   declare_function(SharedRuntime::register_finalizer)                     \
+   declare_function(SharedRuntime::exception_handler_for_return_address)   \
+   declare_function(SharedRuntime::OSR_migration_end)                      \
+--- a/src/hotspot/share/memory/memoryReserver.cpp
++++ b/src/hotspot/share/memory/memoryReserver.cpp
+@@ -83,6 +83,12 @@
+                                   size_t alignment,
+                                   bool exec,
+                                   MemTag mem_tag) {
++#if defined(_WINDOWS) && INCLUDE_JAMGC
++  if (UseJamGC && mem_tag == mtJavaHeap) {
++    assert(!exec, "Jam heap is not executable");
++    return os::win32::reserve_jam_heap(requested_address, size, alignment);
++  }
++#endif
+   // If the memory was requested at a particular address, use
+   // os::attempt_reserve_memory_at() to avoid mapping over something
+   // important.  If the reservation fails, return null.
+@@ -508,7 +514,14 @@
+         WIN64_ONLY(&& !UseLargePages)
+         AIX_ONLY(&& (os::Aix::supports_64K_mmap_pages() || os::vm_page_size() == 4*K))) {
+       // Protect memory at the base of the allocated region.
+-      if (!os::protect_memory(reserved.base(), noaccess_prefix, os::MEM_PROT_NONE, reserved.special())) {
++      bool needs_protection = true;
++#if defined(_WINDOWS) && INCLUDE_JAMGC
++      // Jam's placeholder is already inaccessible. Windows protect_memory
++      // commits first, which cannot be done inside a placeholder reservation.
++      needs_protection = !UseJamGC;
++#endif
++      if (needs_protection &&
++          !os::protect_memory(reserved.base(), noaccess_prefix, os::MEM_PROT_NONE, reserved.special())) {
+         fatal("cannot protect protection page");
+       }
+       log_debug(gc, heap, coops)("Protected page at the reserved heap base: "
+--- a/src/hotspot/share/oops/stackChunkOop.inline.hpp
++++ b/src/hotspot/share/oops/stackChunkOop.inline.hpp
+@@ -43,6 +43,9 @@
+ #include "runtime/registerMap.hpp"
+ #include "runtime/smallRegisterMap.inline.hpp"
+ #include "utilities/macros.hpp"
++#if INCLUDE_JAMGC
++#include "gc/jam/jamBarrierSet.hpp"
++#endif
+ #include CPU_HEADER_INLINE(stackChunkOop)
+ 
+ DEF_HANDLE_CONSTR(stackChunk, is_stackChunk_noinline)
+@@ -65,7 +68,17 @@
+ inline void stackChunkOopDesc::set_bottom(int value)    { jdk_internal_vm_StackChunk::set_bottom(this, value); }
+ 
+ inline int stackChunkOopDesc::sp() const                { return jdk_internal_vm_StackChunk::sp(as_oop()); }
+-inline void stackChunkOopDesc::set_sp(int value)        { jdk_internal_vm_StackChunk::set_sp(this, value); }
++inline void stackChunkOopDesc::set_sp(int value) {
++#if INCLUDE_JAMGC
++  if (UseJamGC && value > sp()) {
++    intptr_t* first = start_address() + MAX2(0, sp() - frame::metadata_words_at_bottom);
++    intptr_t* last = value == bottom() ? end_address()
++        : start_address() + MAX2(0, value - frame::metadata_words_at_bottom);
++    JamBarrierSet::forget((address)first, (address)last);
++  }
++#endif
++  jdk_internal_vm_StackChunk::set_sp(this, value);
++}
+ 
+ inline address stackChunkOopDesc::pc() const            { return jdk_internal_vm_StackChunk::pc(as_oop()); }
+ inline void stackChunkOopDesc::set_pc(address value)    { jdk_internal_vm_StackChunk::set_pc(this, value); }
+--- a/src/hotspot/share/prims/jvmtiTagMap.cpp
++++ b/src/hotspot/share/prims/jvmtiTagMap.cpp
+@@ -1118,6 +1118,7 @@
+                                     jvmtiHeapObjectCallback heap_object_callback,
+                                     const void* user_data)
+ {
++  Universe::heap()->prepare_for_object_iteration();
+   // EA based optimizations on tagged objects are already reverted.
+   EscapeBarrier eb(object_filter == JVMTI_HEAP_OBJECT_UNTAGGED ||
+                    object_filter == JVMTI_HEAP_OBJECT_EITHER,
+@@ -1146,6 +1147,7 @@
+                                        const jvmtiHeapCallbacks* callbacks,
+                                        const void* user_data)
+ {
++  Universe::heap()->prepare_for_object_iteration();
+   // EA based optimizations on tagged objects are already reverted.
+   EscapeBarrier eb(!(heap_filter & JVMTI_HEAP_FILTER_UNTAGGED), JavaThread::current());
+   eb.deoptimize_objects_all_threads();
+--- a/src/hotspot/share/runtime/continuationFreezeThaw.cpp
++++ b/src/hotspot/share/runtime/continuationFreezeThaw.cpp
+@@ -2448,6 +2448,9 @@
+   assert(is_aligned(start, wordSize), "should be aligned: " PTR_FORMAT, p2i(start));
+   assert(is_aligned(end, VMRegImpl::stack_slot_size), "should be aligned: " PTR_FORMAT, p2i(end));
+ 
++  JAMGC_ONLY(if (UseJamGC) JamBarrierSet::forget(start, end);)
++  if (!_cont.tail()->has_bitmap()) return;
++
+   // we need to clear the bits that correspond to arguments as they reside in the caller frame
+   // or they will keep objects that are otherwise unreachable alive.
+ 
+@@ -2565,7 +2568,7 @@
+   if (!is_bottom_frame) {
+     // can only fix caller once this frame is thawed (due to callee saved regs)
+     _cont.tail()->fix_thawed_frame(caller, SmallRegisterMap::instance());
+-  } else if (_cont.tail()->has_bitmap() && locals > 0) {
++  } else if ((_cont.tail()->has_bitmap() JAMGC_ONLY(|| UseJamGC)) && locals > 0) {
+     assert(hf.is_heap_frame(), "should be");
+     address start = (address)(heap_frame_bottom - locals);
+     address end = (address)heap_frame_bottom;
+@@ -2641,7 +2644,7 @@
+   if (!is_bottom_frame) {
+     // can only fix caller once this frame is thawed (due to callee saved regs); this happens on the stack
+     _cont.tail()->fix_thawed_frame(caller, SmallRegisterMap::instance());
+-  } else if (_cont.tail()->has_bitmap() && added_argsize > 0) {
++  } else if ((_cont.tail()->has_bitmap() JAMGC_ONLY(|| UseJamGC)) && added_argsize > 0) {
+     address start = (address)(heap_frame_top + ContinuationHelper::CompiledFrame::size(hf) + frame::metadata_words_at_top);
+     int stack_args_slots = f.cb()->as_nmethod()->num_stack_arg_slots(false /* rounded */);
+     int argsize_in_bytes = stack_args_slots * VMRegImpl::stack_slot_size;
+--- a/src/hotspot/share/runtime/thread.cpp
++++ b/src/hotspot/share/runtime/thread.cpp
+@@ -235,6 +235,7 @@
+     p2i(stack_base()), stack_size()/1024);
+ 
+   // Perform <ChildClass> initialization actions
++  BarrierSet::barrier_set()->on_thread_start(this);
+   DEBUG_ONLY(_run_state = PRE_RUN;)
+   this->pre_run();
+ 
+--- a/src/hotspot/share/runtime/vmOperation.hpp
++++ b/src/hotspot/share/runtime/vmOperation.hpp
+@@ -51,6 +51,7 @@
+   template(CollectForCodeCacheAllocation)         \
+   template(GC_HeapInspection)                     \
+   template(SerialCollectForAllocation)            \
++  template(JamCollect)                            \
+   template(SerialGCCollect)                       \
+   template(ParallelCollectForAllocation)          \
+   template(ParallelGCCollect)                     \
+--- a/src/hotspot/share/runtime/vmOperations.cpp
++++ b/src/hotspot/share/runtime/vmOperations.cpp
+@@ -172,6 +172,7 @@
+ bool VM_PrintThreads::doit_prologue() {
+   // Get Heap_lock if concurrent locks will be dumped
+   if (_print_concurrent_locks) {
++    Universe::heap()->prepare_for_object_iteration();
+     Heap_lock->lock();
+   }
+   return true;
+@@ -260,6 +261,7 @@
+ 
+ bool VM_ThreadDump::doit_prologue() {
+   if (_with_locked_synchronizers) {
++    Universe::heap()->prepare_for_object_iteration();
+     // Acquire Heap_lock to dump concurrent locks
+     Heap_lock->lock();
+   }
+--- a/src/hotspot/share/services/heapDumper.cpp
++++ b/src/hotspot/share/services/heapDumper.cpp
+@@ -2355,6 +2355,7 @@
+ }
+ 
+ bool VM_HeapDumper::doit_prologue() {
++  Universe::heap()->prepare_for_object_iteration();
+   if (_gc_before_heap_dump && (UseZGC || UseShenandoahGC)) {
+     // ZGC and Shenandoah cannot perform a synchronous GC cycle from within the VM thread.
+     // So collect_as_vm_thread() is a noop. To respect the _gc_before_heap_dump flag a
+--- a/src/hotspot/share/utilities/macros.hpp
++++ b/src/hotspot/share/utilities/macros.hpp
+@@ -161,6 +161,24 @@
+ #define NOT_EPSILONGC_RETURN_(code) { return code; }
+ #endif // INCLUDE_EPSILONGC
+ 
++#ifndef INCLUDE_JAMGC
++#define INCLUDE_JAMGC 1
++#endif // INCLUDE_JAMGC
++
++#if INCLUDE_JAMGC
++#define JAMGC_ONLY(x) x
++#define JAMGC_ONLY_ARG(arg) arg,
++#define NOT_JAMGC(x)
++#define NOT_JAMGC_RETURN        /* next token must be ; */
++#define NOT_JAMGC_RETURN_(code) /* next token must be ; */
++#else
++#define JAMGC_ONLY(x)
++#define JAMGC_ONLY_ARG(arg)
++#define NOT_JAMGC(x) x
++#define NOT_JAMGC_RETURN        {}
++#define NOT_JAMGC_RETURN_(code) { return code; }
++#endif // INCLUDE_JAMGC
++
+ #ifndef INCLUDE_G1GC
+ #define INCLUDE_G1GC 1
+ #endif // INCLUDE_G1GC
+--- a/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/HSDB.java
++++ b/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/HSDB.java
+@@ -34,6 +34,7 @@
+ import sun.jvm.hotspot.compiler.*;
+ import sun.jvm.hotspot.debugger.*;
+ import sun.jvm.hotspot.gc.epsilon.*;
++import sun.jvm.hotspot.gc.jam.JamHeap;
+ import sun.jvm.hotspot.gc.parallel.*;
+ import sun.jvm.hotspot.gc.serial.*;
+ import sun.jvm.hotspot.gc.shared.*;
+@@ -1116,6 +1117,15 @@
+                             anno = "PSOldGen ";
+                             bad = false;
+                           }
++                        } else if (collHeap instanceof JamHeap) {
++                          JamHeap heap = (JamHeap) collHeap;
++                          if (heap.youngSpace().contains(handle)) {
++                            anno = "Jam Young ";
++                            bad = false;
++                          } else if (heap.space().contains(handle)) {
++                            anno = "Jam Old ";
++                            bad = false;
++                          }
+                         } else if (collHeap instanceof EpsilonHeap) {
+                           anno = "Epsilon ";
+                           bad = false;
+--- a/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/gc/jam/JamHeap.java
++++ b/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/gc/jam/JamHeap.java
+@@ -0,0 +1,104 @@
++/*
++ * Copyright (c) 2017, Red Hat, Inc. and/or its affiliates.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ *
++ */
++
++package sun.jvm.hotspot.gc.jam;
++
++import java.io.*;
++import java.util.*;
++
++import sun.jvm.hotspot.gc.shared.*;
++import sun.jvm.hotspot.code.*;
++import sun.jvm.hotspot.debugger.*;
++import sun.jvm.hotspot.runtime.*;
++import sun.jvm.hotspot.types.*;
++import sun.jvm.hotspot.memory.*;
++import sun.jvm.hotspot.utilities.Observable;
++import sun.jvm.hotspot.utilities.Observer;
++
++public class JamHeap extends CollectedHeap {
++
++  private static AddressField spaceField;
++  private static AddressField youngSpaceField;
++  private ContiguousSpace space;
++  private ContiguousSpace youngSpace;
++
++  static {
++    VM.registerVMInitializedObserver(new Observer() {
++        public void update(Observable o, Object data) {
++          initialize(VM.getVM().getTypeDataBase());
++        }
++      });
++  }
++
++  private static void initialize(TypeDataBase db) {
++    Type type = db.lookupType("JamHeap");
++    spaceField = type.getAddressField("_space");
++    youngSpaceField = type.getAddressField("_young_space");
++  }
++
++  public JamHeap(Address addr) {
++    super(addr);
++    space = new ContiguousSpace(spaceField.getValue(addr));
++    youngSpace = new ContiguousSpace(youngSpaceField.getValue(addr));
++  }
++
++  @Override
++  public CollectedHeapName kind() {
++    return CollectedHeapName.JAM;
++  }
++
++  @Override
++  public long capacity() {
++    return space.capacity() + youngSpace.capacity();
++  }
++
++  @Override
++  public long used() {
++    return space.used() + youngSpace.used();
++  }
++
++  public ContiguousSpace space() {
++    return space;
++  }
++
++  public ContiguousSpace youngSpace() {
++    return youngSpace;
++  }
++
++  @Override
++  public void liveRegionsIterate(LiveRegionsClosure closure) {
++    closure.doLiveRegions(space());
++    closure.doLiveRegions(youngSpace());
++  }
++
++  @Override
++  public void printOn(PrintStream tty) {
++     MemRegion mr = reservedRegion();
++     tty.println("Jam heap");
++     tty.println(" reserved:  [" + mr.start() + ", " + mr.end() + "]");
++     tty.println(" old:       [" + space.bottom() + ", " + space.top() + ", " + space.end() + "]");
++     tty.println(" young:     [" + youngSpace.bottom() + ", " + youngSpace.top() + ", " + youngSpace.end() + "]");
++  }
++
++}
+--- a/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/gc/shared/CollectedHeapName.java
++++ b/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/gc/shared/CollectedHeapName.java
+@@ -35,6 +35,7 @@
+   public static final CollectedHeapName PARALLEL = new CollectedHeapName("Parallel");
+   public static final CollectedHeapName G1 = new CollectedHeapName("G1");
+   public static final CollectedHeapName EPSILON = new CollectedHeapName("Epsilon");
++  public static final CollectedHeapName JAM = new CollectedHeapName("Jam");
+   public static final CollectedHeapName Z = new CollectedHeapName("Z");
+   public static final CollectedHeapName SHENANDOAH = new CollectedHeapName("Shenandoah");
+ 
+--- a/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/memory/Universe.java
++++ b/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/memory/Universe.java
+@@ -31,6 +31,7 @@
+ import sun.jvm.hotspot.debugger.Address;
+ import sun.jvm.hotspot.debugger.OopHandle;
+ import sun.jvm.hotspot.gc.epsilon.EpsilonHeap;
++import sun.jvm.hotspot.gc.jam.JamHeap;
+ import sun.jvm.hotspot.gc.g1.G1CollectedHeap;
+ import sun.jvm.hotspot.gc.parallel.ParallelScavengeHeap;
+ import sun.jvm.hotspot.gc.serial.SerialHeap;
+@@ -87,6 +88,7 @@
+     addHeapTypeIfInDB(db, ParallelScavengeHeap.class);
+     addHeapTypeIfInDB(db, G1CollectedHeap.class);
+     addHeapTypeIfInDB(db, EpsilonHeap.class);
++    addHeapTypeIfInDB(db, JamHeap.class);
+     addHeapTypeIfInDB(db, ZCollectedHeap.class);
+     addHeapTypeIfInDB(db, ShenandoahHeap.class);
+     addHeapTypeIfInDB(db, ShenandoahGenerationalHeap.class);
+--- a/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/tools/HeapSummary.java
++++ b/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/tools/HeapSummary.java
+@@ -27,6 +27,7 @@
+ import java.io.*;
+ import java.util.*;
+ import sun.jvm.hotspot.gc.epsilon.*;
++import sun.jvm.hotspot.gc.jam.JamHeap;
+ import sun.jvm.hotspot.gc.g1.*;
+ import sun.jvm.hotspot.gc.parallel.*;
+ import sun.jvm.hotspot.gc.serial.*;
+@@ -144,6 +145,12 @@
+       } else if (heap instanceof EpsilonHeap) {
+          EpsilonHeap eh = (EpsilonHeap) heap;
+          printSpace(eh.space());
++      } else if (heap instanceof JamHeap) {
++         JamHeap jh = (JamHeap) heap;
++         System.out.println("Jam old generation:");
++         printSpace(jh.space());
++         System.out.println("Jam young generation:");
++         printSpace(jh.youngSpace());
+       } else if (heap instanceof ZCollectedHeap) {
+          ZCollectedHeap zheap = (ZCollectedHeap) heap;
+          zheap.printOn(System.out);
+@@ -175,6 +182,14 @@
+            System.out.print("Garbage-First (G1) GC ");
+            l = getFlagValue("ParallelGCThreads", flagMap);
+            System.out.println("with " + l + " thread(s)");
++           return;
++       }
++
++       l = getFlagValue("UseJamGC", flagMap);
++       if (l == 1L) {
++           System.out.print("Jam generational GC ");
++           l = getFlagValue("JamWorkers", flagMap);
++           System.out.println("with " + l + " copy worker(s)");
+            return;
+        }
+ 
+--- a/test/lib/jdk/test/whitebox/gc/GC.java
++++ b/test/lib/jdk/test/whitebox/gc/GC.java
+@@ -38,7 +38,8 @@
+     G1(3),
+     Epsilon(4),
+     Z(5),
+-    Shenandoah(6);
++    Shenandoah(6),
++    Jam(7);
+ 
+     private static final WhiteBox WB = WhiteBox.getWhiteBox();
+ 
+--- a/src/hotspot/share/opto/arraycopynode.cpp
++++ b/src/hotspot/share/opto/arraycopynode.cpp
+@@ -193,6 +193,13 @@
+     return nullptr;
+   }
+ 
++  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
++  // Field-wise clone stores use C2OptAccess, not a parser GraphKit. Keep the
++  // clone for macro expansion when the collector requires runtime barriers.
++  if (bs->array_copy_requires_gc_barriers(true, T_OBJECT, true, true, BarrierSetC2::Optimization)) {
++    return NodeSentinel;
++  }
++
+   MergeMemNode* mem = phase->transform(MergeMemNode::make(in_mem))->as_MergeMem();
+   if (can_reshape) {
+     phase->is_IterGVN()->_worklist.push(mem);
+@@ -223,7 +230,6 @@
+ 
+   assert(ik->nof_nonstatic_fields() <= ArrayCopyLoadStoreMaxElem, "too many fields");
+ 
+-  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+   for (int i = 0; i < count; i++) {
+     ciField* field = ik->nonstatic_field_at(i);
+     const TypePtr* adr_type = phase->C->alias_type(field)->adr_type();
