@@ -70,6 +70,9 @@ final class InputCallArm extends Node {
     }
     private Object callEntered(VirtualFrame frame, Closure function, Object[] values, Object[] overrides, boolean prepared) {
         boolean isTail = tail && arity == count;
+        // Legacy returns already passed through DirectCallerNode completion.
+        // Typed calls and this arm's trampoline still return unclassified values.
+        boolean needsCompletion = input != null;
         Object result;
         try {
             Object answer;
@@ -95,8 +98,9 @@ final class InputCallArm extends Node {
             } catch (TailCall transfer) {
                 if (isTail || arity == count && tupleBounce != null) throw transfer;
                 answer = loop.execute(transfer);
+                needsCompletion = true;
             }
-            result = AstControl.captures(this) ? AstControl.complete(this, answer, target,
+            result = needsCompletion && AstControl.captures(this) ? AstControl.complete(this, answer, target,
                 arity == count && destination != null ? root.getTupleResult() : null) : answer;
         } catch (TailCall transfer) {
             if (isTail) throw transfer;
