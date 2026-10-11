@@ -266,7 +266,7 @@ class LiftedReturnTest {
                 var addressProof = new CoreRepresentation(CoreKind.ADDRESS, true, true, List.of("AddrRep"), null, null, null, null, null);
                 var index = new Literal(0L);
                 var read = new IndexManagedScalarAddress(ManagedAddressRead.CHAR,
-                    new LocalRead(addressSlot, false).proven(addressProof), new LocalRead(indexSlot, false).proven(scalar)).proven(scalar);
+                    new LocalRead(addressSlot, false).proven(addressProof), new LocalRead(indexSlot, false).proven(scalar));
                 var operands = new AstOperands(new LocalBinding[]{new LocalBinding(indexSlot, index, true)}, new int[]{indexSlot}, read);
                 var evaluations = new AtomicInteger();
                 var deferred = delayed(answer(), evaluations);
@@ -299,6 +299,50 @@ class LiftedReturnTest {
                     stack.setDepth(0); stack.setDriving(false);
                     var resumed = assertInstanceOf(DataValue.class, saved.continueWith(Unit.INSTANCE));
                     assertEquals(65L, fields.read(resumed, 0)); assertEquals(1, entries.get()); assertEquals(0, evaluations.get());
+                } finally { stack.setDepth(0); stack.setDriving(false); }
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test
+    void loweredByteIndexCaseRetainsEagerResultAndRejectsUnevaluatedAddressWithoutDemand() {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var addressRep = map("kind", "address", "primReps", list("AddrRep"), "evaluated", true);
+                var offsetRep = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
+                var byteRep = map("kind", "long", "primReps", list("WordRep"), "evaluated", false);
+                var read = list("app", list("prim", "indexCharOffAddr#"),
+                    list(list("var", "address", map("rep", addressRep)), list("var", "offset", map("rep", offsetRep))),
+                    list(false, false), false, false, map("rep", byteRep));
+                var body = list("case", read, "byte", list(list("default", null, list(), list("var", "byte", map("rep", byteRep)))),
+                    map("rep", byteRep, "binder", map("id", "byte", "rep", byteRep)));
+                var module = map("bindings", list(map("id", "read", "name", "read", "lifted", true,
+                    "expr", list("lam", list(map("id", "address", "lifted", false, "rep", addressRep),
+                        map("id", "offset", "lifted", false, "rep", offsetRep)), body,
+                        map("resultRep", byteRep, "entryStrict", list(false, false))))));
+                var program = new Program(language(), module, true);
+                var target = program.entryTarget("read");
+                var function = (Closure) program.entryValue("read");
+                var input = ((GuestRoot) target.getRootNode()).getTypedInput();
+                java.util.function.BiFunction<Object, Long, Object> call = (value, index) ->
+                    ScalarTestCalls.callScalarTestTarget(target, input != null && input.getHasEnvironment()
+                        ? new Object[]{0L, function.environment, value, index} : new Object[]{0L, value, index});
+                var bytes = new byte[]{65, (byte) 255};
+                var address = ManagedAddress.fromByteArray(bytes);
+                var stack = AstStacks.astStackScope(target.getRootNode());
+                stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
+                try {
+                    assertEquals(65L, call.apply(address, 0L));
+                    bytes[0] = (byte) 128;
+                    assertEquals(128L, call.apply(address, 0L));
+                    assertEquals(255L, call.apply(address, 1L));
+                    for (long index : new long[]{-1L, 2L, Long.MAX_VALUE})
+                        assertThrows(RuntimeFault.class, () -> call.apply(address, index));
+                    var demands = new AtomicInteger();
+                    var unevaluated = delayed(answer(), demands);
+                    assertThrows(RuntimeFault.class, () -> call.apply(unevaluated, 0L));
+                    assertEquals(0, demands.get(), "Address validation must not force a nonmatching carrier");
                 } finally { stack.setDepth(0); stack.setDriving(false); }
             } finally { context.leave(); }
         }
