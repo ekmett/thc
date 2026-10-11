@@ -11,7 +11,7 @@
 [![GHC: 9.14.1](https://img.shields.io/static/v1?label=GHC&message=9.14.1&color=5e5086&style=flat&logo=haskell&logoColor=white)](thc.cabal)
 [![Cabal: 3.16](https://img.shields.io/static/v1?label=Cabal&message=3.16&color=5e5086&style=flat&logo=haskell&logoColor=white)](README.md)
 [![Java: 25](https://img.shields.io/static/v1?label=Java&message=25&color=b66a13&style=flat&logo=openjdk&logoColor=white)](README.md)
-[![GraalVM: 25.3.4.1](https://img.shields.io/static/v1?label=GraalVM&message=25.3.4.1&color=b66a13&style=flat&logo=openjdk&logoColor=white)](etc/jam-graalvm.json)
+[![GraalVM: 25.3.4.1](assets/badges/graalvm-version.svg)](src/vm/config/source-pins.json)
 [![Gradle: 9.7.1](https://img.shields.io/static/v1?label=Gradle&message=9.7.1&color=02303A&style=flat&logo=gradle&logoColor=white)](nih/gradle/wrapper/gradle-wrapper.properties)
 
 [![OS: Linux · macOS · Windows](https://img.shields.io/static/v1?label=OS&message=Linux+%C2%B7+macOS+%C2%B7+Windows&color=64748b&style=flat)](README.md)
