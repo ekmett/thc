@@ -109,6 +109,7 @@ final class InputCallArm extends Node {
             }
             throw transfer;
         } catch (AstCapture cut) {
+            if (arity == count && destination == null) throw cut;
             throw captureResult(cut, values);
         } catch (DelimitedCut cut) {
             throw captureCall(frame, cut, values);
