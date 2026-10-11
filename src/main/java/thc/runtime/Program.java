@@ -713,9 +713,9 @@ public final class Program implements ExecutableProgram {
         if (binding.get("lifted") instanceof Boolean lifted) return lifted;
         return CoreRepresentations.mayBeLazy(binding.get("lifted"), CoreRepresentations.binder(binding));
     }
-    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer) {
+    private FunctionSpec thunkFunction(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer) {
         return function(label, args, expression, outer, CoreRepresentations.expression(expression),
-            new boolean[args.size()], FunctionRootRole.FUNCTION, true);
+            new boolean[args.size()], FunctionRootRole.FUNCTION, true, null, null, true);
     }
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
                                   CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail) {
@@ -729,6 +729,12 @@ public final class Program implements ExecutableProgram {
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
                                   CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail,
                                   Map<String,Object> initialization, Expr initializedBody) {
+        return function(label, args, expression, outer, resultProof, entryStrict, role, bodyTail,
+            initialization, initializedBody, false);
+    }
+    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
+                                  CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail,
+                                  Map<String,Object> initialization, Expr initializedBody, boolean thunkDemand) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
         List<Object> defaultArm = null;
         if (deferDefaultArm && !outlineCaseArms && !delimited &&
@@ -855,6 +861,9 @@ public final class Program implements ExecutableProgram {
         if (role == FunctionRootRole.FUNCTION) scope.self = new AstSelfLayout(captures, environmentSlots,
             allArgumentSlots, allArgumentProofs, entryStrict.clone(), inputLayout, environmentVectorSlots);
         Expr body = initializedBody != null ? initializedBody : initialization == null ? compile(expression, scope, bodyTail) : initializer(initialization, scope);
+        // This target is entered only by an existing demand on a thunk. Finish
+        // that demand inside its resumable update scope, not at function returns.
+        if (thunkDemand) body = new Evaluate(body, codeMetrics());
         if (initialization != null) {
             RootCallTarget ownTarget = body instanceof MakeClosure closure ? closure.target() : body instanceof Delay thunk ? thunk.target() : null;
             if (ownTarget != null && ownTarget.getRootNode() instanceof GuestRoot ownRoot)
@@ -1045,7 +1054,7 @@ public final class Program implements ExecutableProgram {
         return proof.getEvaluated() && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble());
     }
     private Expr delay(List<Object> expr, Scope scope, String label) {
-        FunctionSpec fn = function(label, List.of(), expr, scope);
+        FunctionSpec fn = thunkFunction(label, List.of(), expr, scope);
         TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
         if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
         return new Delay(fn.target, fn.captureLayout, fn.captures, scope.programSlot).proven(evaluated(CoreRepresentations.expression(expr), false))
