@@ -8,6 +8,9 @@ import com.oracle.truffle.api.nodes.Node;
 
 /** An internal cut retains the exact uncommitted operation, never a new queue entry. */
 public final class PendingWait extends AbstractTruffleException implements InternalGuestControl {
+    // Bound retained empty storage, never the length of a dependency walk.
+    private static final int SAVED_WAIT_SCRATCH_LIMIT = 512;
+    private static final ThreadLocal<java.util.IdentityHashMap<Object, Boolean>> SAVED_WAIT_SCRATCH = new ThreadLocal<>();
     interface Operation {
         Object resume();
         boolean cancel();
@@ -85,17 +88,26 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         return findSavedWait(value);
     }
     @TruffleBoundary private static PendingWait findSavedWait(Object value) {
-        var seen = new java.util.IdentityHashMap<Object, Boolean>();
-        for (;;) {
-            if (value != null && seen.put(value, Boolean.TRUE) != null) throw new RuntimeFault("Suspended guest dependency cycle");
-            if (value instanceof PendingWait pending) return pending;
-            if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
-            else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
-            else {
-                SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(value);
-                if (saved == null) return null;
-                value = saved.getYielded();
+        var seen = SAVED_WAIT_SCRATCH.get();
+        // Saved getters may reenter inspection; an active table is never available.
+        SAVED_WAIT_SCRATCH.set(null);
+        if (seen == null) seen = new java.util.IdentityHashMap<Object, Boolean>();
+        try {
+            for (;;) {
+                if (value != null && seen.put(value, Boolean.TRUE) != null) throw new RuntimeFault("Suspended guest dependency cycle");
+                if (value instanceof PendingWait pending) return pending;
+                if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
+                else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
+                else {
+                    SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(value);
+                    if (saved == null) return null;
+                    value = saved.getYielded();
+                }
             }
+        } finally {
+            int peakSize = seen.size(); // Inspection inserts but never removes identities.
+            seen.clear();
+            if (peakSize <= SAVED_WAIT_SCRATCH_LIMIT && SAVED_WAIT_SCRATCH.get() == null) SAVED_WAIT_SCRATCH.set(seen);
         }
     }
 }

@@ -684,12 +684,45 @@ class SavedGuestContinuationTest {
                 var firstSaved = new Saved(target.getRootNode(), new ThunkSuspended(second), input -> fail("Cyclic suffix ran"));
                 var secondSaved = new Saved(target.getRootNode(), new ThunkSuspended(first), input -> fail("Cyclic suffix ran"));
                 first.setValue(firstSaved); first.setState(5); second.setValue(secondSaved); second.setState(5);
+                assertThrows(RuntimeFault.class, () -> PendingWait.of(firstSaved));
+                assertEquals(1, firstSaved.inspections);
+                assertEquals(1, secondSaved.inspections, "Reject a repeated carrier before reading its successor again");
                 var failure = assertThrows(RuntimeFault.class, () -> new Driver().force(first));
                 assertTrue(failure.getMessage().contains("dependency cycle"), failure.getMessage());
                 assertEquals(5, first.getState()); assertEquals(5, second.getState());
                 assertSame(firstSaved, first.getValue()); assertSame(secondSaved, second.getValue());
                 assertNull(first.getOwner()); assertNull(second.getOwner());
                 assertEquals(0, firstSaved.resumes); assertEquals(0, secondSaved.resumes);
+
+                int firstReads = firstSaved.inspections, secondReads = secondSaved.inspections;
+                second.setValue(Unit.INSTANCE);
+                assertNull(PendingWait.of(firstSaved));
+                assertNull(PendingWait.of(firstSaved));
+                assertEquals(firstReads + 2, firstSaved.inspections);
+                assertEquals(secondReads, secondSaved.inspections);
+
+                var getterFailure = new RuntimeFault("Saved getter failed");
+                var reentrant = new SavedGuestContinuation() {
+                    boolean failOnce = true, inspecting;
+                    int reads;
+                    @Override public Object getSourceRoot() { return target.getRootNode(); }
+                    @Override public Object getIdentity() { return this; }
+                    @Override public Object getYielded() {
+                        reads++;
+                        if (failOnce) { failOnce = false; throw getterFailure; }
+                        if (!inspecting) {
+                            inspecting = true;
+                            try { assertNull(PendingWait.of(this)); }
+                            finally { inspecting = false; }
+                        }
+                        return Unit.INSTANCE;
+                    }
+                    @Override public Object continueWith(Object input) { return fail("Inspection resumed a saved body"); }
+                };
+                assertSame(getterFailure, assertThrows(RuntimeFault.class, () -> PendingWait.of(reentrant)));
+                assertNull(PendingWait.of(reentrant));
+                assertNull(PendingWait.of(reentrant));
+                assertEquals(5, reentrant.reads, "Nested inspection must independently read the same saved identity");
             } finally { context.leave(); }
         }
     }
