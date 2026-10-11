@@ -77,14 +77,14 @@ public abstract class Expr extends Node implements InstrumentableNode {
     public abstract Object execute(VirtualFrame frame);
 
     /**
-     * Whether execution can enter another guest activation, demand a lazy value,
-     * or transfer a guest tail call. False covers every typed execution route;
+     * Whether execution needs call ancestry, can enter another guest activation,
+     * demand a lazy value, or transfer a guest tail call. False covers every typed execution route;
      * returning a thunk without entering it is allowed. Composite proofs must
      * inspect their current children so replacement invalidates compiled proofs.
      * Concrete and conservative so instrumentation wrappers retain their own
      * potentially reentrant behavior instead of delegating the child's proof.
      */
-    public boolean mayEnterGuest() { return true; }
+    public boolean needsCallState() { return true; }
 
     public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
         return RuntimeTypesGen.expectInteger(execute(frame));

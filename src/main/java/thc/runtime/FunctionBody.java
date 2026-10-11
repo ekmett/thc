@@ -42,7 +42,7 @@ final class FunctionBody extends Node {
     }
     // Normal Core locals carry guest values, never the raw suspension carriers
     // accepted by internal application/demand adapters.
-    boolean needsStackDriver() { return rawResult || value.mayEnterGuest(); }
+    boolean needsCallState() { return rawResult || value.needsCallState(); }
     /** Keep a primitive body until the mandatory Object-returning root/call boundary. */
     Object execute(VirtualFrame frame) {
         if (rawResult) return value.execute(frame);

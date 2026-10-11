@@ -565,16 +565,17 @@ public final class FunctionRoot extends GuestRoot {
         // A normal Core body that cannot enter another guest activation cannot
         // originate a stack spill. Keep ingress and polls, including their
         // capture handler, but do not interpret an ordinary return as control.
-        if (!capturesContinuations || strictSlots.length == 0 &&
-                loop.getRepeatingNode() instanceof SelfRepeater repeating && !repeating.needsStackDriver())
-            return executeInitial(frame, false);
+        boolean needsCallState = strictSlots.length != 0 ||
+            !(loop.getRepeatingNode() instanceof SelfRepeater repeating) || repeating.needsCallState();
+        if (!capturesContinuations || !needsCallState)
+            return executeInitial(frame, false, needsCallState);
         AstStackScope stack = astStackScope(this);
         boolean driver = !stack.getDriving();
         if (driver) stack.setDriving(true);
         try {
             stack.setDepth(stack.getDepth() + 1);
             Object result;
-            try { result = executeInitial(frame, stack.getDepth() >= AstStackScope.MAX_DEPTH); }
+            try { result = executeInitial(frame, stack.getDepth() >= AstStackScope.MAX_DEPTH, true); }
             finally { stack.setDepth(stack.getDepth() - 1); }
             if (driver) {
                 SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
@@ -587,7 +588,8 @@ public final class FunctionRoot extends GuestRoot {
             return result;
         } finally { if (driver) stack.setDriving(false); }
     }
-    private Object executeInitial(VirtualFrame frame, boolean spill) {
+    private Object executeInitial(VirtualFrame frame, boolean spill, boolean needsCallState) {
+        boolean deferredBloom = false;
         clearInitialLocals(frame);
         if (metrics != null && metrics.getEnabled() && CompilerDirectives.inCompiledCode()) metrics.incrementCompiledEntries();
         HandoffEntry entry = handoff;
@@ -601,8 +603,9 @@ public final class FunctionRoot extends GuestRoot {
             restoreHandoff(frame, input, true);
         } else {
             if (entry != null) entry.initializeOrdinary(frame);
-            if (!(frame.getArguments()[0] instanceof Long inherited)) throw fault("Invalid bloom argument");
-            frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(inherited));
+            // Delimited roots retain ancestry eagerly for their independently saved frames.
+            deferredBloom = !needsCallState && !enableDelimited;
+            if (!deferredBloom) initializeBloom(frame);
             buildFrame(frame.getArguments(), frame);
         }
         if (metrics == null) {
@@ -613,14 +616,20 @@ public final class FunctionRoot extends GuestRoot {
             Metrics invocation = invocationMetrics(frame);
             if (invocation.getEnabled() && CompilerDirectives.inCompiledCode()) invocation.incrementCompiledEntries();
         }
-        if (spill) return captureStack(initialCaptureFrame(frame));
+        if (spill) return captureStack(initialCaptureFrame(frame, deferredBloom));
         if (!capturesContinuations) return executeCapturableBody(frame);
         try { return executeCapturableBody(frame); }
-        catch (AstCapture cut) { return finishCapture(cut, initialCaptureFrame(frame)); }
+        catch (AstCapture cut) { return finishCapture(cut, initialCaptureFrame(frame, deferredBloom)); }
     }
-    private MaterializedFrame initialCaptureFrame(VirtualFrame frame) {
+    private void initializeBloom(VirtualFrame frame) {
+        if (!(frame.getArguments()[0] instanceof Long inherited)) throw fault("Invalid bloom argument");
+        frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(inherited));
+    }
+    private MaterializedFrame initialCaptureFrame(VirtualFrame frame, boolean deferredBloom) {
         // Snapshot copying belongs to the cold capture path, outside partial evaluation.
+        // The saved body can be replaced before resumption and then need ancestry.
         CompilerDirectives.transferToInterpreter();
+        if (deferredBloom) initializeBloom(frame);
         MaterializedFrame saved = frame.materialize();
         return copyInitialFrame ? DelimitedContinuations.copyContinuationFrame(saved) : saved;
     }

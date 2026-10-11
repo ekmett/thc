@@ -184,6 +184,19 @@ class LiftedReturnTest {
     }
 
     @Test
+    void callAncestryReadRetainsIngressWithoutGuestDescent() {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var root = new FunctionRoot(language(), new FrameLayout().build(), "call ancestry", null,
+                    new int[0], new int[0], new int[0], new LocalRead(FrameLayout.BLOOM_FILTER, false), new Metrics(false));
+                long inherited = 0x1234abcdL;
+                assertEquals(root.entryBloom(inherited), Calls.target(root.getCallTarget(), new Object[]{inherited}));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test
     void localReturnStillCapturesEntryPollWithoutDemand() {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
@@ -194,9 +207,21 @@ class LiftedReturnTest {
                 var state = Language.currentState(); state.getThreads().enterCurrent();
                 try {
                     var request = state.getThreads().send(state.getThreads().currentIdentity(), "entry poll");
-                    var saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{0L, thunk}));
+                    long inherited = 0x1234abcdL;
+                    var saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{inherited, thunk}));
                     assertSame(request, saved.asyncRequest()); assertFalse(saved.stackSpill());
                     assertEquals(0, evaluations.get()); request.acknowledge();
+                    var read = NodeUtil.findFirstNodeInstance(target.getRootNode(), LocalRead.class);
+                    assertNotNull(read);
+                    var original = NodeUtil.cloneNode(read);
+                    long expectedBloom = ((FunctionRoot) target.getRootNode()).entryBloom(inherited);
+                    read.replace(new Expr() {
+                        @Child private Expr value = original;
+                        @Override public Object execute(VirtualFrame frame) {
+                            assertEquals(expectedBloom, frame.getLong(FrameLayout.BLOOM_FILTER));
+                            return value.execute(frame);
+                        }
+                    });
                     assertSame(thunk, saved.continueWith(Unit.INSTANCE)); assertEquals(0, evaluations.get());
                     var stack = AstStacks.astStackScope(target.getRootNode());
                     assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());

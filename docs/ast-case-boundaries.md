@@ -136,11 +136,15 @@ recovery on stock Truffle does not establish the full never-retry contract.
 ## Internal tail-spill compaction
 
 A body that cannot enter another guest activation does not need the stack
-driver. Executable operations supply a conservative `mayEnterGuest` contract;
-local reads satisfy it without forcing their values. Roots query the current
+driver. Executable operations supply a conservative `needsCallState` contract;
+ordinary local reads need no call state and do not force their values. A read
+of the reserved ancestry slot still requires ingress. Roots query the current
 children, so replacing a read with demand or an instrumentation wrapper restores
 the driver. Strict ingress and internal raw-control adapters retain it. The
 omission preserves argument ingress, entry polls and their capture handlers.
+Ordinary ancestry setup is deferred until capture when the body does not need
+it. A saved activation carries ancestry even if its body is replaced before
+resumption. Typed ingress and delimited roots retain eager ancestry setup.
 
 Compaction covers synchronous, non-delimited, evaluated primitive scalar arms
 and exact `DATA`, `CLOSURE` and `ADDRESS` reference results without a typed
