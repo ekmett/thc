@@ -40,6 +40,9 @@ final class FunctionBody extends Node {
         boolean exactLong = resultKind == CoreKind.LONG && !exactInt;
         genericResult = result.getPresent() && !exactLong;
     }
+    // Normal Core locals carry guest values, never the raw suspension carriers
+    // accepted by internal application/demand adapters.
+    boolean needsStackDriver() { return rawResult || value.mayEnterGuest(); }
     /** Keep a primitive body until the mandatory Object-returning root/call boundary. */
     Object execute(VirtualFrame frame) {
         if (rawResult) return value.execute(frame);

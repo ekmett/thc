@@ -12,6 +12,7 @@ public final class LocalRead extends Expr {
     private final boolean cell;
     public LocalRead(int slot) { this(slot, true); }
     public LocalRead(int slot, boolean cell) { this.slot = slot; this.cell = cell; }
+    @Override public boolean mayEnterGuest() { return false; }
     // Initialized non-cell locals use their declared storage; widened activations retain tag checks.
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
         return (!cell && getRepresentation().isInt() && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Int) || frame.isInt(slot)

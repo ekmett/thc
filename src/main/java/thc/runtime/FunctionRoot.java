@@ -558,7 +558,12 @@ public final class FunctionRoot extends GuestRoot {
         return executeEntry(Truffle.getRuntime().createVirtualFrame(arguments, getFrameDescriptor()));
     }
     private Object executeEntry(VirtualFrame frame) {
-        if (!capturesContinuations) return executeInitial(frame, false);
+        // A normal Core body that cannot enter another guest activation cannot
+        // originate a stack spill. Keep ingress and polls, including their
+        // capture handler, but do not interpret an ordinary return as control.
+        if (!capturesContinuations || strictSlots.length == 0 &&
+                loop.getRepeatingNode() instanceof SelfRepeater repeating && !repeating.needsStackDriver())
+            return executeInitial(frame, false);
         AstStackScope stack = astStackScope(this);
         boolean driver = !stack.getDriving();
         if (driver) stack.setDriving(true);

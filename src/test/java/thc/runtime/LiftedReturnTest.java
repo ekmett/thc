@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import java.util.List;
 import java.util.Map;
@@ -123,12 +124,83 @@ class LiftedReturnTest {
                 assertFalse(identity.wasExecuted());
                 long address = identity.getCodeAddress(); int installations = identity.getSuccessfulCompilationCount();
                 long entries = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                assertSame(thunk, Calls.target(identity, new Object[]{0L, thunk}));
+                var stack = AstStacks.astStackScope(identity.getRootNode());
+                long spills = stack.getSpills();
+                stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
+                try {
+                    // Returning a local cannot deepen the guest stack or require a spill.
+                    assertSame(thunk, Calls.target(identity, new Object[]{0L, thunk}));
+                    assertEquals(AstStackScope.MAX_DEPTH - 1, stack.getDepth());
+                    assertTrue(stack.getDriving()); assertEquals(spills, stack.getSpills());
+                } finally { stack.setDepth(0); stack.setDriving(false); }
                 assertEquals(entries + 1, program.diagnostics().get("compiledEntries"));
                 assertEquals(0, evaluations.get()); assertEquals(0, thunk.getState());
                 assertSame(value, Calls.target(identity, new Object[]{0L, value}));
                 assertTrue(identity.isValidLastTier()); assertEquals(address, identity.getCodeAddress());
                 assertEquals(installations, identity.getSuccessfulCompilationCount());
+
+                // Replacing the read with demand must invalidate the omitted stack protocol.
+                var read = NodeUtil.findFirstNodeInstance(identity.getRootNode(), LocalRead.class);
+                assertNotNull(read);
+                read.replace(new Evaluate(NodeUtil.cloneNode(read), new Metrics(false)));
+                assertFalse(identity.isValid());
+                stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
+                final AstContinuation saved;
+                try {
+                    saved = assertInstanceOf(AstContinuation.class, Calls.target(identity, new Object[]{0L, thunk}));
+                    assertTrue(saved.stackSpill()); assertEquals(0, evaluations.get());
+                    assertEquals(AstStackScope.MAX_DEPTH - 1, stack.getDepth());
+                } finally { stack.setDepth(0); stack.setDriving(false); }
+                assertSame(value, saved.continueWith(Unit.INSTANCE));
+                assertEquals(1, evaluations.get());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test
+    void localReturnWithStrictIngressSpillsBeforeDemand() {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var layout = new FrameLayout(); int slot = layout.bind("x");
+                var body = new LocalRead(slot, false);
+                var root = new FunctionRoot(language(), layout.build(), "strict local return", null,
+                    new int[0], new int[]{slot}, new int[]{0}, body, new Metrics(false),
+                    new CoreRepresentation[]{CoreRepresentation.UNKNOWN}, CoreRepresentation.UNKNOWN, null,
+                    new boolean[]{true}, null, null, new int[0], null, false, new int[0][], false,
+                    FunctionRootRole.FUNCTION, true);
+                var value = answer(); var evaluations = new AtomicInteger(); var thunk = delayed(value, evaluations);
+                var stack = AstStacks.astStackScope(root);
+                stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
+                final AstContinuation saved;
+                try {
+                    saved = assertInstanceOf(AstContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L, thunk}));
+                    assertTrue(saved.stackSpill()); assertEquals(0, evaluations.get());
+                    assertEquals(AstStackScope.MAX_DEPTH - 1, stack.getDepth());
+                } finally { stack.setDepth(0); stack.setDriving(false); }
+                assertSame(value, saved.continueWith(Unit.INSTANCE)); assertEquals(1, evaluations.get());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test
+    void localReturnStillCapturesEntryPollWithoutDemand() {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var program = new Program(language(), module(), true);
+                var value = answer(); var evaluations = new AtomicInteger(); var thunk = delayed(value, evaluations);
+                var target = program.entryTarget("identity");
+                var state = Language.currentState(); state.getThreads().enterCurrent();
+                try {
+                    var request = state.getThreads().send(state.getThreads().currentIdentity(), "entry poll");
+                    var saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{0L, thunk}));
+                    assertSame(request, saved.asyncRequest()); assertFalse(saved.stackSpill());
+                    assertEquals(0, evaluations.get()); request.acknowledge();
+                    assertSame(thunk, saved.continueWith(Unit.INSTANCE)); assertEquals(0, evaluations.get());
+                    var stack = AstStacks.astStackScope(target.getRootNode());
+                    assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                } finally { state.getThreads().leaveCurrent(); }
             } finally { context.leave(); }
         }
     }
