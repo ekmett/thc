@@ -728,3 +728,263 @@
                              MARK_WORD_LOCATION,
                              HUB_WRITE_LOCATION,
                              TLAB_TOP_LOCATION,
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/graal/nodes/SubstrateCompressionNode.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/graal/nodes/SubstrateCompressionNode.java
+@@ -69,6 +69,12 @@
+     }
+ 
+     @Override
++    public boolean isBoundedScalarConversion() {
++        // Inherits scalar CompressionNode.generate; the backend emits only pointer arithmetic.
++        return true;
++    }
++
++    @Override
+     public JavaConstant nullConstant() {
+         /*
+          * Return null constant prior to the compression op.
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/nodes/HotSpotCompressionNode.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/nodes/HotSpotCompressionNode.java
+@@ -86,6 +86,12 @@
+     }
+ 
+     @Override
++    public boolean isBoundedScalarConversion() {
++        // Inherits scalar CompressionNode.generate; the backend emits only pointer arithmetic.
++        return true;
++    }
++
++    @Override
+     protected Constant compress(Constant c) {
+         if (JavaConstant.NULL_POINTER.equals(c)) {
+             return HotSpotCompressedNullConstant.COMPRESSED_NULL;
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/nodes/CompressionNode.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/nodes/CompressionNode.java
+@@ -140,6 +140,19 @@
+         return this;
+     }
+ 
++    /**
++     * Whether this node emits only a finite scalar pointer conversion at runtime. An opt-in
++     * implementation must not emit calls, loops, allocation, safepoints, deoptimization, hidden
++     * barriers or runtime slow paths, including during subsequent lowering. Compiler-time
++     * construction and canonicalization are outside this contract.
++     *
++     * The default is conservative because subclasses may override {@link #generate}. VM-specific
++     * final node classes may opt in after auditing their lowering and backend emission.
++     */
++    public boolean isBoundedScalarConversion() {
++        return false;
++    }
++
+     @Override
+     public void generate(NodeLIRBuilderTool gen) {
+         boolean nonNull;
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/truffle/phases/TruffleLoopSafepointEliminationPhase.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/truffle/phases/TruffleLoopSafepointEliminationPhase.java
+@@ -26,9 +26,7 @@
+ 
+ import jdk.graal.compiler.graph.Node;
+ import jdk.graal.compiler.loop.phases.LoopSafepointEliminationPhase;
+-import jdk.graal.compiler.nodes.CallTargetNode;
+ import jdk.graal.compiler.nodes.FixedNode;
+-import jdk.graal.compiler.nodes.Invoke;
+ import jdk.graal.compiler.nodes.LoopBeginNode.SafepointState;
+ import jdk.graal.compiler.nodes.LoopEndNode;
+ import jdk.graal.compiler.nodes.StructuredGraph;
+@@ -37,21 +35,16 @@
+ import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
+ import jdk.graal.compiler.phases.tiers.MidTierContext;
+ import jdk.graal.compiler.truffle.KnownTruffleTypes;
+-import jdk.vm.ci.meta.ResolvedJavaMethod;
+ 
+ /**
+  * Extends the default Graal loop safepoint elimination phase and adds logic to disable guest
+- * safepoints when the loop contains truffle calls or when there is a plain counted loop without
+- * allocations.
++ * safepoints when there is a plain counted loop without allocations.
+  *
+  * @see LoopEndNode#getGuestSafepointState()
+  */
+ public final class TruffleLoopSafepointEliminationPhase extends LoopSafepointEliminationPhase {
+ 
+-    private final ResolvedJavaMethod callBoundary;
+-
+     public TruffleLoopSafepointEliminationPhase(KnownTruffleTypes types) {
+-        this.callBoundary = types.OptimizedCallTarget_callBoundary;
+     }
+ 
+     @Override
+@@ -72,11 +65,8 @@
+ 
+             @Override
+             protected boolean onCallInLoop(LoopSafepointPlan safepointPlan, LoopEndNode loopEnd, FixedNode currentCallNode) {
+-                if (currentCallNode instanceof Invoke && isTruffleCall((Invoke) currentCallNode)) {
+-                    // only truffle calls imply a truffle safepoint at method exits
+-                    safepointPlan.setGuestEndState(loopEnd, SafepointState.OPTIMIZER_DISABLED);
+-                    return true;
+-                }
++                // A bounded leaf callee can omit its return poll. A call alone no longer proves
++                // that the caller's guest loop reaches a Truffle safepoint.
+                 return false;
+             }
+ 
+@@ -88,16 +78,4 @@
+         instance.optimizeSafepoints().apply();
+     }
+ 
+-    private boolean isTruffleCall(Invoke call) {
+-        CallTargetNode target = call.callTarget();
+-        if (target == null) {
+-            return false;
+-        }
+-        ResolvedJavaMethod method = target.targetMethod();
+-        if (method == null) {
+-            return false;
+-        }
+-        return method.equals(callBoundary);
+-    }
+-
+ }
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/truffle/phases/TruffleSafepointInsertionPhase.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/truffle/phases/TruffleSafepointInsertionPhase.java
+@@ -24,22 +24,49 @@
+  */
+ package jdk.graal.compiler.truffle.phases;
+ 
++import jdk.graal.compiler.core.common.memory.BarrierType;
++import jdk.graal.compiler.core.common.memory.MemoryOrderMode;
++import jdk.graal.compiler.core.common.type.AbstractObjectStamp;
+ import jdk.graal.compiler.core.common.type.ObjectStamp;
++import jdk.graal.compiler.core.common.type.PrimitiveStamp;
+ import jdk.graal.compiler.core.common.type.StampFactory;
+ import jdk.graal.compiler.core.common.type.TypeReference;
+ import jdk.graal.compiler.debug.DebugCloseable;
+ import jdk.graal.compiler.debug.GraalError;
+ import jdk.graal.compiler.graph.Node;
++import jdk.graal.compiler.nodes.CompressionNode;
+ import jdk.graal.compiler.nodes.ConstantNode;
+ import jdk.graal.compiler.nodes.FixedNode;
++import jdk.graal.compiler.nodes.FixedWithNextNode;
+ import jdk.graal.compiler.nodes.FrameState;
+ import jdk.graal.compiler.nodes.LoopBeginNode;
+ import jdk.graal.compiler.nodes.LoopEndNode;
+ import jdk.graal.compiler.nodes.NodeView;
++import jdk.graal.compiler.nodes.ParameterNode;
++import jdk.graal.compiler.nodes.PiArrayNode;
++import jdk.graal.compiler.nodes.PiNode;
+ import jdk.graal.compiler.nodes.ReturnNode;
++import jdk.graal.compiler.nodes.StartNode;
+ import jdk.graal.compiler.nodes.StructuredGraph;
+ import jdk.graal.compiler.nodes.ValueNode;
++import jdk.graal.compiler.nodes.calc.AddNode;
++import jdk.graal.compiler.nodes.calc.AndNode;
++import jdk.graal.compiler.nodes.calc.LeftShiftNode;
++import jdk.graal.compiler.nodes.calc.MulNode;
++import jdk.graal.compiler.nodes.calc.NarrowNode;
++import jdk.graal.compiler.nodes.calc.NegateNode;
++import jdk.graal.compiler.nodes.calc.OrNode;
++import jdk.graal.compiler.nodes.calc.RightShiftNode;
++import jdk.graal.compiler.nodes.calc.SignExtendNode;
++import jdk.graal.compiler.nodes.calc.SubNode;
++import jdk.graal.compiler.nodes.calc.UnsignedRightShiftNode;
++import jdk.graal.compiler.nodes.calc.XorNode;
++import jdk.graal.compiler.nodes.calc.ZeroExtendNode;
+ import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
++import jdk.graal.compiler.nodes.memory.FloatingReadNode;
++import jdk.graal.compiler.nodes.memory.ReadNode;
++import jdk.graal.compiler.nodes.memory.address.AddressNode;
++import jdk.graal.compiler.nodes.memory.address.OffsetAddressNode;
+ import jdk.graal.compiler.nodes.spi.NodeWithState;
+ import jdk.graal.compiler.phases.Phase;
+ import jdk.graal.compiler.phases.util.Providers;
+@@ -102,9 +129,11 @@
+             return;
+         }
+ 
+-        for (ReturnNode returnNode : graph.getNodes(ReturnNode.TYPE)) {
+-            try (DebugCloseable s = returnNode.withNodeSourcePosition()) {
+-                insertSafepoint(graph, returnNode);
++        if (!isBoundedLeaf(graph)) {
++            for (ReturnNode returnNode : graph.getNodes(ReturnNode.TYPE)) {
++                try (DebugCloseable s = returnNode.withNodeSourcePosition()) {
++                    insertSafepoint(graph, returnNode);
++                }
+             }
+         }
+         for (LoopBeginNode loopBeginNode : graph.getNodes(LoopBeginNode.TYPE)) {
+@@ -128,6 +157,74 @@
+                 insertSafepoint(graph, (FixedNode) callTarget.invoke());
+             }
+         }
++    }
++
++    /**
++     * Proves a finite, straight-line sequence of scalar operations with no implicit guest work.
++     * Every graph node is checked, including floating nodes: absence of Java invokes alone would
++     * miss lowered calls, barriers, allocations and bulk intrinsics. Exact classes keep unfamiliar
++     * operations and subclasses conservative. VM-specific pointer conversions require an explicit
++     * bounded scalar contract and a scalar result stamp. There is no graph-size or root-name heuristic.
++     *
++     * The accepted operations cannot introduce a call or a loop during later lowering. Plain heap
++     * reads must already be barrier-free, non-null and non-deoptimizing. The finite dataflow graph
++     * and fixed chain therefore bound the work by this compilation's scalar operations. Callers
++     * must retain their own guest loop safepoints; a return from this graph does not imply a poll.
++     */
++    static boolean isBoundedLeaf(StructuredGraph graph) {
++        int fixedNodes = 0;
++        for (Node node : graph.getNodes()) {
++            if (node instanceof FixedNode) {
++                fixedNodes++;
++            }
++            Class<?> type = node.getClass();
++            if (type == StartNode.class || type == ReturnNode.class || type == ConstantNode.class || type == ParameterNode.class ||
++                            type == FrameState.class || type == PiNode.class || type == PiArrayNode.class || type == OffsetAddressNode.class) {
++                continue;
++            }
++            if (node instanceof CompressionNode compression && compression.isBoundedScalarConversion() && isScalar(compression)) {
++                continue;
++            }
++            if (type == ReadNode.class) {
++                ReadNode read = (ReadNode) node;
++                if (read.getBarrierType() == BarrierType.NONE && read.getMemoryOrder() == MemoryOrderMode.PLAIN && !read.getUsedAsNullCheck() &&
++                                isPlainHeapAddress(read.getAddress()) && isScalar(read)) {
++                    continue;
++                }
++            } else if (type == FloatingReadNode.class) {
++                FloatingReadNode read = (FloatingReadNode) node;
++                if (read.getBarrierType() == BarrierType.NONE && isPlainHeapAddress(read.getAddress()) && isScalar(read)) {
++                    continue;
++                }
++            } else if ((type == AddNode.class || type == SubNode.class || type == MulNode.class || type == AndNode.class || type == OrNode.class || type == XorNode.class ||
++                            type == LeftShiftNode.class || type == RightShiftNode.class || type == UnsignedRightShiftNode.class || type == NegateNode.class ||
++                            type == NarrowNode.class || type == SignExtendNode.class || type == ZeroExtendNode.class) &&
++                            ((ValueNode) node).stamp(NodeView.DEFAULT) instanceof PrimitiveStamp) {
++                continue;
++            }
++            return false;
++        }
++        // Also reject incomplete graphs and any fixed cycle, even if all its nodes were accepted.
++        FixedNode current = graph.start();
++        int remaining = fixedNodes;
++        while (current != null && remaining-- > 0) {
++            if (current.getClass() == ReturnNode.class) {
++                return remaining == 0;
++            }
++            if (!(current instanceof FixedWithNextNode)) {
++                return false;
++            }
++            current = ((FixedWithNextNode) current).next();
++        }
++        return false;
++    }
++
++    private static boolean isScalar(ValueNode node) {
++        return node.stamp(NodeView.DEFAULT) instanceof PrimitiveStamp || node.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp;
++    }
++
++    private static boolean isPlainHeapAddress(AddressNode address) {
++        return address.getClass() == OffsetAddressNode.class && address.getBase().stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp stamp && stamp.nonNull();
+     }
+ 
+     private void insertSafepointAtLoopBegin(StructuredGraph graph, LoopBeginNode loopBeginNode) {

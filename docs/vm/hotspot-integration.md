@@ -183,3 +183,25 @@ remain consumable by the JDK's C++14 translation units and C JNI callers. C++26
 module types belong behind that boundary. See [the build guide](build.md) for
 toolchain selection. The phase contracts are declared in
 [`thc_vm.h`](https://github.com/ekmett/thc/blob/main/src/vm/src/adapter/thc_vm.h).
+
+## Truffle leaf returns
+
+HotSpot and Substrate use the same Truffle compiler phases. HotSpot packages
+them in libgraal; Native Image embeds the Substrate-targeted compiler. A change
+to the shared phase still needs qualification with both target representations.
+
+THC's Graal patch makes the existing `TruffleSafepointInsertionPhase` omit
+return polls for proven straight-line scalar leaves. It checks every graph node,
+including floating work, and requires the complete fixed chain to run from start
+to return. Plain heap reads need a non-null base, no barrier, no ordering effect
+and no implicit null check. Calls, loops, allocations, monitors, bulk operations,
+writes and unclassified nodes retain the ordinary polling behavior. Eligibility
+comes from the lowered operations, not a function name or a non-recursive label.
+HotSpot and Substrate pointer compression nodes explicitly promise finite scalar
+lowering without calls, loops, allocation, barriers or deoptimization. Unknown
+compression implementations make no such promise and retain polling.
+
+`TruffleLoopSafepointEliminationPhase` no longer treats a call as evidence that
+the callee will poll before returning. The caller retains its loop poll. Existing
+counted-loop proofs remain in place. This changes Truffle thread-local handshake
+polling, not HotSpot's GC safepoint policy.
