@@ -16,9 +16,6 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
 import java.lang.invoke.MethodHandle;
@@ -89,65 +86,35 @@ public final class FunctionRoot extends GuestRoot {
     private final BranchProfile tailCallProfile = BranchProfile.create();
     @Child private LoopNode loop;
     @Child private HandoffCaller delimitedHandoff;
-    @Child private volatile DirectCallNode recoveredEntry;
     @CompilationFinal private volatile boolean coldEntry;
-    @CompilationFinal private boolean recoveryBoundary;
 
     @Override public Node copy() {
         FunctionRoot copy = (FunctionRoot) super.copy();
-        copy.recoveredEntry = null;
         copy.coldEntry = false;
         return copy;
     }
 
-    @TruffleBoundary private DirectCallNode recoverEntry() {
+    @TruffleBoundary private void recoverEntry() {
         var service = thc.Language.currentState(this).getGraphRecovery();
         var claim = service.claim(this);
-        if (claim == null) return recoveredEntry;
+        if (claim == null) return;
         try {
-            FunctionRoot replacement = copyForRecovery();
-            boolean reduced = claim.target().getRootNode() instanceof AstSameFrameArm.ArmRoot side
-                    ? side.extractInCopy(replacement)
-                    : deferredBudget ? AstDeferredArm.extractFresh(replacement) : AstSameFrameArm.extract(replacement);
-            if (!reduced) {
-                atomic(() -> {
-                    if (recoveredEntry == null && service.publishable(this, claim)) {
-                        coldEntry = true;
-                        reportReplace(this, this, "cold trampoline after compilation failure");
-                    }
-                    return null;
-                });
+            atomic(() -> {
+                if (!service.publishable(this, claim)) return null;
+                coldEntry = true;
+                // Preserve this adopted body and its frames. Only a proper region
+                // acquires a new target; the failed whole entry remains terminal.
+                if (claim.target().getRootNode() instanceof AstSameFrameArm.ArmRoot side)
+                    side.extractNested();
+                else if (deferredBudget) AstDeferredArm.extract(this);
+                else AstSameFrameArm.extract(this);
+                reportReplace(this, this, "cold terminal entry after compilation failure");
                 return null;
-            }
-            replacement.budgetGeneration = budgetGeneration + 1;
-            replacement.recoveryBoundary = true;
-            DirectCallNode prepared = DirectCallNode.create(replacement.getCallTarget());
-            return atomic(() -> {
-                if (recoveredEntry == null && service.publishable(this, claim)) {
-                    recoveredEntry = insert(prepared);
-                    reportReplace(this, this, "smaller fresh entry after compilation failure");
-                }
-                return recoveredEntry;
             });
         } finally {
-            // A cold trampoline keeps this source generation, including pending
-            // sibling failures. Only a published replacement retires all receipts.
-            service.complete(this, claim, recoveredEntry != null);
-        }
-    }
-
-    final FunctionRoot copyForRecovery() {
-        FunctionRoot replacement = NodeUtil.cloneNode(this);
-        freshLoops(replacement);
-        AstSameFrameArm.restoreCopiedExtractions(replacement);
-        return replacement;
-    }
-
-    private static void freshLoops(Node root) {
-        for (Node child : root.getChildren()) freshLoops(child);
-        if (root instanceof LoopNode loop) {
-            Node body = NodeUtil.cloneNode((Node) loop.getRepeatingNode());
-            loop.replace(Truffle.getRuntime().createLoopNode((RepeatingNode) body));
+            // Consume only this head. A concurrent or unextractable sibling still
+            // owns its receipt and may select another finite region at next entry.
+            service.complete(this, claim, false);
         }
     }
 
@@ -599,12 +566,10 @@ public final class FunctionRoot extends GuestRoot {
         } finally { entry.state().getArguments().release(input, entry.getArguments()); }
     }
     @Override public Object execute(VirtualFrame frame) {
-        DirectCallNode redirect = recoveredEntry;
-        if (redirect == null && !noGraphFailure.isValid() && graphFailure.get() != null) {
+        if (!noGraphFailure.isValid() && graphFailure.get() != null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            redirect = recoverEntry();
+            recoverEntry();
         }
-        if (redirect != null) return Calls.direct(redirect, frame.getArguments());
         if (coldEntry) return executeCold(frame.getArguments());
         return executeEntry(frame);
     }
@@ -803,10 +768,10 @@ public final class FunctionRoot extends GuestRoot {
         return budgetGeneration;
     }
     @Override protected boolean prepareForCompilation(boolean rootCompilation, int compilationTier, boolean lastTier) {
-        return (!budgetBoundary && !recoveryBoundary || rootCompilation) && !coldEntry &&
+        return (!budgetBoundary || rootCompilation) && !coldEntry && !compilationFailureObserved &&
                 super.prepareForCompilation(rootCompilation, compilationTier, lastTier);
     }
     @Override public boolean isCloningAllowed() {
-        return !budgetBoundary && !recoveryBoundary && !compilationFailureObserved;
+        return !budgetBoundary && !compilationFailureObserved;
     }
 }
