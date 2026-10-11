@@ -572,10 +572,16 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             recoverEntry();
         }
-        if (coldEntry) return executeCold(frame.getArguments());
+        if (coldEntry) {
+            if (requiresMaterializableFrame()) return executeCold(frame.materialize());
+            return executeCold(frame.getArguments());
+        }
         return executeEntry(frame);
     }
     /** Fresh ingress has not consumed a typed loan or initialized any guest locals yet. */
+    @TruffleBoundary private Object executeCold(MaterializedFrame frame) {
+        return executeEntry(frame);
+    }
     @TruffleBoundary private Object executeCold(Object[] arguments) {
         return executeEntry(Truffle.getRuntime().createVirtualFrame(arguments, getFrameDescriptor()));
     }
