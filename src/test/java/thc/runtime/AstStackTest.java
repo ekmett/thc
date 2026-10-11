@@ -15,30 +15,62 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class AstStackTest {
     @Test void synchronousCaptureCapabilityDrainsSpillsWithoutEnablingDeliveryOrReplayingPrefixes() {
-        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", "false")
+                .option("engine.Splitting", "false").option("engine.SingleTierCompilationThreshold", "10000000").build()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); state.getThreads().enterCurrent(null, false, false, null);
                 try {
                     state.getMaskingState().set(MaskingState.MASKED_INTERRUPTIBLE); var proof = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
-                    var layout = new FrameLayout(); int argument = layout.bind("depth");
+                    var metrics = new Metrics(true);
+                    var layout = new FrameLayout(); int argument = layout.bind("depth", com.oracle.truffle.api.frame.FrameSlotKind.Long);
                     class Body extends Expr {
-                        @Child private DirectCallerNode caller; int prefixes; int suffixes;
+                        @Child private IndirectCallerNode caller; @CompilerDirectives.CompilationFinal private RootCallTarget target; int prefixes; int suffixes;
                         Body() { setRepresentation(proof); }
-                        void install(RootCallTarget target) { caller = insert(new DirectCallerNode(target, new Metrics(false))); }
+                        void install(RootCallTarget target) { this.target = target; caller = insert(new IndirectCallerNode(new Metrics(false), true)); }
                         @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
                         @Override public long executeLong(VirtualFrame frame) {
-                            assertTrue(AstControl.captures(this)); assertFalse(AstControl.enabled(this), "Internal spilling does not grant external delivery"); assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this));
+                            if (!AstControl.captures(this) || AstControl.enabled(this) || SynchronousMasking.current(this) != MaskingState.MASKED_INTERRUPTIBLE)
+                                throw new AssertionError("Synchronous capture must preserve masking without granting external delivery");
                             prefixes++; long n = frame.getLong(argument); if (n == 0) return 1L;
                             Object result;
-                            try { result = caller.call(frame, new Object[]{0L, n - 1}, false); }
+                            try { result = caller.call(frame, target, new Object[]{0L, n - 1}, false); }
                             catch (AstCapture cut) { throw cut.append(new AstResumeStep() { @Override public Object resume(VirtualFrame frame, Object input) { suffixes++; return (Long) input + 1; } }); }
                             suffixes++; return (Long) result + 1;
                         }
                     }
                     var body = new Body(); var root = new FunctionRoot(language, layout.build(), "sync spilled suffix", null, new int[0], new int[]{argument}, new int[]{0}, body,
-                        new Metrics(false), new CoreRepresentation[]{proof}, proof, body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true);
-                    body.install(root.getCallTarget()); assertFalse(root.getEnableAsync()); assertEquals(4097L, Calls.target(root.getCallTarget(), new Object[]{0L, 4096L})); assertEquals(4097, body.prefixes); assertEquals(4096, body.suffixes);
+                        metrics, new CoreRepresentation[]{proof}, proof, body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true);
+                    body.install(root.getCallTarget()); assertFalse(root.getEnableAsync());
+                    // A distinct ordinary root owns draining; the recursive callee's
+                    // callback cannot be the driver's intentional interpreter transfer.
+                    var driverLayout = new FrameLayout(); int driverArgument = driverLayout.bind("depth", com.oracle.truffle.api.frame.FrameSlotKind.Long);
+                    class Driver extends Expr {
+                        @Child private DirectCallerNode caller = new DirectCallerNode(root.getCallTarget(), new Metrics(false));
+                        Driver() { setRepresentation(proof); }
+                        @Override public Object execute(VirtualFrame frame) { return caller.call(frame, new Object[]{0L, frame.getLong(driverArgument)}, false); }
+                    }
+                    var driver = new Driver(); var driverRoot = new FunctionRoot(language, driverLayout.build(), "sync spill driver", null, new int[0], new int[]{driverArgument}, new int[]{0}, driver,
+                        new Metrics(false), new CoreRepresentation[]{proof}, proof, driver.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true);
+                    var installed = (com.oracle.truffle.runtime.OptimizedCallTarget) root.getCallTarget();
+                    assertFalse(installed.wasExecuted()); installed.prepareForAOT(); assertTrue(installed.compile(true)); assertTrue(installed.isValidLastTier()); assertFalse(installed.wasExecuted());
+                    long address = installed.getCodeAddress(); int installations = installed.getSuccessfulCompilationCount(); assertNotEquals(0, address);
+                    var runtime = (com.oracle.truffle.runtime.OptimizedTruffleRuntime) Truffle.getRuntime();
+                    var deoptimizations = new java.util.concurrent.atomic.AtomicInteger();
+                    var listener = new com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener() {
+                        @Override public void onCompilationDeoptimized(com.oracle.truffle.runtime.OptimizedCallTarget target, com.oracle.truffle.api.frame.Frame frame, String reason) {
+                            if (target == installed) deoptimizations.incrementAndGet();
+                        }
+                    };
+                    runtime.addListener(listener);
+                    try {
+                        assertEquals(4097L, Calls.target(driverRoot.getCallTarget(), new Object[]{0L, 4096L}));
+                        assertEquals(4097, body.prefixes); assertEquals(4096, body.suffixes); assertTrue(metrics.getCompiledEntries() > 0);
+                        assertTrue(installed.isValidLastTier()); assertEquals(address, installed.getCodeAddress()); assertEquals(installations, installed.getSuccessfulCompilationCount());
+                        assertEquals(0, deoptimizations.get(), "The cold non-driver capture must not transfer its installed activations to the interpreter");
+                    } finally { runtime.removeListener(listener); }
                     var stack = state.getThreadPollState().get().getAstStack(); assertTrue(stack.getSpills() > 0); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving()); assertEquals(MaskingState.MASKED_INTERRUPTIBLE, state.getMaskingState().get()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
                 } finally { state.getThreads().leaveCurrent(); }
             } finally { context.leave(); }

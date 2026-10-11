@@ -158,6 +158,14 @@ A bytecode Yield or AST capture materializes the frame on the interruption
 path. AST capture also saves pending operands and caller suffixes from Java
 locals. Calls, active masks and annotation scopes form a saved continuation;
 ordinary execution does not allocate continuation records at each poll.
+The declared materializable-frame contract permits a root snapshot to materialize
+in compiled code. Required initial-frame copying and call-site operand cloning
+stay behind cold boundaries, preserving exact saved suffixes and released typed
+loans without an explicit interpreter transfer for each unwound activation.
+The driver still owns draining and restoring these continuations; this does not
+make a saved body an installed-code entry.
+Cold Core demand can still deoptimize at an unspecialized value-kind branch;
+removing capture transfers does not change that specialization policy.
 
 Async-enabled AST and bytecode roots also use these continuations to bound nested calls and
 thunk forcing. At the depth limit, they save the pending computation before
