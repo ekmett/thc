@@ -259,7 +259,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       DEVELOPER_DIR: ${{ matrix.developer_dir }}
-      JAM_NATIVE_IMAGE_HEAP: ${{ matrix.image_heap }}
+      THC_VM_NATIVE_IMAGE_HEAP: ${{ matrix.image_heap }}
     timeout-minutes: 75
     steps: &graal_consumer_steps
       - uses: actions/checkout@v7.0.1
@@ -320,7 +320,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       DEVELOPER_DIR: ${{ matrix.developer_dir }}
-      JAM_NATIVE_IMAGE_HEAP: ${{ matrix.image_heap }}
+      THC_VM_NATIVE_IMAGE_HEAP: ${{ matrix.image_heap }}
     timeout-minutes: 75
     steps: *graal_consumer_steps
 
@@ -396,7 +396,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 90
     env:
-      JAM_NATIVE_IMAGE_HEAP: 4g
+      THC_VM_NATIVE_IMAGE_HEAP: 4g
     defaults:
       run:
         shell: pwsh
