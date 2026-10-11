@@ -605,13 +605,10 @@ public final class FunctionRoot extends GuestRoot {
         catch (AstCapture cut) { return finishCapture(cut, initialCaptureFrame(frame)); }
     }
     private MaterializedFrame initialCaptureFrame(VirtualFrame frame) {
-        if (!copyInitialFrame) return frame.materialize();
-        FrameDescriptor descriptor = frame.getFrameDescriptor();
-        MaterializedFrame saved = Truffle.getRuntime().createMaterializedFrame(frame.getArguments().clone(), descriptor);
-        frame.copyTo(0, saved, 0, descriptor.getNumberOfSlots());
-        for (int index = 0; index < descriptor.getNumberOfAuxiliarySlots(); index++)
-            saved.setAuxiliarySlot(index, frame.getAuxiliarySlot(index));
-        return saved;
+        // Snapshot copying belongs to the cold capture path, outside partial evaluation.
+        CompilerDirectives.transferToInterpreter();
+        MaterializedFrame saved = frame.materialize();
+        return copyInitialFrame ? DelimitedContinuations.copyContinuationFrame(saved) : saved;
     }
     @TruffleBoundary public Object finishCapture(AstCapture cut, MaterializedFrame frame) {
         // The synchronous caller has left: a saved suffix returns an owned value,
