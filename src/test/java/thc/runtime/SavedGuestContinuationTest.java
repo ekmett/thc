@@ -673,6 +673,44 @@ class SavedGuestContinuationTest {
         }
     }
 
+    @Test void dependencyInspectionPreservesCollidingIdentitiesAcrossGrowth() {
+        class Edge implements SavedGuestContinuation {
+            Object next;
+            int reads;
+            @Override public Object getSourceRoot() { return this; }
+            @Override public Object getIdentity() { return this; }
+            @Override public Object getYielded() { reads++; return next; }
+            @Override public Object continueWith(Object input) { return fail("Inspection resumed a saved body"); }
+            @Override public boolean equals(Object other) { throw new AssertionError("Inspection called guest equality"); }
+            @Override public int hashCode() { throw new AssertionError("Inspection called guest hashing"); }
+        }
+        // Select a colliding prefix from more identities than low-bit buckets.
+        // Assertions concern reads and identity, not the table's capacity/layout.
+        var edges = new Edge[64];
+        var buckets = new Edge[32];
+        Edge first = null, second = null;
+        for (int i = 0; i < edges.length; i++) {
+            var edge = edges[i] = new Edge();
+            int bucket = System.identityHashCode(edge) & (buckets.length - 1);
+            if (first == null && buckets[bucket] != null) { first = buckets[bucket]; second = edge; }
+            buckets[bucket] = edge;
+        }
+        assertNotNull(first); assertNotNull(second);
+        var order = new java.util.ArrayList<Edge>();
+        order.add(first); order.add(second);
+        for (var edge : edges) if (edge != first && edge != second) order.add(edge);
+        for (int i = 1; i < order.size(); i++) order.get(i - 1).next = order.get(i);
+        var start = first;
+        assertNull(PendingWait.of(start));
+        for (var edge : edges) assertEquals(1, edge.reads);
+        order.getLast().next = first;
+        var failure = assertThrows(RuntimeFault.class, () -> PendingWait.of(start));
+        assertEquals("Suspended guest dependency cycle", failure.getMessage());
+        for (var edge : edges) assertEquals(2, edge.reads, "The repeated identity must reject before another successor read");
+        order.getLast().next = null;
+        assertNull(PendingWait.of(start));
+        for (var edge : edges) assertEquals(3, edge.reads, "Every inspection must start with fresh membership");
+    }
     @Test void dependencyCycleRejectsBeforeAnyBoundaryChangesOwnership() {
         try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();

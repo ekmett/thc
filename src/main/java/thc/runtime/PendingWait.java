@@ -84,10 +84,53 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         if (value instanceof PendingWait pending) return pending;
         return findSavedWait(value);
     }
+    /** Append-only identity membership owned by one dependency inspection. */
+    private static final class Visited {
+        private static final int MAX_CAPACITY = 1 << 29;
+        private Object[] keys = new Object[32];
+        private int size;
+        private static int index(Object key, int mask) {
+            int hash = System.identityHashCode(key);
+            return (hash - (hash << 7)) & mask;
+        }
+        boolean add(Object key) {
+            for (;;) {
+                Object[] table = keys;
+                int mask = table.length - 1;
+                int at = index(key, mask);
+                while (table[at] != null) {
+                    if (table[at] == key) return false;
+                    at = (at + 1) & mask;
+                }
+                int nextSize = size + 1;
+                if (3 * nextSize > 2 * table.length) {
+                    if (table.length < MAX_CAPACITY) {
+                        grow();
+                        continue;
+                    }
+                    // Keep one empty probe slot, including at maximum capacity.
+                    if (size == MAX_CAPACITY - 1) throw new IllegalStateException("Capacity exhausted.");
+                }
+                table[at] = key;
+                size = nextSize;
+                return true;
+            }
+        }
+        private void grow() {
+            Object[] expanded = new Object[keys.length * 2];
+            int mask = expanded.length - 1;
+            for (Object key : keys) if (key != null) {
+                int at = index(key, mask);
+                while (expanded[at] != null) at = (at + 1) & mask;
+                expanded[at] = key;
+            }
+            keys = expanded;
+        }
+    }
     @TruffleBoundary private static PendingWait findSavedWait(Object value) {
-        var seen = new java.util.IdentityHashMap<Object, Boolean>();
+        var seen = new Visited();
         for (;;) {
-            if (value != null && seen.put(value, Boolean.TRUE) != null) throw new RuntimeFault("Suspended guest dependency cycle");
+            if (value != null && !seen.add(value)) throw new RuntimeFault("Suspended guest dependency cycle");
             if (value instanceof PendingWait pending) return pending;
             if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
             else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
