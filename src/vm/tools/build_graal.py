@@ -30,7 +30,7 @@ def jvm_library():
 
 def graal_environment(java_home=None):
     environment = dict(os.environ)
-    base = Path(java_home or environment.get('JAM_GRAAL_BASE_JDK') or jdk_home(graal=True)).resolve()
+    base = Path(java_home or environment.get('JAM_GRAAL_BASE_JDK') or jdk_home()).resolve()
     launcher = 'java.exe' if platform.system() == 'Windows' else 'java'
     if not (base / 'bin' / launcher).is_file() or not (base / jvm_library()).is_file():
         raise SystemExit(f'Missing matching LabsJDK builder image: {base}')

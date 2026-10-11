@@ -14,15 +14,16 @@ import urllib.request
 def main():
     args = argparse.ArgumentParser()
     mode = args.add_mutually_exclusive_group()
-    mode.add_argument('--full', action='store_true', help='Fetch the complete pinned JDK archive')
+    mode.add_argument('--hotspot-patch-base', action='store_true',
+                      help='Fetch the original OpenJDK archive for HotSpot patch export only')
     mode.add_argument('--graal', action='store_true', help='Fetch LabsJDK, Graal and mx for the GraalVM build')
     options = args.parse_args()
     root = Path(__file__).resolve().parents[1]
     pins = json.loads((root / "config/source-pins.json").read_text())
     upstream = root / "upstream"
     upstream.mkdir(exist_ok=True)
-    if options.full or options.graal:
-        label = 'labsjdk25' if options.graal else 'jdk25'
+    if options.hotspot_patch_base or options.graal:
+        label = 'labsjdk25' if options.graal else 'hotspot-patch-base'
         archive = upstream / (label + '.tar.gz')
         pin = pins[label]
         if not archive.exists():

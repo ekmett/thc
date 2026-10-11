@@ -62,7 +62,7 @@ def run(command, *, cwd, env, timeout):
             try:
                 for line in stream:
                     output.append(line)
-                    if line.strip() == 'jam-runtime-audit-ready':
+                    if line.strip() == 'thc-runtime-audit-ready':
                         ready.set()
             finally:
                 # An early exit should report its output without waiting for timeout.
@@ -75,11 +75,11 @@ def run(command, *, cwd, env, timeout):
         try:
             if not ready.wait(max(0, deadline - time.monotonic())):
                 raise subprocess.TimeoutExpired(command, timeout)
-            if any(line.strip() == 'jam-runtime-audit-ready' for line in stdout):
+            if any(line.strip() == 'thc-runtime-audit-ready' for line in stdout):
                 paths = loaded_modules(process.pid)
                 process.stdin.write('\n')
                 process.stdin.flush()
-                stdout.extend('jam-loaded-library: ' + path + '\n' for path in paths)
+                stdout.extend('thc-loaded-library: ' + path + '\n' for path in paths)
             process.wait(timeout=max(0, deadline - time.monotonic()))
         except BaseException:
             process.kill()

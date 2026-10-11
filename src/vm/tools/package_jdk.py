@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
-"""Bundle Jam and its guest API into a relocatable macOS, Linux or Windows JDK."""
+"""Bundle THC VM and its guest API into a relocatable macOS, Linux or Windows JDK."""
 
 import argparse
 import filecmp
@@ -18,7 +18,7 @@ from pe_runtime import (check_import_library, check_pe_paths, find_dll, pe_comma
 
 ROOT = Path(__file__).resolve().parents[1]
 SYSTEM = ('/usr/lib/', '/System/Library/')
-DARWIN_RUNTIME = ('libjam-vm.dylib', 'libc++.1.dylib', 'libc++abi.1.dylib', 'libunwind.1.dylib')
+DARWIN_RUNTIME = ('libthc-vm.dylib', 'libc++.1.dylib', 'libc++abi.1.dylib', 'libunwind.1.dylib')
 CPP_RUNTIME = re.compile(r'lib(?:c\+\+|c\+\+abi|unwind|stdc\+\+)\.so(?:\..+)?$')
 
 
@@ -45,15 +45,15 @@ def runtime_libraries(directory):
     if manifest.is_file():
         names = tuple(manifest.read_text().splitlines())
         windows = platform.system() == 'Windows'
-        collector = 'jam-vm.dll' if windows else 'libjam-vm.dylib' if platform.system() == 'Darwin' else 'libjam-vm.so'
+        collector = 'thc-vm.dll' if windows else 'libthc-vm.dylib' if platform.system() == 'Darwin' else 'libthc-vm.so'
         pattern = r'[a-z0-9_+.-]+\.dll' if windows else r'lib[A-Za-z0-9_+.-]+'
         if collector not in names or len(set(name.casefold() if windows else name for name in names)) != len(names) or any(
                 not re.fullmatch(pattern, name) for name in names):
-            raise SystemExit(f'Invalid Jam runtime manifest: {manifest}')
+            raise SystemExit(f'Invalid THC VM runtime manifest: {manifest}')
         return names
     if platform.system() == 'Darwin':
         return DARWIN_RUNTIME
-    raise SystemExit(f'Missing Jam runtime manifest: {manifest}')
+    raise SystemExit(f'Missing THC VM runtime manifest: {manifest}')
 
 
 def loader_environment(environment):
@@ -214,9 +214,9 @@ def load_commands(path):
 
 def static_libraries(build, runtime, system, configuration="Release"):
     """Read the native build's archive closure and add the matching C++ runtime."""
-    manifest = build / f'jam-vm-static-libraries-{configuration}.txt'
+    manifest = build / f'thc-vm-static-libraries-{configuration}.txt'
     if not manifest.is_file():
-        raise SystemExit(f'Missing static Jam build manifest: {manifest}')
+        raise SystemExit(f'Missing static THC VM build manifest: {manifest}')
     archives = [Path(line) for line in manifest.read_text().splitlines()]
     if system != 'Windows':
         for name in ('libc++.a', 'libc++abi.a', 'libunwind.a'):
@@ -225,9 +225,9 @@ def static_libraries(build, runtime, system, configuration="Release"):
                 raise SystemExit(f'Expected one matching {name} under {runtime}; found {len(candidates)}')
             archives.append(candidates.pop())
     names = [p.name for p in archives]
-    collector = 'jam-vm-static.lib' if system == 'Windows' else 'libjam-vm-static.a'
+    collector = 'thc-vm-static.lib' if system == 'Windows' else 'libthc-vm-static.a'
     if not names or names[0] != collector or len(names) != len(set(names)):
-        raise SystemExit(f'Invalid static Jam archive closure: {manifest}')
+        raise SystemExit(f'Invalid static THC VM archive closure: {manifest}')
     for path in archives:
         if not path.is_file() or path.suffix != ('.lib' if system == 'Windows' else '.a'):
             raise SystemExit(f'Missing static Jam archive: {path}')
@@ -254,45 +254,45 @@ def package(java_home, output, runtime, runtime_licenses=(), compiler_runtime_li
     if output.is_relative_to(java_home):
         raise SystemExit('The output must be outside the source JDK.')
     libraries = {
-        'libjam-vm.dylib': NATIVE_BUILD / 'libjam-vm.dylib',
-        'libjam_bridge.dylib': ROOT / 'build/bridge/lib/libjam_bridge.dylib',
+        'libthc-vm.dylib': NATIVE_BUILD / 'libthc-vm.dylib',
+        'libthc_bridge.dylib': ROOT / 'build/bridge/lib/libthc_bridge.dylib',
         'libc++.1.dylib': runtime / 'lib/c++/libc++.1.dylib',
         'libc++abi.1.dylib': runtime / 'lib/c++/libc++abi.1.dylib',
         'libunwind.1.dylib': runtime / 'lib/unwind/libunwind.1.dylib',
     } if system == 'Darwin' else {
-        'libjam-vm.so': NATIVE_BUILD / 'libjam-vm.so',
-        'libjam_bridge.so': ROOT / 'build/bridge/lib/libjam_bridge.so',
+        'libthc-vm.so': NATIVE_BUILD / 'libthc-vm.so',
+        'libthc_bridge.so': ROOT / 'build/bridge/lib/libthc_bridge.so',
     }
     import_library = None
     if system == 'Windows':
         libraries = {
-            'jam-vm.dll': NATIVE_BUILD / 'jam-vm.dll',
-            'jam_bridge.dll': ROOT / 'build/bridge/lib/jam_bridge.dll',
+            'thc-vm.dll': NATIVE_BUILD / 'thc-vm.dll',
+            'thc_bridge.dll': ROOT / 'build/bridge/lib/thc_bridge.dll',
         }
-        import_library = NATIVE_BUILD / 'jam-vm.lib'
+        import_library = NATIVE_BUILD / 'thc-vm.lib'
         for source in (*libraries.values(), import_library):
             if not source.is_file():
                 raise SystemExit(f'Missing package input: {source}')
         libraries.update(windows_runtime_libraries(libraries, runtime, java_home))
         check_import_library(import_library, pe_machine(java_home / 'bin/java.exe'))
-        introduced = [name for name, source in libraries.items() if not name.startswith(('jam_', 'jam-'))
+        introduced = [name for name, source in libraries.items() if not name.startswith(('thc_', 'thc-'))
                       and ((existing := find_dll(java_home / 'bin', name)) is None
                            or not filecmp.cmp(source, existing, shallow=False))]
         if introduced and not runtime_licenses:
             raise SystemExit('Pass --runtime-license with the genuine MSVC redistributable notice for: '
                              + ', '.join(introduced))
     if system == 'Linux':
-        if not libraries['libjam-vm.so'].is_file():
-            raise SystemExit(f'Missing package input: {libraries["libjam-vm.so"]}')
-        libraries.update(linux_runtime_libraries(libraries['libjam-vm.so'], runtime))
-    archives = static_libraries(NATIVE_BUILD, runtime, system, os.environ.get("JAM_NATIVE_CONFIG", "Release"))
-    native_runtime = [name for name in libraries if not name.startswith(('libjam_bridge.', 'jam_bridge.'))]
+        if not libraries['libthc-vm.so'].is_file():
+            raise SystemExit(f'Missing package input: {libraries["libthc-vm.so"]}')
+        libraries.update(linux_runtime_libraries(libraries['libthc-vm.so'], runtime))
+    archives = static_libraries(NATIVE_BUILD, runtime, system, os.environ.get("THC_VM_NATIVE_CONFIG", "Release"))
+    native_runtime = [name for name in libraries if not name.startswith(('libthc_bridge.', 'thc_bridge.'))]
     licenses = {
-        'LICENSE.md': ROOT.parent / 'LICENSE.md',
-        'THIRD_PARTY_NOTICES.md': ROOT.parent / 'THIRD_PARTY_NOTICES.md',
+        'LICENSE.md': ROOT / 'LICENSE.md',
         'NOTICE.md': ROOT / 'NOTICE.md',
-        'jam-LICENSE.md': ROOT.parent / 'LICENSE.md',
+        'jam-LICENSE.md': NATIVE_BUILD / 'jam-LICENSE.md',
         'native-LICENSE.md': NATIVE_BUILD / 'native-LICENSE.md',
+        'work-LICENSE.md': NATIVE_BUILD / 'work-LICENSE.md',
     }
     if system == 'Windows':
         if compiler_runtime_license is None:
@@ -304,8 +304,8 @@ def package(java_home, output, runtime, runtime_licenses=(), compiler_runtime_li
             licenses[f'MSVC-{index}-{source.name}'] = source
     else:
         licenses['LLVM-LICENSE.txt'] = runtime / 'LICENSE.TXT'
-    jars = [ROOT / 'build/bridge' / name for name in ('jam-vm.jar', 'jam-vm-sources.jar')]
-    header = ROOT / 'src/adapter/jam_vm.h'
+    jars = [ROOT / 'build/bridge' / name for name in ('thc-vm.jar', 'thc-vm-sources.jar')]
+    header = ROOT / 'src/adapter/thc_vm.h'
     for source in [*libraries.values(), *licenses.values(), *jars, header]:
         if not source.is_file():
             raise SystemExit(f'Missing package input: {source}')
@@ -313,9 +313,9 @@ def package(java_home, output, runtime, runtime_licenses=(), compiler_runtime_li
     with tempfile.TemporaryDirectory(prefix='jam-package-', dir=output.parent) as temporary:
         stage = Path(temporary) / 'jdk'
         shutil.copytree(java_home, stage, symlinks=True)
-        library_dir = stage / 'lib/jam'
+        library_dir = stage / 'lib/thc'
         library_dir.mkdir(parents=True)
-        legal_dir = stage / 'legal/jam-vm'
+        legal_dir = stage / 'legal/thc-vm'
         legal_dir.mkdir(parents=True)
         for name, source in libraries.items():
             shutil.copy2(source, library_dir / name)
@@ -335,7 +335,7 @@ def package(java_home, output, runtime, runtime_licenses=(), compiler_runtime_li
         for source in jars:
             shutil.copy2(source, library_dir / source.name)
         (library_dir / 'include').mkdir()
-        shutil.copy2(header, library_dir / 'include/jam_vm.h')
+        shutil.copy2(header, library_dir / 'include/thc_vm.h')
         for name, source in licenses.items():
             shutil.copy2(source, legal_dir / name)
 
@@ -405,7 +405,7 @@ def package(java_home, output, runtime, runtime_licenses=(), compiler_runtime_li
                     changes += ['-change', dependency, replacement]
             for rpath in sorted(rpaths):
                 if path.parent == library_dir:
-                    # These libraries are flattened into lib/jam and every
+                    # These libraries are flattened into lib/thc and every
                     # dependency above now has a direct loader-relative path.
                     changes += ['-delete_rpath', rpath]
                     continue

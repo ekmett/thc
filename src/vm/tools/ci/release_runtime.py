@@ -20,7 +20,7 @@ import subprocess
 import tarfile
 import zipfile
 
-REPO = 'ekmett/jam'
+REPO = 'ekmett/thc'
 FLAVORS = ('release', 'fastdebug')
 PLATFORMS = {'linux': ('Linux', 'x86_64', 'Ubuntu 24.04'),
              'macos': ('Darwin', 'arm64', 'macOS 26'),
@@ -48,17 +48,17 @@ def require_run(run, jobs, comparison):
         raise ValueError('require a completed successful Managed runtimes run whose source is merged into main')
     passed = {job['name'] for job in jobs if job['conclusion'] == 'success'}
     expected = {f'{suite} ({platform})' for platform in PLATFORMS for suite in
-                ('Build GraalVM', 'HotSpot integration', 'Native and guest bridge',
+                ('Build GraalVM', 'Native and guest bridge',
                  'GraalVM runtime', 'SubstrateVM')}
     if not expected <= passed:
         raise ValueError(f'missing qualification: {sorted(expected - passed)}')
 
 
 def qualified_artifacts(artifacts, flavor):
-    selected = [a for a in artifacts if re.fullmatch(r'jam-(graal|jdk)-(release|fastdebug)-(linux|macos|windows)', a['name'])]
-    expected_artifacts = {f'jam-{kind}-{flavor}-{p}' for kind in ('graal', 'jdk') for p in PLATFORMS}
+    selected = [a for a in artifacts if re.fullmatch(r'thc-graal-(release|fastdebug)-(linux|macos|windows)', a['name'])]
+    expected_artifacts = {f'thc-graal-{flavor}-{p}' for p in PLATFORMS}
     if {a['name'] for a in selected if not a['expired']} != expected_artifacts:
-        raise ValueError('require all six qualified JDK/Graal artifacts of the requested build flavor')
+        raise ValueError('require all three qualified Graal artifacts of the requested build flavor')
     if len({a['name'] for a in selected}) != len(selected):
         raise ValueError('ambiguous duplicate artifact names')
     return selected
@@ -112,7 +112,7 @@ def inventory(path, root):
                         macos.add((version >> 16, (version >> 8) & 255, version & 255))
                     offset += size
     names = {r['path'] for r in records}
-    if not {'release', 'lib/jam/jam-vm.jar', 'lib/jam/runtime-libraries.txt', 'legal/jam-vm/NOTICE.md'} <= names:
+    if not {'release', 'lib/thc/thc-vm.jar', 'lib/thc/runtime-libraries.txt', 'legal/thc-vm/NOTICE.md'} <= names:
         raise ValueError('incomplete packaged installation')
     tree = hashlib.sha256()
     for record in sorted(records, key=lambda r: r['path']):
@@ -140,21 +140,21 @@ def main():
     require_run(run, jobs, api(f"compare/{run['head_sha']}...main"))
     artifacts = api(f'actions/runs/{args.run}/artifacts?per_page=100')['artifacts']
     source = run['head_sha']
-    pins = json.loads(base64.b64decode(api(f'contents/vm/config/source-pins.json?ref={source}')['content']))
+    pins = json.loads(base64.b64decode(api(f'contents/src/vm/config/source-pins.json?ref={source}')['content']))
     selected = qualified_artifacts(artifacts, args.build_flavor)
     args.output.mkdir(parents=True, exist_ok=False)
     args.cache.mkdir(parents=True, exist_ok=True)
     manifest = {'schema': 1, 'tag': args.tag, 'repository': REPO, 'source_commit': source,
                 'source_pins': pins, 'qualification': {'run_id': args.run, 'url': run['html_url'],
-                'scope': 'Jam CI runtime regressions; not general Haskell weak semantics or arbitrary application deployment'},
+                'scope': 'THC VM CI runtime regressions; not general Haskell weak semantics or arbitrary application deployment'},
                 'packages': []}
     base = f'https://github.com/{REPO}/releases/download/{args.tag}/'
     for artifact in sorted(selected, key=lambda a: a['name']):
         if artifact['expired']:
             raise ValueError(f"expired artifact: {artifact['name']}")
-        _, kind, flavor, platform = artifact['name'].split('-')
+        _, _, flavor, platform = artifact['name'].split('-')
         system, arch, tested = PLATFORMS[platform]
-        product, root = ('graalvm', 'graalvm') if kind == 'graal' else ('jdk', 'jdk')
+        product = root = 'graalvm'
         transport = args.cache / f"{artifact['id']}.zip"
         expected = artifact['digest'].removeprefix('sha256:')
         if not transport.exists():
@@ -164,10 +164,10 @@ def main():
             temporary.rename(transport)
         if sha256(transport) != expected:
             raise ValueError(f'artifact checksum mismatch: {transport}')
-        filename = f'jam-{product}-{args.tag}-{flavor}-{platform}-{arch}.tar.gz'
+        filename = f'thc-{product}-{args.tag}-{flavor}-{platform}-{arch}.tar.gz'
         target = args.output / filename
         with zipfile.ZipFile(transport) as archive:
-            inner = f'jam-{kind}-ci.tar.gz'
+            inner = 'thc-graal-ci.tar.gz'
             if archive.namelist() != [inner]:
                 raise ValueError(f'unexpected artifact members: {archive.namelist()}')
             with archive.open(inner) as src, target.open('wb') as dst:
@@ -175,30 +175,30 @@ def main():
         installation, contents, release, requirements = inventory(target, root)
         if release.get('JAM_BUILD_FLAVOR') != flavor:
             raise ValueError(f'packaged VM flavor disagrees with artifact identity: {artifact["name"]}')
-        static_manifest = 'lib/jam/native-image-libraries.txt'
+        static_manifest = 'lib/thc/native-image-libraries.txt'
         static_linkage = any(entry['path'] == static_manifest for entry in contents['files'])
         inventory_name = filename.removesuffix('.tar.gz') + '.files.json'
         (args.output / inventory_name).write_text(json.dumps(contents, indent=2) + '\n')
         manifest['packages'].append({'product': product, 'os': system, 'arch': arch,
             'tested_on': tested, 'requirements': requirements, 'build_flavor': flavor,
-            'native_image_linkage': ('static' if static_linkage else 'shared') if kind == 'graal' else None,
-            'java_version': release.get('JAVA_VERSION'), 'graal_version': release.get('GRAALVM_VERSION') if kind == 'graal' else None,
+            'native_image_linkage': 'static' if static_linkage else 'shared',
+            'java_version': release.get('JAVA_VERSION'), 'graal_version': release.get('GRAALVM_VERSION'),
             'archive': {'url': base + filename, 'type': 'tar.gz', 'sha256': sha256(target), 'bytes': target.stat().st_size},
             'installation': {**installation, 'root': root, 'inventory_url': base + inventory_name},
             'paths': {'java': 'bin/java.exe' if platform == 'windows' else 'bin/java',
-                'api_jar': 'lib/jam/jam-vm.jar', 'native_directory': 'bin' if platform == 'windows' else 'lib/jam',
-                'runtime_manifest': 'lib/jam/runtime-libraries.txt', 'legal': 'legal',
+                'api_jar': 'lib/thc/thc-vm.jar', 'native_directory': 'bin' if platform == 'windows' else 'lib/thc',
+                'runtime_manifest': 'lib/thc/runtime-libraries.txt', 'legal': 'legal',
                 'native_image_manifest': static_manifest if static_linkage else None,
                 'sdk_jars': contents['sdk_jars']},
             'ci_artifact': {'id': artifact['id'], 'sha256': expected}})
         print(f'{platform} {product}: {target.stat().st_size} bytes, installation {installation["sha256"]}', flush=True)
     (args.output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (args.output / 'SHA256SUMS').write_text(''.join(f'{sha256(p)}  {p.name}\n' for p in sorted(args.output.iterdir())))
-    notes = f'''Prebuilt Jam runtimes from [{source[:12]}](https://github.com/{REPO}/commit/{source}).
+    notes = f'''Prebuilt THC VM runtimes from [{source[:12]}](https://github.com/{REPO}/commit/{source}).
 
-These are **{args.build_flavor} preview builds**, promoted byte-for-byte from the [successful runtime CI run]({run['html_url']}). Download the archive for your platform, verify SHA256SUMS, extract it, and set JAVA_HOME to its graalvm/ or jdk/ directory. See manifest.json for exact source pins, platform requirements, matching SDK JARs and full installation identities. Windows includes tar; use tar -xf to preserve the published layout.
+These are **{args.build_flavor} preview builds**, promoted byte-for-byte from the [successful runtime CI run]({run['html_url']}). Download the archive for your platform, verify SHA256SUMS, extract it, and set JAVA_HOME to its graalvm/ directory. See manifest.json for exact source pins, platform requirements, matching SDK JARs and full installation identities. Windows includes tar; use tar -xf to preserve the published layout.
 
-GraalVM includes the matching LabsJDK, patched Graal compiler and Native Image/SubstrateVM. Use -XX:+UnlockExperimentalVMOptions -XX:+UseJamGC for Java and --gc=jam for Native Image. Native Image still needs the platform C/C++ toolchain. Its outputs may require companion Jam libraries; see the [deployment documentation](https://github.com/{REPO}/blob/{source}/docs/vm/native-image.md).
+GraalVM includes the matching LabsJDK, patched Graal compiler and Native Image/SubstrateVM. Use -XX:+UnlockExperimentalVMOptions -XX:+UseJamGC for Java and --gc=jam for Native Image. Native Image still needs the platform C/C++ toolchain. Its outputs may require companion THC VM libraries; see the [deployment documentation](https://github.com/{REPO}/blob/{source}/docs/vm/native-image.md).
 
 Qualification covers the producer's runtime regressions. General Haskell System.Mem.Weak integration and arbitrary application Native Image deployment are not claimed. No source runtime rebuild was performed for publication.
 '''

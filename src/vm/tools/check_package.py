@@ -26,8 +26,8 @@ actual = runtime_flavor(home, loader_environment(os.environ))
 recorded = re.findall(r'^JAM_BUILD_FLAVOR="([^"\n]+)"$', (home / 'release').read_text(), re.MULTILINE)
 if recorded != [actual] or actual != build_flavor():
     raise SystemExit(f'Package flavor mismatch: VM={actual}, recorded={recorded}, requested={build_flavor()}')
-library = home / 'lib/jam'
-jar = library / 'jam-vm.jar'
+library = home / 'lib/thc'
+jar = library / 'thc-vm.jar'
 windows = platform.system() == 'Windows'
 native_library = home / 'bin' if windows else library
 with tempfile.TemporaryDirectory(prefix='jam-package-check-') as temporary:
@@ -38,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix='jam-package-check-') as temporary:
         str(java_tool(home, 'java')), '-Xshare:off', '-Xms32m', '-Xmx32m',
         '-XX:+UnlockExperimentalVMOptions', '-XX:+UnlockDiagnosticVMOptions', '-XX:+UseJamGC',
         '-XX:+VerifyBeforeGC', '-XX:+VerifyAfterGC', '--enable-native-access=ALL-UNNAMED',
-        *(['-Djam.runtime.audit=true'] if windows else []),
+        *(['-Dthc.runtime.audit=true'] if windows else []),
         '-Djava.library.path=' + str(native_library), '-cp', os.pathsep.join((str(classes), str(jar))),
         'WeakBridgeSmoke'], cwd=temporary, env=loader_environment(os.environ),
         timeout=120)
@@ -56,7 +56,7 @@ if version is not None and version.returncode:
     raise SystemExit(f'Packaged native-image launcher failed:\n{version.stdout}{version.stderr}')
 if result.returncode or 'Weak bridge passed:' not in output:
     raise SystemExit(f'Packaged JDK failed (exit {result.returncode}):\n{output[-6000:]}')
-names = (*runtime_libraries(library), 'jam_bridge.dll' if windows else
-         'libjam_bridge.dylib' if platform.system() == 'Darwin' else 'libjam_bridge.so')
+names = (*runtime_libraries(library), 'thc_bridge.dll' if windows else
+         'libthc_bridge.dylib' if platform.system() == 'Darwin' else 'libthc_bridge.so')
 check_loaded_libraries(output, native_library, names)
 print('Packaged JDK passed: public weak API and bundled native libraries.')

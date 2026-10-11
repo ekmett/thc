@@ -40,7 +40,7 @@ def main():
         raise SystemExit('Choose a new archive path outside the packaged runtime.')
     java_tool(home, 'java')
     java_tool(home, 'native-image')
-    for relative in ('lib/jam/jam-vm.jar', 'legal/jam-vm/NOTICE.md'):
+    for relative in ('lib/thc/thc-vm.jar', 'legal/thc-vm/NOTICE.md'):
         if not (home / relative).is_file():
             raise SystemExit(f'Missing packaged runtime input: {relative}')
     for path in home.rglob('*'):

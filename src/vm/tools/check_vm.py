@@ -8,12 +8,12 @@ from pathlib import Path
 from platform_paths import NATIVE_BUILD
 import subprocess
 import sys
-from platform_paths import jdk_home
+from platform_paths import jdk_home, java_tool
 from build_jni_test import build as build_jni_test
 
 root = Path(__file__).resolve().parents[1]
 vm = Path(os.environ.get('JAM_JAVA', jdk_home() / 'bin/java'))
-javac = Path(os.environ.get('JAM_JAVAC', vm.parent / 'javac'))
+javac = Path(os.environ.get('JAM_JAVAC', java_tool(vm.parent.parent, 'javac')))
 prefix = os.environ.get('JAM_EVIDENCE_PREFIX', 'jam')
 classes = root / 'build-java-tests'
 evidence = root / 'evidence'
@@ -21,7 +21,7 @@ classes.mkdir(exist_ok=True)
 evidence.mkdir(exist_ok=True)
 subprocess.run([sys.executable, str(root / 'tools/build_bridge.py'), '--java-home',
                 str(javac.parent.parent)], check=True)
-jar = root / 'build/bridge/jam-vm.jar'
+jar = root / 'build/bridge/thc-vm.jar'
 native = classes / 'native'
 build_jni_test(javac.parent.parent, native)
 build_jni_test(javac.parent.parent, native, collector=True)
@@ -65,6 +65,6 @@ for mode, compiler in (
     for first in ('histogram', 'jvmti', 'legacy', 'locks'):
         run(f'JvmHeapWalkSmoke-{mode}-{first}', 'JvmHeapWalkSmoke', [*compiler,
             '-Xms128m', '-Xmx128m', '-XX:-VerifyBeforeGC', '-XX:-VerifyAfterGC', '-XX:-VerifyBeforeExit',
-            f'-Djam.heap.walk.first={first}', '-XX:CompileCommand=dontinline,JvmHeapWalkSmoke::*'])
+            f'-Dthc.heap.walk.first={first}', '-XX:CompileCommand=dontinline,JvmHeapWalkSmoke::*'])
 run('GenerationCapacitySmoke', 'GenerationCapacitySmoke',
     ['-Xms64m', '-Xmx64m', '-XX:JamYoungSize=32m', '-XX:JamPromoteEvery=1000'])

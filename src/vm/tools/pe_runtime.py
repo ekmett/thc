@@ -152,7 +152,7 @@ def check_loaded_libraries(output, directory, names):
     expected = {name.casefold() for name in names}
     loaded = set()
     for line in output.splitlines():
-        prefix = 'jam-loaded-library: '
+        prefix = 'thc-loaded-library: '
         if not line.startswith(prefix):
             continue
         path = Path(line.removeprefix(prefix))

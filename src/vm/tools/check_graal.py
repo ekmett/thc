@@ -6,7 +6,7 @@
 import argparse
 import os
 from pathlib import Path
-from platform_paths import NATIVE_BUILD
+from platform_paths import NATIVE_BUILD, java_tool
 import subprocess
 import xml.etree.ElementTree as ET
 from build_jni_test import build as build_jni_test
@@ -20,19 +20,19 @@ options = parser.parse_args()
 home = options.java_home.resolve()
 mode = 'libgraal'
 classes = root / 'build-graal-tests'
-jar = home / 'lib/jam/jam-vm.jar'
+jar = home / 'lib/thc/thc-vm.jar'
 evidence = root / 'evidence'
 evidence.mkdir(exist_ok=True)
 native = classes / 'native'
 build_jni_test(home, native)
 build_jni_test(home, native, collector=True)
-subprocess.run([str(home / 'bin/javac'), '-cp', str(jar), '-d', str(classes),
+subprocess.run([str(java_tool(home, 'javac')), '-cp', str(jar), '-d', str(classes),
                 *map(str, sorted((root / 't/java').glob('*.java'))),
                 str(root / 't/bridge/WeakBridgeSmoke.java'),
                 str(root / 't/bridge/JNIWeakSmoke.java')], check=True)
 exports = ['--add-modules=jdk.internal.vm.ci',
            '--add-exports=jdk.internal.vm.ci/jdk.vm.ci.hotspot=ALL-UNNAMED']
-subprocess.run([str(home / 'bin/javac'), *exports, '-d', str(classes),
+subprocess.run([str(java_tool(home, 'javac')), *exports, '-d', str(classes),
                 str(root / 't/graal/InvalidationReasonSmoke.java')], check=True)
 flags = [
     '-Xshare:off', '-Xms32m', '-Xmx32m', '-XX:+UnlockExperimentalVMOptions', '-XX:+UnlockDiagnosticVMOptions', '-XX:+UseJamGC',
@@ -43,7 +43,7 @@ flags = [
     '-Djdk.graal.CompilationFailureAction=ExitVM', '-Djdk.graal.ShowConfiguration=info',
     '-Djdk.graal.DumpPath=' + str(evidence / 'graal-dumps'),
     '--enable-native-access=ALL-UNNAMED',
-    '-Djava.library.path=' + os.pathsep.join(map(str, (home / 'lib/jam', NATIVE_BUILD, native))),
+    '-Djava.library.path=' + os.pathsep.join(map(str, (home / 'lib/thc', NATIVE_BUILD, native))),
     '-cp', os.pathsep.join((str(classes), str(jar))),
 ]
 cases = [
@@ -51,7 +51,7 @@ cases = [
      '--add-opens=jdk.internal.vm.ci/jdk.vm.ci.hotspot=ALL-UNNAMED'], [],
      'InvalidationReasonSmoke passed:'),
     ('HeapSmoke', [], ['walk'], 'allocation checks passed'),
-    ('JvmHeapWalkSmoke', ['-Xms128m', '-Xmx128m', '-Djam.heap.walk.first=jvmti', '-XX:-VerifyBeforeGC', '-XX:-VerifyAfterGC', '-XX:-VerifyBeforeExit'],
+    ('JvmHeapWalkSmoke', ['-Xms128m', '-Xmx128m', '-Dthc.heap.walk.first=jvmti', '-XX:-VerifyBeforeGC', '-XX:-VerifyAfterGC', '-XX:-VerifyBeforeExit'],
      ['allocate', 'array', 'duplicate'], 'JvmHeapWalkSmoke passed:'),
     ('WeakSmoke', [], [], 'finalization checks passed'),
     ('BoundarySmoke', [], [], 'phantom checks passed'),
@@ -66,7 +66,7 @@ cases = [
 ]
 for name, extra, methods, expected in cases:
     log = evidence / f'graal-{mode}-{name}.xml'
-    result = subprocess.run([str(home / 'bin/java'), *flags, *extra,
+    result = subprocess.run([str(java_tool(home, 'java')), *flags, *extra,
                              '-XX:LogFile=' + str(log),
                              *[f'-XX:CompileCommand=dontinline,{name}::{method}' for method in methods],
                              name], cwd=root, text=True, capture_output=True, timeout=300)
@@ -94,7 +94,7 @@ for name, extra, methods, expected in cases:
 
 if options.unsupported_libgraal:
     result = subprocess.run([
-        str(home / 'bin/java'), *flags, '-XX:+UseJVMCINativeLibrary',
+        str(java_tool(home, 'java')), *flags, '-XX:+UseJVMCINativeLibrary',
         '-XX:JVMCILibPath=' + str(options.unsupported_libgraal.resolve()),
         '-XX:LogFile=' + str(evidence / 'graal-unsupported.xml'),
         '-XX:CompileCommand=compileonly,HeapSmoke::walk', 'HeapSmoke'],

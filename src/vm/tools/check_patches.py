@@ -13,13 +13,11 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--graal', action='store_true', help='Check LabsJDK and Graal adaptations')
 options = parser.parse_args()
-label = 'labsjdk25' if options.graal else 'jdk25'
+label = 'labsjdk25'
 with tarfile.open(root / 'upstream' / (label + '.tar.gz')) as archive:
     members = {m.name.split('/', 1)[1]: m for m in archive.getmembers()
                if '/' in m.name and m.isfile()}
-    patches = [root / 'patches/hotspot-jam.patch']
-    if options.graal:
-        patches.append(root / 'patches/labsjdk-compat.patch')
+    patches = [root / 'patches/hotspot-jam.patch', root / 'patches/labsjdk-compat.patch']
     adapted = root / 'upstream' / label
     paths = sorted({line[6:] for patch in patches for line in patch.read_text().splitlines()
                     if line.startswith('--- a/')})

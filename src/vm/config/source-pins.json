@@ -1,5 +1,5 @@
 {
-  "jdk25": {
+  "hotspot-patch-base": {
     "repo": "openjdk/jdk",
     "commit": "6c48f4ed707bf0b15f9b6098de30db8aae6fa40f",
     "files": [
@@ -30,7 +30,8 @@
       "src/hotspot/share/oops/oop.inline.hpp": "a681afb20d96a7dbc3b6e9b514b69014ed16a93e2dafc99b42aedb87e80c7d43",
       "src/hotspot/share/gc/shared/barrierSet.hpp": "453ee8acb5a14c06ebc7ef45a0501ac69b4a9653fb67ddccd55e97e81299b650"
     },
-    "archive_sha256": "829e6bae36579c46a3f9222355abe0b0ca7d66b3bfc8659eaf784fa002529692"
+    "archive_sha256": "829e6bae36579c46a3f9222355abe0b0ca7d66b3bfc8659eaf784fa002529692",
+    "purpose": "HotSpot patch provenance and export only; not a standalone runtime product"
   },
   "epsilon-mc": {
     "repo": "shipilev/jdk",

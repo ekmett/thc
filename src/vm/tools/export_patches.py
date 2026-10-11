@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Edward Kmett <ekmett@gmail.com>
 # SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
-"""Export the HotSpot adaptation against the pinned source archive."""
+"""Export HotSpot edits against their original patch base, or export Graal edits.
+
+The hotspot-patch-base archive/tree is research input for the common patch.
+LabsJDK compatibility remains a separate patch; neither this baseline nor its
+working tree is a supported standalone JDK build or runtime product.
+"""
 import argparse
 import difflib
 import sys
@@ -20,13 +25,13 @@ def difference(before, after, name):
     return ''.join(difflib.unified_diff(before.splitlines(True), after.splitlines(True),
                                        fromfile='a/' + name, tofile='b/' + name))
 # Only tracked source edits, against files read straight from the pinned archive.
-with tarfile.open(root / 'upstream/jdk25.tar.gz') as archive:
+with tarfile.open(root / 'upstream/hotspot-patch-base.tar.gz') as archive:
     members = {m.name.split('/', 1)[1]: m for m in archive.getmembers() if '/' in m.name and m.isfile()}
     paths = [p for directory in ['epsilon', 'jam']
-             for p in (root / 'upstream/jdk25/src/hotspot/share/gc' / directory).rglob('*') if p.is_file()]
+             for p in (root / 'upstream/hotspot-patch-base/src/hotspot/share/gc' / directory).rglob('*') if p.is_file()]
     paths += [p for arch in ['x86', 'aarch64']
-              for p in (root / 'upstream/jdk25/src/hotspot/cpu' / arch / 'gc/jam').rglob('*') if p.is_file()]
-    paths += [root / 'upstream/jdk25' / p for p in [
+              for p in (root / 'upstream/hotspot-patch-base/src/hotspot/cpu' / arch / 'gc/jam').rglob('*') if p.is_file()]
+    paths += [root / 'upstream/hotspot-patch-base' / p for p in [
         'make/autoconf/jvm-features.m4',
         'make/hotspot/lib/JvmFeatures.gmk',
         'src/hotspot/os/windows/os_windows.cpp',
@@ -73,7 +78,7 @@ with tarfile.open(root / 'upstream/jdk25.tar.gz') as archive:
         'src/hotspot/share/include/jvm.h']]
     patch = ''
     for p in sorted(paths, key=lambda p: p.as_posix()):
-        name = p.relative_to(root / 'upstream/jdk25').as_posix()
+        name = p.relative_to(root / 'upstream/hotspot-patch-base').as_posix()
         before = archive.extractfile(members[name]).read().decode() if name in members else ''
         patch += difference(before, p.read_text(), name)
 (root / 'patches/hotspot-jam.patch').write_text(patch, newline='\n')

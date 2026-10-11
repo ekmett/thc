@@ -18,13 +18,13 @@ def build(java_home, output, *, collector=False):
     system = platform.system()
     windows = system == 'Windows'
     include = {'Darwin': 'darwin', 'Linux': 'linux', 'Windows': 'win32'}[system]
-    name = {'Darwin': 'libjam_weak_test.dylib', 'Linux': 'libjam_weak_test.so',
-            'Windows': 'jam_weak_test.dll'}[system]
+    name = {'Darwin': 'libthc_weak_test.dylib', 'Linux': 'libthc_weak_test.so',
+            'Windows': 'thc_weak_test.dll'}[system]
     if collector:
-        name = name.replace('jam_weak_test', 'jam_jni')
+        name = name.replace('thc_weak_test', 'thc_jni')
     library = output / name
     sources = [ROOT / 't' / name for name in
-               (('jam_jni.c', 'critical_jni.c', 'heap_walk_jni.c') if collector else ('weak_jni.c',))]
+               (('thc_jni.c', 'critical_jni.c', 'heap_walk_jni.c') if collector else ('weak_jni.c',))]
     compiler = shlex.split(os.environ.get('CC', 'clang-cl' if windows else 'cc'))
     if windows:
         flags = ['/nologo', '/std:c11', '/O2', '/MD', '/W4', '/WX', '/LD',

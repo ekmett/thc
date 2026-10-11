@@ -30,11 +30,11 @@ for directory in (classes, scratch, evidence):
     directory.mkdir(parents=True, exist_ok=True)
 environment = dict(os.environ, TMPDIR=str(scratch))
 windows = platform.system() == 'Windows'
-jar = home / 'lib/jam/jam-vm.jar'
-static_runtime = (home / 'lib/jam/native-image-libraries.txt').is_file()
+jar = home / 'lib/thc/thc-vm.jar'
+static_runtime = (home / 'lib/thc/native-image-libraries.txt').is_file()
 image_options = [java_tool(home, 'native-image'), '--gc=jam', '-ETMPDIR',
                  '-J-Djava.io.tmpdir=' + str(scratch),
-                 '-J-Xmx' + os.environ.get('JAM_NATIVE_IMAGE_HEAP', '6g'),
+                 '-J-Xmx' + os.environ.get('THC_VM_NATIVE_IMAGE_HEAP', '6g'),
                  '--parallelism=' + os.environ.get('JAM_JOBS', '3')]
 if platform.system() == 'Darwin':
     image_options += ['-EMACOSX_DEPLOYMENT_TARGET=' + os.environ.get('MACOSX_DEPLOYMENT_TARGET', '15.5')]
@@ -67,40 +67,40 @@ run('javac', [java_tool(home, 'javac'), '--add-modules', 'org.graalvm.nativeimag
                '-cp', jar, '-d', classes, *sorted((root / 't/substrate').glob('*.java')),
                root / 't/bridge/WeakBridgeSmoke.java', root / 't/bridge/JNIWeakSmoke.java'])
 jni_library = build_jni_test(home, work / 'jni')
-jni_metadata = classes / 'META-INF/native-image/jam-vm/jni-weak/jni-config.json'
+jni_metadata = classes / 'META-INF/native-image/thc-vm/jni-weak/jni-config.json'
 jni_metadata.parent.mkdir(parents=True, exist_ok=True)
 shutil.copy2(root / 't/bridge/jni-config.json', jni_metadata)
 if windows:
     run('pin-compile', [os.environ.get('JAM_CXX', 'clang-cl'), '/nologo', '/std:c11', '/O2', '/MD',
                         '/W4', '/WX', '/c', root / 't/substrate/pin_writer.c',
                         '/Fo' + str(work / 'pin_writer.obj')])
-    run('pin-archive', ['lib', '/nologo', '/OUT:' + str(work / 'jam_pin_test.lib'), work / 'pin_writer.obj'])
+    run('pin-archive', ['lib', '/nologo', '/OUT:' + str(work / 'thc_pin_test.lib'), work / 'pin_writer.obj'])
 else:
     compiler = ['xcrun', 'clang'] if platform.system() == 'Darwin' else shlex.split(os.environ.get('CC', 'cc'))
     archiver = ['xcrun', 'ar'] if platform.system() == 'Darwin' else shlex.split(os.environ.get('AR', 'ar'))
     run('pin-compile', [*compiler, '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
                         '-c', root / 't/substrate/pin_writer.c', '-o', work / 'pin_writer.o'])
-    run('pin-archive', [*archiver, 'rcs', work / 'libjam_pin_test.a', work / 'pin_writer.o'])
+    run('pin-archive', [*archiver, 'rcs', work / 'libthc_pin_test.a', work / 'pin_writer.o'])
 executable = work / ('substrate-smoke.exe' if windows else 'substrate-smoke')
 run('image-build', [*image_options, '--enable-monitoring=heapdump',
                     '--initialize-at-build-time=IsolateSmoke$EntryPoints,ImageRootsSmoke$ImageRoots',
                     '--initialize-at-run-time=JNIWeakSmoke',
                     '--enable-native-access=ALL-UNNAMED',
-                    '-Djam.pin.include=' + str(root / 't/substrate'),
-                    '-Djam.pin.library=' + str(work),
+                    '-Dthc.pin.include=' + str(root / 't/substrate'),
+                    '-Dthc.pin.library=' + str(work),
                     '-cp', os.pathsep.join(map(str, (classes, jar))),
                     'SubstrateSmoke', executable], timeout=1200,
     expected='Garbage collector: Jam')
 
 def relocate(executable):
     # Windows loads adjacent DLLs; Unix images use their sibling runtime directory.
-    bundle = executable.with_name(executable.name + '.jam')
+    bundle = executable.with_name(executable.name + '.thc')
     if static_runtime:
         if (bundle / 'linkage.txt').read_text() != 'static\n':
             raise SystemExit('Native Image did not declare static Jam linkage')
         if any(path.suffix in ('.dll', '.so', '.dylib') for path in bundle.rglob('*')):
             raise SystemExit('Static Jam image unexpectedly copied runtime libraries')
-    deployed = tuple(name for name in runtime_names if not static_runtime or windows and name.casefold() != 'jam-vm.dll')
+    deployed = tuple(name for name in runtime_names if not static_runtime or windows and name.casefold() != 'thc-vm.dll')
     for library in deployed:
         if not ((executable.parent if windows else bundle) / library).is_file():
             raise SystemExit(f'Missing native-image runtime: {library}')
@@ -122,11 +122,11 @@ def relocate(executable):
             continue
         if platform.system() == 'Linux':
             check_elf_paths(binary, relocated)
-            if static_runtime and any(name.startswith(('libjam', 'libc++', 'libunwind')) for name in elf_commands(binary)[1]):
+            if static_runtime and any(name.startswith(('libthc', 'libjam', 'libc++', 'libunwind')) for name in elf_commands(binary)[1]):
                 raise SystemExit('Static Jam image retains a collector/C++ runtime dependency')
             continue
         identity, dependencies, rpaths = load_commands(binary)
-        if static_runtime and any(Path(name).name.startswith(('libjam', 'libc++', 'libunwind')) for name in dependencies):
+        if static_runtime and any(Path(name).name.startswith(('libthc', 'libjam', 'libc++', 'libunwind')) for name in dependencies):
             raise SystemExit('Static Jam image retains a collector/C++ runtime dependency')
         for path in (identity, *dependencies, *rpaths):
             if path and path.startswith('/') and not path.startswith(SYSTEM):
@@ -134,20 +134,20 @@ def relocate(executable):
     return result
 
 
-runtime_names = runtime_libraries(home / 'lib/jam')
+runtime_names = runtime_libraries(home / 'lib/thc')
 
 
 def run_executable(label, executable, arguments, expected):
-    output = run(label, [executable, *(['-Djam.runtime.audit=true'] if windows else []), *arguments],
+    output = run(label, [executable, *(['-Dthc.runtime.audit=true'] if windows else []), *arguments],
                  expected=expected, trace_libraries=True)
-    bundle = executable.parent if windows else executable.with_name(executable.name + '.jam')
+    bundle = executable.parent if windows else executable.with_name(executable.name + '.thc')
     if static_runtime:
-        if any(name in output for name in ('libjam-vm.', 'jam-vm.dll')):
+        if any(name in output for name in ('libthc-vm.', 'thc-vm.dll')):
             raise SystemExit('Static Jam execution loaded a shared collector')
         if windows:
             for line in output.splitlines():
-                if line.startswith('jam-loaded-library: '):
-                    path = Path(line.removeprefix('jam-loaded-library: '))
+                if line.startswith('thc-loaded-library: '):
+                    path = Path(line.removeprefix('thc-loaded-library: '))
                     if path.name.casefold() in {name.casefold() for name in runtime_names}:
                         if path.parent.resolve() != executable.parent.resolve():
                             raise SystemExit(f'Unexpected Microsoft runtime path: {path}')

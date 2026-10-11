@@ -15,13 +15,13 @@ vm = Path(os.environ.get('JAM_JAVA', jdk_home() / 'bin/java'))
 home = vm.parent.parent
 classes = root / 'build-registration-tests'
 native = classes / 'native'
-jar = root / 'build/bridge/jam-vm.jar'
+jar = root / 'build/bridge/thc-vm.jar'
 (root / 'evidence').mkdir(exist_ok=True)
 build_bridge(home)
 build_jni_test(home, native, collector=True)
 subprocess.run([str(java_tool(home, 'javac')), '-cp', str(jar), '-d', str(classes),
                 *map(str, (root / 't/java' / name for name in
-                           ('CollectorIdentitySmoke.java', 'HeapSmoke.java', 'JamWeak.java')))], check=True)
+                           ('CollectorIdentitySmoke.java', 'HeapSmoke.java', 'THCWeak.java')))], check=True)
 common = ['-Xshare:off', '-Xms32m', '-Xmx32m', '-XX:+UnlockExperimentalVMOptions', '-Xlog:gc',
           '--enable-native-access=ALL-UNNAMED',
           '-Djava.library.path=' + os.pathsep.join(map(str, (root / 'build/bridge/lib', NATIVE_BUILD, native))),
