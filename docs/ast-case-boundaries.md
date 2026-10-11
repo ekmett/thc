@@ -107,7 +107,12 @@ is reported separately as an abandoned task, not a successfully or unsuccessfull
 compiled graph, and does not request recovery.
 
 The compiler callback disables automatic admission and inlining without preparing
-guest code. The next fresh function entry claims the failed task, clones the body with independent
+guest code. Publishing an owned failure receipt invalidates the source's
+one-shot compilation assumption, including when a separate side target failed.
+Healthy entries therefore do not poll the receipt on every call. Copies start
+with an independent valid assumption. A cold trampoline consumes only its
+claimed receipt; pending sibling failures remain eligible for reduction.
+The next fresh function entry claims the failed task, clones the body with independent
 case targets and fresh loop state, and applies the finite extraction to that
 replacement. Entry publication adopts the child and reports the structural change
 atomically. Old `executeBody` paths, tail anchors and saved frames remain on their
@@ -129,6 +134,17 @@ forces diagnostic retries for `Throw`, `Diagnose` and `ExitVM`; application-only
 recovery on stock Truffle does not establish the full never-retry contract.
 
 ## Internal tail-spill compaction
+
+A body that cannot enter another guest activation does not need the stack
+driver. Executable operations supply a conservative `needsCallState` contract;
+ordinary local reads need no call state and do not force their values. A read
+of the reserved ancestry slot still requires ingress. Roots query the current
+children, so replacing a read with demand or an instrumentation wrapper restores
+the driver. Strict ingress and internal raw-control adapters retain it. The
+omission preserves argument ingress, entry polls and their capture handlers.
+Ordinary ancestry setup is deferred until capture when the body does not need
+it. A saved activation carries ancestry even if its body is replaced before
+resumption. Typed ingress and delimited roots retain eager ancestry setup.
 
 Compaction covers synchronous, non-delimited, evaluated primitive scalar arms
 and exact `DATA`, `CLOSURE` and `ADDRESS` reference results without a typed

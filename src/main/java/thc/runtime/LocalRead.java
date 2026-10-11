@@ -12,6 +12,7 @@ public final class LocalRead extends Expr {
     private final boolean cell;
     public LocalRead(int slot) { this(slot, true); }
     public LocalRead(int slot, boolean cell) { this.slot = slot; this.cell = cell; }
+    @Override public boolean needsCallState() { return slot == FrameLayout.BLOOM_FILTER; }
     // Initialized non-cell locals use their declared storage; widened activations retain tag checks.
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
         return (!cell && getRepresentation().isInt() && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Int) || frame.isInt(slot)
@@ -32,9 +33,9 @@ public final class LocalRead extends Expr {
     @Override public Object execute(VirtualFrame frame) {
         Object value = !cell && getRepresentation().isEvaluatedReference()
             ? frame.getObject(slot) : FrameAccess.INSTANCE.read(frame, slot);
-        // A proved unlifted reference may already be bound to a null ABI sentinel.
-        if (!cell && getRepresentation().isEvaluatedUnliftedObject()) return value;
-        if (!cell || !(value instanceof RecCell recursive)) {
+        // Lowering publishes ordinary bindings before use; cells carry publication state.
+        if (!cell) return value;
+        if (!(value instanceof RecCell recursive)) {
             if (value == null) throw fault("Uninitialized local binding");
             return value;
         }

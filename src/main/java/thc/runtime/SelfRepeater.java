@@ -10,6 +10,7 @@ final class SelfRepeater extends Node implements RepeatingNode {
     @Child private FunctionBody body;
     private final Metrics metrics;
     SelfRepeater(FunctionBody body, Metrics metrics) { this.body = body; this.metrics = metrics; }
+    boolean needsCallState() { return body.needsCallState(); }
     private Metrics invocationMetrics(VirtualFrame frame) {
         return metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
     }

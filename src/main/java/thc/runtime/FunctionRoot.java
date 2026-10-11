@@ -21,6 +21,9 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.Arrays;
 import java.util.List;
 import static thc.runtime.RuntimeFault.fault;
@@ -32,6 +35,28 @@ import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
  * restoration follow Cadenza. See NOTICE.md and LICENSE.md. */
 public final class FunctionRoot extends GuestRoot {
     private static final int[] NO_SCALAR_VOID_INPUTS = new int[0];
+    private static final MethodHandle ARGUMENT_COUNT = argumentCountIntrinsic();
+    private static MethodHandle argumentCountIntrinsic() {
+        try {
+            return MethodHandles.publicLookup().findStatic(com.oracle.truffle.api.nodes.RootNode.class,
+                "assumeArgumentCount", MethodType.methodType(Object[].class, Object[].class, int.class));
+        } catch (NoSuchMethodException stockApi) { return null; }
+        catch (IllegalAccessException failure) { throw new ExceptionInInitializerError(failure); }
+    }
+    @CompilationFinal private int ordinaryArgumentCount = -1;
+    @Override protected void prepareForCall() {
+        super.prepareForCall();
+        var proofs = getInputProofs();
+        if (proofs != null)
+            ordinaryArgumentCount = getEntryArgumentOffset() + ArgumentLayout.width(getInputLayout(), proofs.size());
+    }
+    /** PAP and overapplication handling precede entry; the complete ABI fixes this length. */
+    private Object[] ordinaryArguments(Object[] arguments) {
+        if (ordinaryArgumentCount < 0 || ARGUMENT_COUNT == null) return arguments;
+        try { return (Object[]) ARGUMENT_COUNT.invokeExact(arguments, ordinaryArgumentCount); }
+        catch (RuntimeException | Error failure) { throw failure; }
+        catch (Throwable impossible) { throw CompilerDirectives.shouldNotReachHere(impossible); }
+    }
     private final String label;
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] environmentSlots;
@@ -104,7 +129,11 @@ public final class FunctionRoot extends GuestRoot {
                 }
                 return recoveredEntry;
             });
-        } finally { service.complete(this, claim, recoveredEntry != null || coldEntry); }
+        } finally {
+            // A cold trampoline keeps this source generation, including pending
+            // sibling failures. Only a published replacement retires all receipts.
+            service.complete(this, claim, recoveredEntry != null);
+        }
     }
 
     final FunctionRoot copyForRecovery() {
@@ -175,6 +204,12 @@ public final class FunctionRoot extends GuestRoot {
         configureTupleResult(tuple);
         configureScalarResult(body.getRepresentation().refine(resultProof));
         // Establish mandatory carriers before publishing the root, never on its first compiled call.
+        if (captureLayout != null) for (int i = 0; i < environmentSlots.length; i++) {
+            FrameSlotKind kind = captureLayout.fixedFrameKind(i);
+            if (kind == FrameSlotKind.Illegal) continue;
+            int[] vectorSlots = i < environmentVectorSlots.length ? environmentVectorSlots[i] : null;
+            initialize(descriptor, vectorSlots == null ? environmentSlots[i] : vectorSlots[0], kind);
+        }
         if (inputLayout != null) for (int i = 0; i < argumentSlots.length; i++) {
             if (capturesContinuations && contains(getStrictArgumentPositions(), argumentIndices[i] + getEntryArgumentOffset())) {
                 initialize(descriptor, argumentSlots[i], FrameSlotKind.Object);
@@ -380,6 +415,7 @@ public final class FunctionRoot extends GuestRoot {
         scalarVoidIndices = indices;
     }
     @ExplodeLoop public void buildFrame(Object[] arguments, VirtualFrame frame) {
+        arguments = ordinaryArguments(arguments);
         int offset = captureLayout == null ? 1 : 2;
         for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(arguments[index + offset]);
         for (int i = 0; i < argumentSlots.length; i++) {
@@ -545,7 +581,7 @@ public final class FunctionRoot extends GuestRoot {
     }
     @Override public Object execute(VirtualFrame frame) {
         DirectCallNode redirect = recoveredEntry;
-        if (redirect == null && graphFailure.get() != null) {
+        if (redirect == null && !noGraphFailure.isValid() && graphFailure.get() != null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             redirect = recoverEntry();
         }
@@ -558,22 +594,34 @@ public final class FunctionRoot extends GuestRoot {
         return executeEntry(Truffle.getRuntime().createVirtualFrame(arguments, getFrameDescriptor()));
     }
     private Object executeEntry(VirtualFrame frame) {
-        if (!capturesContinuations) return executeInitial(frame, false);
+        // A normal Core body that cannot enter another guest activation cannot
+        // originate a stack spill. Keep ingress and polls, including their
+        // capture handler, but do not interpret an ordinary return as control.
+        boolean needsCallState = strictSlots.length != 0 ||
+            !(loop.getRepeatingNode() instanceof SelfRepeater repeating) || repeating.needsCallState();
+        if (!capturesContinuations || !needsCallState)
+            return executeInitial(frame, false, needsCallState);
         AstStackScope stack = astStackScope(this);
         boolean driver = !stack.getDriving();
         if (driver) stack.setDriving(true);
         try {
             stack.setDepth(stack.getDepth() + 1);
             Object result;
-            try { result = executeInitial(frame, stack.getDepth() >= AstStackScope.MAX_DEPTH); }
+            try { result = executeInitial(frame, stack.getDepth() >= AstStackScope.MAX_DEPTH, true); }
             finally { stack.setDepth(stack.getDepth() - 1); }
-            SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
-            if (driver && saved != null && saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved,
-                saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, false, invocationMetrics(frame));
+            if (driver) {
+                SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
+                if (saved != null) {
+                    CompilerDirectives.transferToInterpreter();
+                    if (saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved,
+                        saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, false, invocationMetrics(frame));
+                }
+            }
             return result;
         } finally { if (driver) stack.setDriving(false); }
     }
-    private Object executeInitial(VirtualFrame frame, boolean spill) {
+    private Object executeInitial(VirtualFrame frame, boolean spill, boolean needsCallState) {
+        boolean deferredBloom = false;
         clearInitialLocals(frame);
         if (metrics != null && metrics.getEnabled() && CompilerDirectives.inCompiledCode()) metrics.incrementCompiledEntries();
         HandoffEntry entry = handoff;
@@ -587,8 +635,9 @@ public final class FunctionRoot extends GuestRoot {
             restoreHandoff(frame, input, true);
         } else {
             if (entry != null) entry.initializeOrdinary(frame);
-            if (!(frame.getArguments()[0] instanceof Long inherited)) throw fault("Invalid bloom argument");
-            frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(inherited));
+            // Delimited roots retain ancestry eagerly for their independently saved frames.
+            deferredBloom = !needsCallState && !enableDelimited;
+            if (!deferredBloom) initializeBloom(frame);
             buildFrame(frame.getArguments(), frame);
         }
         if (metrics == null) {
@@ -599,19 +648,22 @@ public final class FunctionRoot extends GuestRoot {
             Metrics invocation = invocationMetrics(frame);
             if (invocation.getEnabled() && CompilerDirectives.inCompiledCode()) invocation.incrementCompiledEntries();
         }
-        if (spill) return captureStack(initialCaptureFrame(frame));
+        if (spill) return captureStack(initialCaptureFrame(frame, deferredBloom));
         if (!capturesContinuations) return executeCapturableBody(frame);
         try { return executeCapturableBody(frame); }
-        catch (AstCapture cut) { return finishCapture(cut, initialCaptureFrame(frame)); }
+        catch (AstCapture cut) { return finishCapture(cut, initialCaptureFrame(frame, deferredBloom)); }
     }
-    private MaterializedFrame initialCaptureFrame(VirtualFrame frame) {
-        if (!copyInitialFrame) return frame.materialize();
-        FrameDescriptor descriptor = frame.getFrameDescriptor();
-        MaterializedFrame saved = Truffle.getRuntime().createMaterializedFrame(frame.getArguments().clone(), descriptor);
-        frame.copyTo(0, saved, 0, descriptor.getNumberOfSlots());
-        for (int index = 0; index < descriptor.getNumberOfAuxiliarySlots(); index++)
-            saved.setAuxiliarySlot(index, frame.getAuxiliarySlot(index));
-        return saved;
+    private void initializeBloom(VirtualFrame frame) {
+        if (!(ordinaryArguments(frame.getArguments())[0] instanceof Long inherited)) throw fault("Invalid bloom argument");
+        frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(inherited));
+    }
+    private MaterializedFrame initialCaptureFrame(VirtualFrame frame, boolean deferredBloom) {
+        // Snapshot copying belongs to the cold capture path, outside partial evaluation.
+        // The saved body can be replaced before resumption and then need ancestry.
+        CompilerDirectives.transferToInterpreter();
+        if (deferredBloom) initializeBloom(frame);
+        MaterializedFrame saved = frame.materialize();
+        return copyInitialFrame ? DelimitedContinuations.copyContinuationFrame(saved) : saved;
     }
     @TruffleBoundary public Object finishCapture(AstCapture cut, MaterializedFrame frame) {
         // The synchronous caller has left: a saved suffix returns an owned value,
