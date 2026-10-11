@@ -247,6 +247,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 "Check Haskell calls into JavaScript",
                 "Compare public packages with native GHC on both backends and handoff modes",
                 "Check cold project dependency acquisition",
+                "Check that the private Cabal capture fallback uses the selected Cabal",
                 "Prepare fresh library source and native oracles",
                 "Package verified library inputs and installed runtime",
                 "Share this platform's library inputs with this workflow attempt",
@@ -263,8 +264,8 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("inputs.cadence", workflow)
         common = (WORKFLOW.parent / "test-common.yml").read_text()
         commands = [line.strip() for line in (workflow + common).splitlines() if "cabal test driver-tests" in line]
-        self.assertEqual(2, len(commands))
-        for option in ("--public-packages-only", "--acquire-project-only"):
+        self.assertEqual(3, len(commands))
+        for option in ("--public-packages-only", "--acquire-project-only", "--selected-cabal-only"):
             self.assertEqual(1, sum("--test-options=" + option in command for command in commands))
         self.assertIn("name: Build JVM distribution from source\n", workflow)
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()

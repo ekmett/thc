@@ -38,6 +38,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf, isSuffixOf, nub, nubBy, sort, sortOn, stripPrefix)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -2238,7 +2239,10 @@ captureGlobalUnits context project target planned requested missing validateInpu
                        ("THC_PROXY_CORE_DATABASES", Text.unpack (Text.decodeUtf8 (BL.toStrict (encode (helperDatabases view)))))]
                        | Just view <- [contextCoreView context]]
         environment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_BUILD_ADMISSION" : "THC_PROXY_ORIGINAL_BUILD" : "THC_PROXY_CORE_DATABASES" : "THC_PROXY_CORE_LIBDIR" : map fst overrides)) inherited
-    runCommandWithEnv True "cabal" arguments project (Just environment)
+        -- Use the selected Cabal, as the original build does. Another
+        -- cabal-install version can give the same packages other unit IDs.
+        cabal = fromMaybe "cabal" (lookup "CABAL" environment)
+    runCommandWithEnv True cabal arguments project (Just environment)
     plan <- readJson (dist </> "cache/plan.json")
     isolatedCompiler <- field plan "compiler-id"
     isolatedAbi <- field plan "compiler-abi"

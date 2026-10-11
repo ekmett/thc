@@ -10,7 +10,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for store project.
-module StoreProjectTests (tests, storeProjectTest, nativeVariantsTest, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest, staticExportsTest, customStoreProjectTest) where
+module StoreProjectTests (tests, storeProjectTest, nativeVariantsTest, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest, staticExportsTest, customStoreProjectTest, selectedCabalCaptureTest) where
 
 import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, readMVar)
 import Control.Exception (bracket, finally, throwIO)
@@ -18,11 +18,13 @@ import Control.Monad (forM_, unless)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.List (sort, stripPrefix)
+import Data.List (isInfixOf, sort, stripPrefix)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Distribution.InstalledPackageInfo as Package
+import GHC.Clock (getMonotonicTimeNSec)
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
 import qualified System.Directory as Directory
@@ -32,6 +34,7 @@ import System.FilePath ((</>), takeDirectory)
 import qualified System.Process as Process
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual)
+import NativeCacheTests (withEnvironment, writeExecutable)
 import TestSupport
 import THC.Driver.Admission (effectiveBuildSemaphore)
 import THC.Driver.GhcProxy (ghcProxyCommand, directPlugin)
@@ -41,7 +44,8 @@ import THC.Compact.Module (readModuleValue)
 
 tests :: Env -> Test
 tests env = TestList [proxyOptionsTest env, staticExportsTest env, storeProjectTest env, customStoreProjectTest env,
-  inplaceTests env, concurrentTests env, exportSafetyTests env, nativeVariantsTest env False, nativeVariantsTest env True]
+  selectedCabalCaptureTest env, inplaceTests env, concurrentTests env, exportSafetyTests env,
+  nativeVariantsTest env False, nativeVariantsTest env True]
 
 exportSafetyTests :: Env -> Test
 exportSafetyTests env = TestLabel "local export preserves inferred safety and rejects Unsafe imports" $ TestCase $
@@ -744,6 +748,64 @@ customStoreProjectTest env = TestLabel "Custom Setup capture recovers failures a
     assertNoStdout second
     assertBackend "bytecode" second
     assertEqual "transitive captured bundle is reused" stamp =<< getModificationTime leafBundle
+
+-- A native build puts dep-data in the default Cabal store first. The THC
+-- build then does not compile it, so only the private Cabal capture fallback
+-- exports its Core. Each run adds one small dep-data unit to the default store.
+selectedCabalCaptureTest :: Env -> Test
+selectedCabalCaptureTest env = TestLabel "private Cabal capture fallback runs the selected Cabal" $ TestCase $
+  withFixtureNamed env "t/fixtures/run-store-project" "selected cabal" $ \project -> do
+    let base = takeDirectory project
+        source = base </> "dependency-source"
+        output = base </> "output"
+        wrapper = base </> "selected-cabal"
+        callLog = wrapper ++ ".log"
+        dependency plan = one ((== "dep-data") . string . (`field` "pkg-name")) (objects plan "install-plan")
+    selected <- fromMaybe "cabal" <$> lookupEnv "CABAL"
+    cabal <- Directory.findExecutable selected >>=
+      maybe (fail ("selected Cabal missing: " ++ selected)) Directory.makeAbsolute
+    -- The driver uses the ghc on PATH. Give the same ghc to the native build,
+    -- so the Cabal configuration cannot select another compiler.
+    ghc <- Directory.findExecutable "ghc" >>= maybe (fail "ghc missing on PATH") Directory.makeAbsolute
+    copyTree (project </> "dep-data") source
+    removePathForcibly (project </> "dep-data")
+    -- Fresh source gives dep-data a new unit ID and a new Core cache key. The
+    -- clock value keeps the source new when a later run gets the same path.
+    created <- getMonotonicTimeNSec
+    appendFile (source </> "src/Answer.hs")
+      ("\n-- Selected Cabal source: " ++ show source ++ " " ++ show created ++ "\n")
+    sourceDist env source project
+    assertSuccess =<< runExe env project Nothing 300 cabal ["build", "--with-compiler", ghc, "completed"]
+    nativePlan <- readJson (project </> "dist-newstyle/cache/plan.json")
+    let executable = string (field (one ((== "exe:completed") . string . (`field` "component-name"))
+          (objects nativePlan "install-plan")) "bin-file")
+    native <- runExe env project Nothing 60 executable []
+    assertSuccess native
+    -- The wrapper logs each call and then runs the selected Cabal. Only the
+    -- private Cabal capture fallback passes "--store-dir=" to Cabal.
+    writeExecutable wrapper (unlines ["#!/bin/sh", "printf '%s\\n' \"$*\" >> " ++ show callLog,
+      "exec " ++ show cabal ++ " \"$@\""])
+    withEnvironment [("CABAL", wrapper)] $ do
+      prepared <- runPreparation env base
+        ["build", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+         "--dist-dir", output]
+      assertSuccess prepared
+      assertNoStdout prepared
+      plan <- readJson (output </> "native/cache/plan.json")
+      let identifier = string (field (dependency plan) "id")
+      assertEqual "THC plans the dep-data unit that the native build installed"
+        (string (field (dependency nativePlan) "id")) identifier
+      recorded <- lines <$> readText callLog
+      assertBool ("private Cabal capture fallback ran the selected Cabal; calls:\n" ++ unlines recorded) $
+        any ("--store-dir=" `isInfixOf`) recorded
+      executed <- run env base (Just "bytecode") 240
+        ["run", "--verify-artifacts", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+         "--runtime", runtime env, "--dist-dir", output]
+      assertSuccess executed
+      assertNoStdout executed
+      assertBackend "bytecode" executed
+      assertEqual "native and THC output" (out native) (out executed)
+      assertReachable output identifier
 
 nativeVariantsTest :: Env -> Bool -> Test
 nativeVariantsTest env cxx = TestLabel
