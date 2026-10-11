@@ -6,6 +6,8 @@ public final class IndexManagedScalarAddress extends Expr {
     private final ManagedAddressRead operation;
     @Child private Expr address, element;
     public IndexManagedScalarAddress(ManagedAddressRead operation, Expr address, Expr element) { this.operation = operation; this.address = address; this.element = element; }
+    // Native loads and borrow retirement retain their boundaries, but invoke no guest activation.
+    @Override public boolean needsCallState() { return address.needsCallState() || element.needsCallState(); }
     @Override public Object execute(VirtualFrame frame) { if (operation.isInt()) return executeInt(frame); return executeLong(frame); }
     @Override public int executeInt(VirtualFrame frame) { return operation.readInt(address.executeRequiredAddress(frame), element.executeRequiredLong(frame)); }
     @Override public long executeLong(VirtualFrame frame) { return operation.read(address.executeRequiredAddress(frame), element.executeRequiredLong(frame)); }

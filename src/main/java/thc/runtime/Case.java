@@ -128,6 +128,16 @@ class Case extends Expr {
     @Override public void prepareTuple(int[] slots, int offset) {
         for (Alternative alternative : alternatives) alternative.getBody().prepareTuple(slots, offset);
     }
+    @ExplodeLoop @Override public boolean needsCallState() {
+        // An unknown subclass may add execution beyond selection and its children.
+        Class<?> kind = getClass();
+        if (kind != Case.class && kind != DefaultCase.class && kind != DataCase.class && kind != LongCase.class)
+            return true;
+        if (scrutinee.needsCallState()) return true;
+        for (Alternative alternative : alternatives)
+            if (alternative.getBody().needsCallState()) return true;
+        return false;
+    }
     protected final void prepare(VirtualFrame frame) { prepare(frame, null, 0); }
     protected final void prepare(VirtualFrame frame, int[] destination, int offset) {
         try { scrutinee.write(frame); }

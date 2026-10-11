@@ -236,15 +236,70 @@ class LiftedReturnTest {
         }
     }
 
-    @Test
-    void callAncestryReadRetainsIngressWithoutGuestDescent() {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void callAncestryReadRetainsIngressWithoutGuestDescent(boolean delayedCapture) {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
+                var captures = new CaptureLayout(language(), new boolean[]{true}, new boolean[]{true});
+                var deferred = delayed(answer(), new AtomicInteger());
+                Expr body = delayedCapture ? new Delay(deferred.getTarget(), captures, new int[]{FrameLayout.BLOOM_FILTER})
+                    : new LocalRead(FrameLayout.BLOOM_FILTER, false);
                 var root = new FunctionRoot(language(), new FrameLayout().build(), "call ancestry", null,
-                    new int[0], new int[0], new int[0], new LocalRead(FrameLayout.BLOOM_FILTER, false), new Metrics(false));
+                    new int[0], new int[0], new int[0], body, new Metrics(false));
                 long inherited = 0x1234abcdL;
-                assertEquals(root.entryBloom(inherited), Calls.target(root.getCallTarget(), new Object[]{inherited}));
+                Object value = Calls.target(root.getCallTarget(), new Object[]{inherited});
+                assertEquals(root.entryBloom(inherited), delayedCapture
+                    ? captures.readLong(assertInstanceOf(Thunk.class, value).getEnvironment(), 0) : value);
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test
+    void composedByteReadReturnsLazyFieldsAtTheSpillLimitAndRetainsReentrantReplacements() {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var layout = new FrameLayout();
+                int addressSlot = layout.bind("address"), indexSlot = layout.bind("index"), byteSlot = layout.bind("byte");
+                var scalar = new CoreRepresentation(CoreKind.LONG, true, true, List.of("WordRep"), null, null, null, null, null);
+                var addressProof = new CoreRepresentation(CoreKind.ADDRESS, true, true, List.of("AddrRep"), null, null, null, null, null);
+                var index = new Literal(0L);
+                var read = new IndexManagedScalarAddress(ManagedAddressRead.CHAR,
+                    new LocalRead(addressSlot, false).proven(addressProof), new LocalRead(indexSlot, false).proven(scalar)).proven(scalar);
+                var operands = new AstOperands(new LocalBinding[]{new LocalBinding(indexSlot, index, true)}, new int[]{indexSlot}, read);
+                var evaluations = new AtomicInteger();
+                var deferred = delayed(answer(), evaluations);
+                var fields = new DataLayout(language(), "byte with deferred field", "ByteWithDeferred", new String[]{"WordRep", "LiftedRep"});
+                var constructed = new Construct(fields, new Expr[]{new LocalRead(byteSlot, false).proven(scalar),
+                    new Delay(deferred.getTarget(), null, new int[0])});
+                var body = new Case(operands, byteSlot,
+                    new Alternative[]{new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], constructed)}, new Metrics(false));
+                var root = new FunctionRoot(language(), layout.build(), "composed byte leaf", null,
+                    new int[0], new int[]{addressSlot}, new int[]{0}, body, new Metrics(false),
+                    new CoreRepresentation[]{addressProof}, body.getRepresentation(), null, new boolean[]{false},
+                    null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true);
+                var stack = AstStacks.astStackScope(root);
+                stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
+                try {
+                    var bytes = ManagedAddress.fromByteArray(new byte[]{65, 0});
+                    var result = assertInstanceOf(DataValue.class, Calls.target(root.getCallTarget(), new Object[]{0L, bytes}));
+                    assertEquals(65L, fields.read(result, 0)); assertInstanceOf(Thunk.class, fields.read(result, 1));
+                    assertEquals(0, evaluations.get(), "Constructing the deferred field must not enter its target");
+                    var entries = new AtomicInteger();
+                    var replacement = new GuestRoot(language(), new FrameLayout().build()) {
+                        @Override public long bloom(VirtualFrame frame) { return 0L; }
+                        @Override public Object execute(VirtualFrame frame) { entries.incrementAndGet(); return 0L; }
+                    }.getCallTarget();
+                    index.replace(new Expr() {
+                        @Override public Object execute(VirtualFrame frame) { return Calls.target(replacement, new Object[]{0L}); }
+                    }.proven(index.getRepresentation()));
+                    var saved = assertInstanceOf(AstContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L, bytes}));
+                    assertTrue(saved.stackSpill()); assertEquals(0, entries.get(), "Reentrant replacement must retain the entry spill");
+                    stack.setDepth(0); stack.setDriving(false);
+                    var resumed = assertInstanceOf(DataValue.class, saved.continueWith(Unit.INSTANCE));
+                    assertEquals(65L, fields.read(resumed, 0)); assertEquals(1, entries.get()); assertEquals(0, evaluations.get());
+                } finally { stack.setDepth(0); stack.setDriving(false); }
             } finally { context.leave(); }
         }
     }

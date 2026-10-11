@@ -22,6 +22,9 @@ public final class Evaluate extends Expr {
         setCoreSourceLocation(value.getCoreSourceLocation());
     }
     Expr operand() { return value; }
+    @Override public boolean needsCallState() {
+        return !value.getRepresentation().getEvaluated() || value.needsCallState();
+    }
     @Override public void prepareTuple(int[] slots, int offset) { value.prepareTuple(slots, offset); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         return value.executeTuple(frame, slots, offset);
