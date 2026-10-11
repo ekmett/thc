@@ -79,6 +79,8 @@ public final class PendingWait extends AbstractTruffleException implements Inter
     void wake() { owner.waitReady = true; GuestThreads.wakeSuspended(owner); }
     /** Inspect saved host wait carriers without forcing or continuing guest code. */
     @TruffleBoundary static PendingWait of(Object value) {
+        if (value == null) return null;
+        if (value instanceof PendingWait pending) return pending;
         var seen = new java.util.IdentityHashMap<Object, Boolean>();
         for (;;) {
             if (value != null && seen.put(value, Boolean.TRUE) != null) throw new RuntimeFault("Suspended guest dependency cycle");
