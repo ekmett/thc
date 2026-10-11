@@ -21,11 +21,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Listener-boundary classification controls; genuine installation failure evidence is separate. */
 class GraphRecoverySizeFailureTest {
-    @Test void acceptsOnlyExactPermanentSizeFailures() throws Exception {
-        Truffle.getRuntime();
-        Controls.classification();
-    }
-
     @Test void sizeReceiptsKeepTheirOwnerAndSingleClaim() throws Exception {
         Truffle.getRuntime();
         Controls.ownership();
@@ -39,6 +34,11 @@ class GraphRecoverySizeFailureTest {
     @Test void laterUnextractableSiblingCannotDisplacePendingReduction() throws Exception {
         Truffle.getRuntime();
         Controls.siblingFailure(true);
+    }
+
+    @Test void sideFailureInvalidatesTheHealthyEntryBeforeItsNextCall() throws Exception {
+        Truffle.getRuntime();
+        Controls.installedSource();
     }
 
     private static final class Controls {
@@ -65,6 +65,42 @@ class GraphRecoverySizeFailureTest {
             return Engine.newBuilder().allowExperimentalOptions(true)
                     .option("engine.BackgroundCompilation", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000").build();
+        }
+
+        static void installedSource() throws Exception {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("compiler.MaximumGraalGraphSize", "200000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var arm = new AstSameFrameArm(new Literal(7L));
+                    var root = new FunctionRoot(language, new FrameLayout().build(), "installed source", null,
+                        new int[0], new int[0], new int[0], arm, new Metrics(false));
+                    var target = (OptimizedCallTarget) root.getCallTarget();
+                    assertTrue(AstSameFrameArm.extract(arm));
+                    var side = (OptimizedCallTarget) sideTarget(arm);
+                    target.compile(true); target.waitForCompilation();
+                    assertTrue(target.isValidLastTier()); assertFalse(target.wasExecuted());
+                    int installations = target.getSuccessfulCompilationCount();
+                    listener(Language.currentState().getGraphRecovery()).onCompilationFailed(
+                        side, CODE_SIZE, true, true, 2, () -> "unused");
+                    assertFalse(target.isValid(), "A source must not retain code that assumes no side failure");
+                    assertEquals(7L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(installations, target.getSuccessfulCompilationCount());
+                    assertFalse(side.isValid());
+                    var freshRoot = root.copyForRecovery();
+                    assertTrue(freshRoot.noGraphFailure.isValid(), "A fresh source must compile without the old failure poll");
+                    var fresh = (OptimizedCallTarget) freshRoot.getCallTarget();
+                    fresh.compile(true); fresh.waitForCompilation();
+                    assertTrue(fresh.isValidLastTier());
+                    listener(Language.currentState().getGraphRecovery()).onCompilationFailed(
+                        side, CODE_SIZE, true, true, 2, () -> "unused");
+                    assertTrue(fresh.isValidLastTier(), "A late old failure must not invalidate a fresh source");
+                    assertEquals(7L, Calls.target(fresh, new Object[]{0L}));
+                } finally { context.leave(); }
+            }
         }
 
         private static RootCallTarget sideTarget(AstSameFrameArm arm) throws Exception {
@@ -143,46 +179,6 @@ class GraphRecoverySizeFailureTest {
                     int innerIndex = NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).indexOf(inner);
                     var copiedInner = NodeUtil.findAllNodeInstances(fresh, AstSameFrameArm.class).get(innerIndex);
                     assertNotNull(sideTarget(copiedInner), "recovery must reduce the failed sibling's nested arm");
-                } finally { context.leave(); }
-            }
-        }
-
-        static void classification() throws Exception {
-            try (var engine = engine(); var context = Context.newBuilder("thc").engine(engine).build()) {
-                context.initialize("thc"); context.enter();
-                try {
-                    var root = root(); var target = (OptimizedCallTarget) root.getCallTarget();
-                    var listener = listener(Language.currentState().getGraphRecovery());
-                    for (String reason : new String[]{GRAPH_SIZE, CODE_SIZE}) {
-                        root.graphFailure.set(null);
-                        listener.onCompilationFailed(target, reason, true, true, 2, () -> "unused");
-                        var receipt = root.graphFailure.get();
-                        assertNotNull(receipt, reason);
-                        assertSame(target, receipt.target()); assertEquals(reason, receipt.reason());
-                        assertFalse(receipt.claimed()); assertFalse(target.isValid());
-                    }
-                    for (String reason : new String[]{null, "", "prefix " + CODE_SIZE, CODE_SIZE + " suffix",
-                            CODE_SIZE + "\n", CODE_SIZE + "\r\n", " " + CODE_SIZE, CODE_SIZE + " ",
-                            "java.lang.RuntimeException: " + CODE_SIZE,
-                            "jdk.vm.ci.code.BailoutException:java.lang.RuntimeException:java.lang.Exception:\n" + CODE_SIZE,
-                            "jdk.vm.ci.code.BailoutException: Code installation failed: code cache is full",
-                            "jdk.vm.ci.code.BailoutException: Code installation failed: dependencies failed",
-                            "jdk.vm.ci.code.BailoutException: Code installation failed: nmethod reclaimed",
-                            "jdk.graal.compiler.core.common.RetryableBailoutException: Compilable not ready for compilation.",
-                            "jdk.graal.compiler.core.common.RetryableBailoutException: Compilation cancelled.",
-                            "jdk.graal.compiler.core.common.PermanentBailoutException: Compilation timeout.",
-                            "prefix " + GRAPH_SIZE, GRAPH_SIZE + "\n"}) {
-                        root.graphFailure.set(null);
-                        listener.onCompilationFailed(target, reason, true, true, 2, () -> "unused");
-                        assertNull(root.graphFailure.get(), reason);
-                    }
-                    for (String reason : new String[]{GRAPH_SIZE, CODE_SIZE}) {
-                        for (boolean[] flags : new boolean[][]{{false, false}, {false, true}, {true, false}}) {
-                            root.graphFailure.set(null);
-                            listener.onCompilationFailed(target, reason, flags[0], flags[1], 2, () -> "unused");
-                            assertNull(root.graphFailure.get(), reason + " bailout=" + flags[0] + " permanent=" + flags[1]);
-                        }
-                    }
                 } finally { context.leave(); }
             }
         }

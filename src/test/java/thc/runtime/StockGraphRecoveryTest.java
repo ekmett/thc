@@ -573,15 +573,16 @@ class StockGraphRecoveryTest {
                     assertEquals(1, effects.get(), "root and side compilation failures cannot replay the guest");
                     var first = (FunctionRoot) recovered(root).getRootNode();
                     assertSame(first, source.get()); assertEquals(1, first.getGraphBudgetGeneration());
-                    assertTrue(((OptimizedCallTarget) first.getCallTarget()).isValidLastTier());
+                    assertTrue(((OptimizedCallTarget) first.getCallTarget()).getSuccessfulCompilationCount() > 0);
+                    assertFalse(((OptimizedCallTarget) first.getCallTarget()).isValid(),
+                        "The failed side invalidates the previously installed source entry");
                     var pending = first.graphFailure.get();
                     assertNotNull(pending, "a failed extracted side must be attributed to its actual function owner");
                     assertInstanceOf(AstSameFrameArm.ArmRoot.class, pending.target().getRootNode());
                     assertFalse(pending.target().isSubmittedForCompilation()); assertFalse(pending.target().isValid());
-                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode((OptimizedCallTarget) first.getCallTarget());
                     assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
                     assertEquals(2, effects.get());
-                    var second = recovered(first); assertNotNull(second, "even a valid enclosing entry must claim the failed side");
+                    var second = recovered(first); assertNotNull(second, "the invalidated enclosing entry must claim the failed side");
                     assertSame(second.getRootNode(), source.get()); assertTrue(root.isSelf(second));
                     assertEquals(2, ((FunctionRoot) second.getRootNode()).getGraphBudgetGeneration());
                     assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(1, first.getGraphBudgetGeneration());

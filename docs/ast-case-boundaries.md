@@ -107,7 +107,12 @@ is reported separately as an abandoned task, not a successfully or unsuccessfull
 compiled graph, and does not request recovery.
 
 The compiler callback disables automatic admission and inlining without preparing
-guest code. The next fresh function entry claims the failed task, clones the body with independent
+guest code. Publishing an owned failure receipt invalidates the source's
+one-shot compilation assumption, including when a separate side target failed.
+Healthy entries therefore do not poll the receipt on every call. Copies start
+with an independent valid assumption. A cold trampoline consumes only its
+claimed receipt; pending sibling failures remain eligible for reduction.
+The next fresh function entry claims the failed task, clones the body with independent
 case targets and fresh loop state, and applies the finite extraction to that
 replacement. Entry publication adopts the child and reports the structural change
 atomically. Old `executeBody` paths, tail anchors and saved frames remain on their

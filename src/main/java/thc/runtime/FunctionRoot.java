@@ -104,7 +104,11 @@ public final class FunctionRoot extends GuestRoot {
                 }
                 return recoveredEntry;
             });
-        } finally { service.complete(this, claim, recoveredEntry != null || coldEntry); }
+        } finally {
+            // A cold trampoline keeps this source generation, including pending
+            // sibling failures. Only a published replacement retires all receipts.
+            service.complete(this, claim, recoveredEntry != null);
+        }
     }
 
     final FunctionRoot copyForRecovery() {
@@ -545,7 +549,7 @@ public final class FunctionRoot extends GuestRoot {
     }
     @Override public Object execute(VirtualFrame frame) {
         DirectCallNode redirect = recoveredEntry;
-        if (redirect == null && graphFailure.get() != null) {
+        if (redirect == null && !noGraphFailure.isValid() && graphFailure.get() != null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             redirect = recoverEntry();
         }
