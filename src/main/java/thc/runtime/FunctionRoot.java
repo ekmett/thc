@@ -763,7 +763,11 @@ public final class FunctionRoot extends GuestRoot {
     @Override public SourceSection getSourceSection() { return coreSourceLocation == null ? null : coreSourceLocation.getSection(); }
     public List<CoreSourceNote> getCoreSourceNotes() { return coreSourceLocation == null ? List.of() : coreSourceLocation.getNotes(); }
     @Override public String getName() { return label; }
-    @Override public String toString() { return label; }
+    /** Compiler target names use binding provenance; guest stack labels stay unchanged. */
+    @Override public String toString() {
+        var identity = getCoreIdentity();
+        return identity == null ? label : identity.bindingId();
+    }
     public long getGraphBudgetGeneration() { return budgetGeneration; }
     /** Compatibility with older runtime overlays: a failed physical target is never rearmed. */
     public synchronized long prepareGraphBudgetRetry(long failedGeneration) {
