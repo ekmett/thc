@@ -693,8 +693,7 @@ public final class Force extends Node {
             }
             return result;
         } catch (DelimitedCut cut) {
-            RuntimeFault failure = new RuntimeFault("control0# cannot capture across a thunk update");
-            publishFailure(thunk, failure); throw failure;
+            throw rejectDelimitedCapture(thunk);
         } catch (ThunkSuspended failure) {
             if (failure.getThunk() != thunk) suspendOwned(thunk);
             throw failure;
@@ -710,6 +709,12 @@ public final class Force extends Node {
             // Any host unwind can follow effects; never reset to unevaluated and replay.
             suspendOwned(thunk); throw failure;
         }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private RuntimeFault rejectDelimitedCapture(Thunk thunk) {
+        RuntimeFault failure = new RuntimeFault("control0# cannot capture across a thunk update");
+        publishFailure(thunk, failure);
+        return failure;
     }
     private boolean sameContinuationBody(Object actual, Object expected) {
         return actual == expected || actual instanceof GuestRoot left && expected instanceof GuestRoot right && left.isSelf(right.getCallTarget());

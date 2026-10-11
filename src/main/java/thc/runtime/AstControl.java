@@ -41,6 +41,10 @@ public final class AstControl {
         return new AstCapture(wait, SynchronousMasking.current(node)).append(retry);
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
+    static AstCapture captureBlockedForce(Node node, Force force, Object value, AsyncRequest request) {
+        return new AstCapture(request, SynchronousMasking.current(node)).append(new RetryForce(node, force, value));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureChild(Node node, CallSegmentSuspended suspended) {
         return new AstCapture(suspended, SynchronousMasking.current(node))
             .append(new ResumeChild(suspended.getSegment(), node));
@@ -92,7 +96,7 @@ public final class AstControl {
         } catch (PendingWait cut) {
             throw captureForce(node, force, value, cut);
         } catch (AsyncBlocked blocked) {
-            throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(new RetryForce(node, force, value));
+            throw captureBlockedForce(node, force, value, blocked.getRequest());
         }
     }
     public static Object complete(Node node, Object result) { return complete(node, result, null, null, false); }
