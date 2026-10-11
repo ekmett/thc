@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
@@ -78,6 +79,17 @@ public final class Evaluate extends Expr {
     }
     @CompilationFinal private boolean genericLong;
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
+        CoreRepresentation proof = value.getRepresentation();
+        if (proof.getEvaluated() && proof.isLong()) {
+            // A successful evaluated typed read needs no capture policy. Preserve
+            // required-primitive failure only for roots that capture continuations.
+            try { return value.executeLong(frame); }
+            catch (UnexpectedResultException failure) {
+                if (!AstControl.INSTANCE.captures(this)) throw failure;
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new RuntimeFault("Expected primitive Long");
+            }
+        }
         if (AstControl.INSTANCE.captures(this)) return RuntimeTypesGen.expectLong(executeAsync(frame));
         if (value.getRepresentation().getEvaluated() || value.getRepresentation().isLong()) return value.executeLong(frame);
         // A prepared root has no observed value history. Demand its unevaluated
