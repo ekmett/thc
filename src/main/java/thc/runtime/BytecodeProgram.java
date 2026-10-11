@@ -242,8 +242,10 @@ public final class BytecodeProgram implements ExecutableProgram {
 
         // Each side may prepare only a proper original subtree. Rewritten
         // selectors and copied closure wrappers cannot outline themselves.
-        boolean regionSourceAllowed(List<?> expression) {
-            return caseRegionOrigin == null || expression != caseRegionOrigin
+        // A region that keeps a live inline copy stays in the original root:
+        // nested copies would prepare each level's subtree again.
+        boolean regionSourceAllowed(List<?> expression, boolean inlineCopy) {
+            return caseRegionOrigin == null || !inlineCopy && expression != caseRegionOrigin
                 && containsRegionSource(caseRegionOrigin, expression);
         }
 
@@ -4134,7 +4136,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
                     && joinRegionWork(definition.getBody(), 64) >= 64
                     && CoreFreeVariables.coreFreeVariables(definition.getBody()).stream().noneMatch(bodyScope.joins::containsKey)
-                    && context.regionSourceAllowed(definition.getBody());
+                    && context.regionSourceAllowed(definition.getBody(), true);
             // Preserve normal case preparation first: an optional whole-body
             // side can itself exceed local capacity. Existing nested plans take
             // precedence; never wrap one in another region in this activation.
@@ -5499,7 +5501,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var binding : group) if (CoreRepresentations.joinArity(binding) != null) {
             var context = scope.function;
             if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS) {
-                if (recursive && joinRegionWork(expr, 64) >= 64 && context.regionSourceAllowed(expr)) {
+                if (recursive && joinRegionWork(expr, 64) >= 64 && context.regionSourceAllowed(expr, true)) {
                     var closed = closedJoinRegion(expr, scope);
                     if (closed != null) {
                         context.preparingCaseRegion = true;
@@ -5539,14 +5541,16 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (!prefix.isEmpty() && "case".equals(body.getFirst()) && constructorRegionWidth(body) != 0
                         && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)
                         && CoreFreeVariables.coreFreeVariables((List<Object>) body.get(1)).stream().noneMatch(joins::contains)
-                        && context.regionSourceAllowed(expr)) {
+                        && context.regionSourceAllowed(expr, constructorRegionWidth(body) != 1)) {
                     // Move the closed join region, not a case escaping a live join
                     // activation. Its definitions are inert and retain their exact
                     // lexical order in each side; the scrutinee stays in the caller.
                     context.preparingCaseRegion = true;
                     try {
-                        var inline = joinRegion(group, (List<Object>) expr.get(3), recursive, scope, tail);
-                        return partitionedCase(body, scope, tail, false, constructorRegionWidth(body), inline, prefix, expr);
+                        int width = constructorRegionWidth(body);
+                        var inline = inlineCopy(scope, false, width,
+                                () -> joinRegion(group, (List<Object>) expr.get(3), recursive, scope, tail));
+                        return partitionedCase(body, scope, tail, false, width, inline, prefix, expr);
                     } finally { context.preparingCaseRegion = false; }
                 }
             }
@@ -5723,7 +5727,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
                 && (constructorWidth != 0 || scalarPartition)
                 && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)
-                && context.regionSourceAllowed(expr)) {
+                && context.regionSourceAllowed(expr, scalarPartition || constructorWidth != 1)) {
             context.preparingCaseRegion = true;
             try { return partitionedCase(expr, scope, tail, scalarPartition, scalarPartition ? 1 : constructorWidth); }
             finally { context.preparingCaseRegion = false; }
@@ -5792,7 +5796,21 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar, int width) {
-        return partitionedCase(expr, scope, tail, scalar, width, inlineCase(expr, scope, tail, true), List.of(), expr);
+        return partitionedCase(expr, scope, tail, scalar, width,
+                inlineCopy(scope, scalar, width, () -> inlineCase(expr, scope, tail, true)), List.of(), expr);
+    }
+
+    // A narrow constructor region, or a root that has already given up its
+    // inline copies, never emits this copy. Its sides still need its proof,
+    // but closure and thunk roots prepared only for the copy must not stay.
+    private Expression inlineCopy(Scope scope, boolean scalar, int width, Supplier<Expression> prepare) {
+        var emission = scope.function.caseEmission;
+        if ((scalar || width != 1) && (emission == null || emission.inline)) return prepare.get();
+        int rootMark = roots.size(), joinMark = localJoinCount;
+        var proof = prepare.get().proof();
+        roots.subList(rootMark, roots.size()).clear();
+        localJoinCount = joinMark;
+        return new ProvenExpression(e -> { throw new RuntimeFault("A discarded case region copy cannot be emitted"); }, proof);
     }
 
     private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar, int width,
