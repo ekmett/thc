@@ -11,15 +11,15 @@ import com.oracle.svm.shared.Uninterruptible;
 import com.oracle.svm.shared.util.ReflectionUtil;
 
 /** The public Runnable pump is unchanged; registrations belong to the current isolate. */
-@TargetClass(className = "jam.vm.Weak", onlyWith = {JamGC.Enabled.class, JamWeakPresent.class})
-final class Target_jam_vm_Weak {
+@TargetClass(className = "thc.vm.Weak", onlyWith = {JamGC.Enabled.class, THCWeakPresent.class})
+final class Target_thc_vm_Weak {
     @Substitute private static void loadNativeLibrary() { }
     @Substitute public static void checkAvailable() { }
 
     @Substitute
     public static long create(Object key, Object value, Runnable finalizer) {
         if (key == null) throw new NullPointerException("weak key");
-        long token = JamWeakSupport.create(key, value, finalizer);
+        long token = THCWeakSupport.create(key, value, finalizer);
         if (token == 0) throw new OutOfMemoryError("Jam weak registration metadata exhausted");
         return token;
     }
@@ -37,7 +37,7 @@ final class Target_jam_vm_Weak {
     public static Runnable take(long[] tokenOut) {
         if (tokenOut == null) throw new NullPointerException("tokenOut");
         if (tokenOut.length == 0) throw new IllegalArgumentException("tokenOut must have an element");
-        return JamWeakSupport.take(tokenOut);
+        return THCWeakSupport.take(tokenOut);
     }
 
     @Substitute
@@ -59,13 +59,13 @@ final class Target_jam_vm_Weak {
     }
 }
 
-final class JamWeakPresent implements Predicate<String> {
+final class THCWeakPresent implements Predicate<String> {
     @Override public boolean test(String name) {
         return ReflectionUtil.lookupClass(true, name, Thread.currentThread().getContextClassLoader()) != null;
     }
 }
 
-final class JamWeakSupport {
+final class THCWeakSupport {
     @Uninterruptible(reason = "Encode all conditional references under the heap lock before a safepoint.")
     static long create(Object key, Object value, Runnable finalizer) {
         JamHeap heap = JamHeap.get();

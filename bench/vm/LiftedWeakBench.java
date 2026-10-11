@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 
-import jam.vm.Lifted;
-import jam.vm.Weak;
+import thc.vm.Lifted;
+import thc.vm.Weak;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.management.ManagementFactory;

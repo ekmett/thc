@@ -89,7 +89,7 @@ only when an actual strong edge from retained data reaches it. The registry
 does not retain dead keys merely because they had finalizers.
 
 Jam's original weak policy processes sorted registrations once and retains
-newly dead finalizers immediately. That is a different policy. jam-vm keeps
+newly dead finalizers immediately. That is a different policy. thc-vm keeps
 jam's collection machinery and supplies the fixed-point and batch rules at
 the hosted phase boundary.
 
@@ -119,7 +119,7 @@ or ordering: following one association can expose another policy's edges.
 
 Use `java.lang.ref.WeakReference<T>` for an ordinary Java weak pointer. Its
 `get()` returns a strong Java reference when the referent is still available.
-Use `jam.vm.Weak` when a live key must retain a separate value or finalizer,
+Use `thc.vm.Weak` when a live key must retain a separate value or finalizer,
 including values and finalizers that refer back to the key.
 
 Native code can keep a JNI weak global created by `NewWeakGlobalRef`. Acquire
@@ -158,7 +158,7 @@ Registry traversal and retirement allocate no further metadata: fixed-point
 tracing borrows the buffer reserved at registration. This does not make the
 collector's tracing workers or other VM allocations immune to exhaustion.
 
-The public [Java API](https://github.com/ekmett/jam/blob/main/vm/src/bridge/java/jam/vm/Weak.java) exposes the protocol:
+The public [Java API](https://github.com/ekmett/thc/blob/main/src/vm/src/bridge/java/thc/vm/Weak.java) exposes the protocol:
 
 | Operation | Effect |
 | --- | --- |
@@ -174,19 +174,19 @@ safepoint, and release its root even if execution throws:
 
 ```java
 long[] token = new long[1];
-Runnable finalizer = jam.vm.Weak.take(token);
+Runnable finalizer = thc.vm.Weak.take(token);
 if (finalizer != null) {
     try {
         finalizer.run();
     } finally {
-        jam.vm.Weak.complete(token[0]);
+        thc.vm.Weak.complete(token[0]);
     }
 }
 ```
 
 `pump()` performs this loop for the caller. A Truffle runtime installs a runnable
 that enters and executes its guest closure. Context identity is invisible to
-jam-vm; any caller can pump the shared queue. Pending and running finalizers
+thc-vm; any caller can pump the shared queue. Pending and running finalizers
 remain roots through subsequent collections, including a collection triggered
 by the finalizer itself. `complete` ends that retention. See
 [integrating thc](thc-integration.md) for the artifact and scheduling contract.

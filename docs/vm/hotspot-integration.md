@@ -2,7 +2,7 @@
 
 HotSpot owns Java object layout, roots, safepoints and reference processing.
 Jam owns storage, marking and movement. The adapter connects them through
-[a small C interface](https://github.com/ekmett/jam/blob/main/vm/src/adapter/jam_vm.h), compiled on each side with that
+[a small C interface](https://github.com/ekmett/thc/blob/main/src/vm/src/adapter/thc_vm.h), compiled on each side with that
 side's toolchain.
 
 The backend is C++26 module `thc.jam`, with `:heap` and `:weak` partitions.
@@ -26,7 +26,7 @@ identity and WhiteBox identity. Epsilon's original files are restored and
 
 These tables and types are compiled into HotSpot. A native library cannot
 register a new collector in a stock JVM. Once this integration has been built,
-ABI-compatible backend changes can rebuild `libjam-vm` alone. Changes to the
+ABI-compatible backend changes can rebuild `libthc-vm` alone. Changes to the
 host interfaces still require rebuilding `libjvm`.
 
 ## Reserving the heap
@@ -51,7 +51,7 @@ placement succeeded.
 
 Two `ContiguousSpace`s describe the published bounds for heap iteration and
 serviceability. They do not allocate backing. Slow allocations and TLAB
-reservations call `jam_vm_allocate` under `Heap_lock`. The adapter preflights
+reservations call `thc_vm_allocate` under `Heap_lock`. The adapter preflights
 capacity so exhaustion returns to HotSpot's collection-and-retry path instead
 of reaching jam's ordinary allocation abort.
 
@@ -62,17 +62,17 @@ The C interface separates tracing from movement:
 
 | Operation | Contract |
 | --- | --- |
-| `jam_vm_begin` | Select minor or major and reset collected-generation marks and pointer declarations |
-| `jam_vm_trace` | Trace roots through jam; ordinary old roots are live but untraversed during a minor |
-| `jam_vm_remember` / `jam_vm_remembered` | Register exact old source slots; snapshot them at a safepoint |
-| `jam_vm_forget` | Retire slots discarded by continuation thaw without reading their contents |
-| `jam_vm_claim` | Claim the complete object extent before scanning its fields |
-| `jam_vm_fields` | Declare batches of four-byte slot indices, optionally following their targets |
-| `jam_vm_targets` | Trace targets without declaring narrow slots, including targets from wide fields |
-| `jam_vm_marked` | Query liveness after draining tracing work |
-| `jam_vm_prepare` | Freeze forwarding tables; reject a promotion that will not fit |
-| `jam_vm_forward` | Read the frozen destination for root and field repair |
-| `jam_vm_finish` | Move, pack metadata, adopt the rings and republish canonical aliases |
+| `thc_vm_begin` | Select minor or major and reset collected-generation marks and pointer declarations |
+| `thc_vm_trace` | Trace roots through jam; ordinary old roots are live but untraversed during a minor |
+| `thc_vm_remember` / `thc_vm_remembered` | Register exact old source slots; snapshot them at a safepoint |
+| `thc_vm_forget` | Retire slots discarded by continuation thaw without reading their contents |
+| `thc_vm_claim` | Claim the complete object extent before scanning its fields |
+| `thc_vm_fields` | Declare batches of four-byte slot indices, optionally following their targets |
+| `thc_vm_targets` | Trace targets without declaring narrow slots, including targets from wide fields |
+| `thc_vm_marked` | Query liveness after draining tracing work |
+| `thc_vm_prepare` | Freeze forwarding tables; reject a promotion that will not fit |
+| `thc_vm_forward` | Read the frozen destination for root and field repair |
+| `thc_vm_finish` | Move, pack metadata, adopt the rings and republish canonical aliases |
 
 Tracing may drain repeatedly in one epoch. Java keepalive and generalized weak
 closure can both discover more work. Once preparation succeeds, roots and
@@ -150,7 +150,7 @@ Java and generalized weak policy both use jam's actual marks and movement.
 ## Compiler support
 
 Interpreter, C1 and C2 record exact old-to-young source slots. The
-[Graal patch](https://github.com/ekmett/jam/blob/main/vm/patches/graal-jam.patch) recognizes Jam's exported collector
+[Graal patch](https://github.com/ekmett/thc/blob/main/src/vm/patches/graal-jam.patch) recognizes Jam's exported collector
 identity and lowers stores and array copies to the same remembered-slot API.
 Both Java Graal and libgraal use that lowering. The VM checks the actual compiler's GC support
 before installing Java code, including code returned by a libgraal isolate.
@@ -182,4 +182,4 @@ The C header is a deliberate foreign-language boundary. Its declarations must
 remain consumable by the JDK's C++14 translation units and C JNI callers. C++26
 module types belong behind that boundary. See [the build guide](build.md) for
 toolchain selection. The phase contracts are declared in
-[`jam_vm.h`](https://github.com/ekmett/jam/blob/main/vm/src/adapter/jam_vm.h).
+[`thc_vm.h`](https://github.com/ekmett/thc/blob/main/src/vm/src/adapter/thc_vm.h).

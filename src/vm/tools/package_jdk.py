@@ -293,6 +293,7 @@ def package(java_home, output, runtime, runtime_licenses=(), compiler_runtime_li
         'jam-LICENSE.md': NATIVE_BUILD / 'jam-LICENSE.md',
         'native-LICENSE.md': NATIVE_BUILD / 'native-LICENSE.md',
         'work-LICENSE.md': NATIVE_BUILD / 'work-LICENSE.md',
+        'hint-LICENSE.md': NATIVE_BUILD / 'hint-LICENSE.md',
     }
     if system == 'Windows':
         if compiler_runtime_license is None:

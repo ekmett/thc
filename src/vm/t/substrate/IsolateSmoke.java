@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 
 import java.util.concurrent.atomic.AtomicReference;
-import jam.vm.Weak;
+import thc.vm.Weak;
 import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.Isolate;

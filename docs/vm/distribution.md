@@ -1,41 +1,19 @@
-# Prebuilt runtimes
+# Runtime packages
 
-Download a platform archive from [Jam releases](https://github.com/ekmett/jam/releases).
-Each runtime release includes `manifest.json`, `SHA256SUMS`, and a file inventory
-for each installation. Pin a release and its archive SHA-256 in your build.
-Downloads are public and do not require GitHub Actions credentials.
+THC owns the manual VM producer and release workflows. New packages use the
+`thc-graal-*` artifact names and the `thc.vm` / `thc_vm_*` ABI. They contain
+LabsJDK, matching Graal/libgraal and SubstrateVM, the Java API, and the complete
+native archive closure. There is no standalone JDK distribution.
 
-The GraalVM package contains the matching LabsJDK, patched Graal compiler,
-Native Image/SubstrateVM, Jam libraries and Java API. Extract the entire archive
-into an empty directory and set `JAVA_HOME` to its `graalvm/` directory. The
-plain JDK package uses `jdk/`. Only products listed in a release's manifest are
-available: the first release contains GraalVM; older CI runs did not retain
-plain JDK archives.
+Existing [Jam releases](https://github.com/ekmett/jam/releases) remain immutable
+and available for existing pins. Their old ABI and qualification do not qualify
+a THC-branded rebuild. The consumer pin in `etc/jam-graalvm.json` describes
+those historical bytes until a newly built provider has passed qualification;
+do not rename its paths or edit its hashes to disguise that transition.
 
-```sh
-tar -xf jam-graalvm-<tag>-<flavor>-<platform>-<arch>.tar.gz
-export JAVA_HOME="$PWD/graalvm"
-export PATH="$JAVA_HOME/bin:$PATH"
-java -Xshare:off -Xms256m -Xmx256m \
-  -XX:+UnlockExperimentalVMOptions -XX:+UseJamGC -jar application.jar
-```
-
-Verify the archive against `SHA256SUMS` before extraction (`sha256sum` on Linux,
-`shasum -a 256` on macOS, or `Get-FileHash -Algorithm SHA256` on Windows).
-Windows also supports `tar -xf`; set `$env:JAVA_HOME` to the extracted
-`graalvm` directory and prepend its `bin` directory to `$env:Path`.
-
-These are preview builds. New archives identify `release` or `fastdebug` in
-the filename and manifest; `release` is the optimized build and `fastdebug`
-retains VM assertions. The first release used fastdebug and predates the
-filename suffix. The `vm-2026.10.09-0e36293` GraalVM release provides
-macOS arm64 packages qualified on macOS 15.5, Linux x86_64 packages qualified on
-glibc 2.35, and Windows x86_64 packages tested on Windows 11/Server 2022.
-Initial packages required macOS 26 or glibc 2.38. Read each release's platform
-manifest for its actual requirements; newer compatibility floors do not apply
-retroactively to older archives.
-Native Image needs the platform C/C++ toolchain, and generated applications may
-need companion Jam libraries; see [deployment](native-image.md).
+New packages must pass the manual VM workflow before publication. Platform
+floors belong to each release manifest. No new compatibility claim follows
+from moving the source repository.
 
 ## Consumer contract
 
@@ -62,24 +40,16 @@ it does not establish arbitrary application compatibility or complete Haskell
 
 ## Publishing
 
-The **Publish prebuilt runtimes** workflow takes a successful **Managed runtimes**
-run ID, its build flavor and a new release tag. Use a daily, manually dispatched,
-or `runtime-validation` run with full qualification; ordinary commit checks do
-not produce release packages. Its source must belong to this repository and be
-merged into `main`; all fifteen platform/runtime jobs must have passed. It
-requires all six JDK/GraalVM archives of that flavor, checks their recorded
-`JAM_BUILD_FLAVOR` against the artifact identity, verifies the Actions artifact
-hashes, preserves the exact inner archive bytes,
-and publishes a prerelease with checksums and provenance. It does not rebuild
-a runtime or replace an existing release. CI retains archives for fourteen days,
-so promote them before expiration.
-
-To prepare the same assets locally with Python 3.10+ and authenticated `gh`:
+The **Publish prebuilt runtimes** workflow accepts a successful manual VM run,
+build flavor and unused release tag. It consumes three platform Graal archives
+and verifies the native, shared VM, Graal and Substrate checks. It preserves
+archive bytes and records their checksums and producer provenance. It neither
+rebuilds a runtime nor replaces an existing release.
 
 ```sh
-python3 vm/tools/ci/release_runtime.py --run RUN_ID --tag NEW_TAG --build-flavor release \
-  --cache /tmp/jam-downloads --output /tmp/jam-release
+python3 src/vm/tools/ci/release_runtime.py --run RUN_ID --tag NEW_TAG --build-flavor release \
+  --cache /tmp/thc-downloads --output /tmp/thc-release
 ```
 
-The command only prepares files. The workflow uploads them as a draft, then
-publishes after all uploads succeed. A failed upload leaves a draft for inspection.
+This command prepares release files. The workflow uploads a draft and publishes
+only after every upload succeeds. Inspect a failed draft before retrying.

@@ -29,7 +29,7 @@ final class JamRuntimeBundleFeature implements InternalFeature {
             throw UserError.abort("Unable to read static Jam archive manifest %s: %s", manifest, error.getMessage());
         }
         boolean windows = Platform.includedIn(Platform.WINDOWS.class);
-        UserError.guarantee(!libraries.isEmpty() && libraries.getFirst().equals("jam-vm-static") &&
+        UserError.guarantee(!libraries.isEmpty() && libraries.getFirst().equals("thc-vm-static") &&
                         libraries.stream().distinct().count() == libraries.size(), "Invalid static Jam archive manifest: %s", manifest);
         var nativeLibraries = ((BeforeAnalysisAccessImpl) access).getNativeLibraries();
         for (int index = 0; index < libraries.size(); ++index) {
@@ -44,15 +44,15 @@ final class JamRuntimeBundleFeature implements InternalFeature {
     }
 
     @Override public void afterImageWrite(AfterImageWriteAccess access) {
-        Path output = access.getImagePath().resolveSibling(access.getImagePath().getFileName() + ".jam");
-        Path legal = Path.of(System.getProperty("java.home"), "legal", "jam-vm");
+        Path output = access.getImagePath().resolveSibling(access.getImagePath().getFileName() + ".thc");
+        Path legal = Path.of(System.getProperty("java.home"), "legal", "thc-vm");
         try {
             Files.createDirectories(output.resolve("legal"));
             Files.writeString(output.resolve("linkage.txt"), "static\n");
             if (Platform.includedIn(Platform.WINDOWS.class)) {
                 Path directory = JamNative.Directives.libraryDirectory();
                 for (String library : Files.readAllLines(directory.resolve("runtime-libraries.txt"))) {
-                    if (library.equalsIgnoreCase("jam-vm.dll")) continue;
+                    if (library.equalsIgnoreCase("thc-vm.dll")) continue;
                     UserError.guarantee(library.matches("(?i)(msvcp|msvcr|vcruntime|concrt)[0-9]+(_[a-z0-9]+)*\\.dll"),
                                     "Invalid Microsoft runtime library name: %s", library);
                     Path source = directory.resolve(library);

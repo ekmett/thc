@@ -2,29 +2,29 @@
 // SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 
 /** Test executor and collection controls around the public guest API. */
-public final class JamWeak {
+public final class THCWeak {
     static {
-        System.loadLibrary("jam_jni");
+        System.loadLibrary("thc_jni");
     }
 
-    private JamWeak() {}
+    private THCWeak() {}
 
     /** Register K -> (V, F), without a strong native root to any component. */
     public static long create(Object key, Object value, Object finalizer) {
-        return jam.vm.Weak.create(key, value, (Runnable) finalizer);
+        return thc.vm.Weak.create(key, value, (Runnable) finalizer);
     }
 
     /** Return the live value, or null when the association has died. */
-    public static Object deref(long token) { return jam.vm.Weak.deref(token); }
+    public static Object deref(long token) { return thc.vm.Weak.deref(token); }
 
     /** Claim one pending finalizer and write its token into tokenOut[0]. */
-    public static Object take(long[] tokenOut) { return jam.vm.Weak.take(tokenOut); }
+    public static Object take(long[] tokenOut) { return thc.vm.Weak.take(tokenOut); }
 
     /** Retire a registration and claim its finalizer at most once. */
-    public static Object finalizeNow(long token) { return jam.vm.Weak.finalizeNow(token); }
+    public static Object finalizeNow(long token) { return thc.vm.Weak.finalizeNow(token); }
 
     /** Release the running-finalizer root, including when execution threw. */
-    public static void complete(long token) { jam.vm.Weak.complete(token); }
+    public static void complete(long token) { thc.vm.Weak.complete(token); }
 
     /** Collect young; optionally promote its complete live set when old has room. */
     public static native void minor(boolean promote);

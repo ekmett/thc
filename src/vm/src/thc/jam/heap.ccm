@@ -22,7 +22,7 @@ import :candidate;
 
 namespace thc::detail {
 [[noreturn]] inline void invalid(char const * message) noexcept {
-  std::fprintf(stderr, "jam-vm: %s\n", message);
+  std::fprintf(stderr, "thc-vm: %s\n", message);
   std::abort();
 }
 inline jam::heap_options options(std::size_t prefix, std::size_t old_bytes,

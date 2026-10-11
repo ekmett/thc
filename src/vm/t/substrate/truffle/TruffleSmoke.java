@@ -12,7 +12,7 @@ import com.oracle.truffle.runtime.OptimizedCallTarget;
 import java.lang.ref.Reference;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
-import jam.vm.Weak;
+import thc.vm.Weak;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.RuntimeOptions;
 
@@ -249,8 +249,8 @@ public final class TruffleSmoke {
         check(Weak.pump() == 0, "completed finalizers leave no pending claims");
         Reference.reachabilityFence(target);
         System.out.println("Jam Native Image compiled Truffle consumer passed");
-        if (Boolean.getBoolean("jam.runtime.audit")) {
-            System.out.println("jam-runtime-audit-ready");
+        if (Boolean.getBoolean("thc.runtime.audit")) {
+            System.out.println("thc-runtime-audit-ready");
             System.out.flush();
             if (System.in.read() != '\n') throw new AssertionError("runtime audit did not resume");
         }

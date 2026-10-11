@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 
-import jam.vm.Weak;
-import jam.vm.Lifted;
+import thc.vm.Weak;
+import thc.vm.Lifted;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 
@@ -241,9 +241,9 @@ public final class WeakBridgeSmoke {
         generalized();
         liftedHandoff();
         System.out.println("Weak bridge passed: JVM runnables, retirement, pumping and nested GC");
-        if (Boolean.getBoolean("jam.runtime.audit")) {
-            System.clearProperty("jam.runtime.audit");
-            System.out.println("jam-runtime-audit-ready");
+        if (Boolean.getBoolean("thc.runtime.audit")) {
+            System.clearProperty("thc.runtime.audit");
+            System.out.println("thc-runtime-audit-ready");
             System.out.flush();
             if (System.in.read() != '\n') throw new AssertionError("runtime audit did not resume");
         }

@@ -24,9 +24,9 @@ public final class CollectorIdentitySmoke {
             ManagementFactory.getGarbageCollectorMXBeans().getFirst();
         long beforeCount = bean.getCollectionCount();
         long beforeTime = bean.getCollectionTime();
-        long beforeNative = JamWeak.collections(0) + JamWeak.collections(2);
+        long beforeNative = THCWeak.collections(0) + THCWeak.collections(2);
         collect.run();
-        long nativeDelta = JamWeak.collections(0) + JamWeak.collections(2) - beforeNative;
+        long nativeDelta = THCWeak.collections(0) + THCWeak.collections(2) - beforeNative;
         long count = bean.getCollectionCount();
         long elapsed = bean.getCollectionTime();
         if (nativeDelta <= 0 || count - beforeCount != nativeDelta)
@@ -55,11 +55,11 @@ public final class CollectorIdentitySmoke {
         if (jam) {
             if (args.length > 1 && args[1].equals("JVMCI")) checkJVMCI();
             checkAccounting(System::gc);
-            checkAccounting(() -> JamWeak.minor(false));
-            checkAccounting(() -> JamWeak.minor(true));
+            checkAccounting(() -> THCWeak.minor(false));
+            checkAccounting(() -> THCWeak.minor(true));
         } else {
             try {
-                JamWeak.create(new Object(), new Object(), null);
+                THCWeak.create(new Object(), new Object(), null);
                 throw new AssertionError("Epsilon accepted the Jam guest bridge");
             } catch (UnsupportedOperationException expectedFailure) {
                 if (!expectedFailure.getMessage().contains("Jam collector")) throw expectedFailure;

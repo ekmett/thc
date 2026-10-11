@@ -14,13 +14,13 @@ public class BoundarySmoke {
   }
   static void softPressure(SoftReference<byte[]> soft) {
     byte[][] retained = new byte[40][];
-    long majors = JamWeak.collections(2);
+    long majors = THCWeak.collections(2);
     int n = 0;
-    while (JamWeak.collections(2) == majors && n < retained.length) {
+    while (THCWeak.collections(2) == majors && n < retained.length) {
       try { retained[n++] = new byte[1024 * 1024]; }
       catch (OutOfMemoryError exhausted) { break; }
     }
-    HeapSmoke.check(JamWeak.collections(2) > majors, "retained allocation forces a pressure major");
+    HeapSmoke.check(THCWeak.collections(2) > majors, "retained allocation forces a pressure major");
     HeapSmoke.check(soft.get() == null, "whole-heap allocation pressure clears soft reference");
     Reference.reachabilityFence(retained);
   }
@@ -58,13 +58,13 @@ public class BoundarySmoke {
     parked.await();
     Thread.sleep(50);
     HeapSmoke.garbage(10000);
-    JamWeak.minor(true);
+    THCWeak.minor(true);
     System.gc();
     release.countDown();
     parkedAgain.await();
     Thread.sleep(50);
-    JamWeak.minor(false);
-    JamWeak.minor(false);
+    THCWeak.minor(false);
+    THCWeak.minor(false);
     releaseAgain.countDown();
     for (Thread thread : threads) thread.join();
     if (failure.get() != null) throw new AssertionError(failure.get());

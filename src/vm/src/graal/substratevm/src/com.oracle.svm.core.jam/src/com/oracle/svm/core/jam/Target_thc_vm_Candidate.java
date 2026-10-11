@@ -7,8 +7,8 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.shared.Uninterruptible;
 
 /** Candidate registrations and their selection epoch belong to the current isolate. */
-@TargetClass(className = "jam.vm.Candidate", onlyWith = {JamGC.Enabled.class, JamWeakPresent.class})
-final class Target_jam_vm_Candidate {
+@TargetClass(className = "thc.vm.Candidate", onlyWith = {JamGC.Enabled.class, THCWeakPresent.class})
+final class Target_thc_vm_Candidate {
     @Substitute private static void loadNativeLibrary() { }
 
     @Substitute

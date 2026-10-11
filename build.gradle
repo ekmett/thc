@@ -37,8 +37,8 @@ def windowsHost = System.getProperty("os.name").startsWith("Windows")
 def jamPinFile = file("etc/jam-graalvm.json")
 def jamPin = new JsonSlurper().parse(jamPinFile)
 def jamHome = file(providers.environmentVariable("JAVA_HOME").orElse(System.getProperty("java.home")).get()).canonicalFile
-def jamApi = new File(jamHome, "lib/jam/jam-vm.jar")
-def jamNativeDirectory = new File(jamHome, windowsHost ? "bin" : "lib/jam")
+def jamApi = new File(jamHome, "lib/thc/thc-vm.jar")
+def jamNativeDirectory = new File(jamHome, windowsHost ? "bin" : "lib/thc")
 def jamJava = new File(jamHome, windowsHost ? "bin/java.exe" : "bin/java")
 def jamPlatform = (windowsHost ? "Windows" : System.getProperty("os.name")) + "-" +
     (["amd64": "x86_64", "aarch64": "arm64"].get(System.getProperty("os.arch"), System.getProperty("os.arch")))
@@ -334,17 +334,17 @@ tasks.startScripts {
     def windowsMemoryPolicy = "(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | \"%SystemRoot%\\System32\\findstr.exe\" /L /C:\"UseCompressedOops\" /C:\"MaxRAM\" /C:\"MinRAM\" /C:\"InitialRAM\" /C:\"@\" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% \"-XX:+UseCompressedOops\""
     def unixVectorPolicy = 'case "${JAVA_TOOL_OPTIONS-} ${JDK_JAVA_OPTIONS-} ${_JAVA_OPTIONS-} ${JAVA_OPTS-} ${THC_OPTS-}" in\n  *jdk.graal.Vectorization=*|*jdk.graal.VectorizeLoops=*|*@*) ;;\n  *) DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS \\"-Djdk.graal.VectorizeLoops=false\\"" ;;\nesac'
     def windowsVectorPolicy = '(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | "%SystemRoot%\\System32\\findstr.exe" /L /C:"jdk.graal.Vectorization=" /C:"jdk.graal.VectorizeLoops=" /C:"@" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% "-Djdk.graal.VectorizeLoops=false"'
-    def unixJamPolicy = '''[ -n "${JAVA_HOME:-}" ] && [ -f "$JAVA_HOME/lib/jam/jam-vm.jar" ] || die "thc: JAVA_HOME must select the pinned JAM GraalVM package"
-cmp -s "$APP_HOME/lib/jam-vm.jar" "$JAVA_HOME/lib/jam/jam-vm.jar" || die "thc: JAM API differs from the distribution's pinned package"
+    def unixJamPolicy = '''[ -n "${JAVA_HOME:-}" ] && [ -f "$JAVA_HOME/lib/thc/thc-vm.jar" ] || die "thc: JAVA_HOME must select the pinned JAM GraalVM package"
+cmp -s "$APP_HOME/lib/thc-vm.jar" "$JAVA_HOME/lib/thc/thc-vm.jar" || die "thc: JAM API differs from the distribution's pinned package"
 for THC_JAM_INPUT in @JAM_INPUTS@; do
     cmp -s "$APP_HOME/jam-runtime-identity/$THC_JAM_INPUT" "$JAVA_HOME/$THC_JAM_INPUT" || die "thc: JAM provider differs from the distribution's pinned package"
 done
-THC_JAM_LIB=$JAVA_HOME/lib/jam
+THC_JAM_LIB=$JAVA_HOME/lib/thc
 if "$cygwin" || "$msys"; then THC_JAM_LIB=$(cygpath --path --mixed "$JAVA_HOME/bin"); fi
 '''.replace("@JAM_INPUTS@", jamLauncherIdentity.collect { "'${it}'" }.join(" "))
     def windowsJamPolicy = '''if not defined JAVA_HOME (echo thc: JAVA_HOME must select the pinned JAM GraalVM package 1>&2 & exit /b 1)
-if not exist "%JAVA_HOME%\\lib\\jam\\jam-vm.jar" (echo thc: Missing JAM API in JAVA_HOME 1>&2 & exit /b 1)
-fc /b "%APP_HOME%\\lib\\jam-vm.jar" "%JAVA_HOME%\\lib\\jam\\jam-vm.jar" <nul >nul 2>&1
+if not exist "%JAVA_HOME%\\lib\\thc\\thc-vm.jar" (echo thc: Missing JAM API in JAVA_HOME 1>&2 & exit /b 1)
+fc /b "%APP_HOME%\\lib\\thc-vm.jar" "%JAVA_HOME%\\lib\\thc\\thc-vm.jar" <nul >nul 2>&1
 if errorlevel 1 (echo thc: JAM API differs from the distribution's pinned package 1>&2 & exit /b 1)
 for %%f in (@JAM_INPUTS@) do (
     fc /b "%APP_HOME%\\jam-runtime-identity\\%%~f" "%JAVA_HOME%\\%%~f" <nul >nul 2>&1

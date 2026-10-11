@@ -33,7 +33,7 @@ systems and instruction sets still need validation.
 
 ## Guest API
 
-Use [jam.vm.Weak](thc-integration.md) to register weak associations and install
+Use [thc.vm.Weak](thc-integration.md) to register weak associations and install
 JVM runnables. Any caller can pump the shared queue. There is no automatic
 finalizer thread or wakeup notification; the caller supplies the pump schedule.
 
@@ -59,7 +59,7 @@ or arbitrary exhausted-VM successor-installation recovery. The language owns
 its shutdown cleanup and callback scheduling; Jam makes no automatic
 finalize-everything-on-exit promise.
 
-The optional `jam.vm.Candidate` API is included in the same three-platform
+The optional `thc.vm.Candidate` API is included in the same three-platform
 release, with focused HotSpot/GraalVM and Native Image qualification. It does
 not capture stacks or supply a language scheduler; see
 [suspended owners](thc-integration.md#suspended-owners).

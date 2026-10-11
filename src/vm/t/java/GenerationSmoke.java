@@ -85,23 +85,23 @@ public final class GenerationSmoke {
         Object[] array = new Object[4096];
         AtomicReference<Object> atomic = new AtomicReference<>();
         warm(ordinary, large, array, ordinary);
-        JamWeak.minor(true);
-        long promotions = JamWeak.collections(1);
+        THCWeak.minor(true);
+        long promotions = THCWeak.collections(1);
         check(promotions > 0, "old owners established by promotion");
         install(ordinary, unsafe, large, array, atomic);
-        long minors = JamWeak.collections(0);
+        long minors = THCWeak.collections(0);
         for (int n = 0; n < 5; n++) {
-            JamWeak.minor(false);
+            THCWeak.minor(false);
             checkGraph(ordinary, unsafe, large, array, atomic);
         }
-        check(JamWeak.collections(0) >= minors + 5, "five real minors");
-        check(JamWeak.collections(1) == promotions, "retaining minors did not promote");
+        check(THCWeak.collections(0) >= minors + 5, "five real minors");
+        check(THCWeak.collections(1) == promotions, "retaining minors did not promote");
         // A major changes old offsets; its relocated remembered slots must survive another minor.
         System.gc();
-        JamWeak.minor(false);
+        THCWeak.minor(false);
         checkGraph(ordinary, unsafe, large, array, atomic);
-        JamWeak.minor(true);
-        check(JamWeak.collections(1) > promotions, "requested promotion completed");
+        THCWeak.minor(true);
+        check(THCWeak.collections(1) > promotions, "requested promotion completed");
         checkGraph(ordinary, unsafe, large, array, atomic);
         Reference.reachabilityFence(ordinary);
         Reference.reachabilityFence(unsafe);
@@ -109,21 +109,21 @@ public final class GenerationSmoke {
         Reference.reachabilityFence(atomic);
     }
     static long installAssociation(Object oldKey) {
-        return JamWeak.create(oldKey, new Node(211), null);
+        return THCWeak.create(oldKey, new Node(211), null);
     }
     static long oldKeyAssociation() {
         Object key = new Object();
-        JamWeak.minor(true);
+        THCWeak.minor(true);
         long token = installAssociation(key);
         Reference.reachabilityFence(key);
         return token;
     }
     static void oldKeyPolicy() {
         long token = oldKeyAssociation();
-        JamWeak.minor(false);
-        check(((Node) JamWeak.deref(token)).id == 211, "untraced old key conservatively retains young value");
+        THCWeak.minor(false);
+        check(((Node) THCWeak.deref(token)).id == 211, "untraced old key conservatively retains young value");
         System.gc();
-        check(JamWeak.deref(token) == null, "major can reject dead old key");
+        check(THCWeak.deref(token) == null, "major can reject dead old key");
     }
     static WeakReference<Object> newWeak() { return new WeakReference<>(null); }
     static void installWeakReferent(WeakReference<Object> ref) {
@@ -135,44 +135,44 @@ public final class GenerationSmoke {
     }
     static void oldJavaWeak() {
         WeakReference<Object> ref = newWeak();
-        JamWeak.minor(true);
+        THCWeak.minor(true);
         installWeakReferent(ref);
-        JamWeak.minor(false);
+        THCWeak.minor(false);
         check(ref.get() == null, "remembered old Java weak owner must not strengthen its young referent");
         Reference.reachabilityFence(ref);
     }
     static long[] frozenBatch() {
         Object oldKey = new Object();
-        JamWeak.minor(true);
+        THCWeak.minor(true);
         Object youngKey = new Object();
         Object value = new Node(401);
-        long live = JamWeak.create(oldKey, value, null);
-        long first = JamWeak.create(youngKey, null, new Capture(youngKey));
-        long second = JamWeak.create(youngKey, value, new Capture(null));
+        long live = THCWeak.create(oldKey, value, null);
+        long first = THCWeak.create(youngKey, null, new Capture(youngKey));
+        long second = THCWeak.create(youngKey, value, new Capture(null));
         Reference.reachabilityFence(oldKey);
         return new long[] {live, first, second};
     }
     static void finalizerBatch() {
         long[] tokens = frozenBatch();
-        JamWeak.minor(false);
-        check(JamWeak.deref(tokens[0]) != null, "old key activation in mixed batch");
-        check(JamWeak.deref(tokens[2]) == null, "captured young key cannot reactivate retired peer");
+        THCWeak.minor(false);
+        check(THCWeak.deref(tokens[0]) != null, "old key activation in mixed batch");
+        check(THCWeak.deref(tokens[2]) == null, "captured young key cannot reactivate retired peer");
         long[] id = new long[1];
-        Object first = JamWeak.take(id);
+        Object first = THCWeak.take(id);
         check(first instanceof Capture && id[0] == tokens[1], "first frozen finalizer");
-        JamWeak.minor(true);
+        THCWeak.minor(true);
         System.gc();
         check(((Capture) first).captured != null, "running finalizer capture survives minor/promotion/major");
-        JamWeak.complete(id[0]);
-        Object second = JamWeak.take(id);
+        THCWeak.complete(id[0]);
+        Object second = THCWeak.take(id);
         check(second instanceof Capture && id[0] == tokens[2], "second frozen finalizer");
-        JamWeak.complete(id[0]);
-        check(JamWeak.take(id) == null && JamWeak.finalizeNow(tokens[1]) == null, "at most once after promotion");
+        THCWeak.complete(id[0]);
+        check(THCWeak.take(id) == null && THCWeak.finalizeNow(tokens[1]) == null, "at most once after promotion");
     }
     public static void main(String[] args) {
         barriers(); oldJavaWeak(); oldKeyPolicy(); finalizerBatch();
-        check(JamWeak.collections(2) > 0, "major collection exercised");
+        check(THCWeak.collections(2) > 0, "major collection exercised");
         System.out.printf("GenerationSmoke passed: minors=%d promotions=%d majors=%d%n",
-            JamWeak.collections(0), JamWeak.collections(1), JamWeak.collections(2));
+            THCWeak.collections(0), THCWeak.collections(1), THCWeak.collections(2));
     }
 }

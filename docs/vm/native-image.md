@@ -23,13 +23,13 @@ into the executable, while the builder still places the matching Microsoft CRT
 DLLs beside it. Keep those DLLs with the executable; this does not switch
 Graal's Windows toolchain from `/MD` to `/MT`.
 
-The builder writes `application.jam/linkage.txt` containing `static` and copies
-license notices into `application.jam/legal/`. Those files describe the build
+The builder writes `application.thc/linkage.txt` containing `static` and copies
+license notices into `application.thc/legal/`. Those files describe the build
 and carry redistribution notices; the executable does not read them. Preserve
 the notices in your distribution, wherever it keeps third-party licenses.
 
-The supplier ships `lib/jam/native-image-libraries.txt`, listing archive names
-in dependency order, and the corresponding archives under `lib/jam/static/`.
+The supplier ships `lib/thc/native-image-libraries.txt`, listing archive names
+in dependency order, and the corresponding archives under `lib/thc/static/`.
 Native Image requires every listed archive and uses Graal's static-library
 linker path. JVM execution continues to use the separately packaged shared
 bridge and `runtime-libraries.txt`. Consumers of older packages without the
@@ -37,11 +37,11 @@ static manifest must still retain their generated runtime sidecars.
 
 ## Weak associations
 
-Put the same `jam.vm.Weak` API used on HotSpot on the image class path:
+Put the same `thc.vm.Weak` API used on HotSpot on the image class path:
 
 ```sh
 "$JAVA_HOME/bin/native-image" --gc=jam \
-  -cp "$JAVA_HOME/lib/jam/jam-vm.jar:application.jar" \
+  -cp "$JAVA_HOME/lib/thc/thc-vm.jar:application.jar" \
   your.application.Main application
 ```
 
@@ -88,7 +88,7 @@ exact-slot barriers; collection repairs stack, continuation and installed-code
 references as well as the image heap's writable roots.
 
 THC's weak primitive lowering and finalizer handoffs are integrated through
-`jam.vm.Weak`; see [the shipped scope](status.md#shipped-scope-and-limits).
+`thc.vm.Weak`; see [the shipped scope](status.md#shipped-scope-and-limits).
 Other languages still supply their own primitive lowering and pump policy.
 
 ## Limits

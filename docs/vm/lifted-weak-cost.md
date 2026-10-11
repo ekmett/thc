@@ -80,15 +80,15 @@ Use the packaged Jam GraalVM as `JAVA_HOME`, from the repository root:
 
 ```sh
 mkdir -p /tmp/jam-lifted-weak-bench
-"$JAVA_HOME/bin/javac" -cp "$JAVA_HOME/lib/jam/jam-vm.jar" \
+"$JAVA_HOME/bin/javac" -cp "$JAVA_HOME/lib/thc/thc-vm.jar" \
   -d /tmp/jam-lifted-weak-bench bench/vm/LiftedWeakBench.java
 "$JAVA_HOME/bin/java" -Xshare:off -Xms128m -Xmx128m \
   -XX:+UnlockExperimentalVMOptions -XX:+UseJamGC \
   -XX:+EnableJVMCI -XX:+UseJVMCICompiler -XX:+UseJVMCINativeLibrary -Xbatch \
   -Xlog:gc:file=/tmp/jam-lifted-weak-bench/gc.log \
   --enable-native-access=ALL-UNNAMED \
-  "-Djava.library.path=$JAVA_HOME/lib/jam" \
-  -cp "/tmp/jam-lifted-weak-bench:$JAVA_HOME/lib/jam/jam-vm.jar" \
+  "-Djava.library.path=$JAVA_HOME/lib/thc" \
+  -cp "/tmp/jam-lifted-weak-bench:$JAVA_HOME/lib/thc/thc-vm.jar" \
   LiftedWeakBench 64 7 > /tmp/jam-lifted-weak-bench/results.csv
 ```
 

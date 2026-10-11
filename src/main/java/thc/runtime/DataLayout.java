@@ -13,7 +13,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.api.staticobject.StaticShape;
-import jam.vm.Lifted;
+import thc.vm.Lifted;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;

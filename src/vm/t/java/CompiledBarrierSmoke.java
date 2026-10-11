@@ -80,14 +80,14 @@ public final class CompiledBarrierSmoke {
     public static void main(String[] args) {
         warm();
         AtomicReference<Object> cas = new AtomicReference<>(), swap = new AtomicReference<>();
-        JamWeak.minor(true);
+        THCWeak.minor(true);
         check(!young(cas) && !young(swap), "atomic owners promoted");
         install(cas, swap);
         Object[][] arrays = oldArrays();
-        long promotions = JamWeak.collections(1), majors = JamWeak.collections(2);
-        long minors = JamWeak.collections(0);
+        long promotions = THCWeak.collections(1), majors = THCWeak.collections(2);
+        long minors = THCWeak.collections(0);
         for (int i = 0; i < 4; ++i) {
-            JamWeak.minor(false);
+            THCWeak.minor(false);
             node(cas.get(), 101);
             node(swap.get(), 103);
             for (int a = 0; a < arrays.length; ++a) {
@@ -97,8 +97,8 @@ public final class CompiledBarrierSmoke {
                 check(young(array[array.length - 1]), "value remains in young arena");
             }
         }
-        check(JamWeak.collections(0) == minors + 4, "four real minor collections");
-        check(JamWeak.collections(1) == promotions && JamWeak.collections(2) == majors,
+        check(THCWeak.collections(0) == minors + 4, "four real minor collections");
+        check(THCWeak.collections(1) == promotions && THCWeak.collections(2) == majors,
               "neither promotion nor full tracing hides missing barriers");
         Reference.reachabilityFence(cas);
         Reference.reachabilityFence(swap);

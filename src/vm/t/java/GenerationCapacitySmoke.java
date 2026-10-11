@@ -24,15 +24,15 @@ public final class GenerationCapacitySmoke {
     }
     static byte[][] combined() {
         byte[][] old = graph(40);
-        JamWeak.minor(true);
-        long promotions = JamWeak.collections(1);
+        THCWeak.minor(true);
+        long promotions = THCWeak.collections(1);
         check(promotions > 0, "old graph promoted");
         byte[][] young = graph(80);
         System.gc();
         long live = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
         check(live > 32L * 1024 * 1024, "combined live heap exceeds old capacity");
-        JamWeak.minor(true);
-        check(JamWeak.collections(1) == promotions, "non-fitting promotion retained nursery");
+        THCWeak.minor(true);
+        check(THCWeak.collections(1) == promotions, "non-fitting promotion retained nursery");
         verify(old, 40); verify(young, 80);
         Reference.reachabilityFence(old);
         return young;
@@ -40,9 +40,9 @@ public final class GenerationCapacitySmoke {
     public static void main(String[] args) {
         byte[][] young = combined();
         System.gc();
-        long before = JamWeak.collections(1);
-        JamWeak.minor(true);
-        check(JamWeak.collections(1) == before + 1, "promotion succeeds after old garbage is reclaimed");
+        long before = THCWeak.collections(1);
+        THCWeak.minor(true);
+        check(THCWeak.collections(1) == before + 1, "promotion succeeds after old garbage is reclaimed");
         verify(young, 80);
         System.out.println("GenerationCapacitySmoke passed: combined live > old capacity, failed promotion recovered");
     }

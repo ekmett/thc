@@ -37,6 +37,14 @@ that information around long enough to use it.
 
 ![Turbo Haskell](assets/turbo-haskell.png)
 
+## VM toolchain
+
+THC owns the Java/native bridge and the GraalVM/SubstrateVM integration in
+[`src/vm`](src/vm/README.md), with `thc::vm` and `thc::vm-static` CMake targets.
+See the [VM build guide](docs/vm/build.md). Its heavyweight build and release
+workflows are manual, separate from commit CI. A new THC-branded provider still
+needs qualification before replacing the existing installation pin below.
+
 ## Build and run
 
 For native Windows, use the [PowerShell build and test guide](docs/windows.md).

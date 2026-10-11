@@ -10,16 +10,16 @@ import org.graalvm.word.PointerBase;
 
 /** A real native thread keeps writing while Java allocates and collects. */
 @CContext(NativePinSmoke.Directives.class)
-@CLibrary(value = "jam_pin_test", requireStatic = true)
+@CLibrary(value = "thc_pin_test", requireStatic = true)
 public final class NativePinSmoke {
     private static volatile Object sink;
     public static final class Directives implements CContext.Directives {
         @Override public List<String> getHeaderFiles() { return List.of("<pin_writer.h>"); }
-        @Override public List<String> getOptions() { return List.of("-I" + System.getProperty("jam.pin.include")); }
-        @Override public List<String> getLibraryPaths() { return List.of(System.getProperty("jam.pin.library")); }
+        @Override public List<String> getOptions() { return List.of("-I" + System.getProperty("thc.pin.include")); }
+        @Override public List<String> getLibraryPaths() { return List.of(System.getProperty("thc.pin.library")); }
     }
-    @CFunction("jam_pin_start") private static native PointerBase start(PointerBase payload);
-    @CFunction("jam_pin_stop") private static native long stop(PointerBase writer);
+    @CFunction("thc_pin_start") private static native PointerBase start(PointerBase payload);
+    @CFunction("thc_pin_stop") private static native long stop(PointerBase writer);
 
     public static void main(String[] args) {
         for (int repetition = 0; repetition < 3; repetition++) {

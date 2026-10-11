@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 
-package jam.vm;
+package thc.vm;
 
 /**
  * Collector-aware generalized weak associations for guest runtimes.
@@ -18,7 +18,7 @@ package jam.vm;
  * finalizers remain roots across nested collections.
  *
  * <p>This experimental interface requires the matching Jam-enabled JDK and
- * {@code libjam_bridge}. There is currently no queue notification or blocking
+ * {@code libthc_bridge}. There is currently no queue notification or blocking
  * wait operation. The host decides when to pump.
  */
 public final class Weak {
@@ -30,7 +30,7 @@ public final class Weak {
 
     @SuppressWarnings("restricted") // The host explicitly enables native access for this module.
     private static void loadNativeLibrary() {
-        System.loadLibrary("jam_bridge");
+        System.loadLibrary("thc_bridge");
     }
 
     /**

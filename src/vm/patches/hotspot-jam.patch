@@ -239,7 +239,7 @@
 +    log_error(gc)("Release the complete Jam heap reservation, including its compressed-oop guard");
 +    return false;
 +  }
-+  // After jam_vm_destroy, every published window has been restored to a
++  // After thc_vm_destroy, every published window has been restored to a
 +  // placeholder. Never unmap a live alias or consume a neighboring reservation.
 +  size_t remaining = bytes;
 +  char* cursor = base;
@@ -720,7 +720,7 @@
 +  // Check the source, never the concurrently mutable value stored in the slot.
 +  if (!heap->is_in_reserved(slot) || heap->is_in_young(slot)) return;
 +  uintptr_t base = (uintptr_t)CompressedOops::base();
-+  jam_vm_remember(heap->jam(), owner == nullptr ? 0 : CompressedOops::narrow_oop_value(owner),
++  thc_vm_remember(heap->jam(), owner == nullptr ? 0 : CompressedOops::narrow_oop_value(owner),
 +                  ((uintptr_t)slot - base) / 4, count, compressed ? 1 : 2, compressed);
 +}
 +
@@ -728,7 +728,7 @@
 +  JamHeap* heap = JamHeap::heap();
 +  if (start == end || !heap->is_in_reserved(start) || heap->is_in_young(start)) return;
 +  assert(end >= start && is_aligned(start, 4) && is_aligned(end, 4), "retired slot range");
-+  jam_vm_forget(heap->jam(), ((uintptr_t)start - (uintptr_t)CompressedOops::base()) / 4,
++  thc_vm_forget(heap->jam(), ((uintptr_t)start - (uintptr_t)CompressedOops::base()) / 4,
 +                (end - start) / 4);
 +}
 +
@@ -777,7 +777,7 @@
 +
 +void JamBarrierSet::on_thread_start(Thread* thread) {
 +  JamThreadLocalData::enter(thread);
-+  assert(jam_vm_thread_current(JamHeap::heap()->jam()), "Jam heap must be bound on the executing OS thread");
++  assert(thc_vm_thread_current(JamHeap::heap()->jam()), "Jam heap must be bound on the executing OS thread");
 +}
 +
 +void JamBarrierSet::on_thread_attach(Thread* thread) {
@@ -1029,7 +1029,7 @@
 +  }
 +  // VirtualSpace records the reservation only. Jam owns and maps the backing.
 +  _virtual_space.initialize(heap_rs, 0);
-+  _jam = jam_vm_create(CompressedOops::base(), prefix, old_bytes, young_bytes,
++  _jam = thc_vm_create(CompressedOops::base(), prefix, old_bytes, young_bytes,
 +                       reserve, JamWorkers);
 +  MemRegion old_region((HeapWord*)heap_rs.base(), old_bytes / HeapWordSize);
 +  MemRegion young_region((HeapWord*)(heap_rs.base() + jam_young_displacement), young_bytes / HeapWordSize);
@@ -1058,7 +1058,7 @@
 +
 +  // Verification can run before a diagnostic preparation boundary.
 +  if (VerifyDuringStartup || VerifyBeforeGC || VerifyAfterGC || VerifyDuringGC || VerifyBeforeExit) {
-+    guarantee(jam_vm_track_starts(_jam), "Unable to allocate Jam object-start metadata");
++    guarantee(thc_vm_track_starts(_jam), "Unable to allocate Jam object-start metadata");
 +    _track_starts = true;
 +  }
 +
@@ -1069,7 +1069,7 @@
 +  // All done, print out the configuration
 +  JamInitLogger::print();
 +  log_info(gc)("Jam collector: %s, %u copy workers, serial VM scanner",
-+               jam_vm_compactor(_jam), JamWorkers);
++               thc_vm_compactor(_jam), JamWorkers);
 +  log_info(gc)("Jam generations: old=%zu, young=%zu usable bytes; virtual displacement=%zu",
 +               old_bytes, young_bytes, jam_young_displacement);
 +
@@ -1109,7 +1109,7 @@
 +  HeapWord* res;
 +  {
 +    MutexLocker ml(Heap_lock);
-+    uint32_t at = jam_vm_allocate(_jam, size, young);
++    uint32_t at = thc_vm_allocate(_jam, size, young);
 +    if (at == 0) return nullptr;
 +    res = (HeapWord*)(CompressedOops::base() + size_t(at) * HeapWordSize);
 +    (young ? _young_space : _space)->set_top(res + size);
@@ -1237,7 +1237,7 @@
 +}
 +
 +void JamHeap::record_start(oopDesc* obj) {
-+  jam_vm_record_start(heap()->jam(), CompressedOops::narrow_oop_value(cast_to_oop(obj)));
++  thc_vm_record_start(heap()->jam(), CompressedOops::narrow_oop_value(cast_to_oop(obj)));
 +}
 +
 +void JamHeap::object_iterate(ObjectClosure *cl) {
@@ -1245,7 +1245,7 @@
 +  guarantee(_track_starts, "Heap iteration requires diagnostic preparation");
 +  for (int young = 0; young != 2; ++young) {
 +    size_t count;
-+    uint32_t const* bits = jam_vm_start_bits(_jam, young, &count);
++    uint32_t const* bits = thc_vm_start_bits(_jam, young, &count);
 +    for (size_t i = 0; i < count; ++i) {
 +      uint32_t word = bits[i];
 +      while (word != 0) {
@@ -1264,7 +1264,7 @@
 +  StreamIndentor si(st, 1);
 +
 +  st->print_cr("Jam published heap: %zu usable bytes, old/young ring origins %zu/%zu words",
-+               capacity(), jam_vm_origin(_jam, false), jam_vm_origin(_jam, true));
++               capacity(), thc_vm_origin(_jam, false), thc_vm_origin(_jam, true));
 +
 +  if (_space != nullptr) {
 +    st->print_cr("Old space:");
@@ -1333,19 +1333,19 @@
 +
 +class JamFields : public BasicOopIterateClosure {
 +  JamScanState* _state;
-+  jam_vm_visit* _visit;
++  thc_vm_visit* _visit;
 +  bool _follow;
 +  oop _owner;
 +  uint64_t _slots[128];
 +  size_t _count;
 +public:
-+  JamFields(JamScanState* state, jam_vm_visit* visit, bool follow, oop owner)
++  JamFields(JamScanState* state, thc_vm_visit* visit, bool follow, oop owner)
 +    : BasicOopIterateClosure(follow ? state->heap->ref_processor() : nullptr),
 +      _state(state), _visit(visit), _follow(follow), _owner(owner), _count(0) {}
 +
 +  void flush() {
 +    if (_count != 0) {
-+      jam_vm_fields(_visit, _slots, _count, _follow);
++      thc_vm_fields(_visit, _slots, _count, _follow);
 +      _count = 0;
 +    }
 +  }
@@ -1369,7 +1369,7 @@
 +      oop value = RawAccess<>::oop_load(p);
 +      if (value != nullptr) {
 +        uint32_t target = CompressedOops::narrow_oop_value(value);
-+        jam_vm_targets(_visit, &target, 1);
++        thc_vm_targets(_visit, &target, 1);
 +      }
 +    }
 +  }
@@ -1378,13 +1378,13 @@
 +  }
 +};
 +
-+static void jam_scan(void* raw, jam_vm_visit* visit, uint32_t at) {
++static void jam_scan(void* raw, thc_vm_visit* visit, uint32_t at) {
 +  JamScanState* state = static_cast<JamScanState*>(raw);
 +  oop obj = CompressedOops::decode_not_null(CompressedOops::narrow_oop_cast(at));
 +  size_t words = obj->size();
-+  if (!jam_vm_claim(visit, at, words)) return;
++  if (!thc_vm_claim(visit, at, words)) return;
 +
-+  if (jam_vm_tracks_starts(state->heap->jam())) jam_vm_record_start(state->heap->jam(), at);
++  if (thc_vm_tracks_starts(state->heap->jam())) thc_vm_record_start(state->heap->jam(), at);
 +
 +  // Relativize stack-internal pointers before the record becomes movable.
 +  ContinuationGCSupport::transform_stack_chunk(obj);
@@ -1399,7 +1399,7 @@
 +class JamIsAlive : public BoolObjectClosure {
 +public:
 +  bool do_object_b(oop obj) override {
-+    return obj != nullptr && jam_vm_marked(JamHeap::heap()->jam(),
++    return obj != nullptr && thc_vm_marked(JamHeap::heap()->jam(),
 +                                            CompressedOops::narrow_oop_value(obj));
 +  }
 +};
@@ -1416,7 +1416,7 @@
 +void JamHeap::trace_external(uint32_t const* roots, size_t count) {
 +  assert(_jam_scan_state != nullptr && SafepointSynchronize::is_at_safepoint(),
 +         "External tracing requires the active collection");
-+  jam_vm_trace(_jam, roots, count, jam_scan, _jam_scan_state, 1);
++  thc_vm_trace(_jam, roots, count, jam_scan, _jam_scan_state, 1);
 +}
 +
 +static void jam_remembered(void* raw, uint32_t holder, uint64_t slot_offset,
@@ -1446,7 +1446,7 @@
 +}
 +
 +void JamHeap::trace_remembered_slots() {
-+  jam_vm_remembered(_jam, jam_remembered, _jam_scan_state);
++  thc_vm_remembered(_jam, jam_remembered, _jam_scan_state);
 +}
 +
 +class JamRoots : public OopClosure {
@@ -1490,7 +1490,7 @@
 +public:
 +  explicit JamFinalizers(JamScanState* state) : _state(state) {}
 +  void do_void() override {
-+    jam_vm_weak_finalizers(_state->heap->jam(), jam_scan, _state);
++    thc_vm_weak_finalizers(_state->heap->jam(), jam_scan, _state);
 +  }
 +};
 +
@@ -1518,7 +1518,7 @@
 +    _seen.put(p, true);
 +    _seen.maybe_grow();
 +    uint32_t at = CompressedOops::narrow_oop_value(value);
-+    uint32_t next = jam_vm_forward(JamHeap::heap()->jam(), at);
++    uint32_t next = thc_vm_forward(JamHeap::heap()->jam(), at);
 +    oop target = next == 0 ? nullptr : cast_to_oop(CompressedOops::base() + size_t(next) * HeapWordSize);
 +    RawAccess<>::oop_store(p, target);
 +  }
@@ -1554,7 +1554,7 @@
 +    JamHeap* heap = JamHeap::heap();
 +    GCCauseSetter cause(heap, _gc_cause);
 +    if (_track_starts) {
-+      guarantee(jam_vm_track_starts(heap->jam()), "Unable to allocate Jam object-start metadata");
++      guarantee(thc_vm_track_starts(heap->jam()), "Unable to allocate Jam object-start metadata");
 +      Atomic::release_store(&JamHeap::_track_starts, true);
 +    }
 +    heap->do_collection(_minor, _promote,
@@ -1655,14 +1655,14 @@
 +
 +  JamScanState state(this, minor);
 +  _jam_scan_state = &state;
-+  jam_vm_begin(_jam, minor);
++  thc_vm_begin(_jam, minor);
 +  _ref_processor->start_discovery(clear_all_soft_refs);
 +  if (minor) trace_remembered_slots();
-+  jam_vm_weak_roots(_jam, jam_scan, &state);
++  thc_vm_weak_roots(_jam, jam_scan, &state);
 +  JamRoots roots;
 +  jam_roots(&roots, false);
 +  roots.trace(this);
-+  jam_vm_weak_close(_jam, jam_scan, &state);
++  thc_vm_weak_close(_jam, jam_scan, &state);
 +
 +  JamRefProc task;
 +  JamFinalizers finalizers(&state);
@@ -1673,10 +1673,10 @@
 +  WeakProcessor::weak_oops_do(&jam_is_alive, &noop);
 +
 +  bool promoted = minor && promote;
-+  if (!jam_vm_prepare(_jam, promoted)) {
++  if (!thc_vm_prepare(_jam, promoted)) {
 +    guarantee(promoted, "Only insufficient promotion space can fail preparation");
 +    promoted = false;
-+    guarantee(jam_vm_prepare(_jam, false), "In-generation compaction must fit");
++    guarantee(thc_vm_prepare(_jam, false), "In-generation compaction must fit");
 +  }
 +  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::set_active(false));
 +  JamAdjust adjust(minor);
@@ -1689,10 +1689,10 @@
 +  for (int i = 0; i < state.old_slots.length(); ++i) {
 +    adjust.do_oop(state.old_slots.at(i));
 +  }
-+  jam_vm_finish(_jam);
-+  _space->set_top((HeapWord*)(CompressedOops::base() + jam_vm_used(_jam, false) * HeapWordSize));
++  thc_vm_finish(_jam);
++  _space->set_top((HeapWord*)(CompressedOops::base() + thc_vm_used(_jam, false) * HeapWordSize));
 +  _young_space->set_top((HeapWord*)(CompressedOops::base() + jam_young_displacement +
-+                                   jam_vm_used(_jam, true) * HeapWordSize));
++                                   thc_vm_used(_jam, true) * HeapWordSize));
 +  // Promoted bases must be inside the published old space before validation.
 +  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::update_pointers());
 +  if (minor) ++_minor_collections; else ++_major_collections;
@@ -1758,7 +1758,7 @@
 +#include "gc/shared/space.hpp"
 +#include "memory/virtualspace.hpp"
 +#include "services/memoryManager.hpp"
-+#include "jam_vm.h"
++#include "thc_vm.h"
 +
 +class ReferenceProcessor;
 +struct JamScanState;
@@ -1775,7 +1775,7 @@
 +  size_t _promotions;
 +  size_t _major_collections;
 +  VirtualSpace _virtual_space;
-+  jam_vm* _jam;
++  thc_vm* _jam;
 +  ReferenceProcessor* _ref_processor;
 +  JamScanState* _jam_scan_state;
 +  size_t _max_tlab_size;
@@ -1849,7 +1849,7 @@
 +  void collect_generation(bool minor, bool promote, GCCause::Cause cause);
 +  void do_collection(bool minor, bool promote, bool clear_all_soft_refs);
 +  size_t collections(int kind) const;
-+  jam_vm* jam() const { return _jam; }
++  thc_vm* jam() const { return _jam; }
 +  ReferenceProcessor* ref_processor() const { return _ref_processor; }
 +  void trace_external(uint32_t const* roots, size_t count);
 +
@@ -2299,19 +2299,19 @@
 +#include "gc/shared/gc_globals.hpp"
 +#include "runtime/javaThread.hpp"
 +#include "utilities/debug.hpp"
-+#include "jam_vm.h"
++#include "thc_vm.h"
 +
 +class JamThreadLocalData {
 +private:
 +  size_t _ergo_tlab_size;
 +  int64_t _last_tlab_time;
-+  jam_vm_thread* _context;
++  thc_vm_thread* _context;
 +  bool _context_active;
 +
-+  explicit JamThreadLocalData(jam_vm* heap) :
++  explicit JamThreadLocalData(thc_vm* heap) :
 +          _ergo_tlab_size(0),
 +          _last_tlab_time(0),
-+          _context(jam_vm_thread_create(heap)),
++          _context(thc_vm_thread_create(heap)),
 +          _context_active(false) {
 +    guarantee(_context != nullptr, "Unable to allocate Jam thread context");
 +  }
@@ -2322,13 +2322,13 @@
 +  }
 +
 +public:
-+  static void create(Thread* thread, jam_vm* heap) {
++  static void create(Thread* thread, thc_vm* heap) {
 +    new (data(thread)) JamThreadLocalData(heap);
 +  }
 +
 +  static void destroy(Thread* thread) {
 +    guarantee(!data(thread)->_context_active, "Jam thread context must be inactive before destruction");
-+    jam_vm_thread_destroy(data(thread)->_context);
++    thc_vm_thread_destroy(data(thread)->_context);
 +    data(thread)->~JamThreadLocalData();
 +  }
 +
@@ -2338,13 +2338,13 @@
 +
 +  static void enter(Thread* thread) {
 +    guarantee(thread == Thread::current_or_null(), "Jam context must be entered by its own thread");
-+    jam_vm_thread_enter(data(thread)->_context);
++    thc_vm_thread_enter(data(thread)->_context);
 +    data(thread)->_context_active = true;
 +  }
 +
 +  static void leave(Thread* thread) {
 +    guarantee(thread == Thread::current_or_null(), "Jam context must be left by its own thread");
-+    jam_vm_thread_leave(data(thread)->_context);
++    thc_vm_thread_leave(data(thread)->_context);
 +    data(thread)->_context_active = false;
 +  }
 +
@@ -2399,7 +2399,7 @@
 +  return CompressedOops::decode(CompressedOops::narrow_oop_cast(value));
 +}
 +
-+JVM_ENTRY(jlong, JVM_JamWeakCreate(JNIEnv* env, jclass ignored,
++JVM_ENTRY(jlong, JVM_THCWeakCreate(JNIEnv* env, jclass ignored,
 +                                 jobject key, jobject value, jobject finalizer))
 +  JamHeap* heap = jam_weak_heap(CHECK_0);
 +  if (key == nullptr) {
@@ -2409,7 +2409,7 @@
 +  {
 +    MutexLocker lock(Heap_lock);
 +    // Acquiring the lock may safepoint; resolve all arguments only afterward.
-+    token = jam_vm_weak_create(heap->jam(), jam_weak_offset(key),
++    token = thc_vm_weak_create(heap->jam(), jam_weak_offset(key),
 +                               jam_weak_offset(value), jam_weak_offset(finalizer));
 +  }
 +  if (token == 0) {
@@ -2418,17 +2418,17 @@
 +  return jlong(token);
 +JVM_END
 +
-+JVM_ENTRY(jobject, JVM_JamWeakDeref(JNIEnv* env, jclass ignored, jlong token))
++JVM_ENTRY(jobject, JVM_THCWeakDeref(JNIEnv* env, jclass ignored, jlong token))
 +  JamHeap* heap = jam_weak_heap(CHECK_NULL);
 +  Handle result;
 +  {
 +    MutexLocker lock(Heap_lock);
-+    result = Handle(THREAD, jam_weak_object(jam_vm_weak_value(heap->jam(), uint64_t(token))));
++    result = Handle(THREAD, jam_weak_object(thc_vm_weak_value(heap->jam(), uint64_t(token))));
 +  }
 +  return JNIHandles::make_local(THREAD, result());
 +JVM_END
 +
-+JVM_ENTRY(jobject, JVM_JamWeakTake(JNIEnv* env, jclass ignored, jlongArray token_out))
++JVM_ENTRY(jobject, JVM_THCWeakTake(JNIEnv* env, jclass ignored, jlongArray token_out))
 +  JamHeap* heap = jam_weak_heap(CHECK_NULL);
 +  if (token_out == nullptr) {
 +    THROW_MSG_NULL(vmSymbols::java_lang_NullPointerException(), "finalizer token output");
@@ -2441,30 +2441,30 @@
 +  {
 +    MutexLocker lock(Heap_lock);
 +    uint64_t token;
-+    uint32_t at = jam_vm_weak_take(heap->jam(), &token);
++    uint32_t at = thc_vm_weak_take(heap->jam(), &token);
 +    output->long_at_put(0, jlong(token));
 +    result = Handle(THREAD, jam_weak_object(at));
 +  }
 +  return JNIHandles::make_local(THREAD, result());
 +JVM_END
 +
-+JVM_ENTRY(jobject, JVM_JamWeakFinalize(JNIEnv* env, jclass ignored, jlong token))
++JVM_ENTRY(jobject, JVM_THCWeakFinalize(JNIEnv* env, jclass ignored, jlong token))
 +  JamHeap* heap = jam_weak_heap(CHECK_NULL);
 +  Handle result;
 +  {
 +    MutexLocker lock(Heap_lock);
-+    result = Handle(THREAD, jam_weak_object(jam_vm_weak_finalize(heap->jam(), uint64_t(token))));
++    result = Handle(THREAD, jam_weak_object(thc_vm_weak_finalize(heap->jam(), uint64_t(token))));
 +  }
 +  return JNIHandles::make_local(THREAD, result());
 +JVM_END
 +
-+JVM_ENTRY(void, JVM_JamWeakComplete(JNIEnv* env, jclass ignored, jlong token))
++JVM_ENTRY(void, JVM_THCWeakComplete(JNIEnv* env, jclass ignored, jlong token))
 +  JamHeap* heap = jam_weak_heap(CHECK);
 +  MutexLocker lock(Heap_lock);
-+  jam_vm_weak_complete(heap->jam(), uint64_t(token));
++  thc_vm_weak_complete(heap->jam(), uint64_t(token));
 +JVM_END
 +
-+JVM_ENTRY(jlong, JVM_JamCandidateArm(JNIEnv* env, jclass ignored,
++JVM_ENTRY(jlong, JVM_THCCandidateArm(JNIEnv* env, jclass ignored,
 +                                   jobject owner, jlong wait_generation))
 +  JamHeap* heap = jam_weak_heap(CHECK_0);
 +  if (owner == nullptr) {
@@ -2476,7 +2476,7 @@
 +  uint64_t ticket;
 +  {
 +    MutexLocker lock(Heap_lock);
-+    ticket = jam_vm_candidate_arm(heap->jam(), jam_weak_offset(owner), uint64_t(wait_generation));
++    ticket = thc_vm_candidate_arm(heap->jam(), jam_weak_offset(owner), uint64_t(wait_generation));
 +  }
 +  if (ticket == 0) {
 +    THROW_MSG_0(vmSymbols::java_lang_OutOfMemoryError(), "Jam candidate registration metadata exhausted");
@@ -2496,8 +2496,8 @@
 +  }
 +  MutexLocker lock(Heap_lock);
 +  uint32_t at = disarm
-+    ? jam_vm_candidate_disarm(heap->jam(), uint64_t(ticket), uint64_t(wait_generation))
-+    : jam_vm_candidate_poll(heap->jam(), uint64_t(ticket), uint64_t(wait_generation));
++    ? thc_vm_candidate_disarm(heap->jam(), uint64_t(ticket), uint64_t(wait_generation))
++    : thc_vm_candidate_poll(heap->jam(), uint64_t(ticket), uint64_t(wait_generation));
 +  if (at == 0) {
 +    JNIHandles::destroy_local(result);
 +    return nullptr;
@@ -2507,33 +2507,33 @@
 +  return result;
 +}
 +
-+JVM_ENTRY(jobject, JVM_JamCandidatePoll(JNIEnv* env, jclass klass, jlong ticket, jlong wait_generation))
++JVM_ENTRY(jobject, JVM_THCCandidatePoll(JNIEnv* env, jclass klass, jlong ticket, jlong wait_generation))
 +  return jam_candidate_claim(klass, ticket, wait_generation, false, THREAD);
 +JVM_END
 +
-+JVM_ENTRY(jobject, JVM_JamCandidateDisarm(JNIEnv* env, jclass klass, jlong ticket, jlong wait_generation))
++JVM_ENTRY(jobject, JVM_THCCandidateDisarm(JNIEnv* env, jclass klass, jlong ticket, jlong wait_generation))
 +  return jam_candidate_claim(klass, ticket, wait_generation, true, THREAD);
 +JVM_END
 +
-+JVM_ENTRY(void, JVM_JamCandidateComplete(JNIEnv* env, jclass ignored, jlong ticket, jlong wait_generation))
++JVM_ENTRY(void, JVM_THCCandidateComplete(JNIEnv* env, jclass ignored, jlong ticket, jlong wait_generation))
 +  JamHeap* heap = jam_weak_heap(CHECK);
 +  if (ticket <= 0 || wait_generation <= 0) return;
 +  MutexLocker lock(Heap_lock);
-+  jam_vm_candidate_complete(heap->jam(), uint64_t(ticket), uint64_t(wait_generation));
++  thc_vm_candidate_complete(heap->jam(), uint64_t(ticket), uint64_t(wait_generation));
 +JVM_END
 +
-+JVM_ENTRY(jlong, JVM_JamCandidateEpoch(JNIEnv* env, jclass ignored))
++JVM_ENTRY(jlong, JVM_THCCandidateEpoch(JNIEnv* env, jclass ignored))
 +  JamHeap* heap = jam_weak_heap(CHECK_0);
-+  return jlong(jam_vm_candidate_epoch(heap->jam()));
++  return jlong(thc_vm_candidate_epoch(heap->jam()));
 +JVM_END
 +
-+JVM_ENTRY(void, JVM_JamCollect(JNIEnv* env, jclass ignored, jboolean minor, jboolean promote))
++JVM_ENTRY(void, JVM_THCCollect(JNIEnv* env, jclass ignored, jboolean minor, jboolean promote))
 +  JamHeap* heap = jam_weak_heap(CHECK);
 +  // VM_GC_Operation acquires Heap_lock itself, and honors JNI critical regions.
 +  heap->collect_generation(minor, promote, GCCause::_java_lang_system_gc);
 +JVM_END
 +
-+JVM_ENTRY(jlong, JVM_JamCollections(JNIEnv* env, jclass ignored, jint kind))
++JVM_ENTRY(jlong, JVM_THCCollections(JNIEnv* env, jclass ignored, jint kind))
 +  JamHeap* heap = jam_weak_heap(CHECK_0);
 +  if (kind < 0 || kind > 2) {
 +    THROW_MSG_0(vmSymbols::java_lang_IllegalArgumentException(), "collection kind must be 0, 1 or 2");
@@ -2647,8 +2647,8 @@
 +// end of GC_JAM_FLAGS
 +
 +#endif // SHARE_GC_JAM_JAM_GLOBALS_HPP
---- a/src/hotspot/share/gc/jam/vmStructs_jam.hpp
-+++ b/src/hotspot/share/gc/jam/vmStructs_jam.hpp
+--- a/src/hotspot/share/gc/thc/vmStructs_jam.hpp
++++ b/src/hotspot/share/gc/thc/vmStructs_jam.hpp
 @@ -0,0 +1,47 @@
 +/*
 + * Copyright (c) 2018, Red Hat Inc. All rights reserved.
@@ -2674,8 +2674,8 @@
 + *
 + */
 +
-+#ifndef SHARE_GC_JAM_VMSTRUCTS_JAM_HPP
-+#define SHARE_GC_JAM_VMSTRUCTS_JAM_HPP
++#ifndef SHARE_GC_THC_VMSTRUCTS_JAM_HPP
++#define SHARE_GC_THC_VMSTRUCTS_JAM_HPP
 +
 +#include "gc/jam/jamHeap.hpp"
 +#include "gc/shared/space.hpp"
@@ -2696,7 +2696,7 @@
 +#define VM_INT_CONSTANTS_JAMGC(declare_constant,                \
 +                                  declare_constant_with_value)
 +
-+#endif // SHARE_GC_JAM_VMSTRUCTS_JAM_HPP
++#endif // SHARE_GC_THC_VMSTRUCTS_JAM_HPP
 --- a/src/hotspot/share/gc/shared/barrierSet.hpp
 +++ b/src/hotspot/share/gc/shared/barrierSet.hpp
 @@ -128,6 +128,9 @@
@@ -2997,7 +2997,7 @@
  #include "gc/epsilon/vmStructs_epsilon.hpp"
 +#endif
 +#if INCLUDE_JAMGC
-+#include "gc/jam/vmStructs_jam.hpp"
++#include "gc/thc/vmStructs_jam.hpp"
  #endif
  #if INCLUDE_G1GC
  #include "gc/g1/vmStructs_g1.hpp"
@@ -3048,41 +3048,41 @@
 +/* Experimental jam generalized-weak bridge. Tokens are stable native IDs;
 + * managed objects are passed only through ordinary JNI local references. */
 +JNIEXPORT jlong JNICALL
-+JVM_JamWeakCreate(JNIEnv *env, jclass ignored, jobject key, jobject value, jobject finalizer);
++JVM_THCWeakCreate(JNIEnv *env, jclass ignored, jobject key, jobject value, jobject finalizer);
 +
 +JNIEXPORT jobject JNICALL
-+JVM_JamWeakDeref(JNIEnv *env, jclass ignored, jlong token);
++JVM_THCWeakDeref(JNIEnv *env, jclass ignored, jlong token);
 +
 +JNIEXPORT jobject JNICALL
-+JVM_JamWeakTake(JNIEnv *env, jclass ignored, jlongArray token_out);
++JVM_THCWeakTake(JNIEnv *env, jclass ignored, jlongArray token_out);
 +
 +JNIEXPORT jobject JNICALL
-+JVM_JamWeakFinalize(JNIEnv *env, jclass ignored, jlong token);
++JVM_THCWeakFinalize(JNIEnv *env, jclass ignored, jlong token);
 +
 +JNIEXPORT void JNICALL
-+JVM_JamWeakComplete(JNIEnv *env, jclass ignored, jlong token);
++JVM_THCWeakComplete(JNIEnv *env, jclass ignored, jlong token);
 +
 +/* Optional retention candidates; ticket and wait generation must both match. */
 +JNIEXPORT jlong JNICALL
-+JVM_JamCandidateArm(JNIEnv *env, jclass ignored, jobject owner, jlong wait_generation);
++JVM_THCCandidateArm(JNIEnv *env, jclass ignored, jobject owner, jlong wait_generation);
 +
 +JNIEXPORT jobject JNICALL
-+JVM_JamCandidatePoll(JNIEnv *env, jclass klass, jlong ticket, jlong wait_generation);
++JVM_THCCandidatePoll(JNIEnv *env, jclass klass, jlong ticket, jlong wait_generation);
 +
 +JNIEXPORT jobject JNICALL
-+JVM_JamCandidateDisarm(JNIEnv *env, jclass klass, jlong ticket, jlong wait_generation);
++JVM_THCCandidateDisarm(JNIEnv *env, jclass klass, jlong ticket, jlong wait_generation);
 +
 +JNIEXPORT void JNICALL
-+JVM_JamCandidateComplete(JNIEnv *env, jclass ignored, jlong ticket, jlong wait_generation);
++JVM_THCCandidateComplete(JNIEnv *env, jclass ignored, jlong ticket, jlong wait_generation);
 +
 +JNIEXPORT jlong JNICALL
-+JVM_JamCandidateEpoch(JNIEnv *env, jclass ignored);
++JVM_THCCandidateEpoch(JNIEnv *env, jclass ignored);
 +
 +JNIEXPORT void JNICALL
-+JVM_JamCollect(JNIEnv *env, jclass ignored, jboolean minor, jboolean promote);
++JVM_THCCollect(JNIEnv *env, jclass ignored, jboolean minor, jboolean promote);
 +
 +JNIEXPORT jlong JNICALL
-+JVM_JamCollections(JNIEnv *env, jclass ignored, jint kind);
++JVM_THCCollections(JNIEnv *env, jclass ignored, jint kind);
  
  /* Returns the number of real-time milliseconds that have elapsed since the
   * least-recently-inspected heap object was last inspected by the garbage

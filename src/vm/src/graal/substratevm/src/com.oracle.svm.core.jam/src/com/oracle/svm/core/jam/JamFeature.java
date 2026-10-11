@@ -60,7 +60,7 @@ final class JamFeature implements InternalFeature {
         ImageSingletons.add(JamImageHeapInfo.class, heap.imageInfo);
         ImageSingletons.add(GCAllocationSupport.class, new JamAllocationSupport());
         ImageSingletons.add(PinnedObjectSupport.class, new JamPinnedObjectSupport());
-        Class<?> weak = access.findClassByName("jam.vm.Weak");
+        Class<?> weak = access.findClassByName("thc.vm.Weak");
         if (weak != null) { RuntimeClassInitialization.initializeAtRunTime(weak); }
     }
 

@@ -45,7 +45,7 @@ public final class JvmHeapWalkSmoke {
         return 0;
     }
     static long collections() {
-        return JamWeak.collections(0) + JamWeak.collections(2);
+        return THCWeak.collections(0) + THCWeak.collections(2);
     }
     static void check(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
@@ -66,9 +66,9 @@ public final class JvmHeapWalkSmoke {
         for (int i = 0; i != keep.length; ++i) keep[i] = allocate(i);
         System.gc();
         long initialCollections = collections();
-        String firstRequest = System.getProperty("jam.heap.walk.first", "histogram");
+        String firstRequest = System.getProperty("thc.heap.walk.first", "histogram");
         if (firstRequest.equals("jvmti") || firstRequest.equals("legacy")) {
-            System.loadLibrary("jam_jni");
+            System.loadLibrary("thc_jni");
             check(jvmtiCount(Entry.class, firstRequest.equals("legacy")) == 32, "JVMTI lost retained entries");
         } else if (firstRequest.equals("locks")) {
             ManagementFactory.getThreadMXBean().dumpAllThreads(false, true);

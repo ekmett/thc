@@ -32,7 +32,7 @@ static void * run(void * argument) {
   writer->count = count;
   return 0;
 }
-void * jam_pin_start(void * payload) {
+void * thc_pin_start(void * payload) {
   struct writer * writer = calloc(1, sizeof(*writer));
   if (!writer) return NULL;
   writer->payload = payload;
@@ -45,7 +45,7 @@ void * jam_pin_start(void * payload) {
 #endif
   return writer;
 }
-int64_t jam_pin_stop(void * argument) {
+int64_t thc_pin_stop(void * argument) {
   struct writer * writer = argument;
   atomic_store_explicit(&writer->stop, 1, memory_order_relaxed);
 #ifdef _WIN32

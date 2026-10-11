@@ -201,19 +201,19 @@ The implementation uses Jam's
 [heap](https://github.com/ekmett/jam/blob/main/src/jam/heap.ccm),
 [compactor](https://github.com/ekmett/jam/blob/main/src/jam/packed.ccm)
 and [work scheduler](https://github.com/ekmett/work/blob/main/src/work.ccm).
-The [source manifest](https://github.com/ekmett/jam/blob/main/vm/config/source-pins.json) records the exact inputs.
+The [source manifest](https://github.com/ekmett/thc/blob/main/src/vm/config/source-pins.json) records the exact inputs.
 
 ## Optional object starts
 
 The hosted heap can transport an object-start bitmap for VM heap enumeration.
-It is disabled by default. `jam_vm_track_starts` allocates the side channel;
+It is disabled by default. `thc_vm_track_starts` allocates the side channel;
 allocation failure returns zero without enabling it. The VM then runs a major
-collection whose tracer calls `jam_vm_record_start` after each successful object
-claim. Raw allocations can contain many Java objects, so `jam_vm_allocate` does
+collection whose tracer calls `thc_vm_record_start` after each successful object
+claim. Raw allocations can contain many Java objects, so `thc_vm_allocate` does
 not invent a start for a TLAB. When tracking is enabled, the VM also records each
 new object before it can be exposed to a safepoint.
 
-`jam_vm_start_bits` borrows the current canonical bitmap through the generation's
+`thc_vm_start_bits` borrows the current canonical bitmap through the generation's
 allocated high-water mark: one bit per eight-byte cell, returned in 32-bit words.
 Reacquire the view after each collection and inspect it only with mutators stopped.
 The tracer supplies the meaning of the bits; core Jam does not decode Java headers.

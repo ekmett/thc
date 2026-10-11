@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 
-import jam.vm.Weak;
+import thc.vm.Weak;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class JNIWeakSmoke {
-    static { System.loadLibrary("jam_weak_test"); }
+    static { System.loadLibrary("thc_weak_test"); }
 
     private static Runnable collection = System::gc;
     private static volatile Object temporaryRoot;

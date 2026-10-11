@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 
-package jam.vm;
+package thc.vm;
 
 /**
  * Language-owned, nonforcing resolution of computations and projections.

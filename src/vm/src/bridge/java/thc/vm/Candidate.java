@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 
-package jam.vm;
+package thc.vm;
 
 /**
  * Optional collector-selected retention of suspended guest owners.
@@ -38,7 +38,7 @@ package jam.vm;
  * or finishing terminal cancellation.
  *
  * <p>This experimental optional capability requires the matching Jam-enabled
- * runtime and {@code libjam_bridge}. Missing candidate hooks raise
+ * runtime and {@code libthc_bridge}. Missing candidate hooks raise
  * {@link UnsatisfiedLinkError} when used without preventing existing
  * {@link Weak} calls. Another collector raises
  * {@link UnsupportedOperationException}. Unsupported use never registers an owner.
@@ -52,7 +52,7 @@ public final class Candidate {
 
     @SuppressWarnings("restricted") // The host explicitly enables native access for this module.
     private static void loadNativeLibrary() {
-        System.loadLibrary("jam_bridge");
+        System.loadLibrary("thc_bridge");
     }
 
     /**
