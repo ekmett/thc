@@ -18,7 +18,7 @@ module THC.Driver.Project
   ( runProject, acquireProject, buildTargetsProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
   , exportInstalledUnit, prepareInstalledBundle, prepareInstalledBundleWithVerification, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
-  , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
+  , publishCapturedStoreUnit, publishReplayInterfaces, readCapturedStoreBundles, readCapturedInstalledBundles
   , selectedPackageTool, componentCoreRecords
   ) where
 
@@ -1922,9 +1922,6 @@ prepareGlobalBundles context originalCapture project target planned locals units
       atomicJson (path ++ ".request.json") request
       selected <- readCapturedStoreBundles (contextVerifyArtifacts context) request
         [(unitId unit, unitDepends unit) | unit <- units] path
-      forM_ (Map.elems selected) $ \bundle -> do
-        ready <- replayInterfacesReady context bundle
-        require ready "retained pinned Core bundle lacks its matching replay interfaces"
       pure selected
     Nothing -> do
       located <- forM units $ \unit -> do
@@ -2041,12 +2038,13 @@ publishOriginalStoreCapture context capture planned pending validateInputs = do
             packGlobalBundle packageTool pieces databases directory planned unit buildKey exportKey path
             readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
               >>= maybe (fail "original Core bundle publication was not readable") pure
-        ready <- replayInterfacesReady context bundle
+        ready <- maybe (pure True) (const (replayInterfacesReady (contextVerifyArtifacts context) bundle))
+          (contextCoreView context)
         unless ready $ do
           requireFile (directory </> unitId unit </> "capture-complete")
           requireFile (directory </> unitId unit </> "interfaces-ready")
           names <- mapM (`field` "name") (bundleModules bundle)
-          publishReplayInterfaces context (directory </> unitId unit </> "objects") names False path
+          publishReplayInterfaces (directory </> unitId unit </> "objects") names False path
   where first4 (unit, _, _, _) = unitId unit
 
 -- Core replay interfaces belong to the same immutable exporter key as their
@@ -2054,24 +2052,23 @@ publishOriginalStoreCapture context capture planned pending validateInputs = do
 replayInterfacePath :: FilePath -> FilePath
 replayInterfacePath path = path ++ ".interfaces"
 
-replayInterfacesReady :: ExportContext -> Bundle -> IO Bool
-replayInterfacesReady context bundle = case contextCoreView context of
-  Nothing -> pure True
-  Just _ | null (bundleModules bundle) -> pure True
-         | otherwise -> do
-             let directory = replayInterfacePath (bundlePath bundle)
-                 receipt = directory </> "complete"
-             ready <- doesFileExist receipt
-             when (ready && contextVerifyArtifacts context) $ do
-               records <- either fail pure . eitherDecodeStrict' =<< BS.readFile receipt :: IO [(FilePath, String)]
-               require (not (null records)) "empty Core replay interface receipt"
-               forM_ records $ \(relative, expected) -> do
-                 let path = directory </> relative
-                 require (within directory path) "Core replay interface path leaves its bundle"
-                 requireFile path
-                 actual <- digestFile path
-                 require (actual == expected) ("Core replay interface digest differs: " ++ relative)
-             pure ready
+replayInterfacesReady :: Bool -> Bundle -> IO Bool
+replayInterfacesReady verify bundle
+  | null (bundleModules bundle) = pure True
+  | otherwise = do
+      let directory = replayInterfacePath (bundlePath bundle)
+          receipt = directory </> "complete"
+      ready <- doesFileExist receipt
+      when (ready && verify) $ do
+        records <- either fail pure . eitherDecodeStrict' =<< BS.readFile receipt :: IO [(FilePath, String)]
+        require (not (null records)) "empty Core replay interface receipt"
+        forM_ records $ \(relative, expected) -> do
+          let path = directory </> relative
+          require (within directory path) "Core replay interface path leaves its bundle"
+          requireFile path
+          actual <- digestFile path
+          require (actual == expected) ("Core replay interface digest differs: " ++ relative)
+      pure ready
 
 readGlobalForReplay :: ExportContext -> FilePath -> String -> [String] -> String -> String -> IO (Maybe Bundle)
 readGlobalForReplay context path unit dependencies buildKey exportKey = do
@@ -2079,11 +2076,16 @@ readGlobalForReplay context path unit dependencies buildKey exportKey = do
   case loaded of
     Nothing -> pure Nothing
     Just bundle -> do
-      ready <- replayInterfacesReady context bundle
+      ready <- maybe (pure True) (const (replayInterfacesReady (contextVerifyArtifacts context) bundle))
+        (contextCoreView context)
       pure (if ready then Just bundle else Nothing)
 
-publishReplayInterfaces :: ExportContext -> FilePath -> [String] -> Bool -> FilePath -> IO ()
-publishReplayInterfaces context objects modules dynamicHi bundle = forM_ (contextCoreView context) $ \_ -> unless (null modules) $ do
+-- | Publish the actual compiler interfaces belonging to one immutable bundle.
+-- Verify every declared module has its captured interface and retain both
+-- vanilla and dynamic ways byte-for-byte. Only a local replay compiled with
+-- @-dynamic -hisuf hi@ may request aliases; store captures pass 'False'.
+publishReplayInterfaces :: FilePath -> [String] -> Bool -> FilePath -> IO ()
+publishReplayInterfaces objects modules dynamicHi bundle = unless (null modules) $ do
   let destination = replayInterfacePath bundle
   ready <- doesFileExist (destination </> "complete")
   unless ready $ do
@@ -2139,6 +2141,9 @@ readCapturedStoreBundles verify request requested path = do
     selected <- readGlobalBundle verify archive owner (dependencies Map.! owner) buildKey exportKey
     bundle <- maybe (fail ("invalid captured store bundle: " ++ owner)) pure selected
     require (bundleHash bundle == expectedHash) ("captured store bundle digest differs: " ++ owner)
+    when ((jsonField request "coreInterfaceView" :: Maybe Value) /= Nothing) $ do
+      ready <- replayInterfacesReady verify bundle
+      require ready "retained pinned Core bundle lacks its matching replay interfaces"
     pure (owner, bundle)
   pure (Map.fromList pairs)
 
@@ -2283,10 +2288,11 @@ captureGlobalUnits context project target planned requested missing validateInpu
             readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
               >>= maybe (fail "fresh Core bundle publication was not readable") pure
         names <- mapM (`field` "name") (bundleModules bundle)
-        completed <- replayInterfacesReady context bundle
+        completed <- maybe (pure True) (const (replayInterfacesReady (contextVerifyArtifacts context) bundle))
+          (contextCoreView context)
         unless completed $ do
           requireFile (capture </> unitId unit </> "interfaces-ready")
-          publishReplayInterfaces context (capture </> unitId unit </> "objects") names False path
+          publishReplayInterfaces (capture </> unitId unit </> "objects") names False path
     ) `onException` do
       _ <- tryIOError (hPutStrLn stderr ("Cabal store capture retained after failure: " ++ staging))
       pure ()
@@ -2294,7 +2300,8 @@ captureGlobalUnits context project target planned requested missing validateInpu
 
 -- | Publish exactly one already captured store unit using its genuine Cabal
 -- plan, interfaces/Core and native products. No package solve, compiler replay
--- or acquisition of unrelated units is performed here. The output must be new.
+-- or acquisition of unrelated units is performed here. Nonempty units also
+-- publish their captured vanilla/dynamic replay interfaces. The output must be new.
 publishCapturedStoreUnit :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> FilePath -> IO Bundle
 publishCapturedStoreUnit packageTool planPath store dist capture identifier destination = do
   selectedStore <- makeAbsolute store
@@ -2322,7 +2329,12 @@ publishCapturedStoreUnit packageTool planPath store dist capture identifier dest
   databases <- nativeCaptureDatabases selectedStore selectedDist
   packGlobalBundle packageTool (takeDirectory selectedCapture </> "native-pieces") databases selectedCapture planned unit buildKey exportKey selectedDestination
   result <- readGlobalBundle True selectedDestination identifier (unitDepends unit) buildKey exportKey
-  maybe (fail "new captured unit failed its ordinary bundle validation") pure result
+  bundle <- maybe (fail "new captured unit failed its ordinary bundle validation") pure result
+  unless (null (bundleModules bundle)) $ do
+    requireFile (selectedCapture </> identifier </> "interfaces-ready")
+    names <- mapM (`field` "name") (bundleModules bundle)
+    publishReplayInterfaces (selectedCapture </> identifier </> "objects") names False selectedDestination
+  pure bundle
 
 -- Actual completed Cabal registration sources; callers retain their selected
 -- store configuration rather than deriving it from a Core staging directory.
@@ -2546,7 +2558,8 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
     usable <- case hit of
       Nothing -> pure Nothing
       Just bundle -> do
-        ready <- replayInterfacesReady context bundle
+        ready <- maybe (pure True) (const (replayInterfacesReady (contextVerifyArtifacts context) bundle))
+          (contextCoreView context)
         pure (if ready then Just bundle else Nothing)
     case usable of
       Just bundle -> pure bundle
@@ -2659,7 +2672,8 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
                                                  "sha256" .= shaHex inputsBytes]]
     archive <- either fail pure (encodeZip
       (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputsBytes) : members))
-    publishReplayInterfaces context objects expected (exportInterfaceWay == "dynamic") destination
+    forM_ (contextCoreView context) $ \_ ->
+      publishReplayInterfaces objects expected (exportInterfaceWay == "dynamic") destination
     atomicBytes destination (BL.toStrict archive)
     rememberFreshBundle PlainBundle (unitId unit) exportKey buildInputs expected
       (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey [])) `finally` cleanup
