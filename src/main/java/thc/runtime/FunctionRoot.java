@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -85,13 +86,32 @@ public final class FunctionRoot extends GuestRoot {
     @CompilationFinal private boolean hasSelfTail;
     private final BranchProfile tailCallProfile = BranchProfile.create();
     @Child private LoopNode loop;
+    @CompilationFinal private volatile Assumption callStateUnchanged = Assumption.create("unchanged function call-state proof");
     @Child private HandoffCaller delimitedHandoff;
     @CompilationFinal private volatile boolean coldEntry;
 
     @Override public Node copy() {
         FunctionRoot copy = (FunctionRoot) super.copy();
         copy.coldEntry = false;
+        copy.callStateUnchanged = Assumption.create("unchanged function call-state proof");
         return copy;
+    }
+
+    void invalidateCallStateProof(CharSequence reason) {
+        Assumption previous = callStateUnchanged;
+        callStateUnchanged = Assumption.create("unchanged function call-state proof");
+        previous.invalidate(reason == null ? "" : reason.toString());
+    }
+
+    /** Uninlined callers depend on this epoch before inspecting the current children. */
+    boolean canEnterWithoutTailBounce() {
+        Assumption unchanged = callStateUnchanged;
+        return unchanged.isValid() && !needsCallState() && unchanged.isValid();
+    }
+
+    private boolean needsCallState() {
+        return strictSlots.length != 0 ||
+            !(loop.getRepeatingNode() instanceof SelfRepeater repeating) || repeating.needsCallState();
     }
 
     @TruffleBoundary private void recoverEntry() {
@@ -590,8 +610,7 @@ public final class FunctionRoot extends GuestRoot {
         // A normal Core body that cannot enter another guest activation cannot
         // originate a stack spill. Keep ingress and polls, including their
         // capture handler, but do not interpret an ordinary return as control.
-        boolean needsCallState = strictSlots.length != 0 ||
-            !(loop.getRepeatingNode() instanceof SelfRepeater repeating) || repeating.needsCallState();
+        boolean needsCallState = needsCallState();
         if (!capturesContinuations || !needsCallState)
             return executeInitial(frame, false, needsCallState);
         AstStackScope stack = astStackScope(this);
