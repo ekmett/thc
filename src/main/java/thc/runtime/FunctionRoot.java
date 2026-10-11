@@ -324,12 +324,30 @@ public final class FunctionRoot extends GuestRoot {
             throw fault("Prepared continuation belongs to another program context");
     }
     boolean isPreparedForAOT() { return preparedForAOT; }
+    private static void prepareAotDispatch(Node node) {
+        if (node instanceof AstTypedApplication application) application.prepareForAOT();
+        else if (node instanceof TupleApplication application) application.prepareForAOT();
+        else if (node instanceof InputDispatch input) input.prepareForAOT();
+        else if (node instanceof TupleDispatch tuple) tuple.prepareForAOT();
+        for (Node child : node.getChildren()) prepareAotDispatch(child);
+    }
     @Override protected ExecutionSignature prepareForAOT() {
+        // The existing loop handles self transfers from the first guest entry.
+        // Cold compilation must not discover recursion by retiring that entry.
+        hasSelfTail = true;
+        prepareAotDispatch(this);
         // Frame carriers were established structurally before target publication;
         // no context lookup, guest execution or observed-profile seeding is needed.
         // An outlined reusable arm also returns an internal TailCall for its
         // owning caller to rethrow. This physical root result is not the guest ABI.
         Class<?> resultClass = capturesContinuations || role == FunctionRootRole.PASS_THROUGH ? null : numericClass(getScalarResultProof());
+        if (handoff != null) {
+            // One physical root accepts an ordinary packet or an empty packet
+            // carrying a pending loan, and may return a private completion token.
+            // Each ingress retains its own exact arity, layout and loan checks.
+            preparedForAOT = true;
+            return ExecutionSignature.create(null, null);
+        }
         if (getTypedInput() != null) {
             // Narrow scalars already use the typed packet calling convention.
             // Its generated storage class varies; retain exact layout/owner checks.
