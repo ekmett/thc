@@ -567,9 +567,14 @@ public final class FunctionRoot extends GuestRoot {
             Object result;
             try { result = executeInitial(frame, stack.getDepth() >= AstStackScope.MAX_DEPTH); }
             finally { stack.setDepth(stack.getDepth() - 1); }
-            SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
-            if (driver && saved != null && saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved,
-                saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, false, invocationMetrics(frame));
+            if (driver) {
+                SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
+                if (saved != null) {
+                    CompilerDirectives.transferToInterpreter();
+                    if (saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved,
+                        saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, false, invocationMetrics(frame));
+                }
+            }
             return result;
         } finally { if (driver) stack.setDriving(false); }
     }
