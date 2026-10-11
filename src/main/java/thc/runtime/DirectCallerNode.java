@@ -18,10 +18,15 @@ public final class DirectCallerNode extends Node {
     @Child private HandoffCaller handoff;
     @Child private TailCallLoop loop;
     @Child private TailCheck tailCheck;
-    private final BranchProfile normalProfile = BranchProfile.create(), tailProfile = BranchProfile.create();
+    private final BranchProfile normalProfile, tailProfile;
     public DirectCallerNode(RootCallTarget target, Metrics metrics) { this(target, metrics, new boolean[0], 0); }
     public DirectCallerNode(RootCallTarget target, Metrics metrics, boolean[] knownEvaluated) { this(target, metrics, knownEvaluated, 0); }
     public DirectCallerNode(RootCallTarget target, Metrics metrics, boolean[] knownEvaluated, int prefixSize) {
+        this(target, metrics, knownEvaluated, prefixSize, false);
+    }
+    DirectCallerNode(RootCallTarget target, Metrics metrics, boolean[] knownEvaluated, int prefixSize, boolean coldPrepared) {
+        normalProfile = coldPrepared ? BranchProfile.getUncached() : BranchProfile.create();
+        tailProfile = coldPrepared ? BranchProfile.getUncached() : BranchProfile.create();
         this.target = target; this.metrics = metrics;
         entryArguments = new EntryArguments(target, metrics, knownEvaluated, prefixSize);
         GuestRoot root = target.getRootNode() instanceof GuestRoot guest ? guest : null;
@@ -29,8 +34,8 @@ public final class DirectCallerNode extends Node {
             leadingCaseReturn = new LeadingCaseReturnNode(root, metrics, knownEvaluated, prefixSize);
         callNode = DirectCallNode.create(target);
         if (root instanceof FunctionRoot ast && ast.getHandoff$org_intelligence_thc() != null) handoff = new HandoffCaller(target, ast.getHandoff$org_intelligence_thc(), metrics);
-        loop = new TailCallLoop(metrics); tailCheck = new TailCheck(metrics);
-        if (metrics.getEnabled()) metrics.incrementDirectCacheMisses();
+        loop = new TailCallLoop(metrics); tailCheck = new TailCheck(metrics, coldPrepared);
+        if (!coldPrepared && metrics.getEnabled()) metrics.incrementDirectCacheMisses();
     }
     public RootCallTarget getTarget() { return target; }
     public Object call(VirtualFrame frame, Object[] arguments, boolean tailCall) {

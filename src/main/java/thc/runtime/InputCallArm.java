@@ -30,18 +30,22 @@ final class InputCallArm extends Node {
     @Child private TupleBounce tupleBounce;
     @Child private InputDispatch remainder;
     InputCallArm(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start, Closure function) {
+        this(source, count, tail, metrics, destination, start, function, false);
+    }
+    InputCallArm(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start,
+                 Closure function, boolean coldPrepared) {
         this.source = source; this.count = count; this.tail = tail; this.metrics = metrics; this.destination = destination; this.start = start;
         target = function.target; arity = function.arity; prefixCount = function.suppliedCount; hasEnvironment = function.environment != null;
         root = (GuestRoot) java.util.Objects.requireNonNull(target.getRootNode(), "null cannot be cast to non-null type thc.runtime.GuestRoot");
         input = root.getTypedInput();
         strictPositions = input == null ? new int[0] : strictInputPositions(root, input);
-        direct = DirectCallNode.create(target); legacy = new DirectCallerNode(target, metrics, new boolean[0], prefixCount);
+        direct = DirectCallNode.create(target); legacy = new DirectCallerNode(target, metrics, new boolean[0], prefixCount, coldPrepared);
         force = new Force(metrics); loop = new TailCallLoop(metrics);
         if (destination != null) tupleBounce = new TupleBounce(destination, metrics);
         if (arity < count) remainder = new InputDispatch(source, count - arity, tail, metrics, destination, start + arity);
         ArgumentLayout.validate(root.getInputLayout(), prefixCount, source.getLayout(), start, Math.min(arity, count));
         if (arity <= count) checkInputResult(root, destination, arity == count);
-        if (metrics.getEnabled()) metrics.incrementDirectCacheMisses();
+        if (!coldPrepared && metrics.getEnabled()) metrics.incrementDirectCacheMisses();
     }
     boolean matches(Closure function) {
         return function.target == target && function.arity == arity && function.suppliedCount == prefixCount &&

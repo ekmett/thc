@@ -17,7 +17,12 @@ Object RootNode.execute(VirtualFrame frame);
 
 Inlining can merge a callee into the compilation region so allocations disappear.
 Argument and result profiles refine types without changing those method
-signatures. THC's [Java call bridge](../src/main/java/thc/runtime/Calls.java)
+signatures. Explicit AST AOT preparation can install a guarded direct arm for an
+exact scalar call through an already-published fixed global closure. Preparation
+observes immutable code metadata without entering the callee or evaluating any
+arguments. Unpublished globals, reusable indexed bindings, typed inputs/results,
+PAPs and overapplication retain generic dispatch; interpreter calls still learn
+their ordinary target caches. THC's [Java call bridge](../src/main/java/thc/runtime/Calls.java)
 passes the already-constructed packet directly without copying it; it does not
 introduce a primitive call ABI.
 

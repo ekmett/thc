@@ -26,6 +26,10 @@ final class Application extends Expr {
         inputLayout = ArgumentLayout.fromProofs(proofs);
         dispatch = new PreparedDispatch(arguments.length, tail, metrics, evaluated, inputLayout);
     }
+    void prepareForAOT() {
+        if (function.operand() instanceof GlobalRead global)
+            dispatch.prepareForAOT(global.publishedClosure());
+    }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
         Closure fn;
         try { fn = function.executeRequiredClosure(frame); }

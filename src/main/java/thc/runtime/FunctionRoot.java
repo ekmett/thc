@@ -292,7 +292,8 @@ public final class FunctionRoot extends GuestRoot {
     }
     boolean isPreparedForAOT() { return preparedForAOT; }
     private static void prepareAotDispatch(Node node) {
-        if (node instanceof AstTypedApplication application) application.prepareForAOT();
+        if (node instanceof Application application) application.prepareForAOT();
+        else if (node instanceof AstTypedApplication application) application.prepareForAOT();
         else if (node instanceof TupleApplication application) application.prepareForAOT();
         else if (node instanceof InputDispatch input) input.prepareForAOT();
         else if (node instanceof TupleDispatch tuple) tuple.prepareForAOT();

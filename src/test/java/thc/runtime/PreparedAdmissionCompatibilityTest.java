@@ -49,14 +49,43 @@ class PreparedAdmissionCompatibilityTest {
         try (var context = context("platform")) {
             context.initialize("thc"); context.enter();
             try {
-                var program = new Program(language(), module());
+                var input = module();
+                var scalar = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
+                var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+                var bindings = new java.util.ArrayList<Object>((List<?>) input.get("bindings"));
+                bindings.add(map("id", "staticScalar", "name", "staticScalar", "arity", 1, "lifted", true,
+                    "rep", closure, "expr", list("lam", list(map("id", "static_scalar_x", "name", "static_scalar_x",
+                        "lifted", false, "coercion", false, "rep", scalar)),
+                        list("case", list("app", list("var", "identity", map("rep", closure)),
+                            list(list("var", "static_scalar_x", map("rep", scalar))), list(false), false, false,
+                            map("rep", scalar)), "answer", list(list("default", null, list(),
+                            list("app", list("prim", "+#"), list(list("var", "answer", map("rep", scalar)),
+                                list("lit", "int", "17", map("rep", scalar))), list(false, false), false, false,
+                                map("rep", scalar)))), map("rep", scalar, "binder",
+                                    map("id", "answer", "name", "answer", "lifted", false, "rep", scalar))),
+                        map("rep", closure, "resultRep", scalar))));
+                input.put("bindings", bindings);
+                var program = new Program(language(), input);
+                program.prepareCode();
                 var target = (OptimizedCallTarget) program.entryTarget("identity");
-                assertFalse(target.wasExecuted());
+                var caller = (OptimizedCallTarget) program.entryTarget("staticScalar");
+                assertFalse(target.wasExecuted()); assertFalse(caller.wasExecuted());
                 assertTrue(target.prepareForAOT(), "Ordinary AST code must admit preparation without guest warmup");
                 target.compile(true); target.waitForCompilation();
                 assertTrue(target.isValidLastTier()); assertNotEquals(0, target.getCodeAddress());
                 assertFalse(target.wasExecuted());
+                assertTrue(caller.prepareForAOT());
+                caller.compile(true); caller.waitForCompilation();
+                assertTrue(caller.isValidLastTier()); assertFalse(caller.wasExecuted());
+                long address = caller.getCodeAddress(); int installations = caller.getSuccessfulCompilationCount();
+                assertNotEquals(0L, address);
                 long entries = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                assertEquals(59L, Calls.target(caller, new Object[]{0L, 42L}));
+                assertEquals(entries + 2, program.diagnostics().get("compiledEntries"),
+                    "The first published-global call must enter its installed caller and callee");
+                assertTrue(caller.isValidLastTier()); assertEquals(address, caller.getCodeAddress());
+                assertEquals(installations, caller.getSuccessfulCompilationCount());
+                entries = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                 assertEquals(42L, Calls.target(target, new Object[]{0L, 42L}));
                 assertEquals(entries + 1, program.diagnostics().get("compiledEntries"), "The first call must enter installed code");
                 assertTrue(target.isValidLastTier());
