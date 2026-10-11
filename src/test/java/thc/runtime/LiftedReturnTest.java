@@ -94,9 +94,34 @@ class LiftedReturnTest {
                 var value = answer();
                 var evaluations = new AtomicInteger(); var thunk = delayed(value, evaluations);
                 var demand = program.entryTarget("demand");
+                var compiled = backend.equals("ast") ? (OptimizedCallTarget) demand : null;
+                long address = 0L; int installations = 0;
+                if (compiled != null) {
+                    assertFalse(compiled.wasExecuted());
+                    compiled.compile(true); compiled.waitForCompilation();
+                    assertTrue(compiled.isValidLastTier()); assertNotEquals(0L, compiled.getCodeAddress());
+                    assertFalse(compiled.wasExecuted());
+                    address = compiled.getCodeAddress(); installations = compiled.getSuccessfulCompilationCount();
+                    assertSame(value, Calls.target(demand, new Object[]{0L, value}));
+                    assertTrue(compiled.isValidLastTier()); assertEquals(address, compiled.getCodeAddress());
+                    assertEquals(installations, compiled.getSuccessfulCompilationCount());
+                    assertEquals(0, evaluations.get()); assertEquals(0, thunk.getState());
+                }
                 assertSame(value, Calls.target(demand, new Object[]{0L, thunk}));
                 assertSame(value, Calls.target(demand, new Object[]{0L, thunk}));
                 assertEquals(1, evaluations.get()); assertEquals(2, thunk.getState());
+                if (compiled != null) {
+                    assertFalse(compiled.isValid(), "The first real thunk demand earns specialization");
+                    compiled.compile(true); compiled.waitForCompilation();
+                    assertTrue(compiled.isValidLastTier()); assertNotEquals(0L, compiled.getCodeAddress());
+                    address = compiled.getCodeAddress();
+                    assertEquals(installations + 1, compiled.getSuccessfulCompilationCount());
+                    assertSame(value, Calls.target(demand, new Object[]{0L, value}));
+                    assertSame(value, Calls.target(demand, new Object[]{0L, thunk}));
+                    assertEquals(1, evaluations.get()); assertEquals(2, thunk.getState());
+                    assertTrue(compiled.isValidLastTier()); assertEquals(address, compiled.getCodeAddress());
+                    assertEquals(installations + 1, compiled.getSuccessfulCompilationCount());
+                }
 
                 var scrutineeEvaluations = new AtomicInteger(); var resultEvaluations = new AtomicInteger();
                 var scrutinee = delayed(value, scrutineeEvaluations); var result = delayed(value, resultEvaluations);

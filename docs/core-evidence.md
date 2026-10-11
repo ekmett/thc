@@ -42,6 +42,12 @@ A successful case establishes WHNF for its binder and original scrutinee variabl
 
 An ordinary function returns its lifted result without forcing it. Neither a call nor a return establishes WHNF: `id x` can return the exact thunk passed as `x`. A `case` evaluates its scrutinee before inspection, including a default-only case, but does not thereby evaluate the selected alternative's result. Both backends preserve this distinction in their result proofs.
 
+An untouched demand returns an already evaluated value without retiring its
+compiled caller. Its first actual thunk demand invalidates that caller and
+learns the thunk path through execution; subsequent compilation can specialize
+that path. Further call-target or suspension observations retain their ordinary
+specialization behavior. Preparation does not force a thunk to train demand.
+
 The runtime also accounts for its own storage. GHC may certify a constructor expression as WHNF while THC stores that expression in a CAF or recursive update thunk. Such storage loses the evaluated flag until forced; recursive captures retain their indirection identity. Lifted function and join formals remain conservative unless their entry contract has been enforced. Diagnostic substitutions also lose the unavailable value's original proofs. A type proof must never bypass a thunk introduced by lowering.
 
 Exact evaluated `long` captures use a fixed primitive `StaticShape` field without an object field or a primitive/object tag. Unknown captures retain the existing adaptive representation and recursive cells. Case binders, pattern fields, lets and result paths preserve usable primitive evidence through their respective backend lowering. This does not change the object-based inter-root call ABI or unbox arbitrary Haskell heap objects.

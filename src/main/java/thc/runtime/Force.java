@@ -47,16 +47,11 @@ public final class Force extends Node {
             invocationMetrics = root.invocationMetrics(frame);
         }
         if (!seenThunk) {
-            // An untouched compiled demand has no target/profile history. Keep its
-            // real thunk execution cold without training or retiring the caller.
-            if (CompilerDirectives.inCompiledCode()) return executeCold(original, invocationMetrics);
             CompilerDirectives.transferToInterpreterAndInvalidate();
             seenThunk = true;
         }
         return executeThunk(original, invocationMetrics);
     }
-    @TruffleBoundary(transferToInterpreterOnException = false)
-    private Object executeCold(Thunk original, Metrics invocationMetrics) { return executeThunk(original, invocationMetrics); }
 
     private Object executeThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
