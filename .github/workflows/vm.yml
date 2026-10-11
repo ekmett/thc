@@ -52,10 +52,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Select dependency directory
-        run: '"JAM_CI_TOOLS=$env:RUNNER_TEMP/jam-vm-toolchain" >> $env:GITHUB_ENV'
+        run: '"JAM_CI_TOOLS=$env:RUNNER_TEMP/thc-vm-toolchain" >> $env:GITHUB_ENV'
       - uses: actions/cache@v6.1.0
         with:
-          path: ${{ runner.temp }}/jam-vm-toolchain
+          path: ${{ runner.temp }}/thc-vm-toolchain
           key: windows-2022-x86_64-native-${{ hashFiles('src/vm/tools/ci/setup_windows.ps1') }}
       - name: Install pinned build dependencies
         timeout-minutes: 10
@@ -65,20 +65,20 @@ jobs:
           . "$env:JAM_CI_TOOLS/env.ps1"
           $env:JAM_BOOT_JDK = $null
           ./tools/build_native.ps1
-          ./build-jam/jam-vm-test.exe --require-simd
+          ./build-jam/thc-vm-test.exe --require-simd
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./build-jam/jam-generational-test.exe --require-simd
+          ./build-jam/thc-generational-test.exe --require-simd
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Managed runtimes guest bridge on stock Java
         run: |
           . "$env:JAM_CI_TOOLS/env.ps1"
           python tools/build_bridge.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          & "$env:JAM_BOOT_JDK/bin/javac.exe" -cp build/bridge/jam-vm.jar -d build-bridge-test t/bridge/WeakBridgeSmoke.java
+          & "$env:JAM_BOOT_JDK/bin/javac.exe" -cp build/bridge/thc-vm.jar -d build-bridge-test t/bridge/WeakBridgeSmoke.java
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & "$env:JAM_BOOT_JDK/bin/java.exe" -Xshare:off --enable-native-access=ALL-UNNAMED `
             "-Djava.library.path=$PWD/build/bridge/lib" `
-            -cp 'build-bridge-test;build/bridge/jam-vm.jar' WeakBridgeSmoke unavailable
+            -cp 'build-bridge-test;build/bridge/thc-vm.jar' WeakBridgeSmoke unavailable
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Capture Ninja dependency graph
@@ -124,10 +124,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Select dependency directory
-        run: echo "JAM_CI_TOOLS=$RUNNER_TEMP/jam-vm-toolchain" >> "$GITHUB_ENV"
+        run: echo "JAM_CI_TOOLS=$RUNNER_TEMP/thc-vm-toolchain" >> "$GITHUB_ENV"
       - uses: actions/cache@v6.1.0
         with:
-          path: ${{ runner.temp }}/jam-vm-toolchain
+          path: ${{ runner.temp }}/thc-vm-toolchain
           key: ${{ matrix.cache }}-native-${{ hashFiles(format('src/vm/tools/ci/setup_{0}.sh', matrix.platform)) }}
       - name: Install pinned build dependencies
         run: bash tools/ci/setup_${{ matrix.platform }}.sh native
@@ -135,16 +135,16 @@ jobs:
         run: |
           source "$JAM_CI_TOOLS/env.sh"
           env -u JAM_BOOT_JDK bash tools/build_native.sh
-          build-jam/jam-vm-test --require-simd
-          build-jam/jam-generational-test --require-simd
+          build-jam/thc-vm-test --require-simd
+          build-jam/thc-generational-test --require-simd
       - name: Managed runtimes guest bridge on stock Java
         run: |
           source "$JAM_CI_TOOLS/env.sh"
           python3 tools/build_bridge.py
-          "$JAM_BOOT_JDK/bin/javac" -cp build/bridge/jam-vm.jar -d build-bridge-test t/bridge/WeakBridgeSmoke.java
+          "$JAM_BOOT_JDK/bin/javac" -cp build/bridge/thc-vm.jar -d build-bridge-test t/bridge/WeakBridgeSmoke.java
           "$JAM_BOOT_JDK/bin/java" -Xshare:off --enable-native-access=ALL-UNNAMED \
             "-Djava.library.path=$PWD/build/bridge/lib" \
-            -cp build-bridge-test:build/bridge/jam-vm.jar WeakBridgeSmoke unavailable
+            -cp build-bridge-test:build/bridge/thc-vm.jar WeakBridgeSmoke unavailable
 
       - name: Capture Ninja dependency graph
         if: ${{ !cancelled() && hashFiles('src/vm/build-jam/build.ninja') != '' }}
@@ -184,10 +184,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Select dependency directory
-        run: echo "JAM_CI_TOOLS=$RUNNER_TEMP/jam-vm-toolchain" >> "$GITHUB_ENV"
+        run: echo "JAM_CI_TOOLS=$RUNNER_TEMP/thc-vm-toolchain" >> "$GITHUB_ENV"
       - uses: actions/cache@v6.1.0
         with:
-          path: ${{ runner.temp }}/jam-vm-toolchain
+          path: ${{ runner.temp }}/thc-vm-toolchain
           key: ${{ matrix.cache }}-graal-${{ hashFiles(format('src/vm/tools/ci/setup_{0}.sh', matrix.platform)) }}
           restore-keys: |
             ${{ matrix.cache }}-native-${{ hashFiles(format('src/vm/tools/ci/setup_{0}.sh', matrix.platform)) }}
@@ -217,11 +217,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
       - name: Archive runtime and consumer dependencies
-        run: python3 tools/ci/archive_graal.py --output "$RUNNER_TEMP/jam-graal-ci.tar.gz"
+        run: python3 tools/ci/archive_graal.py --output "$RUNNER_TEMP/thc-graal-ci.tar.gz"
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: jam-graal-${{ env.JAM_BUILD_FLAVOR }}-${{ matrix.platform }}
-          path: ${{ runner.temp }}/jam-graal-ci.tar.gz
+          name: thc-graal-${{ env.JAM_BUILD_FLAVOR }}-${{ matrix.platform }}
+          path: ${{ runner.temp }}/thc-graal-ci.tar.gz
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -267,35 +267,34 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v8.0.1
         with:
-          name: jam-graal-${{ env.JAM_BUILD_FLAVOR }}-${{ matrix.platform }}
-          path: ${{ runner.temp }}/jam-graal-download
+          name: thc-graal-${{ env.JAM_BUILD_FLAVOR }}-${{ matrix.platform }}
+          path: ${{ runner.temp }}/thc-graal-download
       - name: Restore runtime and consumer dependencies
         run: |
-          mkdir "$RUNNER_TEMP/jam-graal-ci"
-          tar -xzf "$RUNNER_TEMP/jam-graal-download/jam-graal-ci.tar.gz" -C "$RUNNER_TEMP/jam-graal-ci"
-          cp -R "$RUNNER_TEMP/jam-graal-ci/upstream" .
-          echo "JAM_CI_JAVA_HOME=$RUNNER_TEMP/jam-graal-ci/graalvm" >> "$GITHUB_ENV"
-          rm "$RUNNER_TEMP/jam-graal-download/jam-graal-ci.tar.gz"
+          mkdir "$RUNNER_TEMP/thc-graal-ci"
+          tar -xzf "$RUNNER_TEMP/thc-graal-download/thc-graal-ci.tar.gz" -C "$RUNNER_TEMP/thc-graal-ci"
+          cp -R "$RUNNER_TEMP/thc-graal-ci/upstream" .
+          echo "JAM_CI_JAVA_HOME=$RUNNER_TEMP/thc-graal-ci/graalvm" >> "$GITHUB_ENV"
+          rm "$RUNNER_TEMP/thc-graal-download/thc-graal-ci.tar.gz"
       - name: Select dependency directory
         if: matrix.suite == 'GraalVM runtime'
-        run: echo "JAM_CI_TOOLS=$RUNNER_TEMP/jam-vm-toolchain" >> "$GITHUB_ENV"
+        run: echo "JAM_CI_TOOLS=$RUNNER_TEMP/thc-vm-toolchain" >> "$GITHUB_ENV"
       - uses: actions/cache@v6.1.0
         if: matrix.suite == 'GraalVM runtime'
         with:
-          path: ${{ runner.temp }}/jam-vm-toolchain
+          path: ${{ runner.temp }}/thc-vm-toolchain
           key: ${{ matrix.cache }}-graal-${{ hashFiles(format('src/vm/tools/ci/setup_{0}.sh', matrix.platform)) }}
           restore-keys: |
             ${{ matrix.cache }}-native-${{ hashFiles(format('src/vm/tools/ci/setup_{0}.sh', matrix.platform)) }}
       - name: Install matching stock compiler
         if: matrix.suite == 'GraalVM runtime'
         run: bash tools/ci/setup_${{ matrix.platform }}.sh graal
-      - name: Run compiled heap and weak-pointer regressions
+      - name: Run VM, collector identity and compiled regressions
         if: matrix.suite == 'GraalVM runtime'
         run: |
           source "$JAM_CI_TOOLS/env.sh"
-          python3 tools/check_graal.py --java-home "$JAM_CI_JAVA_HOME" \
+          python3 tools/check_runtime.py graalvm --java-home "$JAM_CI_JAVA_HOME" \
             --unsupported-libgraal "$JAM_STOCK_GRAAL_HOME/lib"
-          python3 tools/check_package.py --java-home "$JAM_CI_JAVA_HOME"
       - name: Install Native Image build dependencies
         if: matrix.suite == 'SubstrateVM' && runner.os == 'Linux'
         run: |
@@ -339,10 +338,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Select dependency directory
-        run: '"JAM_CI_TOOLS=$env:RUNNER_TEMP/jam-vm-toolchain" >> $env:GITHUB_ENV'
+        run: '"JAM_CI_TOOLS=$env:RUNNER_TEMP/thc-vm-toolchain" >> $env:GITHUB_ENV'
       - uses: actions/cache@v6.1.0
         with:
-          path: ${{ runner.temp }}/jam-vm-toolchain
+          path: ${{ runner.temp }}/thc-vm-toolchain
           key: windows-2022-x86_64-graal-${{ hashFiles('src/vm/tools/ci/setup_windows.ps1') }}
           restore-keys: |
             windows-2022-x86_64-native-${{ hashFiles('src/vm/tools/ci/setup_windows.ps1') }}
@@ -376,12 +375,12 @@ jobs:
       - name: Archive runtime and consumer dependencies
         run: |
           . "$env:JAM_CI_TOOLS/env.ps1"
-          python tools/ci/archive_graal.py --output "$env:RUNNER_TEMP/jam-graal-ci.tar.gz"
+          python tools/ci/archive_graal.py --output "$env:RUNNER_TEMP/thc-graal-ci.tar.gz"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: jam-graal-${{ env.JAM_BUILD_FLAVOR }}-windows
-          path: ${{ runner.temp }}/jam-graal-ci.tar.gz
+          name: thc-graal-${{ env.JAM_BUILD_FLAVOR }}-windows
+          path: ${{ runner.temp }}/thc-graal-ci.tar.gz
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -409,35 +408,33 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v8.0.1
         with:
-          name: jam-graal-${{ env.JAM_BUILD_FLAVOR }}-windows
-          path: ${{ runner.temp }}/jam-graal-download
+          name: thc-graal-${{ env.JAM_BUILD_FLAVOR }}-windows
+          path: ${{ runner.temp }}/thc-graal-download
       - name: Restore runtime and consumer dependencies
         run: |
-          New-Item -ItemType Directory "$env:RUNNER_TEMP/jam-graal-ci" | Out-Null
-          & "$env:SystemRoot/System32/tar.exe" -xzf "$env:RUNNER_TEMP/jam-graal-download/jam-graal-ci.tar.gz" -C "$env:RUNNER_TEMP/jam-graal-ci"
+          New-Item -ItemType Directory "$env:RUNNER_TEMP/thc-graal-ci" | Out-Null
+          & "$env:SystemRoot/System32/tar.exe" -xzf "$env:RUNNER_TEMP/thc-graal-download/thc-graal-ci.tar.gz" -C "$env:RUNNER_TEMP/thc-graal-ci"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Copy-Item -Recurse "$env:RUNNER_TEMP/jam-graal-ci/upstream" .
-          "JAM_CI_JAVA_HOME=$env:RUNNER_TEMP/jam-graal-ci/graalvm" >> $env:GITHUB_ENV
-          Remove-Item "$env:RUNNER_TEMP/jam-graal-download/jam-graal-ci.tar.gz"
+          Copy-Item -Recurse "$env:RUNNER_TEMP/thc-graal-ci/upstream" .
+          "JAM_CI_JAVA_HOME=$env:RUNNER_TEMP/thc-graal-ci/graalvm" >> $env:GITHUB_ENV
+          Remove-Item "$env:RUNNER_TEMP/thc-graal-download/thc-graal-ci.tar.gz"
       - name: Select dependency directory
-        run: '"JAM_CI_TOOLS=$env:RUNNER_TEMP/jam-vm-toolchain" >> $env:GITHUB_ENV'
+        run: '"JAM_CI_TOOLS=$env:RUNNER_TEMP/thc-vm-toolchain" >> $env:GITHUB_ENV'
       - uses: actions/cache@v6.1.0
         with:
-          path: ${{ runner.temp }}/jam-vm-toolchain
+          path: ${{ runner.temp }}/thc-vm-toolchain
           key: windows-2022-x86_64-graal-${{ hashFiles('src/vm/tools/ci/setup_windows.ps1') }}
           restore-keys: |
             windows-2022-x86_64-native-${{ hashFiles('src/vm/tools/ci/setup_windows.ps1') }}
       - name: Install runtime check dependencies
         timeout-minutes: 10
         run: ./tools/ci/setup_windows.ps1 graal
-      - name: Run compiled heap and weak-pointer regressions
+      - name: Run VM, collector identity and compiled regressions
         if: matrix.suite == 'GraalVM runtime'
         run: |
           . "$env:JAM_CI_TOOLS/env.ps1"
-          python tools/check_graal.py --java-home "$env:JAM_CI_JAVA_HOME" `
+          python tools/check_runtime.py graalvm --java-home "$env:JAM_CI_JAVA_HOME" `
             --unsupported-libgraal "$env:JAM_STOCK_GRAAL_HOME/bin"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python tools/check_package.py --java-home "$env:JAM_CI_JAVA_HOME"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and run VM native executables
         if: matrix.suite == 'SubstrateVM'
