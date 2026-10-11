@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
@@ -84,9 +84,7 @@ public final class GenericInputCall extends Node {
                 }
                 throw transfer;
             } catch (AstCapture cut) {
-                CompilerDirectives.transferToInterpreter();
-                Object[] savedValues = values == null ? null : values.clone();
-                throw cut.append((saved, value) -> finish(saved, value, savedValues, exact, next, resultShape));
+                throw captureResult(cut, values, exact, next, resultShape);
             } catch (DelimitedCut cut) {
                 throw captureCall(frame, cut, values, exact, next, resultShape);
             }
@@ -97,13 +95,21 @@ public final class GenericInputCall extends Node {
             offset = next;
             try { function = requireClosure(AstControl.force(frame, this, force, result)); }
             catch (AstCapture cut) {
-                CompilerDirectives.transferToInterpreter();
-                Object[] savedValues = values == null ? null : values.clone();
-                throw cut.append((saved, value) -> execute(saved, requireClosure(value), savedValues, next));
+                throw captureRemainder(cut, values, next);
             } catch (DelimitedCut cut) {
                 throw captureCall(frame, cut, values, false, next, null);
             }
         }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture captureResult(AstCapture cut, Object[] values, boolean exact, int next, TupleShape resultShape) {
+        Object[] savedValues = values == null ? null : values.clone();
+        return cut.append((saved, value) -> finish(saved, value, savedValues, exact, next, resultShape));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture captureRemainder(AstCapture cut, Object[] values, int next) {
+        Object[] savedValues = values == null ? null : values.clone();
+        return cut.append((saved, value) -> execute(saved, requireClosure(value), savedValues, next));
     }
     private Object invokeTyped(VirtualFrame frame, Closure function, Object[] values, int offset,
             TypedInputLayout input, int[] strict, Object[] overrides, boolean prepared, boolean isTail, Metrics metrics) {

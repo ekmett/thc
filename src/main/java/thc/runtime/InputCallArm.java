@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
@@ -100,22 +101,28 @@ final class InputCallArm extends Node {
             }
             throw transfer;
         } catch (AstCapture cut) {
-            CompilerDirectives.transferToInterpreter();
-            Object[] savedValues = values == null ? null : values.clone();
-            throw cut.append((saved, value) -> finish(saved, value, savedValues));
+            throw captureResult(cut, values);
         } catch (DelimitedCut cut) {
             throw captureCall(frame, cut, values);
         }
         return finish(frame, result, values);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture captureResult(AstCapture cut, Object[] values) {
+        Object[] savedValues = values == null ? null : values.clone();
+        return cut.append((saved, value) -> finish(saved, value, savedValues));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture captureRemainder(AstCapture cut, Object[] values) {
+        Object[] savedValues = values == null ? null : values.clone();
+        return cut.append((saved, value) -> remainder.execute(saved, requireClosure(value), savedValues));
     }
     private Object finish(VirtualFrame frame, Object result, Object[] values) {
         if (arity < count) {
             Closure closure;
             try { closure = requireClosure(AstControl.force(frame, this, force, result)); }
             catch (AstCapture cut) {
-                CompilerDirectives.transferToInterpreter();
-                Object[] savedValues = values == null ? null : values.clone();
-                throw cut.append((saved, value) -> remainder.execute(saved, requireClosure(value), savedValues));
+                throw captureRemainder(cut, values);
             } catch (DelimitedCut cut) {
                 throw captureCall(frame, cut, values);
             }
