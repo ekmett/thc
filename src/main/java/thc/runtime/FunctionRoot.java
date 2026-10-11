@@ -296,6 +296,7 @@ public final class FunctionRoot extends GuestRoot {
         else if (node instanceof TupleApplication application) application.prepareForAOT();
         else if (node instanceof InputDispatch input) input.prepareForAOT();
         else if (node instanceof TupleDispatch tuple) tuple.prepareForAOT();
+        else if (node instanceof Alternative alternative) alternative.prepareForAOT();
         for (Node child : node.getChildren()) prepareAotDispatch(child);
     }
     @Override protected ExecutionSignature prepareForAOT() {
@@ -304,7 +305,8 @@ public final class FunctionRoot extends GuestRoot {
         hasSelfTail = true;
         prepareAotDispatch(this);
         // Frame carriers were established structurally before target publication;
-        // no context lookup, guest execution or observed-profile seeding is needed.
+        // no context lookup or guest execution is needed. Existing choice profiles
+        // admit both outcomes without recording guest observations.
         // An outlined reusable arm also returns an internal TailCall for its
         // owning caller to rethrow. This physical root result is not the guest ABI.
         Class<?> resultClass = capturesContinuations || role == FunctionRootRole.PASS_THROUGH ? null : numericClass(getScalarResultProof());

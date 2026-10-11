@@ -15,6 +15,13 @@ arm: the scrutinee runs once, existing match profiles choose the alternative,
 and original constructor/payload restoration precedes the call. No additional
 branch profile or ever-seen flag is introduced.
 
+Explicit AST AOT preparation admits both outcomes of existing `Alternative`
+counting profiles before compilation. This keeps untouched
+choices reachable on the first installed call without running guest code.
+Ordinary JIT roots continue to learn their choice probabilities from execution.
+Unboxed-sum `SumCase` profiles remain adaptive on cold preparation; their shared
+profile-array clone ownership needs a separate correction.
+
 The call inherits the caller's Bloom ancestry. It is not an ordinary non-tail
 call with a reset Bloom and local trampoline. An outer backedge therefore
 crosses the side root and reaches its original loop owner. Capture-capable side

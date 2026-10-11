@@ -116,13 +116,27 @@ public class AstStackTest {
     private static List<?> literal(int value) { return List.of("lit", "int", Integer.toString(value)); }
     private static List<?> apply(Object function, Object... arguments) { return List.of("app", function, Arrays.asList(arguments), Collections.nCopies(arguments.length, false)); }
     private static List<?> prim(String name, Object... arguments) { return apply(List.of("prim", name), arguments); }
-    private static List<?> bind(Object value, String name, Object body) { return List.of("case", value, name, List.of(Arrays.asList("default", null, List.of(), body))); }
     private Map<String, Object> module() {
-        var recurse = bind(apply(variable("loop"), prim("-#", variable("n"), literal(1)), variable("tick")), "answer", prim("+#", variable("answer"), variable("prefix")));
-        var choice = List.of("case", variable("n"), "choice", List.of(List.of("lit", List.of("int", "0"), List.of(), variable("prefix")), Arrays.asList("default", null, List.of(), recurse)));
-        var body = bind(apply(variable("tick"), variable("n")), "prefix", choice);
+        // Match exported Int# shape evidence without claiming that a call is WHNF.
+        var resultRep = new LinkedHashMap<>(longRep); resultRep.put("evaluated", false);
+        class ScalarCore {
+            List<?> call(Object function, Object... arguments) {
+                return List.of("app", function, Arrays.asList(arguments), Collections.nCopies(arguments.length, false),
+                    false, false, Map.of("rep", resultRep));
+            }
+            List<?> prim(String name, Object... arguments) { return call(List.of("prim", name), arguments); }
+            List<?> bind(Object value, String name, Object body) {
+                return List.of("case", value, name, List.of(Arrays.asList("default", null, List.of(), body)),
+                    Map.of("rep", resultRep, "resultRep", resultRep, "binder", binder(name, longRep, false)));
+            }
+        }
+        var core = new ScalarCore();
+        var recurse = core.bind(core.call(variable("loop"), core.prim("-#", variable("n"), literal(1)), variable("tick")), "answer", core.prim("+#", variable("answer"), variable("prefix")));
+        var choice = List.of("case", variable("n"), "choice", List.of(List.of("lit", List.of("int", "0"), List.of(), variable("prefix")), Arrays.asList("default", null, List.of(), recurse)),
+            Map.of("rep", resultRep, "resultRep", resultRep, "binder", binder("choice", longRep, false)));
+        var body = core.bind(core.call(variable("tick"), variable("n")), "prefix", choice);
         var parameters = List.of(Map.of("id", "n", "name", "n", "lifted", false, "rep", longRep), Map.of("id", "tick", "name", "tick", "lifted", true, "rep", closure));
-        return Map.of("bindings", List.of(Map.of("id", "loop", "name", "loop", "lifted", true, "expr", List.of("lam", parameters, body, Map.of("rep", closure, "resultRep", longRep)))));
+        return Map.of("bindings", List.of(Map.of("id", "loop", "name", "loop", "lifted", true, "expr", List.of("lam", parameters, body, Map.of("rep", closure, "resultRep", resultRep)))));
     }
     @Test void bytecodeAutonomousCutsRetainEveryNonTailPrefixAndSuffix() {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
@@ -174,11 +188,26 @@ public class AstStackTest {
                 bindings.add(caller); source.put("bindings", bindings); source.put("instrument", true);
                 ExecutableProgram program = bytecode ? new BytecodeProgram(language, source, true) : new Program(language, source, true);
                 var target = program.entryTarget("caller");
+                var captured = (com.oracle.truffle.runtime.OptimizedCallTarget) (bytecode ? target : program.entryTarget("loop"));
+                if (!bytecode) {
+                    assertFalse(captured.wasExecuted()); captured.prepareForAOT(); assertTrue(captured.compile(true));
+                    assertTrue(captured.isValidLastTier()); assertFalse(captured.wasExecuted());
+                }
+                long capturedAddress = captured.getCodeAddress(); int capturedCount = captured.getSuccessfulCompilationCount();
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 var runtime = Truffle.getRuntime();
                 runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
                     .invoke(runtime, target);
+                var installed = (com.oracle.truffle.runtime.OptimizedCallTarget) target;
+                long installedAddress = installed.getCodeAddress(); int installedCount = installed.getSuccessfulCompilationCount();
+                var deoptimizations = new java.util.concurrent.atomic.AtomicInteger();
+                var listener = new com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener() {
+                    @Override public void onCompilationDeoptimized(com.oracle.truffle.runtime.OptimizedCallTarget deoptimized, com.oracle.truffle.api.frame.Frame frame, String reason) {
+                        if (deoptimized == captured) deoptimizations.incrementAndGet();
+                    }
+                };
+                ((com.oracle.truffle.runtime.OptimizedTruffleRuntime) runtime).addListener(listener);
                 var state = Language.currentState(); state.getThreads().enterCurrent();
                 try {
                     int[] prefixes = {0};
@@ -195,11 +224,17 @@ public class AstStackTest {
                     assertSame(target, program.entryTarget("caller"));
                     if (!bytecode) assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target),
                         "The original installed AST caller must survive its first spill");
+                    if (!bytecode) {
+                        assertTrue(captured.isValidLastTier()); assertEquals(capturedAddress, captured.getCodeAddress());
+                        assertEquals(capturedCount, captured.getSuccessfulCompilationCount());
+                        assertEquals(installedAddress, installed.getCodeAddress()); assertEquals(installedCount, installed.getSuccessfulCompilationCount());
+                        assertEquals(0, deoptimizations.get(), "The declared cold non-driver Core callee must remain compiled through its first cut");
+                    }
                     var stack = state.getThreadPollState().get().getAstStack();
                     assertTrue(stack.getSpills() > 0); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
                     assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
                     assertEquals(0, language.getHandoffState().get().getResults().getDepth());
-                } finally { state.getThreads().leaveCurrent(); }
+                } finally { ((com.oracle.truffle.runtime.OptimizedTruffleRuntime) runtime).removeListener(listener); state.getThreads().leaveCurrent(); }
             } finally { context.leave(); }
         }
     }

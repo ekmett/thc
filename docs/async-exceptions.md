@@ -164,8 +164,12 @@ stay behind cold boundaries, preserving exact saved suffixes and released typed
 loans without an explicit interpreter transfer for each unwound activation.
 The driver still owns draining and restoring these continuations; this does not
 make a saved body an installed-code entry.
-Cold Core demand can still deoptimize at an unspecialized value-kind branch;
-removing capture transfers does not change that specialization policy.
+Explicitly AOT-prepared AST `Alternative` choices admit both outcomes before
+compilation. Unboxed-sum `SumCase` choices still use adaptive cold profiles.
+Core with declared primitive carriers can therefore retain its first installation
+through an autonomous cut and both recursive case outcomes. Missing or opaque
+carrier evidence still uses ordinary adaptive frame widening; capture preparation
+does not invent representation proofs.
 
 Async-enabled AST and bytecode roots also use these continuations to bound nested calls and
 thunk forcing. At the depth limit, they save the pending computation before

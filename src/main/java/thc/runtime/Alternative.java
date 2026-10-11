@@ -37,6 +37,8 @@ final class Alternative extends Node {
         // NodeUtil clones it, losing the identity guard around its disabled counters.
         matchProfile = profileChoice ? CountingConditionProfile.create() : null;
     }
+    /** Admit both match outcomes before cold compilation, without observing a guest. */
+    void prepareForAOT() { if (matchProfile != null) matchProfile.disable(); }
     public int getKind() { return kind; }
     public Object getValue() { return value; }
     public int[] getFields() { return fields; }
