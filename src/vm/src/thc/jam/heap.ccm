@@ -383,5 +383,8 @@ public:
     collecting = false;
     candidate_roots.publish();
   }
+  /// \brief Release unused backing pages after movement and canonical publication.
+  /// \pre Collection is idle, mutators are stopped, and VM root repair is complete.
+  void discard_unused() const noexcept { host.discard_unused(); }
 };
 }

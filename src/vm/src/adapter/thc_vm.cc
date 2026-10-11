@@ -104,6 +104,7 @@ int thc_vm_marked(thc_vm const * vm, uint32_t at) { return vm->heap.marked(at); 
 int thc_vm_prepare(thc_vm * vm, int promote) { return vm->heap.prepare(promote); }
 uint32_t thc_vm_forward(thc_vm const * vm, uint32_t at) { return vm->heap.forward(at); }
 void thc_vm_finish(thc_vm * vm) { vm->heap.finish(); }
+void thc_vm_discard_unused(thc_vm * vm) { vm->heap.discard_unused(); }
 uint64_t thc_vm_weak_create(thc_vm * vm, uint32_t key, uint32_t value, uint32_t finalizer) {
   return vm->heap.weaks().create(key, value, finalizer);
 }

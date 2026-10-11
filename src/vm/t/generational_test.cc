@@ -426,6 +426,13 @@ static void concurrent_alias_pin() {
   native.join();
   check(__atomic_load_n(payload, __ATOMIC_RELAXED) == writes.load(std::memory_order_acquire),
         "pin keeps final native write across all collection modes");
+  // Backing release requires the native writer to stop as well as VM mutators.
+  thc_vm_discard_unused(h.vm);
+  thc_vm_discard_unused(h.vm);
+  check(thc_vm_pin_address(pin) == alias, "discard preserves the live side alias");
+  check(h.at(pinned).header == alias->header, "discard preserves the canonical pin header");
+  check(__atomic_load_n(payload, __ATOMIC_RELAXED) == writes.load(std::memory_order_acquire),
+        "discard preserves the pinned native payload");
   check(h.at(pinned).identity == writes.load(std::memory_order_acquire),
         "republished canonical mapping shares pinned backing");
   thc_vm_unpin(h.vm, pin);

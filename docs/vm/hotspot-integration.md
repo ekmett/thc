@@ -73,11 +73,20 @@ The C interface separates tracing from movement:
 | `thc_vm_prepare` | Freeze forwarding tables; reject a promotion that will not fit |
 | `thc_vm_forward` | Read the frozen destination for root and field repair |
 | `thc_vm_finish` | Move, pack metadata, adopt the rings and republish canonical aliases |
+| `thc_vm_discard_unused` | Release unused whole backing pages while idle with mutators stopped, after movement and root repair |
 
 Tracing may drain repeatedly in one epoch. Java keepalive and generalized weak
 closure can both discover more work. Once preparation succeeds, roots and
 external slots are repaired before movement. Neither forwarding table may be
 reset while another consumer still needs it.
+
+Backing release is explicit and best effort. It delegates to Jam's hosted
+collector after canonical publication and all root and derived-pointer repair;
+live contents, reserved capacities and canonical and native pin addresses stay
+unchanged. Ordinary collections do not request it. The experimental CRaC
+provider's separate compatibility patch can request release after the
+pre-checkpoint major collection. That patch is not part of the normal LabsJDK
+build, and releasing the Java heap does not collect libgraal's compiler isolate.
 
 VM callbacks currently run serially on the registered VM thread. Jam's copy
 workers remain parallel. A C callback does not by itself make a native worker

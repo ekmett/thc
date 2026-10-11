@@ -35,7 +35,7 @@ FetchContent_Declare(work GIT_REPOSITORY https://github.com/ekmett/work.git
 FetchContent_Declare(hint GIT_REPOSITORY https://github.com/ekmett/hint.git
   GIT_TAG b24b9da02325ea949db5b76f5a90302d9b1c5f83)
 FetchContent_Declare(jam GIT_REPOSITORY https://github.com/ekmett/jam.git
-  GIT_TAG 8774a75f83f2b8240e201d53b42017123d9ee762)
+  GIT_TAG 54f5201673cd3d0dfd5f7e561d0d2c76b81d23e2)
 FetchContent_MakeAvailable(jam)
 
 add_library(thc-vm SHARED)

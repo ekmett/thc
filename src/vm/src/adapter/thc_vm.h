@@ -122,6 +122,11 @@ THC_VM_API int thc_vm_marked(thc_vm const *, uint32_t);
 THC_VM_API int thc_vm_prepare(thc_vm *, int promote);
 THC_VM_API uint32_t thc_vm_forward(thc_vm const *, uint32_t);
 THC_VM_API void thc_vm_finish(thc_vm *);
+/* Best-effort release of whole unused backing pages in both generations.
+ * Requires idle collection, stopped mutators and completed root/derived-pointer
+ * repair after finish has republished canonical aliases. Does not collect or
+ * change capacity, live contents, canonical addresses or native pin addresses. */
+THC_VM_API void thc_vm_discard_unused(thc_vm *);
 
 /* Generalized weak associations are VM side metadata, not strong JNI handles.
  * Dropping the guest token does not cancel finalization. A finalizer is itself

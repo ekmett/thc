@@ -54,6 +54,7 @@ static void run(size_t workers) {
     size_t before = thc_vm_origin(vm, 0);
     thc_vm_finish(vm);
     check(before != thc_vm_origin(vm, 0), "jam ring rotated");
+    thc_vm_discard_unused(vm);
     uint32_t p = root;
     for (unsigned n = 2000; n != 0; --n) {
       object const value = *at(base, p);
