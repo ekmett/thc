@@ -43,14 +43,21 @@ public final class TupleApplication extends Expr {
         setRepresentation(p.copy(p.getKind(), true, p.getPresent(), p.getPrimReps(), p.getComponents(), p.getVector(), p.getAlternatives(), p.getTagSlot(), p.getAlternativeSlots()));
     }
     @Override public void prepareTuple(int[] slots, int offset) {
-        if (metrics != null) return;
         if (vector != null) { slots = vectorSlots; offset = 0; }
-        if (dispatch != null) {
+        if (destinationSlots != null) {
             if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
             return;
         }
         destinationSlots = slots; destinationOffset = offset;
-        dispatch = new TupleDispatch(new AstTupleDestination(shape, slots, offset), null, arguments.length, tail, inputLayout);
+        if (metrics == null) dispatch = new TupleDispatch(new AstTupleDestination(shape, slots, offset), null, arguments.length, tail, inputLayout);
+    }
+    /** Adopt only the aggregate destination already determined during lowering. */
+    void prepareForAOT() {
+        if (dispatch == null && destinationSlots != null) atomic(() -> {
+            if (dispatch == null) dispatch = insert(new TupleDispatch(new AstTupleDestination(shape, destinationSlots, destinationOffset),
+                metrics, arguments.length, tail, inputLayout));
+            return null;
+        });
     }
     @Override public Object execute(VirtualFrame frame) {
         VectorLayout layout = vector;
