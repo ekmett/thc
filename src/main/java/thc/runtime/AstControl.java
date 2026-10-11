@@ -78,6 +78,7 @@ public final class AstControl {
         }
     }
     public static Object force(VirtualFrame frame, Node node, Force force, Object value) {
+        if (!(value instanceof Thunk)) return value;
         if (!captures(node)) return force.execute(frame, value);
         return forceCallback(frame, node, force, value);
     }
