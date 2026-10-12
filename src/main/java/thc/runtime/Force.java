@@ -698,23 +698,27 @@ public final class Force extends Node {
                 thunk.setOwner(null); thunk.setState(2); thunk.notifyUpdate();
             }
             return result;
-        } catch (DelimitedCut cut) {
-            throw rejectDelimitedCapture(thunk);
-        } catch (ThunkSuspended failure) {
-            if (failure.getThunk() != thunk) suspendOwned(thunk);
-            throw failure;
-        } catch (AsyncThunkUnwind failure) {
-            suspendOwned(thunk); throw failure;
-        } catch (GuestException failure) {
-            publishFailure(thunk, new MemoizedGuestFailure(failure.getPayload(),
-                failure.getLocation() == null ? this : failure.getLocation(), failure.getSomeException()));
-            throw failure;
-        } catch (RuntimeFault failure) {
-            publishFailure(thunk, failure); throw failure;
         } catch (Throwable failure) {
-            // Any host unwind can follow effects; never reset to unevaluated and replay.
-            suspendOwned(thunk); throw failure;
+            throw rethrow(settleOwnedFailure(thunk, failure));
         }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Throwable settleOwnedFailure(Thunk thunk, Throwable failure) {
+        if (failure instanceof DelimitedCut) return rejectDelimitedCapture(thunk);
+        if (failure instanceof ThunkSuspended suspended) {
+            if (suspended.getThunk() != thunk) suspendOwned(thunk);
+        } else if (failure instanceof AsyncThunkUnwind) {
+            suspendOwned(thunk);
+        } else if (failure instanceof GuestException guest) {
+            publishFailure(thunk, new MemoizedGuestFailure(guest.getPayload(),
+                guest.getLocation() == null ? this : guest.getLocation(), guest.getSomeException()));
+        } else if (failure instanceof RuntimeFault) {
+            publishFailure(thunk, failure);
+        } else {
+            // Any host unwind can follow effects; never reset to unevaluated and replay.
+            suspendOwned(thunk);
+        }
+        return failure;
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
     private RuntimeFault rejectDelimitedCapture(Thunk thunk) {
