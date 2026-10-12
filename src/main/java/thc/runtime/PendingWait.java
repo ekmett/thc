@@ -87,7 +87,7 @@ public final class PendingWait extends AbstractTruffleException implements Inter
     /** Append-only identity membership owned by one dependency inspection. */
     private static final class Visited {
         private static final int MAX_CAPACITY = 1 << 29;
-        private Object[] keys = new Object[32];
+        private Object[] keys = new Object[128];
         private int size;
         private static int index(Object key, int mask) {
             int hash = System.identityHashCode(key);

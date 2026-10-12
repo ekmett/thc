@@ -686,8 +686,8 @@ class SavedGuestContinuationTest {
         }
         // Select a colliding prefix from more identities than low-bit buckets.
         // Assertions concern reads and identity, not the table's capacity/layout.
-        var edges = new Edge[64];
-        var buckets = new Edge[32];
+        var edges = new Edge[256];
+        var buckets = new Edge[128];
         Edge first = null, second = null;
         for (int i = 0; i < edges.length; i++) {
             var edge = edges[i] = new Edge();
