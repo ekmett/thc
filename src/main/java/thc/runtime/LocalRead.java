@@ -31,7 +31,9 @@ public final class LocalRead extends Expr {
             ? frame.getDouble(slot) : super.executeDouble(frame);
     }
     @Override public Object execute(VirtualFrame frame) {
-        Object value = !cell && getRepresentation().isEvaluatedReference()
+        CoreRepresentation proof = getRepresentation();
+        // DATA/CLOSURE storage is a reference even before the value is demanded.
+        Object value = !cell && (proof.isEvaluatedReference() || proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE)
             ? frame.getObject(slot) : FrameAccess.INSTANCE.read(frame, slot);
         // Lowering publishes ordinary bindings before use; cells carry publication state.
         if (!cell) return value;
