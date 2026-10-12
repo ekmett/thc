@@ -710,6 +710,24 @@ class SavedGuestContinuationTest {
         order.getLast().next = null;
         assertNull(PendingWait.of(start));
         for (var edge : edges) assertEquals(3, edge.reads, "Every inspection must start with fresh membership");
+
+        for (int length = 1; length <= 4; length++) for (int repeated = 0; repeated < length; repeated++) {
+            for (int i = 1; i < length; i++) order.get(i - 1).next = order.get(i);
+            var last = order.get(length - 1);
+            last.next = order.get(repeated);
+            var before = new int[order.size()];
+            for (int i = 0; i < before.length; i++) before[i] = order.get(i).reads;
+            var shortCycle = assertThrows(RuntimeFault.class, () -> PendingWait.of(start));
+            assertEquals("Suspended guest dependency cycle", shortCycle.getMessage());
+            for (int i = 0; i < before.length; i++)
+                assertEquals(before[i] + (i < length ? 1 : 0), order.get(i).reads,
+                    "Reject a short cycle before rereading its successor");
+            last.next = null;
+            assertNull(PendingWait.of(start));
+            for (int i = 0; i < before.length; i++)
+                assertEquals(before[i] + (i < length ? 2 : 0), order.get(i).reads,
+                    "A mutated short chain must have fresh membership");
+        }
     }
     @Test void dependencyCycleRejectsBeforeAnyBoundaryChangesOwnership() {
         try (var context = Main.executionContext()) {

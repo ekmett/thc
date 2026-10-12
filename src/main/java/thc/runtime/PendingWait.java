@@ -128,9 +128,23 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         }
     }
     @TruffleBoundary private static PendingWait findSavedWait(Object value) {
-        var seen = new Visited();
+        Visited seen = null;
+        Object first = null, second = null, third = null;
         for (;;) {
-            if (value != null && !seen.add(value)) throw new RuntimeFault("Suspended guest dependency cycle");
+            if (value != null) {
+                if (seen == null) {
+                    if (value == first || value == second || value == third)
+                        throw new RuntimeFault("Suspended guest dependency cycle");
+                    if (first == null) first = value;
+                    else if (second == null) second = value;
+                    else if (third == null) third = value;
+                    else {
+                        seen = new Visited();
+                        seen.add(first); seen.add(second); seen.add(third); seen.add(value);
+                        first = null; second = null; third = null;
+                    }
+                } else if (!seen.add(value)) throw new RuntimeFault("Suspended guest dependency cycle");
+            }
             if (value instanceof PendingWait pending) return pending;
             if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
             else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
