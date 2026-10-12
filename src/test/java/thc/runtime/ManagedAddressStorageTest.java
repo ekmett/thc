@@ -243,6 +243,9 @@ class ManagedAddressStorageTest {
     }
     @Test
     void outOfRangeSentinelsRetainIdentityButGrantNoMemoryAccess() {
+        var none = ManagedAddress.nullAddress();
+        assertSame(none, none.plus(0));
+        assertThrows(RuntimeFault.class, () -> none.plus(1));
         var base = ManagedAddress.fromByteArray(new byte[] {65, 0});
         var before = base.plus(-1);
         var after = base.plus(3);
