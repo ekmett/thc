@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -131,6 +132,10 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         Visited seen = null;
         Object first = null, second = null, third = null;
         for (;;) {
+            if (value instanceof PendingWait pending) return pending;
+            // Only carriers with successors need cycle membership.
+            if (!(value instanceof ThunkSuspended) && !(value instanceof CallSegmentSuspended) &&
+                !(value instanceof SavedGuestContinuation) && !(value instanceof ContinuationResult)) return null;
             if (value != null) {
                 if (seen == null) {
                     if (value == first || value == second || value == third)
@@ -145,7 +150,6 @@ public final class PendingWait extends AbstractTruffleException implements Inter
                     }
                 } else if (!seen.add(value)) throw new RuntimeFault("Suspended guest dependency cycle");
             }
-            if (value instanceof PendingWait pending) return pending;
             if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
             else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
             else {
