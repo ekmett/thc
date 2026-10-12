@@ -729,6 +729,7 @@ public final class Force extends Node {
     private boolean sameContinuationBody(Object actual, Object expected) {
         return actual == expected || actual instanceof GuestRoot left && expected instanceof GuestRoot right && left.isSelf(right.getCallTarget());
     }
+    @TruffleBoundary(transferToInterpreterOnException = false)
     private void publishContinuation(Thunk thunk, SavedGuestContinuation continuation) {
         // Thread-local side effects cannot unwind between capture and ownership release.
         TruffleSafepoint safepoint = TruffleSafepoint.getCurrent();

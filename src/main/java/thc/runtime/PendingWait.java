@@ -39,7 +39,6 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         GuestThreads.GuestThread owner = GuestThreads.suspendingCurrent(node);
         return owner == null ? null : new PendingWait(operation, owner, SynchronousMasking.current(node), node);
     }
-    @TruffleBoundary(transferToInterpreterOnException = false)
     synchronized void retainUpdate(Thunk thunk, Object continuation) {
         if (abandoned) throw terminalFailure;
         if (updates == null) updates = new java.util.ArrayList<>();
