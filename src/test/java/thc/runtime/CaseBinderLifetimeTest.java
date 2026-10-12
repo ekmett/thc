@@ -209,6 +209,78 @@ class CaseBinderLifetimeTest {
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void unusedConstructorReferenceDiesWhileTheSelectedBodyStillRuns(String backend) { unusedResultReference(backend, true); }
 
+    @Test void firstCompiledDeadObjectConstructorFieldRetiresWithoutForcingItsPayload() throws Exception {
+        var object = Map.<String, Object>of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
+        var data = Map.<String, Object>of("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
+        var payload = Map.of("id", "unused", "name", "unused", "lifted", true, "rep", object);
+        var expression = node("case", node("var", "input", Map.of("rep", data)), "whole",
+                List.of(node("data", "Pair", List.of("number", "unused"), variable("number"),
+                        Map.of("binders", List.of(binder("number"), payload)))),
+                Map.of("rep", LONG, "binder", Map.of("id", "whole", "lifted", true, "rep", data)));
+        String entry = "unusedObjectFieldFirstCompiled";
+        var module = Map.<String, Object>of("constructors", List.of(Map.of("id", "Pair", "name", "Pair", "kind", "boxed", "arity", 2,
+                "fieldReps", List.of(List.of("IntRep"), List.of("BoxedRep (Just Lifted)")),
+                "fieldLifted", List.of(false, true), "strictFields", List.of(false, false))),
+                "bindings", List.of(Map.of("id", entry, "name", entry, "lifted", true, "rep", CLOSURE,
+                        "expr", node("lam", List.of(Map.of("id", "input", "name", entry, "lifted", true, "rep", data)), expression,
+                                Map.of("rep", CLOSURE, "resultRep", LONG)))));
+        // This compiler seam uses the existing synchronous test profile. The
+        // launcher's separate graph budget is not the retirement contract.
+        try (var context = thc.Main.withContextProfile(org.graalvm.polyglot.Context.newBuilder("thc"),
+                thc.ContextProfile.SYNCHRONOUS_TEST).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, module, true);
+                var target = program.entryTarget(entry);
+                var selection = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class).getFirst();
+                assertEquals(1, selection.alternatives.length);
+                var arm = selection.alternatives[0];
+                int deadSlot = arm.getFields()[1];
+                var descriptor = target.getRootNode().getFrameDescriptor();
+                assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(deadSlot), "Lowering declares the dead field Object before guest entry");
+                int[] observations = new int[3], forces = new int[1];
+                var frames = new com.oracle.truffle.api.frame.MaterializedFrame[1];
+                Expr body = arm.getBody();
+                Expr observed = new Expr() {
+                    @Child private Expr value = body;
+                    @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                    @Override public long executeLong(VirtualFrame frame) {
+                        observations[0]++;
+                        if (frame.getTag(deadSlot) == FrameSlotKind.Illegal.tag) observations[1]++;
+                        if (CompilerDirectives.inCompiledCode()) observations[2]++;
+                        // Keep a real materializable frame observable after the
+                        // selected arm so retirement includes its reference array.
+                        frames[0] = frame.materialize();
+                        return value.executeRequiredLong(frame);
+                    }
+                };
+                observed.setRepresentation(body.getRepresentation());
+                body.replace(observed);
+                var payloadTarget = new com.oracle.truffle.api.nodes.RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        forces[0]++;
+                        throw new AssertionError("Unused constructor payload was forced");
+                    }
+                }.getCallTarget();
+                var lazy = new Thunk(payloadTarget, null);
+                var input = program.constructorLayout("Pair").create(new Object[]{41L, lazy});
+                assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
+                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                target.getClass().getMethod("waitForCompilation").invoke(target);
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                assertEquals(41L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, input}));
+                assertArrayEquals(new int[]{1, 1, 1}, observations, "The first installed arm retires its dead field");
+                assertEquals(0, forces[0]);
+                assertEquals(0, lazy.getState());
+                assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(deadSlot));
+                var storage = frames[0].getClass().getDeclaredField("indexedLocals"); storage.setAccessible(true);
+                assertNull(((Object[]) storage.get(frames[0]))[deadSlot], "The escaped frame retains no dead payload copy");
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+            } finally { context.leave(); }
+        }
+    }
+
     private static void unusedResultReference(String backend, boolean boxed) {
         var object = Map.<String, Object>of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
         var pair = boxed ? Map.<String, Object>of("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true)
