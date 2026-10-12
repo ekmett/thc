@@ -434,8 +434,12 @@ public final class ManagedAddress {
         var pointer = externalPointer();
         if (pointer != null) return (int) pointer.read(displacement, 1);
         if (nativeOwner != null) return readOwnedNativeByte(displacement);
+        if (owner != null) {
+            long index = displacedOffset(displacement);
+            requireBytes();
+            return owner.readByteInt(index);
+        }
         int index = index(displacement);
-        if (owner != null) return owner.readByteInt(index);
         if (literalBytes != null) return literalBytes[index] & 255;
         if (mutableBytes == null) CompilerDirectives.transferToInterpreter();
         return java.util.Objects.requireNonNull(mutableBytes)[index] & 255;

@@ -309,15 +309,26 @@ public class NativeAddressTest {
     @Test public void numericalResolutionCannotCrossContextOwnership() {
         try (var first = context(); var second = context()) {
             first.initialize("thc"); second.initialize("thc"); var original = ManagedAddress.fromHex("41"); first.enter(); final long firstBits;
-            try { firstBits = original.toNativeBits(); } finally { first.leave(); }
+            var lifetime = Truffle.getRuntime().createAssumption("owned returned byte address");
+            final ManagedAddress returned;
+            try {
+                firstBits = original.toNativeBits();
+                returned = ManagedAddress.fromReturnedAddress(new PackageReturnedAddress(Language.currentState(), lifetime,
+                    new Object(), ManagedAddress.fromStaticBytes(new byte[] {65})));
+                assertEquals(65L, returned.readWord8(0));
+            } finally { first.leave(); }
             second.enter(); final long secondBits;
             try {
+                assertThrows(RuntimeFault.class, () -> returned.readWord8(0));
                 var foreign = NativeAddresses.current(null).recover(firstBits); assertEquals(firstBits, foreign.toNativeBits()); assertThrows(RuntimeFault.class, () -> foreign.readWord8(0));
                 assertThrows(RuntimeFault.class, foreign::cbitsBacking); secondBits = original.toNativeBits(); assertNotEquals(firstBits, secondBits);
                 assertTrue(NativeAddresses.current(null).recover(secondBits).sameLocation(original));
             } finally { second.leave(); }
             first.enter();
             try {
+                assertEquals(65L, returned.readWord8(0));
+                lifetime.invalidate();
+                assertThrows(RuntimeFault.class, () -> returned.readWord8(0));
                 assertTrue(NativeAddresses.current(null).recover(firstBits).sameLocation(original)); var foreign = NativeAddresses.current(null).recover(secondBits);
                 assertEquals(secondBits, foreign.toNativeBits()); assertThrows(RuntimeFault.class, () -> foreign.readWord8(0));
             } finally { first.leave(); }
