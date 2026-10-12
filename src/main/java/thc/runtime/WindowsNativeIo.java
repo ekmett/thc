@@ -53,7 +53,7 @@ public final class WindowsNativeIo implements AutoCloseable {
         if (displacement != 0) throw fault("Windows IO selection permits only its one-byte CBool read");
         return 0;
     }
-    private void current() {
+    @TruffleBoundary private void current() {
         if (Language.currentState(null) != context || context.getWindowsNativeIo() != this || closed) throw fault("Windows native IO belongs to another or closed context");
         if (!context.getEnv().isNativeAccessAllowed()) throw new SecurityException("Windows native IO requires native access");
     }
