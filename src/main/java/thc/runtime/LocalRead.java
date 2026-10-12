@@ -56,7 +56,8 @@ public final class LocalRead extends Expr {
     }
     /** Recursive captures retain cell identity until the whole group is published. */
     public void writeForced(VirtualFrame frame, Thunk original, Object result) {
-        Object binding = FrameAccess.INSTANCE.read(frame, slot);
+        if (!frame.isObject(slot)) return;
+        Object binding = frame.getObject(slot);
         if (binding == original) FrameAccess.INSTANCE.write(frame, slot, result);
         else if (cell && binding instanceof RecCell recursive) {
             synchronized (recursive) {
