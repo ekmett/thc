@@ -55,6 +55,24 @@ reservations call `thc_vm_allocate` under `Heap_lock`. The adapter preflights
 capacity so exhaustion returns to HotSpot's collection-and-retry path instead
 of reaching jam's ordinary allocation abort.
 
+Allocations first try young space when the request fits its capacity. After a
+minor collection cannot satisfy the request, the adapter tries old space before
+requesting a major collection, for both individual objects and TLAB reservations.
+Every completed collection records the young free capacity under the heap lock.
+If a later failed young request exceeds that recorded extent, the adapter tries
+current old capacity before repeating a minor. Roots can die between collections;
+this policy defers possible young reclamation until old allocation also fails,
+then retains the collection-and-retry path. A concurrent collection can refresh
+the snapshot before the old attempt, so the comparison is a scheduling hint;
+the allocator always checks the selected generation's actual capacity.
+
+The snapshot starts unset so first pressure still requests collection, and every
+minor, promotion or major replaces it after publishing the generation tops.
+TLAB size bounds and accounting remain nursery based; a successful reservation
+reports its actual size and address. Initializing reference stores retain their
+barriers because the returned TLAB can be old. The policy changes neither
+whole-nursery promotion nor the final allocation failure path.
+
 ## Collection phases
 
 The host stops mutators and retires TLABs before opening a collection epoch.

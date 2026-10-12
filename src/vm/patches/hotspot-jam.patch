@@ -915,7 +915,7 @@
 +};
 --- a/src/hotspot/share/gc/jam/jamHeap.cpp
 +++ b/src/hotspot/share/gc/jam/jamHeap.cpp
-@@ -0,0 +1,804 @@
+@@ -0,0 +1,813 @@
 +/*
 + * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
 + * Copyright (c) 2017, 2022, Red Hat, Inc. All rights reserved.
@@ -1581,7 +1581,13 @@
 +  if (tlab && !young) return nullptr;
 +  HeapWord* result = allocate_work(size, young, verbose);
 +  if (result == nullptr && is_init_completed()) {
++    bool try_old = false;
 +    if (young) {
++      MutexLocker ml(Heap_lock);
++      try_old = size > _young_free_after_gc;
++    }
++    if (try_old) result = allocate_work(size, false, verbose);
++    if (result == nullptr && young) {
 +      bool promote;
 +      {
 +        MutexLocker ml(Heap_lock);
@@ -1589,6 +1595,8 @@
 +      }
 +      collect_generation(true, promote, GCCause::_allocation_failure);
 +      result = allocate_work(size, true, verbose);
++      // A full live nursery can still leave room for objects or TLABs in old.
++      if (result == nullptr) result = allocate_work(size, false, verbose);
 +    }
 +    if (result == nullptr) {
 +      collect_generation(false, false, GCCause::_allocation_failure);
@@ -1693,6 +1701,7 @@
 +  _space->set_top((HeapWord*)(CompressedOops::base() + thc_vm_used(_jam, false) * HeapWordSize));
 +  _young_space->set_top((HeapWord*)(CompressedOops::base() + jam_young_displacement +
 +                                   thc_vm_used(_jam, true) * HeapWordSize));
++  _young_free_after_gc = _young_space->free() / HeapWordSize;
 +  // Promoted bases must be inside the published old space before validation.
 +  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::update_pointers());
 +  if (minor) ++_minor_collections; else ++_major_collections;
@@ -1722,7 +1731,7 @@
 +}
 --- a/src/hotspot/share/gc/jam/jamHeap.hpp
 +++ b/src/hotspot/share/gc/jam/jamHeap.hpp
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,177 @@
 +/*
 + * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
 + * Copyright (c) 2017, 2022, Red Hat, Inc. All rights reserved.
@@ -1771,6 +1780,7 @@
 +  GCMemoryManager _memory_manager;
 +  ContiguousSpace* _space;
 +  ContiguousSpace* _young_space;
++  size_t _young_free_after_gc; // Words, protected by Heap_lock; a scheduling hint.
 +  size_t _minor_collections;
 +  size_t _promotions;
 +  size_t _major_collections;
@@ -1792,6 +1802,7 @@
 +          _memory_manager("Jam Heap"),
 +          _space(nullptr),
 +          _young_space(nullptr),
++          _young_free_after_gc(SIZE_MAX),
 +          _minor_collections(0),
 +          _promotions(0),
 +          _major_collections(0),
