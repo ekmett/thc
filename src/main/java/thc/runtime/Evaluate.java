@@ -59,11 +59,15 @@ public final class Evaluate extends Expr {
             else original = value.execute(frame);
         } catch (AstCapture cut) {
             if (value.getRepresentation().getEvaluated()) throw cut;
-            throw cut.append(new AstResumeStep() {
-                @Override public Object resume(VirtualFrame frame, Object input) { return forceResult(frame, input); }
-            });
+            throw appendForce(cut);
         }
         return value.getRepresentation().getEvaluated() ? original : forceResult(frame, original);
+    }
+    @CompilerDirectives.TruffleBoundary
+    private AstCapture appendForce(AstCapture cut) {
+        return cut.append(new AstResumeStep() {
+            @Override public Object resume(VirtualFrame frame, Object input) { return forceResult(frame, input); }
+        });
     }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
         if (AstControl.INSTANCE.captures(this)) return RuntimeTypesGen.expectInteger(executeAsync(frame));
