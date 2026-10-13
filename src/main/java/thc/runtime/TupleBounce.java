@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
@@ -33,12 +32,7 @@ public final class TupleBounce extends Node {
                 Object result;
                 if (input != null) {
                     input.getLayout().setLong(input, 0, 0L);
-                    var targetRoot = next.getTarget().getRootNode();
-                    if (targetRoot == null) {
-                        CompilerDirectives.transferToInterpreter();
-                        throw new NullPointerException("null cannot be cast to non-null type thc.runtime.GuestRoot");
-                    }
-                    TypedInputLayout inputLayout = ((GuestRoot) targetRoot).getTypedInput();
+                    TypedInputLayout inputLayout = root.getTypedInput();
                     if (inputLayout == null) throw fault("Target has no typed input entry");
                     long generation = input.getGeneration();
                     try { result = (this.metrics == null ? next.getTarget().call(this, new Object[]{input}) : Calls.indirect(call, next.getTarget(), new Object[]{input})); }
