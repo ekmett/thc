@@ -677,27 +677,30 @@ public final class Force extends Node {
             }
             Object result = returned instanceof TailYield tail ? tail.getContinuation() :
                 returned instanceof AstTailYield tail ? tail.getContinuation() : returned;
-            if (result instanceof SavedGuestContinuation || result instanceof ContinuationResult) {
+            SavedGuestContinuation saved;
+            if (result instanceof SavedGuestContinuation direct) {
+                suspensionProfile.enter();
+                saved = direct;
+            } else if (result instanceof ContinuationResult raw) {
                 // Resolve the cold bytecode view only after the suspension profile.
                 suspensionProfile.enter();
-                SavedGuestContinuation saved = savedGuestContinuation(result);
-                if (saved == null) CompilerDirectives.transferToInterpreter();
-                java.util.Objects.requireNonNull(saved);
-                if (saved.getYielded() instanceof DelimitedCut) throw fault("control0# cannot capture across a thunk update");
-                Object expectedRoot = continuation != null ? continuation.getSourceRoot() :
-                    thunk.getTarget() == null ? null : thunk.getTarget().getRootNode();
-                if (!(returned instanceof TailYield) && !(returned instanceof AstTailYield) && !sameContinuationBody(saved.getSourceRoot(), expectedRoot))
-                    throw new IllegalStateException("Nested guest yield has no captured caller segment");
-                AsyncRequest request = asyncRequest(saved);
-                publishContinuation(thunk, saved);
-                throw new ThunkSuspended(thunk, request, stackSpill(saved));
+                saved = BytecodeContinuations.view(raw);
+            } else {
+                if (result instanceof Thunk) throw fault("Thunk target violated WHNF convention");
+                synchronized (thunk.getMonitor()) {
+                    thunk.setValue(result); thunk.setTarget(null); thunk.setEnvironment(null);
+                    thunk.setOwner(null); thunk.setState(2); thunk.notifyUpdate();
+                }
+                return result;
             }
-            if (result instanceof Thunk) throw fault("Thunk target violated WHNF convention");
-            synchronized (thunk.getMonitor()) {
-                thunk.setValue(result); thunk.setTarget(null); thunk.setEnvironment(null);
-                thunk.setOwner(null); thunk.setState(2); thunk.notifyUpdate();
-            }
-            return result;
+            if (saved.getYielded() instanceof DelimitedCut) throw fault("control0# cannot capture across a thunk update");
+            Object expectedRoot = continuation != null ? continuation.getSourceRoot() :
+                thunk.getTarget() == null ? null : thunk.getTarget().getRootNode();
+            if (!(returned instanceof TailYield) && !(returned instanceof AstTailYield) && !sameContinuationBody(saved.getSourceRoot(), expectedRoot))
+                throw new IllegalStateException("Nested guest yield has no captured caller segment");
+            AsyncRequest request = asyncRequest(saved);
+            publishContinuation(thunk, saved);
+            throw new ThunkSuspended(thunk, request, stackSpill(saved));
         } catch (Throwable failure) {
             throw rethrow(settleOwnedFailure(thunk, failure));
         }
