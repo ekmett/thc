@@ -50,6 +50,7 @@ class CaseBinderLifetimeTest {
             this.body = body; this.slot = slot; this.observations = observations;
             setRepresentation(body.getRepresentation());
         }
+        @Override public boolean needsCallState() { return body.needsCallState(); }
         @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
         @Override public long executeLong(VirtualFrame frame) {
             observations[0]++;
