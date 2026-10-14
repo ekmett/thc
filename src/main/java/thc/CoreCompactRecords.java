@@ -83,7 +83,7 @@ public final class CoreCompactRecords {
     private Map<String,Object> vector(CoreCompactCursor cursor) { return map("lanes", cursor.unsigned(), "element", enumeration(cursor, ELEMENTS)); }
     private String primitive(CoreCompactCursor cursor) {
         int tag = cursor.readByte();
-        if (tag == 16) { var vector = vector(cursor); return "VecRep " + vector.get("lanes") + " " + vector.get("element"); }
+        if (tag == 16) return "VecRep " + cursor.unsigned() + " " + enumeration(cursor, ELEMENTS);
         if (tag >= PRIMITIVES.size()) throw error("Invalid compact Core primitive representation: " + tag);
         return PRIMITIVES.get(tag);
     }
