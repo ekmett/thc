@@ -4182,8 +4182,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                                 new ProvenExpression(e -> e.builder.emitLoadConstant(thc.runtime.Unit.INSTANCE), UNKNOWN));
                     } catch (BytecodeEncodingException failure) {
                         if (!localIndexOverflow(failure)) throw failure;
-                        roots.subList(rootMark, roots.size()).clear();
-                        localJoinCount = joinMark;
+                        discardPreparedSince(rootMark, joinMark);
                     }
                 } finally {
                     context.preparingCaseRegion = false;
@@ -5539,8 +5538,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                                 if (!localIndexOverflow(failure)) throw failure;
                                 // This optional side has not escaped preparation. Keep the
                                 // usable inline body and any previously accepted region plans.
-                                roots.subList(rootMark, roots.size()).clear();
-                                localJoinCount = joinMark;
+                                discardPreparedSince(rootMark, joinMark);
                                 return inline;
                             }
                             if (context.caseEmission == null) context.caseEmission = new CaseRegionEmission();
@@ -5831,9 +5829,15 @@ public final class BytecodeProgram implements ExecutableProgram {
         if ((scalar || width != 1) && (emission == null || emission.inline)) return prepare.get();
         int rootMark = roots.size(), joinMark = localJoinCount;
         var proof = prepare.get().proof();
+        discardPreparedSince(rootMark, joinMark);
+        return new ProvenExpression(e -> { throw new RuntimeFault("A discarded case region copy cannot be emitted"); }, proof);
+    }
+
+    // Roots and joins prepared since the marks belong to a discarded attempt.
+    // None is installed in a binding or a region call node.
+    private void discardPreparedSince(int rootMark, int joinMark) {
         roots.subList(rootMark, roots.size()).clear();
         localJoinCount = joinMark;
-        return new ProvenExpression(e -> { throw new RuntimeFault("A discarded case region copy cannot be emitted"); }, proof);
     }
 
     private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar, int width,
@@ -5884,10 +5888,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 // The actual emitter, not syntax-size estimates, decides whether
                 // a side fits. At most five reductions; no guest code executes.
                 width /= 2;
-                // These roots belong only to the discarded preparation attempt;
-                // none has been installed in a binding or a region call node.
-                roots.subList(rootMark, roots.size()).clear();
-                localJoinCount = joinMark;
+                discardPreparedSince(rootMark, joinMark);
                 specs.clear();
                 emission.inline = false;
             }
@@ -5914,9 +5915,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             return function(label, List.of(binder), body, scope, proof, new boolean[1], tail, true, true, regionOrigin);
         } catch (BytecodeEncodingException failure) {
             if (!oneArm || !localIndexOverflow(failure)) throw failure;
-            // These roots belong only to the discarded attempt; none is installed.
-            roots.subList(rootMark, roots.size()).clear();
-            localJoinCount = joinMark;
+            discardPreparedSince(rootMark, joinMark);
             return function(label, List.of(binder), body, scope, proof, new boolean[1], tail, true, true, regionOrigin, true);
         }
     }
