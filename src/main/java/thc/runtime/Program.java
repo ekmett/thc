@@ -842,6 +842,7 @@ public final class Program implements ExecutableProgram {
             int n = captureFields.size();
             CoreRepresentation[] vectors = new CoreRepresentation[n];
             boolean[] eligible = new boolean[n], exactLong = new boolean[n], exactFloat = new boolean[n], exactDouble = new boolean[n];
+            boolean[] sourceReferences = new boolean[n];
             Class<?>[] references = new Class<?>[n];
             NarrowInteger[] narrow = new NarrowInteger[n];
             for (int i = 0; i < n; i++) {
@@ -851,11 +852,12 @@ public final class Program implements ExecutableProgram {
                 eligible[i] = !proof.isVector() && field.primitive;
                 exactLong[i] = !field.cell && proof.isLong() && proof.getEvaluated();
                 references[i] = field.cell ? null : proof.referenceCarrier();
+                sourceReferences[i] = !field.cell && (proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE);
                 exactFloat[i] = !field.cell && proof.isFloat() && proof.getEvaluated();
                 exactDouble[i] = !field.cell && proof.isDouble() && proof.getEvaluated();
                 narrow[i] = !field.cell && proof.getEvaluated() ? proof.getNarrowInteger() : null;
             }
-            captures = CaptureLayout.withVectors(language, vectors, eligible, exactLong, references, exactFloat, exactDouble, narrow);
+            captures = CaptureLayout.withVectors(language, vectors, eligible, exactLong, references, exactFloat, exactDouble, narrow, sourceReferences);
         }
         int[] allArgumentSlots = new int[args.size()];
         Arrays.fill(allArgumentSlots, -1);
