@@ -346,74 +346,90 @@ class BytecodeGraphBudgetTest {
         }
     }
 
-    // Disjoint wide decisions in one root, as operands of a sum. They must not be
-    // alternatives of one outer case: such a case is itself a narrow region with
-    // one side root per arm, and then no decision here shares the root's plan.
-    private static Map<String, Object> siblingCapacityInput(int... repetitions) {
-        List<Object> sum = null;
+    // Wide decisions of 64 arms: `parts` holds each one as a case with its own
+    // binder. `input` and `lambda` are the last decision's program, whose body the
+    // caller replaces with `withBody`.
+    private record WideRegions(Map<String, Object> input, List<Object> lambda, List<List<Object>> parts) {
+        Map<String, Object> withBody(List<Object> body) {
+            lambda.set(2, body);
+            var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+            var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
+            input.put("bindings", bindings); return input;
+        }
+    }
+
+    // One decision per entry. Each arm makes that many calls, then returns the last
+    // call's value. A zero entry has no calls: each arm returns its own number.
+    private static WideRegions wideRegions(int... repetitions) {
+        return wideRegions(repetitions, count -> variable("value" + (count - 1), LONG));
+    }
+
+    // The same, with the expression each arm ends in after its calls.
+    private static WideRegions wideRegions(int[] repetitions, java.util.function.IntFunction<List<Object>> tail) {
+        var parts = new ArrayList<List<Object>>();
         Map<String, Object> input = null;
         List<Object> lambda = null;
         for (int region = 0; region < repetitions.length; region++) {
             int count = repetitions[region];
             input = new LinkedHashMap<>(decision(64, List.of(binder("step", CLOSURE, true)), LONG,
-                    arm -> count == 0 ? number(arm) : capacityCalls(count, arm, variable("value" + (count - 1), LONG), LONG)));
+                    arm -> count == 0 ? number(arm) : capacityCalls(count, arm, tail.apply(count), LONG)));
             var entry = ((List<Map<String, Object>>) input.get("bindings")).getFirst();
             lambda = new ArrayList<>((List<Object>) entry.get("expr"));
             var part = new ArrayList<>((List<Object>) lambda.get(2));
             String id = "region" + region;
             part.set(2, id); part.set(4, Map.of("rep", LONG, "binder", binder(id, DATA, true)));
-            sum = sum == null ? part : node("app", node("prim", "+#"), List.of(sum, part),
-                    List.of(false, false), false, false, Map.of("rep", LONG));
+            parts.add(part);
         }
+        return new WideRegions(input, lambda, parts);
+    }
+
+    private static List<Object> plus(List<Object> left, List<Object> right) {
+        return node("app", node("prim", "+#"), List.of(left, right), List.of(false, false), false, false, Map.of("rep", LONG));
+    }
+
+    // Disjoint wide decisions in one root, as operands of a sum. They must not be
+    // alternatives of one outer case: such a case is itself a narrow region with
+    // one side root per arm, and then no decision here shares the root's plan.
+    private static Map<String, Object> siblingCapacityInput(int... repetitions) {
+        var regions = wideRegions(repetitions);
+        List<Object> sum = regions.parts().getFirst();
+        for (var part : regions.parts().subList(1, regions.parts().size())) sum = plus(sum, part);
         // Genuine return work remains in the original root after the last decision.
-        lambda.set(2, node("app", node("prim", "+#"), List.of(sum, number(99)),
-                List.of(false, false), false, false, Map.of("rep", LONG)));
-        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
-        var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
-        input.put("bindings", bindings); return input;
+        return regions.withBody(plus(sum, number(99)));
     }
 
     // An outer case with enough work is a narrow region: one side root per arm.
     // Each arm holds a wide decision of its own, with the given calls per arm.
     private static Map<String, Object> narrowCaseWithWideArms(int... repetitions) {
+        var regions = wideRegions(repetitions);
         var alternatives = new ArrayList<List<Object>>();
-        Map<String, Object> input = null;
-        List<Object> lambda = null;
-        for (int region = 0; region < repetitions.length; region++) {
-            int count = repetitions[region];
-            input = new LinkedHashMap<>(decision(64, List.of(binder("step", CLOSURE, true)), LONG,
-                    arm -> count == 0 ? number(arm) : capacityCalls(count, arm, variable("value" + (count - 1), LONG), LONG)));
-            var entry = ((List<Map<String, Object>>) input.get("bindings")).getFirst();
-            lambda = new ArrayList<>((List<Object>) entry.get("expr"));
-            var part = new ArrayList<>((List<Object>) lambda.get(2));
-            String id = "region" + region;
-            part.set(2, id); part.set(4, Map.of("rep", LONG, "binder", binder(id, DATA, true)));
-            alternatives.add(node("data", "C" + region, List.of(), part));
-        }
-        lambda.set(2, node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
+        for (int region = 0; region < repetitions.length; region++)
+            alternatives.add(node("data", "C" + region, List.of(), regions.parts().get(region)));
+        return regions.withBody(node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
                 Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
-        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
-        var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
-        input.put("bindings", bindings); return input;
     }
 
-    // The first arm holds 8,192 calls, too many local IDs for one root. Its side
-    // cannot narrow further, so the decision must split inside that side, without
-    // a live inline copy. The program must load and run each call once.
-    @Test void aWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Exception {
+    // One arm of a narrow or scalar region holds 8,192 calls, too many local IDs for
+    // one root. Its side cannot narrow further, so the decision must split inside
+    // that side, without a live inline copy. The program must load, split only that
+    // side, and run each of the 128 calls of the chosen arm once, in order.
+    // `more` are the entry arguments after the closure; `inSplitSide` sees the side.
+    private void checkSplitSide(Map<String, Object> input, long expected, Object[] more,
+            org.junit.jupiter.api.function.ThrowingConsumer<BytecodeRoot> inSplitSide) throws Throwable {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             var threads = Language.currentState().getThreads(); threads.enterCurrent();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new BytecodeProgram(language, narrowCaseWithWideArms(128, 0), true);
+                var program = new BytecodeProgram(language, input, true);
                 var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
                 int splitSides = 0;
                 for (var side : regionSides(root)) {
                     var sideRoot = (BytecodeRoot) side.getRootNode();
                     assertTrue(instructions(sideRoot).values().stream().noneMatch(value -> value.contains("InlineCaseRegions")),
                             "a side keeps no live inline copy");
-                    if (!regionSides(sideRoot).isEmpty()) splitSides++;
+                    if (regionSides(sideRoot).isEmpty()) continue;
+                    splitSides++; inSplitSide.accept(sideRoot);
                 }
                 assertEquals(1, splitSides, "only the arm that overflows splits");
                 var calls = new java.util.concurrent.atomic.AtomicInteger();
@@ -423,10 +439,62 @@ class BytecodeGraphBudgetTest {
                         return (Long) frame.getArguments()[1] + 1;
                     }
                 }.getCallTarget());
-                assertEquals(63128L, Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
+                var arguments = new ArrayList<Object>(List.of(0L, program.entryValue("chosen"), step));
+                arguments.addAll(Arrays.asList(more));
+                assertEquals(expected, Calls.target(target, arguments.toArray()));
                 assertEquals(128, calls.get());
             } finally { threads.leaveCurrent(); context.leave(); }
         }
+    }
+
+    @Test void aWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Throwable {
+        checkSplitSide(narrowCaseWithWideArms(128, 0), 63128L, new Object[0], side -> { });
+    }
+
+    // A scalar region has one side per literal arm, so its sides are also one arm.
+    @Test void aWideDecisionInAScalarSideSplitsWhenItsLocalIdsOverflow() throws Throwable {
+        var regions = wideRegions(128);
+        var outer = node("case", variable("selector", LONG), "pick", List.of(
+                node("lit", List.of("int", "0"), List.of(), regions.parts().getFirst()),
+                node("lit", List.of("int", "1"), List.of(), number(7)),
+                node("default", null, List.of(), number(9))),
+                Map.of("rep", LONG, "binder", binder("pick", LONG, false)));
+        // The entry takes the selector after the closure.
+        regions.lambda().set(1, List.of(binder("x", DATA, true), binder("step", CLOSURE, true), binder("selector", LONG, false)));
+        regions.lambda().set(3, Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(true, false, false)));
+        checkSplitSide(regions.withBody(outer), 63128L, new Object[]{0L}, side -> { });
+    }
+
+    // The arm that overflows has a join prefix: `let join k in <wide decision>`.
+    // The nested decision is a case region with that prefix, and it still splits.
+    @Test void aJoinPrefixedWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Throwable {
+        var regions = wideRegions(new int[]{128, 0}, count -> joinedCall("k", List.of(), LONG));
+        var joined = node("let", false, List.of(localJoin("k", List.of(), number(777), LONG)),
+                regions.parts().getFirst(), Map.of("rep", LONG));
+        var input = regions.withBody(node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch",
+                List.of(node("data", "C0", List.of(), joined), node("data", "C1", List.of(), regions.parts().get(1))),
+                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
+        checkSplitSide(input, 777L, new Object[0], side -> { });
+    }
+
+    // A join region keeps the roots of an inline copy that it never emits. It must
+    // stay out of a side that splits for capacity, even when its body is large.
+    @Test void joinRegionsStayOutOfASideThatSplitsForCapacity() throws Throwable {
+        List<Object> chain = number(0);
+        for (int i = 1; i <= 24; i++) chain = plus(number(i), chain);
+        var regions = wideRegions(128, 0);
+        // The join is called in tail position of its own let, next to the decision.
+        var withJoin = node("let", false, List.of(localJoin("j", List.of(), chain, LONG)),
+                joinedCall("j", List.of(), LONG), Map.of("rep", LONG));
+        var joined = plus(regions.parts().getFirst(), withJoin);
+        var input = regions.withBody(node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch",
+                List.of(node("data", "C0", List.of(), joined), node("data", "C1", List.of(), regions.parts().get(1))),
+                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
+        checkSplitSide(input, 63128L + 300, new Object[0], side -> {
+            for (var nested : regionSides(side))
+                assertFalse(((BytecodeRoot) nested.getRootNode()).getName().startsWith("join body"),
+                        "a join body is not outlined inside a side that splits for capacity");
+        });
     }
 
     @Test void aLaterSmallRegionCannotRestoreAnUnencodableInlineCopy() throws Exception {
