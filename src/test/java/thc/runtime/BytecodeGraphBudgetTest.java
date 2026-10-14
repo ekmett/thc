@@ -346,26 +346,161 @@ class BytecodeGraphBudgetTest {
         }
     }
 
-    private static Map<String, Object> siblingCapacityInput(int... repetitions) {
-        var alternatives = new ArrayList<List<Object>>();
+    // Wide decisions of 64 arms: `parts` holds each one as a case with its own
+    // binder. `input` and `lambda` are the last decision's program, whose body the
+    // caller replaces with `withBody`.
+    private record WideRegions(Map<String, Object> input, List<Object> lambda, List<List<Object>> parts) {
+        Map<String, Object> withBody(List<Object> body) {
+            lambda.set(2, body);
+            var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+            var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
+            input.put("bindings", bindings); return input;
+        }
+    }
+
+    // One decision per entry. Each arm makes that many calls, then returns the last
+    // call's value. A zero entry has no calls: each arm returns its own number.
+    private static WideRegions wideRegions(int... repetitions) {
+        return wideRegions(repetitions, count -> variable("value" + (count - 1), LONG));
+    }
+
+    // The same, with the expression each arm ends in after its calls.
+    private static WideRegions wideRegions(int[] repetitions, java.util.function.IntFunction<List<Object>> tail) {
+        var parts = new ArrayList<List<Object>>();
         Map<String, Object> input = null;
         List<Object> lambda = null;
         for (int region = 0; region < repetitions.length; region++) {
             int count = repetitions[region];
             input = new LinkedHashMap<>(decision(64, List.of(binder("step", CLOSURE, true)), LONG,
-                    arm -> count == 0 ? number(arm) : capacityCalls(count, arm, variable("value" + (count - 1), LONG), LONG)));
+                    arm -> count == 0 ? number(arm) : capacityCalls(count, arm, tail.apply(count), LONG)));
             var entry = ((List<Map<String, Object>>) input.get("bindings")).getFirst();
             lambda = new ArrayList<>((List<Object>) entry.get("expr"));
             var part = new ArrayList<>((List<Object>) lambda.get(2));
             String id = "region" + region;
             part.set(2, id); part.set(4, Map.of("rep", LONG, "binder", binder(id, DATA, true)));
-            alternatives.add(node("data", "C" + region, List.of(), part));
+            parts.add(part);
         }
-        lambda.set(2, node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
-                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
-        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
-        var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
-        input.put("bindings", bindings); return input;
+        return new WideRegions(input, lambda, parts);
+    }
+
+    private static List<Object> plus(List<Object> left, List<Object> right) {
+        return node("app", node("prim", "+#"), List.of(left, right), List.of(false, false), false, false, Map.of("rep", LONG));
+    }
+
+    // Disjoint wide decisions in one root, as operands of a sum. They must not be
+    // alternatives of one outer case: such a case is itself a narrow region with
+    // one side root per arm, and then no decision here shares the root's plan.
+    private static Map<String, Object> siblingCapacityInput(int... repetitions) {
+        var regions = wideRegions(repetitions);
+        List<Object> sum = regions.parts().getFirst();
+        for (var part : regions.parts().subList(1, regions.parts().size())) sum = plus(sum, part);
+        // Genuine return work remains in the original root after the last decision.
+        return regions.withBody(plus(sum, number(99)));
+    }
+
+    // A case on a constant constructor, with one arm per entry. With enough work in
+    // its arms it is a narrow region: one side root per arm.
+    private static List<Object> narrowCase(List<List<Object>> arms) {
+        var alternatives = new ArrayList<List<Object>>();
+        for (int arm = 0; arm < arms.size(); arm++) alternatives.add(node("data", "C" + arm, List.of(), arms.get(arm)));
+        return node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
+                Map.of("rep", LONG, "binder", binder("branch", DATA, true)));
+    }
+
+    // Each arm of the narrow case holds a wide decision of its own, with the given
+    // calls per arm.
+    private static Map<String, Object> narrowCaseWithWideArms(int... repetitions) {
+        var regions = wideRegions(repetitions);
+        return regions.withBody(narrowCase(regions.parts()));
+    }
+
+    // One arm of a narrow or scalar region holds 8,192 calls, too many local IDs for
+    // one root. Its side cannot narrow further, so the decision must split inside
+    // that side, without a live inline copy. The program must load, split only that
+    // side, and run each of the 128 calls of the chosen arm once, in order.
+    // A join region keeps the roots of an inline copy that it never emits, so no
+    // join body may be outlined inside a side that splits for capacity.
+    // `more` are the entry arguments after the closure.
+    private void checkSplitSide(Map<String, Object> input, long expected, Object... more) throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                int splitSides = 0;
+                for (var side : regionSides(root)) {
+                    var sideRoot = (BytecodeRoot) side.getRootNode();
+                    assertTrue(instructions(sideRoot).values().stream().noneMatch(value -> value.contains("InlineCaseRegions")),
+                            "a side keeps no live inline copy");
+                    if (regionSides(sideRoot).isEmpty()) continue;
+                    splitSides++;
+                    for (var nested : regionSides(sideRoot))
+                        assertFalse(((BytecodeRoot) nested.getRootNode()).getName().startsWith("join body"),
+                                "a join body is not outlined inside a side that splits for capacity");
+                    // The side was prepared twice. Replay from source and a clone must
+                    // still emit the instructions of the attempt that was kept.
+                    var before = instructions(sideRoot);
+                    sideRoot.getRootNodes().ensureSourceInformation();
+                    assertEquals(before, instructions(sideRoot), "source replay keeps the side's instructions");
+                    var cloneMethod = sideRoot.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                    assertEquals(before, instructions((BytecodeRoot) cloneMethod.invoke(sideRoot)), "so does a clone");
+                }
+                assertEquals(1, splitSides, "only the arm that overflows splits");
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(63000L + calls.getAndIncrement(), frame.getArguments()[1]);
+                        return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                var arguments = new ArrayList<Object>(List.of(0L, program.entryValue("chosen"), step));
+                arguments.addAll(Arrays.asList(more));
+                assertEquals(expected, Calls.target(target, arguments.toArray()));
+                assertEquals(128, calls.get());
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
+    @Test void aWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Exception {
+        checkSplitSide(narrowCaseWithWideArms(128, 0), 63128L);
+    }
+
+    // A scalar region has one side per literal arm, so its sides are also one arm.
+    @Test void aWideDecisionInAScalarSideSplitsWhenItsLocalIdsOverflow() throws Exception {
+        var regions = wideRegions(128);
+        var outer = node("case", variable("selector", LONG), "pick", List.of(
+                node("lit", List.of("int", "0"), List.of(), regions.parts().getFirst()),
+                node("lit", List.of("int", "1"), List.of(), number(7)),
+                node("default", null, List.of(), number(9))),
+                Map.of("rep", LONG, "binder", binder("pick", LONG, false)));
+        // The entry takes the selector after the closure.
+        regions.lambda().set(1, List.of(binder("x", DATA, true), binder("step", CLOSURE, true), binder("selector", LONG, false)));
+        regions.lambda().set(3, Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(true, false, false)));
+        checkSplitSide(regions.withBody(outer), 63128L, 0L);
+    }
+
+    // The arm that overflows has a join prefix: `let join k in <wide decision>`.
+    // The nested decision is a case region with that prefix, and it still splits.
+    @Test void aJoinPrefixedWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Exception {
+        var regions = wideRegions(new int[]{128, 0}, count -> joinedCall("k", List.of(), LONG));
+        var joined = node("let", false, List.of(localJoin("k", List.of(), number(777), LONG)),
+                regions.parts().getFirst(), Map.of("rep", LONG));
+        checkSplitSide(regions.withBody(narrowCase(List.of(joined, regions.parts().get(1)))), 777L);
+    }
+
+    // A join body large enough to be outlined, if joins were allowed there, sits next
+    // to the decision. checkSplitSide fails if the side outlines it.
+    @Test void joinRegionsStayOutOfASideThatSplitsForCapacity() throws Exception {
+        List<Object> chain = number(0);
+        for (int i = 1; i <= 24; i++) chain = plus(number(i), chain);
+        var regions = wideRegions(128, 0);
+        // The join is called in tail position of its own let, next to the decision.
+        var withJoin = node("let", false, List.of(localJoin("j", List.of(), chain, LONG)),
+                joinedCall("j", List.of(), LONG), Map.of("rep", LONG));
+        var joined = plus(regions.parts().getFirst(), withJoin);
+        checkSplitSide(regions.withBody(narrowCase(List.of(joined, regions.parts().get(1)))), 63128L + 300);
     }
 
     @Test void aLaterSmallRegionCannotRestoreAnUnencodableInlineCopy() throws Exception {
@@ -384,7 +519,9 @@ class BytecodeGraphBudgetTest {
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void theFiniteRegionCapDoesNotRetryAnUncoveredCapacityOverflow(boolean overflow) throws Exception {
-        int[] calls = new int[9]; calls[8] = overflow ? 64 : 0;
+        // The ninth decision stays in the root. 64 arms of 128 calls are 8,192 calls,
+        // more than twice the count at which one root runs out of local IDs.
+        int[] calls = new int[9]; calls[8] = overflow ? 128 : 0;
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -462,7 +599,12 @@ class BytecodeGraphBudgetTest {
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void localEncodingCapacityNarrowsSidesBeforePublishingTheOriginalTarget(boolean parentOnly) throws Exception {
-        int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 8 : 64;
+        // One root runs out of local IDs between 3,072 and 4,096 calls (checked on
+        // 2026-10-14). The parent holds 8,192 calls in both cases. In the parent-only
+        // case each side of 32 arms holds 256 calls and fits. In the other case a side
+        // of 32 arms holds 4,096 calls, near the limit, so the sides must narrow. The
+        // width assertion below fails if a change in locals per call ends that.
+        int arms = parentOnly ? 1024 : 64, repetitions = parentOnly ? 8 : 128;
         var input = decision(arms, List.of(binder("step", CLOSURE, true)), LONG,
                 arm -> capacityCalls(repetitions, arm, variable("value" + (repetitions - 1), LONG), LONG));
         try (var context = context()) {
@@ -478,6 +620,8 @@ class BytecodeGraphBudgetTest {
                 assertEquals(0, root.prepareGraphBudgetRetry(0), "capacity-only extraction is not a graph bailout");
                 assertTrue(instructions(root).values().stream().noneMatch(value -> value.contains("InlineCaseRegions")),
                         "the unencodable inline body must not be emitted");
+                assertEquals(parentOnly, regionWidths(root).stream().allMatch(width -> width == BytecodeCaseRegion.WIDTH),
+                        "only the sides of the other case narrow below the default width");
                 var beforeInstructions = instructions(root);
                 assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
                 var calls = new java.util.concurrent.atomic.AtomicInteger();
@@ -486,7 +630,7 @@ class BytecodeGraphBudgetTest {
                         calls.incrementAndGet(); return (Long) frame.getArguments()[1] + 1;
                     }
                 }.getCallTarget());
-                assertEquals(parentOnly ? 255008L : 63064L,
+                assertEquals(parentOnly ? 1023008L : 63128L,
                         Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
                 assertEquals(repetitions, calls.get(), "no preparation, retry or branch replay may execute a call");
                 assertEquals(1, entries(program));
@@ -623,6 +767,76 @@ class BytecodeGraphBudgetTest {
                 var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
                 assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
                 assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
+    // A narrow region never emits its inline copy. The closure under it keeps
+    // one prepared root, in the side that runs it, also below a nested region.
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void aNarrowRegionKeepsItsClosureOnlyInTheSideThatRunsIt(boolean nested) throws Exception {
+        var marker = new LinkedHashMap<>(binder("f", CLOSURE, true));
+        marker.put("expr", node("lam", List.of(binder("marker", LONG, false)),
+                node("app", node("prim", "+#"), List.of(variable("marker", LONG), variable("value2", LONG)),
+                        List.of(false, false), false, false, Map.of("rep", LONG)),
+                Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(false))));
+        var marked = node("let", false, List.of(marker), node("app", variable("f", CLOSURE),
+                List.of(variable("value2", LONG)), List.of(false), false, false, Map.of("rep", LONG)), Map.of("rep", LONG));
+        var inner = new ArrayList<List<Object>>();
+        for (int arm = 0; arm < 3; arm++)
+            inner.add(node("data", "C" + arm, List.of(), capacityCalls(3, 10 + arm, arm == 1 ? marked : variable("value2", LONG), LONG)));
+        var nestedCase = node("case", variable("y", DATA), "inner", inner, Map.of("rep", LONG, "binder", binder("inner", DATA, true)));
+        var input = decision(3, List.of(binder("step", CLOSURE, true), binder("y", DATA, true)), LONG,
+                arm -> arm != 1 ? capacityCalls(3, arm, variable("value2", LONG), LONG) : nested ? nestedCase : capacityCalls(3, arm, marked, LONG));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var sides = regionSides((BytecodeRoot) target.getRootNode());
+                assertEquals(3, sides.size());
+                if (nested) assertEquals(3, regionSides((BytecodeRoot) sides.get(1).getRootNode()).size());
+                assertEquals(1L, java.util.regex.Pattern.compile("(?m)^lambda marker$").matcher(program.bytecodeDump()).results().count(),
+                        "a discarded inline copy keeps no closure root");
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { return (Long) frame.getArguments()[1] + 1; }
+                }.getCallTarget());
+                var chosen = program.constructorLayout("C1");
+                assertEquals(nested ? 22006L : 2006L, Calls.target(target, new Object[]{0L, chosen.allocate(), step, chosen.allocate()}));
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
+    // A scalar region keeps a live inline copy. A side would prepare the rest
+    // of a strict chain again at each level, so it keeps such a case inline.
+    @Test void aSideKeepsANestedScalarSuffixInItsOwnActivation() throws Exception {
+        var chain = capacityCalls(16, 1, variable("value15", LONG), LONG);
+        var input = decision(3, List.of(binder("step", CLOSURE, true)), LONG,
+                arm -> arm == 1 ? chain : capacityCalls(3, arm, variable("value2", LONG), LONG));
+        var alone = new LinkedHashMap<>(input);
+        alone.put("bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                "expr", node("lam", List.of(binder("step", CLOSURE, true)), chain,
+                        Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(false))))));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { return (Long) frame.getArguments()[1] + 1; }
+                }.getCallTarget());
+                var top = new BytecodeProgram(language, alone, true).entryTarget("entry");
+                var topSides = regionSides((BytecodeRoot) top.getRootNode());
+                assertEquals(1, topSides.size(), "the chain is a scalar region in an original root");
+                assertEquals(List.of(), regionSides((BytecodeRoot) topSides.getFirst().getRootNode()));
+                assertEquals(1016L, Calls.target(top, new Object[]{0L, step}));
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var sides = regionSides((BytecodeRoot) target.getRootNode());
+                assertEquals(3, sides.size());
+                assertEquals(List.of(), regionSides((BytecodeRoot) sides.get(1).getRootNode()),
+                        "a side keeps a nested scalar region inline");
+                assertEquals(1016L, Calls.target(target, new Object[]{0L, program.constructorLayout("C1").allocate(), step}));
             } finally { threads.leaveCurrent(); context.leave(); }
         }
     }
@@ -775,6 +989,14 @@ class BytecodeGraphBudgetTest {
                     "expr", node("lam", List.of(binder("seed", LONG, false), binder("bias", LONG, false),
                             binder("payload", REFERENCE, true)), body,
                         Map.of("rep", CLOSURE, "resultRep", result, "entryStrict", List.of(false, false, false))))));
+    }
+
+    private static List<Integer> regionWidths(BytecodeRoot root) throws Exception {
+        var field = BytecodeRoot.class.getDeclaredField("caseRegions"); field.setAccessible(true);
+        var widthField = BytecodeCaseRegion.class.getDeclaredField("width"); widthField.setAccessible(true);
+        var result = new ArrayList<Integer>();
+        for (var region : (BytecodeCaseRegion[]) field.get(root)) result.add((Integer) widthField.get(region));
+        return result;
     }
 
     private static List<RootCallTarget> regionSides(BytecodeRoot root) throws Exception {
@@ -1174,10 +1396,15 @@ class BytecodeGraphBudgetTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 // The observed 48-link suffix exceeds the fixed budget, while the
                 // smaller unsplit prefix fits after the suffix moves out of line.
-                var program = new BytecodeProgram(language, broadDefaultSuffix(8, 48));
+                // Six links leave the recovered graph 10 to 20 percent below the
+                // limit (checked on 2026-10-14). Eight links left less than 3 percent,
+                // and a small change in the lowered code pushed it over.
+                int prefixLinks = 6, suffixLinks = 48;
+                long answer = 2L * suffixLinks + 2L * prefixLinks;
+                var program = new BytecodeProgram(language, broadDefaultSuffix(prefixLinks, suffixLinks));
                 var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
-                var input = chain(program, 48);
-                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, input}));
+                var input = chain(program, suffixLinks);
+                assertEquals(answer, Calls.target(target, new Object[]{0L, 17L, input}));
                 var original = instructions(root);
                 assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
                 assertTrue(compile(target));
@@ -1185,14 +1412,14 @@ class BytecodeGraphBudgetTest {
                 assertEquals(0, entries(program)); assertEquals(original, instructions(root));
                 assertTrue(valid(target), "the finite recovery graph is installed before guest execution");
                 bypass(target);
-                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, chain(program, 48)}));
+                assertEquals(answer, Calls.target(target, new Object[]{0L, 17L, chain(program, suffixLinks)}));
                 assertSame(target, program.entryTarget("entry"));
                 // The newly extracted suffix is still cold; its first execution may deoptimize.
                 // Compile that now-observed path explicitly, never retry the guest call on failure.
                 assertEquals(original.keySet(), instructions(root).keySet());
                 assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
                 long before = entries(program);
-                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, input}));
+                assertEquals(answer, Calls.target(target, new Object[]{0L, 17L, input}));
                 assertEquals(before + 1, entries(program)); assertTrue(valid(target));
                 assertSame(target, program.entryTarget("entry")); assertEquals(1, root.prepareGraphBudgetRetry(1));
             } finally { context.leave(); }

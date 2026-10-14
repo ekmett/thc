@@ -45,11 +45,21 @@ the scrutinee does not reference its joins. The scrutinee stays in the caller an
 runs once; each side retains the join definitions in their original lexical
 order. Ordinary lets remain outside this transformation. Recursive prefixes and
 cases needing an outer join activation stay on the existing inline path.
-An outlined root can prepare eligible regions strictly inside its original Core
-expression. Its own entry and synthesized selector or closure wrappers cannot
-outline themselves. Nested regions retain the same join, capture and capacity
-rules; the source descent keeps preparation finite without copying descendant
-sets. Each side remains a real guest call and continuation boundary.
+An outlined root can prepare eligible narrow constructor regions strictly inside
+its original Core expression. Its own entry and synthesized selector or closure
+wrappers cannot outline themselves. Nested regions retain the same join, capture
+and capacity rules; the source descent keeps preparation finite without copying
+descendant sets. Each side remains a real guest call and continuation boundary.
+Scalar, wide and join regions keep a live inline copy, so they stay in the
+original root: a nested copy would prepare each level's subtree again.
+One exception exists for capacity. A side of a single arm that still exhausts
+local IDs is prepared again, and its case regions may then split inside the
+side. Those regions discard their inline copies, so the program keeps no second
+copy of any subtree. Join regions stay out of such a side.
+A root that cannot emit an inline copy of a region, such as a narrow constructor
+region, keeps only that copy's result proof. The program keeps no closure or
+thunk root from the copy, so code under nested narrow regions has one prepared
+root per closure, in the side that runs it.
 Preparation does not execute guest code or change published bytecode PCs.
 
 Suspending operations preserve their pending operands and caller state through
