@@ -236,13 +236,20 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean preparingCaseRegion;
         List<?> caseRegionOrigin;
         CaseRegionEmission caseEmission;
-        // Set only for a side that overflowed its local IDs as a single arm.
-        // Its case regions exist for capacity alone. Each discards its inline
-        // copy, so the program keeps no second copy of any subtree.
         boolean capacityNesting;
         final List<BytecodeCaseRegion> caseRegions = new ArrayList<>();
         LeadingCaseReturn leadingCaseReturn;
         TupleShape tuple;
+
+        // For a side that overflowed its local IDs as a single arm. Its case regions
+        // exist for capacity alone and start with their inline copy off, so each
+        // discards the copy it prepares and the program keeps no second copy of
+        // any subtree. The flag and the emission choice always go together.
+        void nestForCapacity() {
+            capacityNesting = true;
+            caseEmission = new CaseRegionEmission();
+            caseEmission.inline = false;
+        }
 
         // Each side may prepare only a proper original subtree. Rewritten
         // selectors and copied closure wrappers cannot outline themselves.
@@ -877,11 +884,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         context.entryPoll = entryPoll;
         context.caseRegionOrigin = regionOrigin;
         context.preparingCaseRegion = passThrough && regionOrigin == null;
-        if (capacityNesting) {
-            context.capacityNesting = true;
-            context.caseEmission = new CaseRegionEmission();
-            context.caseEmission.inline = false;
-        }
+        if (capacityNesting) context.nestForCapacity();
         var scope = new Scope(context, outer.source);
         var free = CoreFreeVariables.coreFreeVariables(expression);
         var argumentIds = new LinkedHashSet<String>();
@@ -5906,8 +5909,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     // A side of one arm cannot narrow further. When its own decision still runs out
     // of local IDs, prepare that decision's case regions inside the side, for
-    // capacity alone. They discard their inline copies, so the program keeps no
-    // second copy of any subtree.
+    // capacity alone (see nestForCapacity).
     private FunctionSpec regionSide(String label, Map<String, Object> binder, List<Object> body, Scope scope,
             CoreRepresentation proof, boolean tail, List<?> regionOrigin, boolean oneArm) {
         int rootMark = roots.size(), joinMark = localJoinCount;
