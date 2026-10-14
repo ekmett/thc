@@ -46,10 +46,9 @@ public final class CoreCompactModule implements AutoCloseable {
                     "Compact Core identity differs from package directory: " + module.getPrefix());
             if (facts.get("targetLayout") != null) require(Objects.equals(TargetLayout.fromDocument(facts.get("targetLayout")), targetLayout),
                     "Compact Core target layout differs from package directory");
-            var result = new LinkedHashMap<>(facts);
-            result.remove("targetLayout"); result.put("bindings", List.of());
+            facts.remove("targetLayout"); facts.put("bindings", List.of());
             synchronized (getCounters()) { getCounters().decodedModules++; }
-            return metadata = result;
+            return metadata = facts;
         } catch (Exception failure) { return rethrow(failure); }
     }
     public boolean containsSymbol(String id) {
