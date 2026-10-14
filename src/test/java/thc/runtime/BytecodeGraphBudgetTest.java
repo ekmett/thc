@@ -430,6 +430,13 @@ class BytecodeGraphBudgetTest {
                             "a side keeps no live inline copy");
                     if (regionSides(sideRoot).isEmpty()) continue;
                     splitSides++; inSplitSide.accept(sideRoot);
+                    // The side was prepared twice. Replay from source and a clone must
+                    // still emit the instructions of the attempt that was kept.
+                    var before = instructions(sideRoot);
+                    sideRoot.getRootNodes().ensureSourceInformation();
+                    assertEquals(before, instructions(sideRoot), "source replay keeps the side's instructions");
+                    var cloneMethod = sideRoot.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                    assertEquals(before, instructions((BytecodeRoot) cloneMethod.invoke(sideRoot)), "so does a clone");
                 }
                 assertEquals(1, splitSides, "only the arm that overflows splits");
                 var calls = new java.util.concurrent.atomic.AtomicInteger();
