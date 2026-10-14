@@ -373,6 +373,62 @@ class BytecodeGraphBudgetTest {
         input.put("bindings", bindings); return input;
     }
 
+    // An outer case with enough work is a narrow region: one side root per arm.
+    // Each arm holds a wide decision of its own, with the given calls per arm.
+    private static Map<String, Object> narrowCaseWithWideArms(int... repetitions) {
+        var alternatives = new ArrayList<List<Object>>();
+        Map<String, Object> input = null;
+        List<Object> lambda = null;
+        for (int region = 0; region < repetitions.length; region++) {
+            int count = repetitions[region];
+            input = new LinkedHashMap<>(decision(64, List.of(binder("step", CLOSURE, true)), LONG,
+                    arm -> count == 0 ? number(arm) : capacityCalls(count, arm, variable("value" + (count - 1), LONG), LONG)));
+            var entry = ((List<Map<String, Object>>) input.get("bindings")).getFirst();
+            lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+            var part = new ArrayList<>((List<Object>) lambda.get(2));
+            String id = "region" + region;
+            part.set(2, id); part.set(4, Map.of("rep", LONG, "binder", binder(id, DATA, true)));
+            alternatives.add(node("data", "C" + region, List.of(), part));
+        }
+        lambda.set(2, node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
+                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
+        input.put("bindings", bindings); return input;
+    }
+
+    // The first arm holds 8,192 calls, too many local IDs for one root. Its side
+    // cannot narrow further, so the decision must split inside that side, without
+    // a live inline copy. The program must load and run each call once.
+    @Test void aWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, narrowCaseWithWideArms(128, 0), true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                int splitSides = 0;
+                for (var side : regionSides(root)) {
+                    var sideRoot = (BytecodeRoot) side.getRootNode();
+                    assertTrue(instructions(sideRoot).values().stream().noneMatch(value -> value.contains("InlineCaseRegions")),
+                            "a side keeps no live inline copy");
+                    if (!regionSides(sideRoot).isEmpty()) splitSides++;
+                }
+                assertEquals(1, splitSides, "only the arm that overflows splits");
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(63000L + calls.getAndIncrement(), frame.getArguments()[1]);
+                        return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                assertEquals(63128L, Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
+                assertEquals(128, calls.get());
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
     @Test void aLaterSmallRegionCannotRestoreAnUnencodableInlineCopy() throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();

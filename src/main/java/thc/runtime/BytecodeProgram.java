@@ -236,6 +236,10 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean preparingCaseRegion;
         List<?> caseRegionOrigin;
         CaseRegionEmission caseEmission;
+        // Set only for a side that overflowed its local IDs as a single arm.
+        // Its case regions exist for capacity alone. Each discards its inline
+        // copy, so the program keeps no second copy of any subtree.
+        boolean capacityNesting;
         final List<BytecodeCaseRegion> caseRegions = new ArrayList<>();
         LeadingCaseReturn leadingCaseReturn;
         TupleShape tuple;
@@ -247,6 +251,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean regionSourceAllowed(List<?> expression, boolean inlineCopy) {
             return caseRegionOrigin == null || !inlineCopy && expression != caseRegionOrigin
                 && containsRegionSource(caseRegionOrigin, expression);
+        }
+
+        // A case region in a capacity-nesting side discards its inline copy. Join
+        // regions do not: they keep the roots of a copy they never emit, so they
+        // keep calling regionSourceAllowed with a live copy.
+        boolean caseRegionSourceAllowed(List<?> expression, boolean inlineCopy) {
+            return regionSourceAllowed(expression, inlineCopy && !capacityNesting);
         }
 
         FunctionContext(int formalArity) { this(formalArity, new boolean[formalArity]); }
@@ -853,12 +864,24 @@ public final class BytecodeProgram implements ExecutableProgram {
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
             CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough, boolean entryPoll,
             List<?> regionOrigin) {
+        return function(label, args, expression, outer, resultProof, entryStrict, tail, passThrough, entryPoll,
+                regionOrigin, false);
+    }
+
+    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
+            CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough, boolean entryPoll,
+            List<?> regionOrigin, boolean capacityNesting) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
         var context = new FunctionContext(args.size(), entryStrict.clone());
         context.passThrough = passThrough;
         context.entryPoll = entryPoll;
         context.caseRegionOrigin = regionOrigin;
         context.preparingCaseRegion = passThrough && regionOrigin == null;
+        if (capacityNesting) {
+            context.capacityNesting = true;
+            context.caseEmission = new CaseRegionEmission();
+            context.caseEmission.inline = false;
+        }
         var scope = new Scope(context, outer.source);
         var free = CoreFreeVariables.coreFreeVariables(expression);
         var argumentIds = new LinkedHashSet<String>();
@@ -5541,7 +5564,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (!prefix.isEmpty() && "case".equals(body.getFirst()) && constructorRegionWidth(body) != 0
                         && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)
                         && CoreFreeVariables.coreFreeVariables((List<Object>) body.get(1)).stream().noneMatch(joins::contains)
-                        && context.regionSourceAllowed(expr, constructorRegionWidth(body) != 1)) {
+                        && context.caseRegionSourceAllowed(expr, constructorRegionWidth(body) != 1)) {
                     // Move the closed join region, not a case escaping a live join
                     // activation. Its definitions are inert and retain their exact
                     // lexical order in each side; the scrutinee stays in the caller.
@@ -5727,7 +5750,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
                 && (constructorWidth != 0 || scalarPartition)
                 && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)
-                && context.regionSourceAllowed(expr, scalarPartition || constructorWidth != 1)) {
+                && context.caseRegionSourceAllowed(expr, scalarPartition || constructorWidth != 1)) {
             context.preparingCaseRegion = true;
             try { return partitionedCase(expr, scope, tail, scalarPartition, scalarPartition ? 1 : constructorWidth); }
             finally { context.preparingCaseRegion = false; }
@@ -5852,8 +5875,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                         wrapper.set(3, body);
                         body = wrapper;
                     }
-                    specs.add(function("case region " + binder + " " + start, List.of(binderMetadata), body, scope,
-                            inline.proof(), new boolean[1], tail, true, true, regionOrigin));
+                    specs.add(regionSide("case region " + binder + " " + start, binderMetadata, body, scope,
+                            inline.proof(), tail, regionOrigin, width == 1));
                 }
                 break;
             } catch (BytecodeEncodingException failure) {
@@ -5878,6 +5901,24 @@ public final class BytecodeProgram implements ExecutableProgram {
         scope.function.caseRegions.add(new BytecodeCaseRegion(guards, width, targets, layouts, tail));
         var scrutinee = force(compile((List<Object>) expr.get(1), scope, false));
         return new LoweredCaseExpression(preparedRegion(inline, specs, scope, tail, index, scrutinee));
+    }
+
+    // A side of one arm cannot narrow further. When its own decision still runs out
+    // of local IDs, prepare that decision's case regions inside the side, for
+    // capacity alone. They discard their inline copies, so the program keeps no
+    // second copy of any subtree.
+    private FunctionSpec regionSide(String label, Map<String, Object> binder, List<Object> body, Scope scope,
+            CoreRepresentation proof, boolean tail, List<?> regionOrigin, boolean oneArm) {
+        int rootMark = roots.size(), joinMark = localJoinCount;
+        try {
+            return function(label, List.of(binder), body, scope, proof, new boolean[1], tail, true, true, regionOrigin);
+        } catch (BytecodeEncodingException failure) {
+            if (!oneArm || !localIndexOverflow(failure)) throw failure;
+            // These roots belong only to the discarded attempt; none is installed.
+            roots.subList(rootMark, roots.size()).clear();
+            localJoinCount = joinMark;
+            return function(label, List.of(binder), body, scope, proof, new boolean[1], tail, true, true, regionOrigin, true);
+        }
     }
 
     private Expression preparedRegion(Expression inline, List<FunctionSpec> specs, Scope scope, boolean tail,
