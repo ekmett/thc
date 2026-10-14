@@ -398,24 +398,30 @@ class BytecodeGraphBudgetTest {
         return regions.withBody(plus(sum, number(99)));
     }
 
-    // An outer case with enough work is a narrow region: one side root per arm.
-    // Each arm holds a wide decision of its own, with the given calls per arm.
+    // A case on a constant constructor, with one arm per entry. With enough work in
+    // its arms it is a narrow region: one side root per arm.
+    private static List<Object> narrowCase(List<List<Object>> arms) {
+        var alternatives = new ArrayList<List<Object>>();
+        for (int arm = 0; arm < arms.size(); arm++) alternatives.add(node("data", "C" + arm, List.of(), arms.get(arm)));
+        return node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
+                Map.of("rep", LONG, "binder", binder("branch", DATA, true)));
+    }
+
+    // Each arm of the narrow case holds a wide decision of its own, with the given
+    // calls per arm.
     private static Map<String, Object> narrowCaseWithWideArms(int... repetitions) {
         var regions = wideRegions(repetitions);
-        var alternatives = new ArrayList<List<Object>>();
-        for (int region = 0; region < repetitions.length; region++)
-            alternatives.add(node("data", "C" + region, List.of(), regions.parts().get(region)));
-        return regions.withBody(node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
-                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
+        return regions.withBody(narrowCase(regions.parts()));
     }
 
     // One arm of a narrow or scalar region holds 8,192 calls, too many local IDs for
     // one root. Its side cannot narrow further, so the decision must split inside
     // that side, without a live inline copy. The program must load, split only that
     // side, and run each of the 128 calls of the chosen arm once, in order.
-    // `more` are the entry arguments after the closure; `inSplitSide` sees the side.
-    private void checkSplitSide(Map<String, Object> input, long expected, Object[] more,
-            org.junit.jupiter.api.function.ThrowingConsumer<BytecodeRoot> inSplitSide) throws Throwable {
+    // A join region keeps the roots of an inline copy that it never emits, so no
+    // join body may be outlined inside a side that splits for capacity.
+    // `more` are the entry arguments after the closure.
+    private void checkSplitSide(Map<String, Object> input, long expected, Object... more) throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             var threads = Language.currentState().getThreads(); threads.enterCurrent();
@@ -429,7 +435,10 @@ class BytecodeGraphBudgetTest {
                     assertTrue(instructions(sideRoot).values().stream().noneMatch(value -> value.contains("InlineCaseRegions")),
                             "a side keeps no live inline copy");
                     if (regionSides(sideRoot).isEmpty()) continue;
-                    splitSides++; inSplitSide.accept(sideRoot);
+                    splitSides++;
+                    for (var nested : regionSides(sideRoot))
+                        assertFalse(((BytecodeRoot) nested.getRootNode()).getName().startsWith("join body"),
+                                "a join body is not outlined inside a side that splits for capacity");
                     // The side was prepared twice. Replay from source and a clone must
                     // still emit the instructions of the attempt that was kept.
                     var before = instructions(sideRoot);
@@ -454,12 +463,12 @@ class BytecodeGraphBudgetTest {
         }
     }
 
-    @Test void aWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Throwable {
-        checkSplitSide(narrowCaseWithWideArms(128, 0), 63128L, new Object[0], side -> { });
+    @Test void aWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Exception {
+        checkSplitSide(narrowCaseWithWideArms(128, 0), 63128L);
     }
 
     // A scalar region has one side per literal arm, so its sides are also one arm.
-    @Test void aWideDecisionInAScalarSideSplitsWhenItsLocalIdsOverflow() throws Throwable {
+    @Test void aWideDecisionInAScalarSideSplitsWhenItsLocalIdsOverflow() throws Exception {
         var regions = wideRegions(128);
         var outer = node("case", variable("selector", LONG), "pick", List.of(
                 node("lit", List.of("int", "0"), List.of(), regions.parts().getFirst()),
@@ -469,24 +478,21 @@ class BytecodeGraphBudgetTest {
         // The entry takes the selector after the closure.
         regions.lambda().set(1, List.of(binder("x", DATA, true), binder("step", CLOSURE, true), binder("selector", LONG, false)));
         regions.lambda().set(3, Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(true, false, false)));
-        checkSplitSide(regions.withBody(outer), 63128L, new Object[]{0L}, side -> { });
+        checkSplitSide(regions.withBody(outer), 63128L, 0L);
     }
 
     // The arm that overflows has a join prefix: `let join k in <wide decision>`.
     // The nested decision is a case region with that prefix, and it still splits.
-    @Test void aJoinPrefixedWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Throwable {
+    @Test void aJoinPrefixedWideDecisionInANarrowSideSplitsWhenItsLocalIdsOverflow() throws Exception {
         var regions = wideRegions(new int[]{128, 0}, count -> joinedCall("k", List.of(), LONG));
         var joined = node("let", false, List.of(localJoin("k", List.of(), number(777), LONG)),
                 regions.parts().getFirst(), Map.of("rep", LONG));
-        var input = regions.withBody(node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch",
-                List.of(node("data", "C0", List.of(), joined), node("data", "C1", List.of(), regions.parts().get(1))),
-                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
-        checkSplitSide(input, 777L, new Object[0], side -> { });
+        checkSplitSide(regions.withBody(narrowCase(List.of(joined, regions.parts().get(1)))), 777L);
     }
 
-    // A join region keeps the roots of an inline copy that it never emits. It must
-    // stay out of a side that splits for capacity, even when its body is large.
-    @Test void joinRegionsStayOutOfASideThatSplitsForCapacity() throws Throwable {
+    // A join body large enough to be outlined, if joins were allowed there, sits next
+    // to the decision. checkSplitSide fails if the side outlines it.
+    @Test void joinRegionsStayOutOfASideThatSplitsForCapacity() throws Exception {
         List<Object> chain = number(0);
         for (int i = 1; i <= 24; i++) chain = plus(number(i), chain);
         var regions = wideRegions(128, 0);
@@ -494,14 +500,7 @@ class BytecodeGraphBudgetTest {
         var withJoin = node("let", false, List.of(localJoin("j", List.of(), chain, LONG)),
                 joinedCall("j", List.of(), LONG), Map.of("rep", LONG));
         var joined = plus(regions.parts().getFirst(), withJoin);
-        var input = regions.withBody(node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch",
-                List.of(node("data", "C0", List.of(), joined), node("data", "C1", List.of(), regions.parts().get(1))),
-                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
-        checkSplitSide(input, 63128L + 300, new Object[0], side -> {
-            for (var nested : regionSides(side))
-                assertFalse(((BytecodeRoot) nested.getRootNode()).getName().startsWith("join body"),
-                        "a join body is not outlined inside a side that splits for capacity");
-        });
+        checkSplitSide(regions.withBody(narrowCase(List.of(joined, regions.parts().get(1)))), 63128L + 300);
     }
 
     @Test void aLaterSmallRegionCannotRestoreAnUnencodableInlineCopy() throws Exception {
