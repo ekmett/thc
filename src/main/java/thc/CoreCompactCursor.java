@@ -97,7 +97,7 @@ public final class CoreCompactCursor {
         long at = take(length);
         return bytes.asSlice(at, length).toArray(ValueLayout.JAVA_BYTE);
     }
-    public String text(int length) throws CharacterCodingException { return utf8(bytes, take(length), length); }
+    public String text(int length) throws CharacterCodingException { return utf8(slice(bytes, take(length), length)); }
     public void expectEnd() {
         if (position != end) throw new IllegalArgumentException("Trailing bytes in compact Core record");
     }
@@ -109,9 +109,8 @@ public final class CoreCompactCursor {
         return bytes.asSlice(start, length);
     }
     /** Decode only this span; cold strings remain mapped bytes. */
-    public static String utf8(MemorySegment bytes, long start, long length) throws CharacterCodingException {
-        MemorySegment selected = slice(bytes, start, length);
-        if (length > Integer.MAX_VALUE) throw new IllegalArgumentException("Compact Core string exceeds JVM carrier size");
+    public static String utf8(MemorySegment selected) throws CharacterCodingException {
+        if (selected.byteSize() > Integer.MAX_VALUE) throw new IllegalArgumentException("Compact Core string exceeds JVM carrier size");
         return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT).decode(selected.asByteBuffer()).toString();
     }
