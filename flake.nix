@@ -13,42 +13,51 @@
 
   outputs = { self, nixpkgs, hide }:
     let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
-      pin = (builtins.fromJSON (builtins.readFile ./etc/jam-graalvm.json)).platforms.Linux-x86_64;
-      jam = pkgs.callPackage ./nix/jam.nix { inherit pin; };
-      toolchain = pkgs.callPackage ./nix/toolchain.nix { inherit jam; };
-      nativeTools = pkgs.callPackage ./nix/native-tools.nix {};
-      jvm = pkgs.callPackage ./nix/jvm.nix { inherit jam toolchain; revision = self.rev or "unversioned"; };
-      installed = pkgs.callPackage ./nix/installed.nix { inherit nativeTools jvm jam toolchain; };
-      withHide = pkgs.callPackage ./nix/toolchain.nix {
-        inherit jam;
-        name = "thc-hide-toolchain";
-        extraPackages = [ hide.packages.${system}.hide ];
-      };
-    in {
-      packages.${system} = {
-        jam-graalvm = jam;
-        inherit toolchain;
-        native-tools = nativeTools;
-        inherit jvm;
-        thc = installed;
-        default = installed;
-        development-image = pkgs.callPackage ./nix/image.nix { inherit toolchain jam; };
-        installed-image = pkgs.callPackage ./nix/image.nix {
-          toolchain = withHide;
-          inherit jam installed;
+      systems = [ "x86_64-linux" "aarch64-linux" ];
+      forAllSystems = nixpkgs.lib.genAttrs systems;
+      perSystem = system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+          pin = (builtins.fromJSON (builtins.readFile ./etc/jam-graalvm.json)).platforms.Linux-x86_64;
+          jam = pkgs.callPackage ./nix/jam.nix { inherit pin; };
+          toolchain = pkgs.callPackage ./nix/toolchain.nix { inherit jam; };
+          nativeTools = pkgs.callPackage ./nix/native-tools.nix {};
+          jvm = pkgs.callPackage ./nix/jvm.nix { inherit jam toolchain; revision = self.rev or "unversioned"; };
+          installed = pkgs.callPackage ./nix/installed.nix { inherit nativeTools jvm jam toolchain; };
+          withHide = pkgs.callPackage ./nix/toolchain.nix {
+            inherit jam;
+            name = "thc-hide-toolchain";
+            extraPackages = [ hide.packages.${system}.hide ];
+          };
+        in {
+          packages = {
+            jam-graalvm = jam;
+            inherit toolchain;
+            native-tools = nativeTools;
+            inherit jvm;
+            thc = installed;
+            default = installed;
+            development-image = pkgs.callPackage ./nix/image.nix { inherit toolchain jam; };
+            installed-image = pkgs.callPackage ./nix/image.nix {
+              toolchain = withHide;
+              inherit jam installed;
+            };
+            toolchain-with-hide = withHide;
+          };
+          apps.toolchain = {
+            type = "app";
+            program = "${toolchain}/bin/thc-toolchain";
+            meta.description = "Pinned THC compiler development environment";
+          };
+          devShells = {
+            default = toolchain.env;
+            with-hide = withHide.env;
+          };
         };
-        toolchain-with-hide = withHide;
-      };
-      apps.${system}.toolchain = {
-        type = "app";
-        program = "${toolchain}/bin/thc-toolchain";
-        meta.description = "Pinned THC compiler development environment";
-      };
-      devShells.${system} = {
-        default = toolchain.env;
-        with-hide = withHide.env;
-      };
+      all = forAllSystems perSystem;
+    in {
+      packages = forAllSystems (system: (all.${system}).packages);
+      apps = forAllSystems (system: (all.${system}).apps);
+      devShells = forAllSystems (system: (all.${system}).devShells);
     };
 }

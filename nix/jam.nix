@@ -23,7 +23,7 @@ stdenvNoCC.mkDerivation {
   meta = {
     description = "Unmodified pinned Jam GraalVM distribution for THC";
     homepage = "https://github.com/ekmett/jam";
-    platforms = [ "x86_64-linux" ];
+    platforms = [ "x86_64-linux" "aarch64-linux" ];
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
   };
 }
