@@ -61,6 +61,8 @@ foreach(command IN LISTS ghc_commands)
     list(APPEND toolchain_inputs "${program}")
   endif()
 endforeach()
+include("${CMAKE_CURRENT_LIST_DIR}/NativeGhc.cmake")
+list(APPEND toolchain_inputs ${native_ghc_inputs})
 list(REMOVE_DUPLICATES toolchain_inputs)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${toolchain_inputs})
 

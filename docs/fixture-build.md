@@ -61,6 +61,10 @@ Native/Core compilation uses the selected global package database. Its interface
 libraries, headers, registrations, settings and configured compiler/linker tools
 are file inputs, including retained Core replaced under the same GHC version.
 The configured PATH is captured; ambient GHC package environments are excluded.
+Direct CMake GHC native links on macOS use clang and ld from the selected Apple
+developer directory and `SDKROOT` (or the SDK selected by `xcrun --sdk macosx`).
+The selected SDK library directory precedes paths retained in GHC package metadata.
+These tools, SDK settings and libSystem stub are explicit fixture inputs.
 Gradle is not invoked by fixture generation. Acquisition fixtures still in
 quarantine need explicit package/archive products before admission. The production
 pinned-source and installed-Core providers remain available; fixture generation

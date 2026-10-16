@@ -16,7 +16,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_
   add_custom_command(OUTPUT "${process_native}/process-oracle"
     BYPRODUCTS "${process_native}/Main.hi" "${process_native}/Main.o"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${process_native}"
-    COMMAND ${fixture_env} "${GHC}" --make -O1 -threaded -fforce-recomp
+    COMMAND ${fixture_env} ${native_ghc} --make -O1 -threaded -fforce-recomp
       -package process -package unix -outputdir "${process_native}"
       "${PROJECT_SOURCE_DIR}/t/fixtures/process-lifecycle/Main.hs" -o "${process_native}/process-oracle"
     DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/process-lifecycle/Main.hs" ${toolchain_inputs}
@@ -51,7 +51,6 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86
   if(NOT open_host OR NOT open_host STREQUAL open_target OR NOT ghc_info MATCHES [[\("target word size","8"\)]])
     message(FATAL_ERROR "Native open request controls require native 64-bit GHC")
   endif()
-  set(open_sdk_flags)
   set(open_c_flags)
   set(open_sdk_inputs)
   if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
@@ -65,7 +64,6 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86
       message(FATAL_ERROR "Native open request controls require an absolute SDKROOT")
     endif()
     # Match nativeCompilerFlags: the selected SDK applies to C and linkage.
-    list(APPEND open_sdk_flags "-optl--sysroot=${open_sdk}")
     list(APPEND open_c_flags "--sysroot=${open_sdk}")
     foreach(settings SDKSettings.json SDKSettings.plist)
       if(EXISTS "${open_sdk}/${settings}")
@@ -86,9 +84,9 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86
   add_custom_command(OUTPUT "${open_native}/oracle"
     BYPRODUCTS "${open_native}/OriginalOpenRequestNative.hi" "${open_native}/OriginalOpenRequestNative.o"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${open_native}"
-    COMMAND ${fixture_env} "${GHC}" --make -main-is OriginalOpenRequestNative.main
+    COMMAND ${fixture_env} ${native_ghc} --make -main-is OriginalOpenRequestNative.main
       -O2 -threaded -fforce-recomp -package unix -package ghc-internal
-      ${open_sdk_flags} -optl-pthread -outputdir "${open_native}"
+      -optl-pthread -outputdir "${open_native}"
       "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalOpenRequestNative.hs"
       $<TARGET_OBJECTS:fixture-native-open-request-c> -o "${open_native}/oracle"
     DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalOpenRequestNative.hs"
