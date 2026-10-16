@@ -435,6 +435,60 @@ def install_jam(recorder):
     return home
 
 
+def darwin_bootstrap_environment(recorder):
+    """Keep bootstrap GHC's native tools and SDK on one Apple selection."""
+    env = dict(os.environ)
+
+    def query(name, argv):
+        _, output = recorder.command(name, argv, env=env, capture=True)
+        value = output.strip()
+        require(Path(value).is_absolute() and "\n" not in value and "\r" not in value,
+                f"{name} did not select one absolute path")
+        return value
+
+    env["DEVELOPER_DIR"] = env.get("DEVELOPER_DIR") or query(
+        "apple-developer", ["/usr/bin/xcode-select", "-p"])
+    xcrun = ["/usr/bin/xcrun", "--sdk", "macosx"]
+    clang = query("apple-clang", [*xcrun, "--find", "clang"])
+    linker = query("apple-linker", [*xcrun, "--find", "ld"])
+    env["SDKROOT"] = env.get("SDKROOT") or query("apple-sdk", [*xcrun, "--show-sdk-path"])
+    for name in ("DEVELOPER_DIR", "SDKROOT"):
+        require(Path(env[name]).is_absolute() and not any(c in env[name] for c in "\r\n"),
+                f"{name} must select one absolute path")
+    recorder.command("apple-clang-version", [clang, "--version"], env=env)
+    recorder.command("apple-linker-version", [linker, "-v"], env=env)
+    ghcup = Path(os.environ["THC_GHCUP_ROOT"])
+    recorder.command("bootstrap-ghc-info", [ghcup / "ghc/9.14.1/bin/ghc", "--info"], env=env)
+
+    source = Path(env.get("CABAL_CONFIG", str(Path(env["CABAL_DIR"]) / "config")))
+    # Caller configuration may contain repository credentials; keep it outside
+    # the uploaded setup report, in the runner's private temporary directory.
+    config = (Path(env["RUNNER_TEMP"]) / "thc-apple-cabal.config").resolve()
+    if source.is_file():
+        original = source.read_bytes()
+    else:
+        recorder.command("bootstrap-cabal-config", [ghcup / "cabal/3.16.0.0/cabal",
+                         "--config-file=" + str(config), "user-config", "init", "--force"], env=env)
+        original = config.read_bytes()
+    # Cached GHC packages can retain an absolute CLT SDK library directory.
+    # Search the selected SDK first even when those package flags are present.
+    options = ["-L" + str(Path(env["SDKROOT"]) / "usr/lib"),
+               "-pgmc" + clang, "-pgml" + clang,
+               "-optc-isysroot", "-optc" + env["SDKROOT"],
+               "-optl-isysroot", "-optl" + env["SDKROOT"], "-optl-fuse-ld=" + linker]
+    # Cabal's splitArgs groups double quotes, not shell single quotes. In Cabal
+    # 3.16 the first repeated section's options are applied last. Prepending
+    # keeps unrelated caller options while making this toolchain authoritative.
+    quoted = " ".join('"' + arg.replace('"', '\\"') + '"' for arg in options)
+    config.write_bytes(("program-default-options\n  ghc-options: " + quoted + "\n\n").encode() + original)
+    config.chmod(0o600)
+    selected = {"DEVELOPER_DIR": env["DEVELOPER_DIR"], "SDKROOT": env["SDKROOT"],
+                "CABAL_CONFIG": str(config)}
+    recorder.data["appleBootstrap"] = {**selected, "clang": clang, "linker": linker,
+                                       "ghcOptions": options}
+    return selected
+
+
 def setup_toolchain(recorder):
     """Restore independent caches and check out sources, then install misses."""
     host = (platform.system(), platform.machine())
@@ -519,7 +573,10 @@ fi
     else:
         recorder.parallel(commands)
     verify_jam(recorder, java_home)
+    native_env = darwin_bootstrap_environment(recorder) if host[0] == "Darwin" else {}
     with open(os.environ["GITHUB_ENV"], "a") as stream:
+        for name, value in native_env.items():
+            stream.write(f"{name}={value}\n")
         stream.write(f"JAVA_HOME={java_home}\nGRAALVM_HOME={java_home}\n")
         stream.write(f"GHC={os.environ['THC_GHCUP_ROOT']}/ghc/9.14.1/bin/ghc\n"
                      f"GHC_PKG={os.environ['THC_GHCUP_ROOT']}/ghc/9.14.1/bin/ghc-pkg\n"

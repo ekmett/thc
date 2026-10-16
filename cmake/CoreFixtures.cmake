@@ -86,7 +86,7 @@ add_custom_command(OUTPUT "${sum_layout_native}/sum-layout-oracle"
   BYPRODUCTS "${sum_layout_native}/Main.hi" "${sum_layout_native}/Main.o"
     "${sum_layout_native}/SumLayoutAudit.hi" "${sum_layout_native}/SumLayoutAudit.o"
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${sum_layout_native}"
-  COMMAND ${fixture_env} "${GHC}" --make -O2 -fforce-recomp -dcore-lint -dstg-lint
+  COMMAND ${fixture_env} ${native_ghc} --make -O2 -fforce-recomp -dcore-lint -dstg-lint
     "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler" -odir "${sum_layout_native}" -hidir "${sum_layout_native}"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumLayoutAuditNative.hs" -o "${sum_layout_native}/sum-layout-oracle"
   DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumLayoutAuditNative.hs"
@@ -127,7 +127,7 @@ add_custom_command(OUTPUT "${sum_result_native}/oracle"
   BYPRODUCTS "${sum_result_native}/Main.hi" "${sum_result_native}/Main.o"
     "${sum_result_native}/SumResultAudit.hi" "${sum_result_native}/SumResultAudit.o"
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${sum_result_native}"
-  COMMAND ${fixture_env} "${GHC}" --make -O2 -fforce-recomp -dcore-lint -dstg-lint
+  COMMAND ${fixture_env} ${native_ghc} --make -O2 -fforce-recomp -dcore-lint -dstg-lint
     "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler" -odir "${sum_result_native}" -hidir "${sum_result_native}"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumResultAuditNative.hs" -o "${sum_result_native}/oracle"
   DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumResultAuditNative.hs"
@@ -173,7 +173,7 @@ add_custom_command(OUTPUT "${floating_tuple_native}/oracle"
   BYPRODUCTS "${floating_tuple_native}/Main.hi" "${floating_tuple_native}/Main.o"
     "${floating_tuple_native}/FloatingTupleAudit.hi" "${floating_tuple_native}/FloatingTupleAudit.o"
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${floating_tuple_native}"
-  COMMAND ${fixture_env} "${GHC}" --make -O2 -fforce-recomp -dcore-lint -dstg-lint
+  COMMAND ${fixture_env} ${native_ghc} --make -O2 -fforce-recomp -dcore-lint -dstg-lint
     "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler" -odir "${floating_tuple_native}" -hidir "${floating_tuple_native}"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/FloatingTupleAuditNative.hs" -o "${floating_tuple_native}/oracle"
   DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/FloatingTupleAuditNative.hs"
@@ -203,7 +203,7 @@ foreach(module Main NativeTiming Fixtures MapWorkload THC/Prim/Test)
 endforeach()
 add_custom_command(OUTPUT "${native}" BYPRODUCTS ${native_objects}
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${native_dir}"
-  COMMAND ${fixture_env} "${GHC}" --make -O2 -fforce-recomp -dcore-lint -dstg-lint
+  COMMAND ${fixture_env} ${native_ghc} --make -O2 -fforce-recomp -dcore-lint -dstg-lint
     "-i${PROJECT_SOURCE_DIR}/t/fixtures/core" "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler"
     -odir "${native_dir}" -hidir "${native_dir}"
     "${PROJECT_SOURCE_DIR}/t/fixtures/core/NativeOracle.hs" -o "${native}"

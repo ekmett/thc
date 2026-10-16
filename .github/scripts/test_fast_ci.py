@@ -226,6 +226,58 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn("JAVA_HOME=" + str(java), (self.root / "env").read_text())
         self.assertIn(str(ghcup / "ghc/9.14.1/bin"), (self.root / "path").read_text())
 
+    def test_apple_bootstrap_preserves_config_and_selects_one_toolchain(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        recorder.directory.mkdir(parents=True)
+        source = self.root / "caller.config"
+        original = (b"jobs: 2\nprogram-default-options\n"
+                    b"  ghc-options: -DKEEP_CALLER\n    -Wall\n")
+        source.write_bytes(original)
+        developer = "/Applications/Xcode Test.app/Contents/Developer"
+        sdk = developer + "/SDKs/MacOSX.sdk"
+        clang, linker = developer + "/bin/clang", developer + "/bin/ld"
+        env = {"RUNNER_TEMP": str(self.root),
+               "CABAL_DIR": str(self.root / "cabal"), "CABAL_CONFIG": str(source),
+               "THC_GHCUP_ROOT": str(self.root / "ghcup")}
+
+        def command(name, argv, **kwargs):
+            if name == "apple-developer":
+                self.assertEqual(["/usr/bin/xcode-select", "-p"], argv)
+                return 0, developer + "\n"
+            self.assertEqual(developer, kwargs["env"]["DEVELOPER_DIR"])
+            if name in ("apple-clang", "apple-linker", "apple-sdk"):
+                self.assertEqual(["/usr/bin/xcrun", "--sdk", "macosx"], argv[:3])
+                return 0, {"apple-clang": clang, "apple-linker": linker, "apple-sdk": sdk}[name] + "\n"
+            if name == "bootstrap-cabal-config":
+                Path(argv[1].removeprefix("--config-file=")).write_bytes(b"jobs: 4\n")
+            return 0, ""
+
+        with patch.dict(os.environ, env, clear=True), patch.object(recorder, "command", side_effect=command):
+            selected = ci.darwin_bootstrap_environment(recorder)
+            self.assertEqual(sdk, selected["SDKROOT"])
+            self.assertEqual(developer, selected["DEVELOPER_DIR"])
+            config = Path(selected["CABAL_CONFIG"]).read_bytes()
+            self.assertTrue(config.endswith(original))
+            self.assertFalse(Path(selected["CABAL_CONFIG"]).is_relative_to(recorder.directory))
+            self.assertEqual(original, source.read_bytes())
+            self.assertIn(('"-L' + sdk + '/usr/lib"').encode(), config)
+            self.assertIn(('"-pgml' + clang + '"').encode(), config)
+            self.assertIn(('"-optl' + sdk + '"').encode(), config)
+            self.assertIn(('"-optl-fuse-ld=' + linker + '"').encode(), config)
+            # An explicit SDK/developer selection is retained; no default SDK
+            # query can replace it, including when the source config is absent.
+            source.unlink()
+            with patch.dict(os.environ, DEVELOPER_DIR=developer, SDKROOT="/Explicit SDK"), \
+                 patch.object(recorder, "command", side_effect=command) as commands:
+                selected = ci.darwin_bootstrap_environment(recorder)
+                names = [call.args[0] for call in commands.call_args_list]
+                self.assertNotIn("apple-developer", names)
+                self.assertNotIn("apple-sdk", names)
+                self.assertIn("bootstrap-cabal-config", names)
+                self.assertEqual("/Explicit SDK", selected["SDKROOT"])
+                self.assertTrue(Path(selected["CABAL_CONFIG"]).read_bytes().endswith(b"jobs: 4\n"))
+
     def jam_pin(self, transport=None, runtime=None):
         pin = {"schema": 1, "producer": {"repository": "ekmett/jam", "commit": "a" * 40},
                "platforms": {"Linux-x86_64": {
