@@ -53,7 +53,10 @@ report_build_failure() {
     if [[ "$build_platform" == Darwin ]]; then
       /usr/sbin/sysctl kern.maxproc kern.maxprocperuid >&2
     fi
-    ps -axo pid=,ppid=,uid=,stat=,comm= >&2
+    case "$build_platform" in
+      CYGWIN*) ps -al >&2 ;;
+      *) ps -axo pid=,ppid=,uid=,stat=,comm= >&2 ;;
+    esac
   fi
   exit "$status"
 }
