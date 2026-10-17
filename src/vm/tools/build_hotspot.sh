@@ -13,14 +13,15 @@ source_dir="$root/upstream/labsjdk25"
 target=graal-builder-image
 pins="$root/config/source-pins.json"
 python_bin=${JAM_PYTHON:-python3}
-case $(uname -s) in
+build_platform=$(uname -s)
+case "$build_platform" in
   CYGWIN*) pins=$(cygpath -m "$pins"); python_bin=$(cygpath -u "$python_bin");;
 esac
 version=$("$python_bin" -c 'import json,sys; print(json.load(open(sys.argv[1]))["labsjdk25"]["version"])' "$pins")
 version=${version%$'\r'}
 configure_flags+=("--with-version-string=$version" --with-build-user=thc-vm --with-vendor-name='THC VM')
 configure_flags+=("$@")
-case $(uname -s) in
+case "$build_platform" in
   CYGWIN*)
     export AUTOCONF=${JAM_AUTOCONF:-/usr/bin/autoconf}
     export M4=${JAM_M4:-/usr/bin/m4}
@@ -40,8 +41,27 @@ case $(uname -s) in
                   "--with-extra-ldflags=-L$native_build -lthc-vm -Wl,-rpath,$native_build")
     ;;
 esac
+# Keep the original configure/make status even if resource pressure also prevents
+# diagnostics from starting. Executable names omit process arguments/environment.
+report_build_failure() {
+  local status=$?
+  trap - EXIT
+  if (( status != 0 )); then
+    set +e
+    printf 'HotSpot %s failed: exit=%s pid=%s jobs=%s\n' "$build_stage" "$status" "$$" "${JAM_JOBS:-8}" >&2
+    ulimit -a >&2
+    if [[ "$build_platform" == Darwin ]]; then
+      /usr/sbin/sysctl kern.maxproc kern.maxprocperuid >&2
+    fi
+    ps -axo pid=,ppid=,uid=,stat=,comm= >&2
+  fi
+  exit "$status"
+}
+build_stage=configure
+trap report_build_failure EXIT
 cd "$source_dir"
 bash configure "${configure_flags[@]}" \
   "--with-debug-level=$flavor" --with-jvm-variants=server --with-jvm-features=jamgc,epsilongc,serialgc \
   --disable-warnings-as-errors "${native_flags[@]}"
+build_stage=make
 "$make_bin" "CONF=server-$flavor" "JOBS=${JAM_JOBS:-8}" "$target"
