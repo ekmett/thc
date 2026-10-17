@@ -8,7 +8,6 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -90,15 +89,12 @@ class GraphRecoverySizeFailureTest {
                     assertEquals(7L, Calls.target(target, new Object[]{0L}));
                     assertEquals(installations, target.getSuccessfulCompilationCount());
                     assertFalse(side.isValid());
-                    var freshRoot = root.copyForRecovery();
-                    assertTrue(freshRoot.noGraphFailure.isValid(), "A fresh source must compile without the old failure poll");
-                    var fresh = (OptimizedCallTarget) freshRoot.getCallTarget();
-                    fresh.compile(true); fresh.waitForCompilation();
-                    assertTrue(fresh.isValidLastTier());
+                    assertFalse(target.compile(true));
                     listener(Language.currentState().getGraphRecovery()).onCompilationFailed(
                         side, CODE_SIZE, true, true, 2, () -> "unused");
-                    assertTrue(fresh.isValidLastTier(), "A late old failure must not invalidate a fresh source");
-                    assertEquals(7L, Calls.target(fresh, new Object[]{0L}));
+                    assertEquals(7L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(installations, target.getSuccessfulCompilationCount());
+                    assertSame(root, target.getRootNode()); assertFalse(target.compile(true));
                 } finally { context.leave(); }
             }
         }
@@ -110,20 +106,13 @@ class GraphRecoverySizeFailureTest {
             return targets == null ? null : targets[0];
         }
 
-        private static final class FailureDuringCopy extends Expr {
+        private static final class SideWork extends Expr {
             @Children private AstSameFrameArm[] arms;
-            private final AtomicReference<Runnable> onCopy = new AtomicReference<>();
             private final AtomicInteger effects;
             private final AtomicReference<Node> executed;
-            FailureDuringCopy(AstSameFrameArm[] arms, AtomicInteger effects, AtomicReference<Node> executed) {
+            SideWork(AstSameFrameArm[] arms, AtomicInteger effects, AtomicReference<Node> executed) {
                 this.arms = arms; this.effects = effects; this.executed = executed;
                 setRepresentation(arms[0].getRepresentation());
-            }
-            @Override public Node copy() {
-                Node copy = super.copy();
-                Runnable callback = onCopy.getAndSet(null);
-                if (callback != null) callback.run();
-                return copy;
             }
             @Override public Object execute(VirtualFrame frame) {
                 effects.incrementAndGet(); executed.set(getRootNode());
@@ -143,7 +132,7 @@ class GraphRecoverySizeFailureTest {
                     var inner = new AstSameFrameArm(new Literal(2L));
                     var second = new AstSameFrameArm(inner);
                     var last = new AstSameFrameArm(new Literal(3L));
-                    var body = new FailureDuringCopy(new AstSameFrameArm[]{first, second, last}, effects, executed);
+                    var body = new SideWork(new AstSameFrameArm[]{first, second, last}, effects, executed);
                     var root = new FunctionRoot(language, new FrameLayout().build(), "sibling failures", null,
                             new int[0], new int[0], new int[0], body, new Metrics(true));
                     var target = (OptimizedCallTarget) root.getCallTarget();
@@ -157,28 +146,24 @@ class GraphRecoverySizeFailureTest {
                     var lastTarget = (OptimizedCallTarget) sideTarget(last);
                     var listener = listener(Language.currentState().getGraphRecovery());
                     listener.onCompilationFailed(firstTarget, CODE_SIZE, true, true, 2, () -> "unused");
-                    body.onCopy.set(() -> {
-                        assertTrue(root.graphFailure.get().claimed());
-                        assertSame(firstTarget, root.graphFailure.get().target());
-                        assertEquals(0, effects.get());
-                        listener.onCompilationFailed(secondTarget, CODE_SIZE, true, true, 2, () -> "unused");
-                        if (laterUnextractable)
-                            listener.onCompilationFailed(lastTarget, CODE_SIZE, true, true, 2, () -> "unused");
-                    });
+                    var service = Language.currentState().getGraphRecovery();
+                    var claim = service.claim(root); assertNotNull(claim);
+                    assertSame(firstTarget, claim.target()); assertEquals(0, effects.get());
+                    listener.onCompilationFailed(secondTarget, CODE_SIZE, true, true, 2, () -> "unused");
+                    if (laterUnextractable)
+                        listener.onCompilationFailed(lastTarget, CODE_SIZE, true, true, 2, () -> "unused");
+                    assertTrue(service.publishable(root, claim), "callbacks cannot steal a held head receipt");
+                    assertNull(service.claim(root)); service.complete(root, claim, false);
+                    assertSame(secondTarget, root.graphFailure.get().target());
                     assertEquals(6L, Calls.target(target, new Object[]{0L}));
                     assertEquals(1, effects.get()); assertSame(root, executed.get());
-                    assertEquals(0, root.getGraphBudgetGeneration());
+                    assertSame(secondTarget, sideTarget(second));
+                    assertNotNull(sideTarget(inner), "the pending sibling reduces its own proper nested region");
+                    if (laterUnextractable) assertSame(lastTarget, root.graphFailure.get().target());
                     assertEquals(6L, Calls.target(target, new Object[]{0L}));
-                    assertEquals(2, effects.get());
-                    assertNotSame(root, executed.get(), "the reducible sibling failure must survive the first claim");
-                    var fresh = (FunctionRoot) executed.get();
-                    assertEquals(1, fresh.getGraphBudgetGeneration());
+                    assertEquals(2, effects.get()); assertSame(root, executed.get());
+                    assertNull(root.graphFailure.get()); assertFalse(target.compile(true));
                     assertEquals(0, root.getGraphBudgetGeneration());
-                    assertSame(root.compilationOwner(), fresh.compilationOwner());
-                    assertSame(secondTarget, sideTarget(second)); assertNull(sideTarget(inner));
-                    int innerIndex = NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).indexOf(inner);
-                    var copiedInner = NodeUtil.findAllNodeInstances(fresh, AstSameFrameArm.class).get(innerIndex);
-                    assertNotNull(sideTarget(copiedInner), "recovery must reduce the failed sibling's nested arm");
                 } finally { context.leave(); }
             }
         }

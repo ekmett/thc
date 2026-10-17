@@ -3,7 +3,7 @@
 
 # Managed weak registrations
 
-The current draft uses real `jam.vm.Weak` associations in both interpreters.
+The current draft uses real `thc.vm.Weak` associations in both interpreters.
 Selected Linux JVM laws pass on the pinned Jam package: logical keys survive
 thunk evaluation, pending handoffs permit guest progress, and automatic actions
 follow the original GHC finalizer wrapper. Windows also passes the selected

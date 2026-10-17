@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.OptimizationFailedException;
@@ -46,15 +47,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class StockGraphRecoveryTest {
     @Test void stockAstOsrCallbackExposesOriginalOwnerThroughPublicChildren() { ownership(false); }
     @Test void stockBytecodeOsrCallbackExposesOriginalOwnerThroughPublicChildren() { ownership(true); }
-    @Test void terminalStockFailureRecoversOnlyFreshEntryWithoutReplayingEffects() {
+    @Test void terminalWholeEntryStaysColdWhileItsFirstSideCallRunsCompiled() {
         Truffle.getRuntime();
         Controls.recoverAst(false);
     }
-    @Test void repeatedRealFailuresKeepEarlierReplacementLocalExtractions() {
+    @Test void failedSideKeepsItsBoundaryWhileAProperNestedTraceCompiles() {
         Truffle.getRuntime();
         Controls.recoverAst(true);
     }
-    @Test void realAstOsrFailureFinishesOldActivationThenFreshEntryRunsCompiledOsr() {
+    @Test void realAstOsrFailureFinishesOldActivationWithoutAnotherWholeBodyCandidate() {
         Truffle.getRuntime();
         Controls.recoverOsr();
     }
@@ -66,7 +67,7 @@ class StockGraphRecoveryTest {
         Truffle.getRuntime();
         Controls.recoverBytecode();
     }
-    @Test void concurrentEntryCompletesOldBodyWhileOneClaimPreparesReplacement() throws Exception {
+    @Test void concurrentEntriesKeepTheSameBodyAfterSideExtraction() throws Exception {
         Truffle.getRuntime();
         Controls.concurrentEntry();
     }
@@ -90,15 +91,15 @@ class StockGraphRecoveryTest {
         Truffle.getRuntime();
         Controls.recoverBytecodeOsr(true);
     }
-    @Test void realDeferredDefaultFailureKeepsPreparedSidesReplacementLocal() {
+    @Test void realDeferredDefaultFailureExtractsOnItsOriginalEntry() {
         Truffle.getRuntime();
         Controls.recoverDeferred();
     }
-    @Test void typedLoansAndRealOldAndFreshResumeBodiesSurviveRecovery() {
+    @Test void typedLoansAndParkedResumeBodiesKeepTheirOriginalOwner() {
         Truffle.getRuntime();
         Controls.typedResume();
     }
-    @Test void failedExtractedSideRecoversAtNextEntryWithoutMutatingActiveBody() {
+    @Test void failedExtractedSideKeepsItsBoundaryWhileNestedExtractionProgresses() {
         Truffle.getRuntime();
         Controls.recoverSide();
     }
@@ -110,11 +111,11 @@ class StockGraphRecoveryTest {
         Truffle.getRuntime();
         Controls.bytecodeTypedResume();
     }
-    @Test void capturedOldLogicalThunkFirstSuspendsInFreshCompiledBody() {
+    @Test void capturedLogicalThunkKeepsItsOriginalOwnerAfterTerminalFailure() {
         Truffle.getRuntime();
         Controls.capturedThunk();
     }
-    @Test void oldTailAnchorRestartsOldBodyAfterAutomaticEntryReplacement() {
+    @Test void oldTailAnchorRestartsItsOriginalTerminalBody() {
         Truffle.getRuntime();
         Controls.tailAnchor();
     }
@@ -178,7 +179,7 @@ class StockGraphRecoveryTest {
                         assertEquals(0, root.prepareGraphBudgetRetry(0), "the failed source must not extract and rearm itself");
                         assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
                         if (shared) assertNull(recovered(root), "shared code stays unowned after failure");
-                        else assertNotNull(recovered(root), "a transient failure also installs a smaller fresh entry");
+                        else assertNull(recovered(root), "a transient failure keeps the whole entry terminal");
                         assertFalse(root.isCloningAllowed(), "the failed source cannot be split into unchanged retryable clones");
                     }
                 } finally { context.leave(); }
@@ -251,12 +252,26 @@ class StockGraphRecoveryTest {
         }
         private static final class CapturedWork extends Expr {
             @Child private Expr heavy;
-            CapturedWork(AtomicInteger effects, AtomicReference<RootNode> source) {
+            @Child private AstSameFrameArm cut;
+            private final AtomicBoolean armed = new AtomicBoolean();
+            CapturedWork(AtomicInteger effects, AtomicReference<RootNode> source) { this(effects, source, false); }
+            CapturedWork(AtomicInteger effects, AtomicReference<RootNode> source, boolean capture) {
                 heavy = new AstSameFrameArm(new Heavy(new long[4096], effects, source)); setRepresentation(LONG);
+                if (capture) cut = new AstSameFrameArm(new KillThread(new Expr() {
+                    @Override public Object execute(VirtualFrame frame) { return GuestThreadOps.myThreadId(this); }
+                }, new Literal(new Object()), new Literal(Unit.INSTANCE), true,
+                    CoreRepresentations.parse(Map.of("kind", "void", "primReps", List.of(), "evaluated", true))));
             }
+            @CompilerDirectives.TruffleBoundary private boolean captureArmed() { return armed.getAndSet(false); }
             @Override public Object execute(VirtualFrame frame) {
-                try { return heavy.executeLong(frame) + frame.getLong(4); }
+                long value;
+                try { value = heavy.executeLong(frame) + frame.getLong(4); }
                 catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) { throw new AssertionError(failure); }
+                if (cut != null && captureArmed()) {
+                    try { cut.execute(frame); }
+                    catch (AstCapture capture) { throw capture.append((saved, input) -> value); }
+                }
+                return value;
             }
         }
         static void capturedThunk() {
@@ -268,17 +283,23 @@ class StockGraphRecoveryTest {
                     var capture = new CaptureLayout(language, new boolean[]{true}, new boolean[]{true});
                     var environment = capture.captureValues(new Object[]{23L});
                     var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
-                    var root = capturedRoot(language, capture, new CapturedWork(effects, source), metrics, true);
+                    var body = new CapturedWork(effects, source, true);
+                    var root = capturedRoot(language, capture, body, metrics, true);
                     var target = (OptimizedCallTarget) root.getCallTarget();
                     var escaped = new Closure(environment, 0, target);
                     assertThrows(OptimizationFailedException.class, () -> target.compile(true)); assertEquals(0, effects.get());
                     assertEquals(-6705412340454524888L, Calls.target(target, new Object[]{0L, environment}));
-                    var fresh = (FunctionRoot) recovered(root).getRootNode(); assertSame(fresh, source.get());
-                    var optimized = (OptimizedCallTarget) fresh.getCallTarget();
-                    assertTrue(optimized.compile(true)); assertTrue(optimized.isValidLastTier());
-                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(optimized);
+                    assertSame(root, source.get());
+                    var optimized = target;
+                    assertFalse(optimized.compile(true)); assertFalse(optimized.isValid());
                     assertSame(target, escaped.target); assertSame(environment, escaped.environment);
                     assertSame(capture, environment.getLayout()); assertTrue(root.isSelf(optimized));
+                    assertNotNull(side(body.cut, 0));
+                    var compiledSide = side(body.cut, 0);
+                    assertFalse(compiledSide.wasExecuted());
+                    assertTrue(compiledSide.compile(true)); assertTrue(compiledSide.isValidLastTier());
+                    long address = compiledSide.getCodeAddress(); int installations = compiledSide.getSuccessfulCompilationCount();
+                    assertNotEquals(0L, address);
                     var thunk = new Thunk(escaped.target, escaped.environment);
                     var demand = new RootNode(language, new FrameLayout().build()) {
                         @Child private Force force = new Force(metrics, true);
@@ -286,16 +307,19 @@ class StockGraphRecoveryTest {
                     }.getCallTarget();
                     owner.getThreads().enterCurrent(null, false, true, null);
                     try {
-                        var request = owner.getThreads().send(owner.getThreads().currentIdentity(), new Object());
+                        body.armed.set(true);
                         var suspension = assertThrows(ThunkSuspended.class, demand::call);
-                        assertSame(thunk, suspension.getThunk()); assertSame(request, suspension.getAsyncRequest());
-                        assertTrue(request.compiledCapture); assertEquals(5, thunk.getState());
+                        var request = suspension.getAsyncRequest(); assertNotNull(request);
+                        assertSame(thunk, suspension.getThunk()); assertTrue(request.compiledCapture);
+                        assertEquals(5, thunk.getState());
                         var saved = SavedGuestContinuations.savedGuestContinuation(thunk.getValue());
-                        assertNotNull(saved); assertSame(fresh, saved.getSourceRoot()); assertNotSame(root, saved.getSourceRoot());
-                        assertSame(request, saved.asyncRequest()); assertEquals(1, effects.get()); request.acknowledge();
+                        assertNotNull(saved); assertSame(root, saved.getSourceRoot());
+                        assertSame(request, saved.asyncRequest()); assertEquals(2, effects.get()); request.acknowledge();
                         Object value = demand.call(); assertEquals(-6705412340454524888L, value);
                         assertSame(value, demand.call()); assertEquals(2, thunk.getState()); assertEquals(2, effects.get());
-                        assertSame(fresh, source.get()); assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                        assertSame(root, source.get()); assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                        assertEquals(address, compiledSide.getCodeAddress());
+                        assertEquals(installations, compiledSide.getSuccessfulCompilationCount());
                         assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); clean(language);
                     } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
                 } finally { context.leave(); }
@@ -357,8 +381,8 @@ class StockGraphRecoveryTest {
                     assertSame(root, saved.getSourceRoot()); assertEquals(1, effects.get()); assertTrue(scope.getSpills() > 0);
                     assertThrows(OptimizationFailedException.class, () -> target.compile(true)); assertEquals(1, effects.get());
                     assertEquals(-6705412340454524888L, Calls.target(target, new Object[]{0L, environment}));
-                    var fresh = (FunctionRoot) recovered(root).getRootNode(); assertSame(fresh, source.get());
-                    assertTrue(((OptimizedCallTarget) fresh.getCallTarget()).compile(true));
+                    assertSame(root, source.get());
+                    assertFalse(target.compile(true));
                     assertEquals(-6705412340454524888L, saved.continueWith(Unit.INSTANCE));
                     assertSame(root, source.get(), "saved anchor restarts the original body, never the new entry");
                     assertEquals(3, iterations.get()); for (int count : prefixes) assertEquals(1, count);
@@ -366,8 +390,8 @@ class StockGraphRecoveryTest {
                     assertThrows(IllegalStateException.class, () -> saved.continueWith(Unit.INSTANCE));
                     long entries = metrics.getCompiledEntries();
                     assertEquals(-6705412340454524888L, Calls.target(target, new Object[]{0L, environment}));
-                    assertSame(fresh, source.get()); assertTrue(metrics.getCompiledEntries() > entries);
-                    assertEquals(4, effects.get()); assertTrue(root.isSelf(fresh.getCallTarget())); clean(language);
+                    assertSame(root, source.get()); assertEquals(entries, metrics.getCompiledEntries());
+                    assertEquals(4, effects.get()); assertTrue(root.isSelf(root.getCallTarget())); clean(language);
                 } finally { context.leave(); }
             }
         }
@@ -571,21 +595,19 @@ class StockGraphRecoveryTest {
                     var target = root.getCallTarget();
                     assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
                     assertEquals(1, effects.get(), "root and side compilation failures cannot replay the guest");
-                    var first = (FunctionRoot) recovered(root).getRootNode();
-                    assertSame(first, source.get()); assertEquals(1, first.getGraphBudgetGeneration());
-                    assertTrue(((OptimizedCallTarget) first.getCallTarget()).getSuccessfulCompilationCount() > 0);
-                    assertFalse(((OptimizedCallTarget) first.getCallTarget()).isValid(),
-                        "The failed side invalidates the previously installed source entry");
-                    var pending = first.graphFailure.get();
-                    assertNotNull(pending, "a failed extracted side must be attributed to its actual function owner");
+                    assertSame(root, source.get()); assertEquals(0, root.getGraphBudgetGeneration());
+                    var outer = side(body, 0); assertNotNull(outer);
+                    var pending = root.graphFailure.get();
+                    assertNotNull(pending, "a failed extracted side keeps its actual original function owner");
                     assertInstanceOf(AstSameFrameArm.ArmRoot.class, pending.target().getRootNode());
                     assertFalse(pending.target().isSubmittedForCompilation()); assertFalse(pending.target().isValid());
                     assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
-                    assertEquals(2, effects.get());
-                    var second = recovered(first); assertNotNull(second, "the invalidated enclosing entry must claim the failed side");
-                    assertSame(second.getRootNode(), source.get()); assertTrue(root.isSelf(second));
-                    assertEquals(2, ((FunctionRoot) second.getRootNode()).getGraphBudgetGeneration());
-                    assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(1, first.getGraphBudgetGeneration());
+                    assertEquals(2, effects.get()); assertSame(root, source.get());
+                    assertSame(outer, side(body, 0), "the failed outer boundary stays in place");
+                    var nested = NodeUtil.findAllNodeInstances(body, AstSameFrameArm.class).get(1);
+                    assertNotNull(side(nested, 0), "only a proper nested region becomes another candidate");
+                    assertFalse(((OptimizedCallTarget) target).compile(true));
+                    assertEquals(0, root.getGraphBudgetGeneration());
                 } finally { context.leave(); }
             }
         }
@@ -640,26 +662,24 @@ class StockGraphRecoveryTest {
                         Object next = Calls.target(target, new Object[]{nextPacket}); consumed(input, nextPacket);
                         answer(language, tuple, next, -6705412340454524882L, lazy);
                         assertEquals(1, effects.get()); assertEquals(MaskingState.UNMASKED, observedMask.get());
-                        var fresh = (FunctionRoot) recovered(root).getRootNode();
-                        assertSame(fresh, source.get()); assertSame(input, fresh.getTypedInput());
-                        assertSame(tuple, fresh.getTupleResult()); assertSame(arguments, fresh.getInputLayout());
-                        assertEquals(root.mask, fresh.mask); assertTrue(root.isSelf(fresh.getCallTarget()));
-                        var optimized = (OptimizedCallTarget) fresh.getCallTarget();
-                        assertTrue(optimized.compile(true)); assertTrue(optimized.isValidLastTier());
-                        ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(optimized);
+                        assertSame(root, source.get()); assertSame(input, root.getTypedInput());
+                        assertSame(tuple, root.getTupleResult()); assertSame(arguments, root.getInputLayout());
+                        assertEquals(root.mask, root.mask); assertTrue(root.isSelf(root.getCallTarget()));
+                        var optimized = (OptimizedCallTarget) root.getCallTarget();
+                        assertFalse(optimized.compile(true)); assertFalse(optimized.isValid());
                         long entries = metrics.getCompiledEntries();
                         var request = owner.getThreads().send(owner.getThreads().currentIdentity(), new Object());
                         var lastPacket = packet(input, 31L, lazy);
                         var saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{lastPacket}));
-                        assertSame(fresh, saved.getSourceRoot()); assertSame(request, saved.asyncRequest());
-                        assertTrue(metrics.getCompiledEntries() > entries); assertTrue(request.compiledCapture);
+                        assertSame(root, saved.getSourceRoot()); assertSame(request, saved.asyncRequest());
+                        assertEquals(entries, metrics.getCompiledEntries());
                         consumed(input, lastPacket); request.acknowledge(); assertEquals(1, effects.get());
 
                         answer(language, tuple, old.continueWith(Unit.INSTANCE), -6705412340454524888L, lazy);
                         assertSame(root, source.get()); assertEquals(MaskingState.MASKED_INTERRUPTIBLE, observedMask.get());
                         assertThrows(RuntimeFault.class, () -> old.continueWith(Unit.INSTANCE));
                         answer(language, tuple, saved.continueWith(Unit.INSTANCE), -6705412340454524880L, lazy);
-                        assertSame(fresh, source.get()); assertEquals(MaskingState.UNMASKED, observedMask.get());
+                        assertSame(root, source.get()); assertEquals(MaskingState.UNMASKED, observedMask.get());
                         assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
                         assertEquals(3, effects.get()); assertEquals(0, lazy.getState());
                         assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); clean(language);
@@ -732,23 +752,28 @@ class StockGraphRecoveryTest {
                     var program = new Program(language, module, false, false, true);
                     var root = (FunctionRoot) program.entryTarget("entry").getRootNode();
                     var target = (OptimizedCallTarget) root.getCallTarget();
-                    assertEquals(1, NodeUtil.findAllNodeInstances(root, AstDeferredArm.class).size());
+                    var deferred = NodeUtil.findAllNodeInstances(root, AstDeferredArm.class);
+                    assertEquals(1, deferred.size());
+                    OptimizedCallTarget prepared;
+                    try {
+                        var field = AstDeferredArm.class.getDeclaredField("target"); field.setAccessible(true);
+                        prepared = (OptimizedCallTarget) field.get(deferred.getFirst());
+                    } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+                    assertTrue(prepared.compile(true)); assertTrue(prepared.isValidLastTier());
+                    assertFalse(prepared.wasExecuted(), "compiler preparation cannot invoke the empty side");
+                    int emptyInstallations = prepared.getSuccessfulCompilationCount();
                     var failure = assertThrows(OptimizationFailedException.class, () -> target.compile(true));
                     assertSame(target, failure.getCallTarget()); assertFalse(target.isSubmittedForCompilation());
                     assertEquals(526848L, Calls.target(target, new Object[]{0L, 3L}));
-                    var fresh = recovered(root); assertNotNull(fresh, "deferred candidate must reduce only a fresh entry body");
-                    assertTrue(root.isSelf(fresh)); assertNotSame(target, fresh);
-                    assertEquals(1, NodeUtil.findAllNodeInstances(root, AstDeferredArm.class).size());
-                    assertEquals(0, NodeUtil.findAllNodeInstances(fresh.getRootNode(), AstDeferredArm.class).size());
-                    assertEquals(1, NodeUtil.findAllNodeInstances(fresh.getRootNode(), AstCaseArm.class).size());
+                    assertTrue(prepared.wasExecuted(), "the first guest side call must reach its installed body");
+                    assertFalse(prepared.isValid(), "empty pass-through code is invalidated before publication");
+                    assertEquals(emptyInstallations, prepared.getSuccessfulCompilationCount());
+                    assertSame(root, target.getRootNode()); assertNull(recovered(root));
+                    assertEquals(0, NodeUtil.findAllNodeInstances(root, AstDeferredArm.class).size());
+                    assertEquals(1, NodeUtil.findAllNodeInstances(root, AstCaseArm.class).size());
                     assertEquals(0, root.getGraphBudgetGeneration());
-                    assertEquals(1, ((FunctionRoot) fresh.getRootNode()).getGraphBudgetGeneration());
-                    var optimized = (OptimizedCallTarget) fresh;
-                    assertTrue(optimized.compile(true)); assertTrue(optimized.isValidLastTier());
-                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(optimized);
-                    long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                    assertFalse(target.compile(true)); assertFalse(target.isValid());
                     assertEquals(527872L, Calls.target(target, new Object[]{0L, 4L}));
-                    assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before);
                     assertSame(target, program.entryTarget("entry"));
                 } finally { context.leave(); }
             }
@@ -880,7 +905,7 @@ class StockGraphRecoveryTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
-                    var gate = new CloneGate(new AstSameFrameArm(new Heavy(new long[4096], effects, source)), reached, release);
+                    var gate = new EntryGate(new AstSameFrameArm(new Heavy(new long[4096], effects, source)), reached, release);
                     var root = new FunctionRoot(language, new FrameLayout().build(), "concurrent recovery", null,
                             new int[0], new int[0], new int[0], gate, new Metrics(true));
                     var target = (OptimizedCallTarget) root.getCallTarget();
@@ -892,46 +917,40 @@ class StockGraphRecoveryTest {
                         try { return Calls.target(target, new Object[]{0L}); }
                         finally { context.leave(); }
                     });
-                    assertTrue(reached.await(20, TimeUnit.SECONDS), "claimant must reach candidate preparation");
-                    assertTrue(root.graphFailure.get().claimed()); assertEquals(0, effects.get());
+                    assertTrue(reached.await(20, TimeUnit.SECONDS), "first entry must retain its active body");
+                    assertNull(root.graphFailure.get()); assertEquals(0, effects.get());
                     var second = workers.submit(() -> {
                         context.enter();
                         try { return Calls.target(target, new Object[]{0L}); }
                         finally { context.leave(); }
                     });
-                    Object oldAnswer = second.get(20, TimeUnit.SECONDS);
+                    Object answer = second.get(20, TimeUnit.SECONDS);
                     assertEquals(1, effects.get()); assertSame(root, source.get());
-                    assertTrue(root.graphFailure.get().claimed(), "competing entry cannot steal the terminal receipt");
                     release.countDown();
-                    assertEquals(oldAnswer, first.get(20, TimeUnit.SECONDS));
-                    assertEquals(2, effects.get()); assertNotSame(root, source.get());
-                    var fresh = (FunctionRoot) source.get();
-                    assertTrue(root.isSelf(fresh.getCallTarget())); assertEquals(root.mask, fresh.mask);
-                    assertEquals(1, fresh.getGraphBudgetGeneration()); assertEquals(0, root.getGraphBudgetGeneration());
-                    assertNull(root.graphFailure.get());
-                    assertEquals(oldAnswer, Calls.target(target, new Object[]{0L}));
-                    assertEquals(3, effects.get()); assertSame(fresh, source.get());
+                    assertEquals(answer, first.get(20, TimeUnit.SECONDS));
+                    assertEquals(2, effects.get()); assertSame(root, source.get());
+                    assertNull(root.graphFailure.get()); assertFalse(target.compile(true));
+                    assertEquals(answer, Calls.target(target, new Object[]{0L}));
+                    assertEquals(3, effects.get()); assertSame(root, source.get());
                 } finally { release.countDown(); context.leave(); workers.shutdownNow(); }
             }
         }
 
-        private static final class CloneGate extends Expr {
+        private static final class EntryGate extends Expr {
             @Child private Expr body;
             private final AtomicBoolean armed = new AtomicBoolean();
             private final CountDownLatch reached, release;
-            CloneGate(Expr body, CountDownLatch reached, CountDownLatch release) {
+            EntryGate(Expr body, CountDownLatch reached, CountDownLatch release) {
                 this.body = body; this.reached = reached; this.release = release; setRepresentation(LONG);
             }
-            @Override public Node copy() {
-                Node copy = super.copy();
+            @Override public Object execute(VirtualFrame frame) {
                 if (armed.compareAndSet(true, false)) {
                     reached.countDown();
-                    try { if (!release.await(20, TimeUnit.SECONDS)) throw new AssertionError("candidate preparation timed out"); }
+                    try { if (!release.await(20, TimeUnit.SECONDS)) throw new AssertionError("active entry timed out"); }
                     catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new AssertionError(interrupted); }
                 }
-                return copy;
+                return body.execute(frame);
             }
-            @Override public Object execute(VirtualFrame frame) { return body.execute(frame); }
         }
 
         static void launcherPolicy() throws Exception {
@@ -990,18 +1009,11 @@ class StockGraphRecoveryTest {
                     assertTrue(root.graphFailure.get().reason().contains("GraphTooBigBailoutException"));
                     assertEquals(2, effects.get(), "compiler completion has no guest effects");
                     assertEquals(expected, Calls.target(target, new Object[]{0L}));
-                    assertEquals(3, effects.get()); assertNotSame(root, source.get());
-                    var fresh = (FunctionRoot) source.get();
-                    assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(1, fresh.getGraphBudgetGeneration());
-                    assertSame(root.compilationOwner(), fresh.compilationOwner());
-                    var installed = (OptimizedCallTarget) fresh.getCallTarget();
-                    installed.compile(true);
-                    runtime.waitForCompilation(installed, 20000);
-                    assertTrue(installed.isValidLastTier()); assertEquals(3, effects.get());
-                    long before = metrics.getCompiledEntries();
+                    assertEquals(3, effects.get()); assertSame(root, source.get());
+                    assertEquals(0, root.getGraphBudgetGeneration());
+                    assertFalse(target.compile(true));
                     assertEquals(expected, Calls.target(target, new Object[]{0L}));
-                    assertEquals(4, effects.get()); assertSame(fresh, source.get());
-                    assertTrue(metrics.getCompiledEntries() > before, "the real entry must execute installed replacement code");
+                    assertEquals(4, effects.get()); assertSame(root, source.get());
                     assertEquals(1, attempts.get(), "a physical failed target must never attempt compilation again");
                 } finally {
                     release.countDown();
@@ -1155,14 +1167,10 @@ class StockGraphRecoveryTest {
                     assertEquals(0, root.getGraphBudgetGeneration());
                     assertEquals(4096L, Calls.target(target, new Object[]{0L}));
                     assertEquals(8192, effects.get(), "two complete invocations, not failed-call replay");
-                    var fresh = (FunctionRoot) source.get();
-                    assertNotSame(root, fresh); assertTrue(root.isSelf(fresh.getCallTarget()));
-                    assertEquals(1, fresh.getGraphBudgetGeneration());
-                    assertTrue(compiled.get() > 0, "the replacement must really execute OSR-compiled iterations");
-                    assertSame(oldLoop, body.loop); assertEquals(0, root.getGraphBudgetGeneration());
-                    var freshLoop = NodeUtil.findAllNodeInstances(fresh, LoopWork.class).getFirst().loop;
-                    assertNotSame(oldLoop, freshLoop);
-                    assertNotNull(((OptimizedOSRLoopNode) freshLoop).getCompiledOSRLoop());
+                    assertSame(root, source.get()); assertEquals(0, root.getGraphBudgetGeneration());
+                    assertSame(oldLoop, body.loop);
+                    assertFalse(failure.target().compile(true), "the original whole-body OSR remains terminal");
+                    assertEquals(0, compiled.get());
                     System.out.println("STOCK AST OSR RECOVERY effects=" + effects.get() + " compiledIterations=" + compiled.get());
                 } finally { context.leave(); }
             }
@@ -1199,65 +1207,69 @@ class StockGraphRecoveryTest {
         static void recoverAst(boolean twice) {
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
-                    .option("engine.SingleTierCompilationThreshold", "10000000")
-                    .option("engine.CompilationFailureAction", "Throw")
+                    .option("engine.SingleTierCompilationThreshold", "1")
+                    .option("engine.CompilationFailureAction", "Print")
                     .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
+                    var compiled = new AtomicInteger();
                     long[] values = new long[4096];
                     for (int i = 0; i < values.length; i++) values[i] = i + 1;
-                    Expr heavy = new AstSameFrameArm(new Heavy(values, effects, source));
-                    if (twice) heavy = new Pair(heavy, new AstSameFrameArm(new Heavy(values, effects, source)));
-                    var metrics = new Metrics(true);
-                    var root = new FunctionRoot(language, new FrameLayout().build(), "stock recovery", null,
-                            new int[0], new int[0], new int[0], heavy, metrics);
+                    var trace = new AstSameFrameArm(new Expr() {
+                        @Override public Object execute(VirtualFrame frame) {
+                            if (CompilerDirectives.inCompiledCode()) record();
+                            return 17L;
+                        }
+                        @CompilerDirectives.TruffleBoundary private void record() { compiled.incrementAndGet(); }
+                    });
+                    AstSameFrameArm region = twice ? new AstSameFrameArm(
+                            new Pair(new Heavy(values, effects, source), trace)) : trace;
+                    var body = new Pair(new Heavy(values, effects, source), region);
+                    var root = new FunctionRoot(language, new FrameLayout().build(), "terminal trace owner", null,
+                            new int[0], new int[0], new int[0], body, new Metrics(true));
                     var target = (OptimizedCallTarget) root.getCallTarget();
-                    var oldLoops = NodeUtil.findAllNodeInstances(root, OptimizedOSRLoopNode.class);
-                    var failure = assertThrows(OptimizationFailedException.class, () -> target.compile(true));
-                    assertSame(target, failure.getCallTarget());
-                    assertTrue(failure.toString().contains("GraphTooBigBailoutException"));
-                    assertFalse(target.isSubmittedForCompilation()); assertFalse(target.isValidLastTier());
-                    assertFalse(target.canBeInlined()); assertEquals(0, effects.get());
-                    assertEquals(0, root.getGraphBudgetGeneration(), "callback must not rewrite the old body");
+                    target.compile(true); target.waitForCompilation();
+                    assertFalse(target.isValid()); assertNotNull(root.graphFailure.get());
+                    assertTrue(root.graphFailure.get().reason().contains("GraphTooBigBailoutException"));
+                    assertEquals(0, effects.get()); assertEquals(0, compiled.get());
                     long expected = 17;
                     for (int i = 0; i < values.length; i++) expected = (expected ^ values[i]) * 17 + i;
                     int perCall = twice ? 2 : 1;
-                    if (twice) expected *= 2;
+                    expected = expected * perCall + 17L;
                     assertEquals(expected, Calls.target(target, new Object[]{0L}));
-                    assertEquals(perCall, effects.get());
-                    assertNotSame(root, source.get(), "the next fresh entry must run replacement-owned code");
-                    var replacement = (FunctionRoot) source.get();
-                    assertTrue(root.isSelf(replacement.getCallTarget())); assertEquals(root.mask, replacement.mask);
-                    assertSame(root.getFrameDescriptor(), replacement.getFrameDescriptor());
-                    assertEquals(oldLoops, NodeUtil.findAllNodeInstances(root, OptimizedOSRLoopNode.class));
-                    assertEquals(0, root.getGraphBudgetGeneration());
-                    assertEquals(1, replacement.getGraphBudgetGeneration());
-                    var fresh = (OptimizedCallTarget) replacement.getCallTarget();
+                    assertSame(root, source.get(), "A failed whole entry must not create another whole-root candidate");
+                    assertEquals(perCall, effects.get()); assertFalse(target.compile(true));
+                    var firstBoundary = side(region, 2);
+                    assertNotNull(firstBoundary);
                     if (twice) {
-                        var nextFailure = assertThrows(OptimizationFailedException.class, () ->
-                                ((OptimizedCallTarget) source.get().getCallTarget()).compile(true));
-                        assertSame(fresh, nextFailure.getCallTarget());
-                        assertTrue(nextFailure.toString().contains("GraphTooBigBailoutException"));
-                        assertFalse(fresh.isSubmittedForCompilation()); assertEquals(perCall, effects.get());
+                        assertFalse(firstBoundary.isValid()); assertNotNull(root.graphFailure.get());
                         assertEquals(expected, Calls.target(target, new Object[]{0L}));
-                        assertEquals(perCall * 2, effects.get());
-                        assertNotSame(replacement, source.get());
-                        replacement = (FunctionRoot) source.get();
-                        assertEquals(2, replacement.getGraphBudgetGeneration());
-                        fresh = (OptimizedCallTarget) replacement.getCallTarget();
+                        assertEquals(perCall * 2, effects.get()); assertSame(firstBoundary, side(region, 2));
+                        assertFalse(firstBoundary.compile(true), "An extracted side cannot retry its failed graph");
                     }
-                    assertTrue(fresh.compile(true)); assertTrue(fresh.isValidLastTier());
-                    int beforeEffects = twice ? perCall * 2 : perCall;
-                    assertEquals(beforeEffects, effects.get(), "explicit fresh compilation has no guest effects");
-                    long before = metrics.getCompiledEntries();
+                    var installed = side(trace, 2);
+                    assertNotNull(installed); assertTrue(installed.isValidLastTier());
+                    assertEquals(1, compiled.get(), "The first invocation of the new cold side must enter installed code");
+                    long address = installed.getCodeAddress(); int installations = installed.getSuccessfulCompilationCount();
+                    assertNotEquals(0L, address);
                     assertEquals(expected, Calls.target(target, new Object[]{0L}));
-                    assertEquals(beforeEffects + perCall, effects.get()); assertTrue(metrics.getCompiledEntries() > before);
-                    assertSame(replacement, source.get());
+                    assertEquals(perCall * (twice ? 3 : 2), effects.get()); assertEquals(2, compiled.get());
+                    assertSame(root, source.get()); assertFalse(target.isValid()); assertFalse(target.compile(true));
+                    assertEquals(address, installed.getCodeAddress());
+                    assertEquals(installations, installed.getSuccessfulCompilationCount());
                 } finally { context.leave(); }
             }
+        }
+
+        private static OptimizedCallTarget side(AstSameFrameArm arm, int mode) {
+            try {
+                var field = AstSameFrameArm.class.getDeclaredField("targets"); field.setAccessible(true);
+                var targets = (RootCallTarget[]) field.get(arm);
+                return targets == null ? null : (OptimizedCallTarget) targets[mode];
+            } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         }
 
         private static final class Pair extends Expr {

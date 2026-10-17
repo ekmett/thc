@@ -1,0 +1,25 @@
+{
+  "release": "vm-2026.10.09-0e36293",
+  "source_commit": "0e36293fa5438c8d4313f8b0f837a2e765d61d11",
+  "runtime_source_commit": "3ffc31d4bf5f019a3f3d1686772b8cbd9da11e4a",
+  "runtime_source_difference": "Only a compiler-test expectation differs; no runtime source change.",
+  "package_sha256": "943db23980d3bd34e8d16ca03b8c6293a248fead38b7d81a297d86b11796d3b1",
+  "checked_file_sha256": {
+    "bin/java": "2fc06643f7d30eaa401260b2a0124676fd2be64180af6ddbfbee6aa58b864ba5",
+    "lib/server/libjvm.dylib": "b551066175bc907633924b8a9a695259683a805c834a22d9c3c7332fe7f5c047",
+    "lib/jam/jam-vm.jar": "eb66c89ca247dfba73767ed191e3e37a83c50e0fcac3f7013898ff378e2e55f3",
+    "lib/jam/libjam_bridge.dylib": "caed5e5d005c125456c0bd5c47f939f69da68d7211229c9efd36832782f5311b"
+  },
+  "host": "Apple M2 Max, macOS 26.6.2 (25G83)",
+  "runtime": "25.0.4.1+1-jvmci-25.3-b22, GraalVM release flavor",
+  "heap_bytes": 134217728,
+  "old_bytes": 100663296,
+  "young_bytes": 33554432,
+  "copy_workers": 1,
+  "scanner": "serial VM scanner",
+  "compactor": "neon",
+  "samples": 7,
+  "warmup_cycles": 3,
+  "batch": 64,
+  "gc_policy": "Explicit System.gc full major collections; no allocation-triggered collections observed."
+}

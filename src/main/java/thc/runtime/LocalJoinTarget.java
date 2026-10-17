@@ -28,11 +28,11 @@ public final class LocalJoinTarget {
     public int[][] getTypedSlots() { return typedSlots; } public LocalJoinJump getJump() { return jump; }
     /** Set once after lowering the group, before publishing its AST. */
     void setBodySlots(int first, int limit) { firstBodySlot = first; bodySlotLimit = limit; }
-    void clearBodySlots(VirtualFrame frame) {
-        // Constant slot indices let Graal keep an owned frame virtual. With a
-        // dynamic descriptor, count the clears instead of expanding a large
-        // incoming frame into the OSR or same-frame side target's graph.
-        if (CompilerDirectives.isPartialEvaluationConstant(frame.getFrameDescriptor())) clearConstantFrame(frame);
+    void clearBodySlots(VirtualFrame frame, boolean constantFrame) {
+        // The constant-slot route retains virtualization opportunities for roots
+        // without an explicit materializable-frame requirement. Declared materializable
+        // FunctionRoots and dynamic descriptors count the full fallback clears.
+        if (constantFrame && CompilerDirectives.isPartialEvaluationConstant(frame.getFrameDescriptor())) clearConstantFrame(frame);
         else for (int slot = firstBodySlot; slot < bodySlotLimit; slot++) frame.clear(slot);
     }
     @ExplodeLoop private void clearConstantFrame(VirtualFrame frame) {

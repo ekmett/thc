@@ -10,6 +10,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -22,6 +27,65 @@ class DemandPapTest {
     private static final Map<String, Object> LONG = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
     private static final Map<String, Object> FUNCTION = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
     private static List<Object> node(Object... fields) { return Arrays.asList(fields); }
+    @Test void coldCompiledReadOfPublishedCellDoesNotWaitForUnrelatedPreparation() throws Exception {
+        try (var context = executionContext(false)) {
+            context.initialize("thc");
+            var lock = new PreparationLock();
+            var cell = new GlobalBinding("published");
+            var preparations = new AtomicInteger();
+            var compiledSuffix = new AtomicBoolean();
+            cell.defer(lock, () -> { preparations.incrementAndGet(); return 17L; });
+            com.oracle.truffle.runtime.OptimizedCallTarget target;
+            context.enter();
+            try {
+                target = (com.oracle.truffle.runtime.OptimizedCallTarget) new RootNode(null) {
+                    @Override public ExecutionSignature prepareForAOT() { return ExecutionSignature.create(Long.class, new Class<?>[0]); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        Object value = cell.read();
+                        compiledSuffix.set(CompilerDirectives.inCompiledCode());
+                        return value;
+                    }
+                }.getCallTarget();
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT());
+                target.compile(true); target.waitForCompilation();
+                assertFalse(target.wasExecuted()); assertTrue(target.isValidLastTier());
+                assertEquals(0, preparations.get());
+                assertEquals(17L, cell.read());
+                assertEquals(1, preparations.get());
+            } finally { context.leave(); }
+            long address = target.getCodeAddress(); int installations = target.getSuccessfulCompilationCount();
+            assertNotEquals(0L, address); assertFalse(target.wasExecuted());
+            var held = new CountDownLatch(1);
+            var release = new CountDownLatch(1);
+            var unrelated = new GlobalBinding("still lowering");
+            unrelated.defer(lock, () -> {
+                held.countDown();
+                if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("Unrelated preparation was not released");
+                return 34L;
+            });
+            try (var workers = Executors.newFixedThreadPool(2)) {
+                var preparing = workers.submit(unrelated::prepareCode);
+                try {
+                    assertTrue(held.await(5, TimeUnit.SECONDS), "Unrelated preparation must own the shared lock");
+                    var reading = workers.submit(() -> {
+                        context.enter();
+                        try { return Calls.target(target, new Object[0]); }
+                        finally { context.leave(); }
+                    });
+                    assertEquals(17L, reading.get(5, TimeUnit.SECONDS),
+                        "A published read must complete while unrelated lowering still owns the lock");
+                    assertFalse(preparing.isDone()); assertNull(unrelated.peek());
+                    assertTrue(compiledSuffix.get(), "The first read must return into compiled code");
+                    assertTrue(target.isValidLastTier()); assertEquals(address, target.getCodeAddress());
+                    assertEquals(installations, target.getSuccessfulCompilationCount());
+                    assertEquals(1, preparations.get());
+                } finally {
+                    release.countDown();
+                    preparing.get(5, TimeUnit.SECONDS);
+                }
+            }
+        }
+    }
     @Test void coldCompiledPeekObservesPublicationWithoutPreparingTheCell() throws Exception {
         try (var context = executionContext(false)) {
             context.initialize("thc"); context.enter();

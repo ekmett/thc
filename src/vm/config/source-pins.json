@@ -1,0 +1,98 @@
+{
+  "hotspot-patch-base": {
+    "repo": "openjdk/jdk",
+    "commit": "6c48f4ed707bf0b15f9b6098de30db8aae6fa40f",
+    "files": [
+      "src/hotspot/share/gc/epsilon/epsilonHeap.cpp",
+      "src/hotspot/share/gc/epsilon/epsilonHeap.hpp",
+      "src/hotspot/share/gc/epsilon/epsilonArguments.cpp",
+      "src/hotspot/share/gc/epsilon/epsilonBarrierSet.hpp",
+      "src/hotspot/share/oops/compressedOops.inline.hpp",
+      "src/hotspot/share/oops/compressedOops.cpp",
+      "src/hotspot/share/oops/instanceRefKlass.inline.hpp",
+      "src/hotspot/share/gc/shared/referenceProcessor.cpp",
+      "src/hotspot/share/gc/serial/serialFullGC.cpp",
+      "src/hotspot/share/gc/shared/weakProcessor.cpp",
+      "src/hotspot/share/oops/oop.inline.hpp",
+      "src/hotspot/share/gc/shared/barrierSet.hpp"
+    ],
+    "sha256": {
+      "src/hotspot/share/gc/epsilon/epsilonHeap.cpp": "a45bcb0c5ba021417eb14bb01bf4c8ff12a51e99e7d1cbecc20eec015293111e",
+      "src/hotspot/share/gc/epsilon/epsilonHeap.hpp": "a7acd3662b9fa408b9d5edfba970966a93ed96420790cb62092b6243002f63d3",
+      "src/hotspot/share/gc/epsilon/epsilonArguments.cpp": "3e4a18cb12fe2b59e87a72464a03d7dc4b962b2ae400516cf6f89c79ab13b09c",
+      "src/hotspot/share/gc/epsilon/epsilonBarrierSet.hpp": "3a86997f04689b7b6646c76c7948de1a346e87e98e67bf114af778592d838e78",
+      "src/hotspot/share/oops/compressedOops.inline.hpp": "453fba0a36680d1066613af7d2bdad151ddfb2853129c46e602f1eeab4998462",
+      "src/hotspot/share/oops/compressedOops.cpp": "4a0cd09d7013b0afa2045f36571ce89413071332d1cf69ab60349a878682838b",
+      "src/hotspot/share/oops/instanceRefKlass.inline.hpp": "9b235d135cf8e86a6e8dd950df47c0f7666856afbf6040651e81e719d66eb9d4",
+      "src/hotspot/share/gc/shared/referenceProcessor.cpp": "b10476fd6c59a9972827ce19d288b61e33a49f95fb9ec727a3b2c86b6c80d055",
+      "src/hotspot/share/gc/serial/serialFullGC.cpp": "257eecd15de899bb053189bd6f478b34ec2e6284ae6707d5323bf05f83c31a62",
+      "src/hotspot/share/gc/shared/weakProcessor.cpp": "b03d9714c870d0a331523ebad184eb752b75eb41b1a1d2c1d06a81f4cfa9894d",
+      "src/hotspot/share/oops/oop.inline.hpp": "a681afb20d96a7dbc3b6e9b514b69014ed16a93e2dafc99b42aedb87e80c7d43",
+      "src/hotspot/share/gc/shared/barrierSet.hpp": "453ee8acb5a14c06ebc7ef45a0501ac69b4a9653fb67ddccd55e97e81299b650"
+    },
+    "archive_sha256": "829e6bae36579c46a3f9222355abe0b0ca7d66b3bfc8659eaf784fa002529692",
+    "purpose": "HotSpot patch provenance and export only; not a standalone runtime product"
+  },
+  "epsilon-mc": {
+    "repo": "shipilev/jdk",
+    "commit": "ae2cf98353d6267d109409b85eba5f5462c20a0b",
+    "files": [
+      "src/hotspot/share/gc/epsilon/epsilonHeap.cpp",
+      "src/hotspot/share/gc/epsilon/epsilonHeap.hpp",
+      "src/hotspot/share/gc/epsilon/epsilon_globals.hpp"
+    ],
+    "sha256": {
+      "src/hotspot/share/gc/epsilon/epsilonHeap.cpp": "2416cccef07697ea4e8d7828beae35ae3cd122712dd2e3bd7f35448a2516ceac",
+      "src/hotspot/share/gc/epsilon/epsilonHeap.hpp": "d21808ae5c874f8b807e5ecf0b86b4cf714901fb617d64d3e6c1c0ffa294f884",
+      "src/hotspot/share/gc/epsilon/epsilon_globals.hpp": "8f48a5e81d0bf66c773c136c6e7ff397fdeb20145f9614f294e6246a42b26c1b"
+    }
+  },
+  "graal": {
+    "repo": "oracle/graal",
+    "commit": "7b025988a922a73286d1326e1eddc1ca39d3f569",
+    "files": [
+      "substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/Heap.java",
+      "substratevm/src/com.oracle.svm.core.genscavenge/src/com/oracle/svm/core/genscavenge/GCImpl.java",
+      "substratevm/src/com.oracle.svm.core.genscavenge/src/com/oracle/svm/core/genscavenge/ReferenceObjectProcessing.java",
+      "substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/ReferenceAccess.java",
+      "substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/ReferenceAccessImpl.java",
+      "compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/HotSpotGraalRuntime.java"
+    ],
+    "sha256": {
+      "substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/Heap.java": "772cae3d46210a15746455789cbc92721020de0dac849ffe8a7e099d5dcd4b7d",
+      "substratevm/src/com.oracle.svm.core.genscavenge/src/com/oracle/svm/core/genscavenge/GCImpl.java": "b3f5b1fb48fd54f78c42c6fdf080aeae538fbb87ab641ccc700b92861b1cd42e",
+      "substratevm/src/com.oracle.svm.core.genscavenge/src/com/oracle/svm/core/genscavenge/ReferenceObjectProcessing.java": "bf9eef84e2f6a0f98fa98e0a3f6ebf47065f88fb33f9a1cab1e8825beb9ad156",
+      "substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/ReferenceAccess.java": "ac5cefc35880092c2c552a8ea95fe93a6d1ecbe0f6fdc580753c53c27e17d885",
+      "substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/ReferenceAccessImpl.java": "a15119014975887556f76ea894046c373255bb398cc69c222488ad9b8444b7ce",
+      "compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/HotSpotGraalRuntime.java": "61fa234e7063610f10bffa7f46a9c4db03a6c73523b8fd1fa73a6c2d9d7000bb"
+    },
+    "version": "25.3.4.1"
+  },
+  "ghc": {
+    "repo": "ghc/ghc",
+    "commit": "902339d332fb4ce2b3c87dcac1ee6495d41ad886",
+    "files": [
+      "rts/sm/MarkWeak.c",
+      "rts/Weak.c",
+      "libraries/ghc-internal/src/GHC/Internal/Weak.hs",
+      "libraries/base/src/System/Mem/Weak.hs"
+    ],
+    "sha256": {
+      "rts/sm/MarkWeak.c": "6291ff87385e76289ad10270856a56fb3305459d71e0767d1bd9701f541c2c3c",
+      "rts/Weak.c": "a43a8b426ef066f894f2aafce1640fc50fdd44542117d93f0e619cd22c6f4ddc",
+      "libraries/ghc-internal/src/GHC/Internal/Weak.hs": "ddf8fda38abdde53f5aab351f30f9366c1c259f958caf00117400e8987f38a17",
+      "libraries/base/src/System/Mem/Weak.hs": "6b3a8b3a2c55bedf3d8a2aea480aa80f46ae85593e157399701c098721a7e11a"
+    }
+  },
+  "labsjdk25": {
+    "repo": "graalvm/labs-openjdk",
+    "commit": "f471c3eca82192dcdb1078687723652cf2ed63e7",
+    "archive_sha256": "3898f7d1120a1dbbe124d6611c9fc323a5e0134ab8e5d589611d51eeff42f475",
+    "version": "25.0.4.1+1-jvmci-25.3-b22"
+  },
+  "mx": {
+    "repo": "graalvm/mx",
+    "commit": "2675b13e58f97d6d37a4090cdcb5a52c280e1d8c",
+    "version": "7.85.1"
+  }
+}

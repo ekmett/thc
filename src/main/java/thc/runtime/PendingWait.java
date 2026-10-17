@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -78,11 +79,77 @@ public final class PendingWait extends AbstractTruffleException implements Inter
     }
     void wake() { owner.waitReady = true; GuestThreads.wakeSuspended(owner); }
     /** Inspect saved host wait carriers without forcing or continuing guest code. */
-    @TruffleBoundary static PendingWait of(Object value) {
-        var seen = new java.util.IdentityHashMap<Object, Boolean>();
+    static PendingWait of(Object value) {
+        // Keep absence visible to partial evaluation before the saved-chain walk.
+        if (value == null) return null;
+        if (value instanceof PendingWait pending) return pending;
+        return findSavedWait(value);
+    }
+    /** Append-only identity membership owned by one dependency inspection. */
+    private static final class Visited {
+        private static final int MAX_CAPACITY = 1 << 29;
+        private Object[] keys = new Object[128];
+        private int size;
+        private static int index(Object key, int mask) {
+            int hash = System.identityHashCode(key);
+            return (hash - (hash << 7)) & mask;
+        }
+        boolean add(Object key) {
+            for (;;) {
+                Object[] table = keys;
+                int mask = table.length - 1;
+                int at = index(key, mask);
+                while (table[at] != null) {
+                    if (table[at] == key) return false;
+                    at = (at + 1) & mask;
+                }
+                int nextSize = size + 1;
+                if (3 * nextSize > 2 * table.length) {
+                    if (table.length < MAX_CAPACITY) {
+                        grow();
+                        continue;
+                    }
+                    // Keep one empty probe slot, including at maximum capacity.
+                    if (size == MAX_CAPACITY - 1) throw new IllegalStateException("Capacity exhausted.");
+                }
+                table[at] = key;
+                size = nextSize;
+                return true;
+            }
+        }
+        private void grow() {
+            Object[] expanded = new Object[keys.length * 2];
+            int mask = expanded.length - 1;
+            for (Object key : keys) if (key != null) {
+                int at = index(key, mask);
+                while (expanded[at] != null) at = (at + 1) & mask;
+                expanded[at] = key;
+            }
+            keys = expanded;
+        }
+    }
+    @TruffleBoundary private static PendingWait findSavedWait(Object value) {
+        Visited seen = null;
+        Object first = null, second = null, third = null;
         for (;;) {
-            if (value != null && seen.put(value, Boolean.TRUE) != null) throw new RuntimeFault("Suspended guest dependency cycle");
             if (value instanceof PendingWait pending) return pending;
+            // Only carriers with successors need cycle membership.
+            if (!(value instanceof ThunkSuspended) && !(value instanceof CallSegmentSuspended) &&
+                !(value instanceof SavedGuestContinuation) && !(value instanceof ContinuationResult)) return null;
+            if (value != null) {
+                if (seen == null) {
+                    if (value == first || value == second || value == third)
+                        throw new RuntimeFault("Suspended guest dependency cycle");
+                    if (first == null) first = value;
+                    else if (second == null) second = value;
+                    else if (third == null) third = value;
+                    else {
+                        seen = new Visited();
+                        seen.add(first); seen.add(second); seen.add(third); seen.add(value);
+                        first = null; second = null; third = null;
+                    }
+                } else if (!seen.add(value)) throw new RuntimeFault("Suspended guest dependency cycle");
+            }
             if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
             else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
             else {

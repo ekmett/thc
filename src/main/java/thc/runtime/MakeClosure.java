@@ -26,7 +26,7 @@ final class MakeClosure extends Expr {
     RootCallTarget target() { return target; }
     @Override public Closure execute(VirtualFrame frame) {
         return constantClosure != null ? constantClosure : new Closure(captureLayout.capture(frame, captures,
-            programSlot < 0 ? null : Program.instance(frame, programSlot)), arity, target);
+            programSlot < 0 ? null : Program.instance(frame, programSlot), true), arity, target);
     }
     @Override public Closure executeClosure(VirtualFrame frame) { return execute(frame); }
 }

@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -16,9 +17,6 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
 import java.lang.invoke.MethodHandle;
@@ -88,66 +86,55 @@ public final class FunctionRoot extends GuestRoot {
     @CompilationFinal private boolean hasSelfTail;
     private final BranchProfile tailCallProfile = BranchProfile.create();
     @Child private LoopNode loop;
+    @CompilationFinal private volatile Assumption callStateUnchanged = Assumption.create("unchanged function call-state proof");
     @Child private HandoffCaller delimitedHandoff;
-    @Child private volatile DirectCallNode recoveredEntry;
     @CompilationFinal private volatile boolean coldEntry;
-    @CompilationFinal private boolean recoveryBoundary;
 
     @Override public Node copy() {
         FunctionRoot copy = (FunctionRoot) super.copy();
-        copy.recoveredEntry = null;
         copy.coldEntry = false;
+        copy.callStateUnchanged = Assumption.create("unchanged function call-state proof");
         return copy;
     }
 
-    @TruffleBoundary private DirectCallNode recoverEntry() {
+    void invalidateCallStateProof(CharSequence reason) {
+        Assumption previous = callStateUnchanged;
+        callStateUnchanged = Assumption.create("unchanged function call-state proof");
+        previous.invalidate(reason == null ? "" : reason.toString());
+    }
+
+    /** Uninlined callers depend on this epoch before inspecting the current children. */
+    boolean canEnterWithoutTailBounce() {
+        Assumption unchanged = callStateUnchanged;
+        return unchanged.isValid() && !needsCallState() && unchanged.isValid();
+    }
+
+    private boolean needsCallState() {
+        return strictSlots.length != 0 ||
+            !(loop.getRepeatingNode() instanceof SelfRepeater repeating) || repeating.needsCallState();
+    }
+
+    @TruffleBoundary private void recoverEntry() {
         var service = thc.Language.currentState(this).getGraphRecovery();
         var claim = service.claim(this);
-        if (claim == null) return recoveredEntry;
+        if (claim == null) return;
         try {
-            FunctionRoot replacement = copyForRecovery();
-            boolean reduced = claim.target().getRootNode() instanceof AstSameFrameArm.ArmRoot side
-                    ? side.extractInCopy(replacement)
-                    : deferredBudget ? AstDeferredArm.extractFresh(replacement) : AstSameFrameArm.extract(replacement);
-            if (!reduced) {
-                atomic(() -> {
-                    if (recoveredEntry == null && service.publishable(this, claim)) {
-                        coldEntry = true;
-                        reportReplace(this, this, "cold trampoline after compilation failure");
-                    }
-                    return null;
-                });
+            atomic(() -> {
+                if (!service.publishable(this, claim)) return null;
+                coldEntry = true;
+                // Preserve this adopted body and its frames. Only a proper region
+                // acquires a new target; the failed whole entry remains terminal.
+                if (claim.target().getRootNode() instanceof AstSameFrameArm.ArmRoot side)
+                    side.extractNested();
+                else if (deferredBudget) AstDeferredArm.extract(this);
+                else AstSameFrameArm.extract(this);
+                reportReplace(this, this, "cold terminal entry after compilation failure");
                 return null;
-            }
-            replacement.budgetGeneration = budgetGeneration + 1;
-            replacement.recoveryBoundary = true;
-            DirectCallNode prepared = DirectCallNode.create(replacement.getCallTarget());
-            return atomic(() -> {
-                if (recoveredEntry == null && service.publishable(this, claim)) {
-                    recoveredEntry = insert(prepared);
-                    reportReplace(this, this, "smaller fresh entry after compilation failure");
-                }
-                return recoveredEntry;
             });
         } finally {
-            // A cold trampoline keeps this source generation, including pending
-            // sibling failures. Only a published replacement retires all receipts.
-            service.complete(this, claim, recoveredEntry != null);
-        }
-    }
-
-    final FunctionRoot copyForRecovery() {
-        FunctionRoot replacement = NodeUtil.cloneNode(this);
-        freshLoops(replacement);
-        AstSameFrameArm.restoreCopiedExtractions(replacement);
-        return replacement;
-    }
-
-    private static void freshLoops(Node root) {
-        for (Node child : root.getChildren()) freshLoops(child);
-        if (root instanceof LoopNode loop) {
-            Node body = NodeUtil.cloneNode((Node) loop.getRepeatingNode());
-            loop.replace(Truffle.getRuntime().createLoopNode((RepeatingNode) body));
+            // Consume only this head. A concurrent or unextractable sibling still
+            // owns its receipt and may select another finite region at next entry.
+            service.complete(this, claim, false);
         }
     }
 
@@ -324,14 +311,33 @@ public final class FunctionRoot extends GuestRoot {
             throw fault("Prepared continuation belongs to another program context");
     }
     boolean isPreparedForAOT() { return preparedForAOT; }
+    private static void prepareAotDispatch(Node node) {
+        if (node instanceof Application application) application.prepareForAOT();
+        else if (node instanceof AstTypedApplication application) application.prepareForAOT();
+        else if (node instanceof TupleApplication application) application.prepareForAOT();
+        else if (node instanceof InputDispatch input) input.prepareForAOT();
+        else if (node instanceof TupleDispatch tuple) tuple.prepareForAOT();
+        else if (node instanceof Alternative alternative) alternative.prepareForAOT();
+        for (Node child : node.getChildren()) prepareAotDispatch(child);
+    }
     @Override protected ExecutionSignature prepareForAOT() {
-        // Only the admitted owner-free real-lowerer family is prepared here.
+        // The existing loop handles self transfers from the first guest entry.
+        // Cold compilation must not discover recursion by retiring that entry.
+        hasSelfTail = true;
+        prepareAotDispatch(this);
         // Frame carriers were established structurally before target publication;
-        // no context lookup, guest execution or observed-profile seeding is needed.
-        if (programSlot < 0) return null;
+        // no context lookup or guest execution is needed. Existing choice profiles
+        // admit both outcomes without recording guest observations.
         // An outlined reusable arm also returns an internal TailCall for its
         // owning caller to rethrow. This physical root result is not the guest ABI.
         Class<?> resultClass = capturesContinuations || role == FunctionRootRole.PASS_THROUGH ? null : numericClass(getScalarResultProof());
+        if (handoff != null) {
+            // One physical root accepts an ordinary packet or an empty packet
+            // carrying a pending loan, and may return a private completion token.
+            // Each ingress retains its own exact arity, layout and loan checks.
+            preparedForAOT = true;
+            return ExecutionSignature.create(null, null);
+        }
         if (getTypedInput() != null) {
             // Narrow scalars already use the typed packet calling convention.
             // Its generated storage class varies; retain exact layout/owner checks.
@@ -339,17 +345,20 @@ public final class FunctionRoot extends GuestRoot {
             return ExecutionSignature.create(resultClass, new Class<?>[]{null});
         }
         List<CoreRepresentation> inputs = getInputProofs();
+        if (inputs == null) inputs = Arrays.asList(argumentProofs);
         ArgumentLayout input = getInputLayout();
         Class<?>[] signature = new Class<?>[getEntryArgumentOffset() + ArgumentLayout.width(input, inputs.size())];
         signature[0] = Long.class;
         // ExecutionSignature requires an exact runtime class, not a superclass.
         // StaticShape selects the concrete CapturedFrame subclass; keep its
         // existing authenticated layout/owner checks, without inventing a class.
-        signature[1] = null;
+        if (getEntryArgumentOffset() == 2) signature[1] = null;
         for (int i = 0; i < inputs.size(); i++) {
             CoreRepresentation proof = inputs.get(i);
             if (proof.isEmptyTuple()) continue;
             Class<?> carrier = proof.getKind() == CoreKind.VOID ? Unit.class : numericClass(proof);
+            if (capturesContinuations && contains(getStrictArgumentPositions(), getEntryArgumentOffset() + i))
+                carrier = null; // Deferred strict ingress may still carry a lazy thunk.
             // Lifted data/functions may arrive as a lazy thunk or a value.
             // Keep the existing constructor/captured-program owner checks;
             // these alternatives do not have one exact signature class.
@@ -369,8 +378,8 @@ public final class FunctionRoot extends GuestRoot {
     @Override public boolean getAsynchronousExceptions() { return enableAsync; }
     public boolean getEnableDelimited() { return enableDelimited; }
     public boolean getCapturesContinuations() { return capturesContinuations; }
-    /** Shared AOT code must observe admission without retiring its installed target. */
-    public boolean usesRuntimeAsyncAdmission() { return programSlot >= 0; }
+    /** Prepared AOT code must observe admission without retiring its installed target. */
+    public boolean usesRuntimeAsyncAdmission() { return programSlot >= 0 || preparedForAOT; }
     public boolean getStackCapture() { return stackCapture; }
     public FunctionRootRole getRole() { return role; }
     public HandoffEntry getHandoff$org_intelligence_thc() { return handoff; }
@@ -580,16 +589,20 @@ public final class FunctionRoot extends GuestRoot {
         } finally { entry.state().getArguments().release(input, entry.getArguments()); }
     }
     @Override public Object execute(VirtualFrame frame) {
-        DirectCallNode redirect = recoveredEntry;
-        if (redirect == null && !noGraphFailure.isValid() && graphFailure.get() != null) {
+        if (!noGraphFailure.isValid() && graphFailure.get() != null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            redirect = recoverEntry();
+            recoverEntry();
         }
-        if (redirect != null) return Calls.direct(redirect, frame.getArguments());
-        if (coldEntry) return executeCold(frame.getArguments());
+        if (coldEntry) {
+            if (requiresMaterializableFrame()) return executeCold(frame.materialize());
+            return executeCold(frame.getArguments());
+        }
         return executeEntry(frame);
     }
     /** Fresh ingress has not consumed a typed loan or initialized any guest locals yet. */
+    @TruffleBoundary private Object executeCold(MaterializedFrame frame) {
+        return executeEntry(frame);
+    }
     @TruffleBoundary private Object executeCold(Object[] arguments) {
         return executeEntry(Truffle.getRuntime().createVirtualFrame(arguments, getFrameDescriptor()));
     }
@@ -597,8 +610,7 @@ public final class FunctionRoot extends GuestRoot {
         // A normal Core body that cannot enter another guest activation cannot
         // originate a stack spill. Keep ingress and polls, including their
         // capture handler, but do not interpret an ordinary return as control.
-        boolean needsCallState = strictSlots.length != 0 ||
-            !(loop.getRepeatingNode() instanceof SelfRepeater repeating) || repeating.needsCallState();
+        boolean needsCallState = needsCallState();
         if (!capturesContinuations || !needsCallState)
             return executeInitial(frame, false, needsCallState);
         AstStackScope stack = astStackScope(this);
@@ -658,9 +670,8 @@ public final class FunctionRoot extends GuestRoot {
         frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(inherited));
     }
     private MaterializedFrame initialCaptureFrame(VirtualFrame frame, boolean deferredBloom) {
-        // Snapshot copying belongs to the cold capture path, outside partial evaluation.
-        // The saved body can be replaced before resumption and then need ancestry.
-        CompilerDirectives.transferToInterpreter();
+        // The prepared descriptor permits compiled materialization. Snapshot copying
+        // remains behind its boundary; saved body replacement may need ancestry.
         if (deferredBloom) initializeBloom(frame);
         MaterializedFrame saved = frame.materialize();
         return copyInitialFrame ? DelimitedContinuations.copyContinuationFrame(saved) : saved;
@@ -772,7 +783,11 @@ public final class FunctionRoot extends GuestRoot {
     @Override public SourceSection getSourceSection() { return coreSourceLocation == null ? null : coreSourceLocation.getSection(); }
     public List<CoreSourceNote> getCoreSourceNotes() { return coreSourceLocation == null ? List.of() : coreSourceLocation.getNotes(); }
     @Override public String getName() { return label; }
-    @Override public String toString() { return label; }
+    /** Compiler target names use binding provenance; guest stack labels stay unchanged. */
+    @Override public String toString() {
+        var identity = getCoreIdentity();
+        return identity == null ? label : identity.bindingId();
+    }
     public long getGraphBudgetGeneration() { return budgetGeneration; }
     /** Compatibility with older runtime overlays: a failed physical target is never rearmed. */
     public synchronized long prepareGraphBudgetRetry(long failedGeneration) {
@@ -784,10 +799,10 @@ public final class FunctionRoot extends GuestRoot {
         return budgetGeneration;
     }
     @Override protected boolean prepareForCompilation(boolean rootCompilation, int compilationTier, boolean lastTier) {
-        return (!budgetBoundary && !recoveryBoundary || rootCompilation) && !coldEntry &&
+        return (!budgetBoundary || rootCompilation) && !coldEntry && !compilationFailureObserved &&
                 super.prepareForCompilation(rootCompilation, compilationTier, lastTier);
     }
     @Override public boolean isCloningAllowed() {
-        return !budgetBoundary && !recoveryBoundary && !compilationFailureObserved;
+        return !budgetBoundary && !compilationFailureObserved;
     }
 }

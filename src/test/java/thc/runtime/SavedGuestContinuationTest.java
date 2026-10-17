@@ -554,12 +554,12 @@ class SavedGuestContinuationTest {
     private static final class Saved implements SavedGuestContinuation {
         private final Object savedRoot, savedYield;
         private final Function<Object, Object> resume;
-        int resumes;
+        int resumes, inspections;
         Saved(Object savedRoot, Object savedYield, Function<Object, Object> resume) {
             this.savedRoot = savedRoot; this.savedYield = savedYield; this.resume = resume;
         }
         @Override public Object getSourceRoot() { return savedRoot; }
-        @Override public Object getYielded() { return savedYield; }
+        @Override public Object getYielded() { inspections++; return savedYield; }
         @Override public Object getIdentity() { return this; }
         @Override public Object continueWith(Object input) { resumes++; return resume.apply(input); }
     }
@@ -629,6 +629,160 @@ class SavedGuestContinuationTest {
             } finally { context.leave(); }
         }
     }
+    @Test void completedDependencyChainsInspectOnlyLinearSavedEdges() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var target = new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { return fail("Original body replayed"); }
+                }.getCallTarget();
+                for (int route = 0; route < 3; route++) for (int length : new int[]{64, 128}) {
+                    var saved = new java.util.ArrayList<Saved>();
+                    var boundaries = new java.util.ArrayList<Object>();
+                    Object boundary = null;
+                    for (int index = 0; index < length; index++) {
+                        Object signal = boundary instanceof Thunk thunk ? new ThunkSuspended(thunk) :
+                            boundary instanceof CallSegment segment ? new CallSegmentSuspended(segment) : Unit.INSTANCE;
+                        long answer = index + 1L;
+                        var continuation = new Saved(target.getRootNode(), signal, input -> {
+                            if (answer == 1L) assertSame(Unit.INSTANCE, input);
+                            else {
+                                var child = assertInstanceOf(ChildResume.class, input);
+                                assertNull(child.getFailure()); assertEquals(answer - 1L, child.takeValue());
+                            }
+                            return answer;
+                        });
+                        boundary = route == 0 || route == 2 && index % 2 == 0
+                            ? parked(target, continuation) : new CallSegment(continuation);
+                        saved.add(continuation); boundaries.add(boundary);
+                    }
+                    for (var continuation : saved) continuation.inspections = 0;
+                    var driver = new Driver();
+                    assertEquals((long) length, driver.force(boundary));
+                    int inspections = saved.stream().mapToInt(continuation -> continuation.inspections).sum();
+                    assertTrue(inspections <= 24 * length,
+                        "Whole resume must inspect linearly: " + inspections + " yielded reads for " + length + " boundaries, route " + route);
+                    for (int index = 0; index < length; index++) {
+                        assertEquals(1, saved.get(index).resumes);
+                        assertEquals(2, boundaries.get(index) instanceof Thunk thunk ? thunk.getState() : ((CallSegment) boundaries.get(index)).getState());
+                    }
+                    assertEquals((long) length, driver.force(boundary));
+                    assertEquals(inspections, saved.stream().mapToInt(continuation -> continuation.inspections).sum());
+                }
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void dependencyInspectionPreservesCollidingIdentitiesAcrossGrowth() {
+        class Edge implements SavedGuestContinuation {
+            Object next;
+            int reads;
+            @Override public Object getSourceRoot() { return this; }
+            @Override public Object getIdentity() { return this; }
+            @Override public Object getYielded() { reads++; return next; }
+            @Override public Object continueWith(Object input) { return fail("Inspection resumed a saved body"); }
+            @Override public boolean equals(Object other) { throw new AssertionError("Inspection called guest equality"); }
+            @Override public int hashCode() { throw new AssertionError("Inspection called guest hashing"); }
+        }
+        // Select a colliding prefix from more identities than low-bit buckets.
+        // Assertions concern reads and identity, not the table's capacity/layout.
+        var edges = new Edge[256];
+        var buckets = new Edge[128];
+        Edge first = null, second = null;
+        for (int i = 0; i < edges.length; i++) {
+            var edge = edges[i] = new Edge();
+            int bucket = System.identityHashCode(edge) & (buckets.length - 1);
+            if (first == null && buckets[bucket] != null) { first = buckets[bucket]; second = edge; }
+            buckets[bucket] = edge;
+        }
+        assertNotNull(first); assertNotNull(second);
+        var order = new java.util.ArrayList<Edge>();
+        order.add(first); order.add(second);
+        for (var edge : edges) if (edge != first && edge != second) order.add(edge);
+        for (int i = 1; i < order.size(); i++) order.get(i - 1).next = order.get(i);
+        var start = first;
+        assertNull(PendingWait.of(start));
+        for (var edge : edges) assertEquals(1, edge.reads);
+        order.getLast().next = first;
+        var failure = assertThrows(RuntimeFault.class, () -> PendingWait.of(start));
+        assertEquals("Suspended guest dependency cycle", failure.getMessage());
+        for (var edge : edges) assertEquals(2, edge.reads, "The repeated identity must reject before another successor read");
+        order.getLast().next = null;
+        assertNull(PendingWait.of(start));
+        for (var edge : edges) assertEquals(3, edge.reads, "Every inspection must start with fresh membership");
+
+        for (int length = 1; length <= 4; length++) for (int repeated = 0; repeated < length; repeated++) {
+            for (int i = 1; i < length; i++) order.get(i - 1).next = order.get(i);
+            var last = order.get(length - 1);
+            last.next = order.get(repeated);
+            var before = new int[order.size()];
+            for (int i = 0; i < before.length; i++) before[i] = order.get(i).reads;
+            var shortCycle = assertThrows(RuntimeFault.class, () -> PendingWait.of(start));
+            assertEquals("Suspended guest dependency cycle", shortCycle.getMessage());
+            for (int i = 0; i < before.length; i++)
+                assertEquals(before[i] + (i < length ? 1 : 0), order.get(i).reads,
+                    "Reject a short cycle before rereading its successor");
+            last.next = null;
+            assertNull(PendingWait.of(start));
+            for (int i = 0; i < before.length; i++)
+                assertEquals(before[i] + (i < length ? 2 : 0), order.get(i).reads,
+                    "A mutated short chain must have fresh membership");
+        }
+    }
+    @Test void dependencyCycleRejectsBeforeAnyBoundaryChangesOwnership() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var target = new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { return fail("Original body replayed"); }
+                }.getCallTarget();
+                var first = new Thunk(target, null); var second = new Thunk(target, null);
+                var firstSaved = new Saved(target.getRootNode(), new ThunkSuspended(second), input -> fail("Cyclic suffix ran"));
+                var secondSaved = new Saved(target.getRootNode(), new ThunkSuspended(first), input -> fail("Cyclic suffix ran"));
+                first.setValue(firstSaved); first.setState(5); second.setValue(secondSaved); second.setState(5);
+                assertThrows(RuntimeFault.class, () -> PendingWait.of(firstSaved));
+                assertEquals(1, firstSaved.inspections);
+                assertEquals(1, secondSaved.inspections, "Reject a repeated carrier before reading its successor again");
+                var failure = assertThrows(RuntimeFault.class, () -> new Driver().force(first));
+                assertTrue(failure.getMessage().contains("dependency cycle"), failure.getMessage());
+                assertEquals(5, first.getState()); assertEquals(5, second.getState());
+                assertSame(firstSaved, first.getValue()); assertSame(secondSaved, second.getValue());
+                assertNull(first.getOwner()); assertNull(second.getOwner());
+                assertEquals(0, firstSaved.resumes); assertEquals(0, secondSaved.resumes);
+
+                int firstReads = firstSaved.inspections, secondReads = secondSaved.inspections;
+                second.setValue(Unit.INSTANCE);
+                assertNull(PendingWait.of(firstSaved));
+                assertNull(PendingWait.of(firstSaved));
+                assertEquals(firstReads + 2, firstSaved.inspections);
+                assertEquals(secondReads, secondSaved.inspections);
+
+                var getterFailure = new RuntimeFault("Saved getter failed");
+                var reentrant = new SavedGuestContinuation() {
+                    boolean failOnce = true, inspecting;
+                    int reads;
+                    @Override public Object getSourceRoot() { return target.getRootNode(); }
+                    @Override public Object getIdentity() { return this; }
+                    @Override public Object getYielded() {
+                        reads++;
+                        if (failOnce) { failOnce = false; throw getterFailure; }
+                        if (!inspecting) {
+                            inspecting = true;
+                            try { assertNull(PendingWait.of(this)); }
+                            finally { inspecting = false; }
+                        }
+                        return Unit.INSTANCE;
+                    }
+                    @Override public Object continueWith(Object input) { return fail("Inspection resumed a saved body"); }
+                };
+                assertSame(getterFailure, assertThrows(RuntimeFault.class, () -> PendingWait.of(reentrant)));
+                assertNull(PendingWait.of(reentrant));
+                assertNull(PendingWait.of(reentrant));
+                assertEquals(5, reentrant.reads, "Nested inspection must independently read the same saved identity");
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void coldRecordResumesSharedChildBeforeParentAndPublishesOnce() {
         try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();

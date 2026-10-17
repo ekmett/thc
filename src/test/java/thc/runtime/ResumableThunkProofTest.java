@@ -315,6 +315,8 @@ class ResumableThunkProofTest {
                         assertSame(failure, pool.submit(() -> entered(context,
                             () -> assertThrows(RuntimeFault.class, () -> driver.force(outer)))).get(5, TimeUnit.SECONDS));
                     }
+                    if (!bytecodeParent) assertSame(failure, assertThrows(RuntimeFault.class,
+                        () -> Calls.target(astParent.getCallTarget(), new Object[]{0L})));
                 } finally { context.leave(); }
             }
         }

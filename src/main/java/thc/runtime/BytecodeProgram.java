@@ -616,6 +616,33 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var binding : bindings) Objects.requireNonNull(globals.get((String) binding.get("id"))).prepareCode();
     }
 
+    @Override public List<RootCallTarget> compilationTargets() {
+        try (var ownership = preparationLock.acquire()) {
+            synchronized (this) { return compilationTargetsLocked(); }
+        }
+    }
+
+    private List<RootCallTarget> compilationTargetsLocked() {
+        var targets = new LinkedHashSet<RootCallTarget>();
+        for (var root : roots) {
+            targets.add(root.getCallTarget());
+            // Yield continuation constants already belong to this exact lowered root.
+            // Inspect the ordinary instruction stream; do not manufacture saved guest frames.
+            for (var instruction : root.getBytecodeNode().getInstructions())
+                for (var argument : instruction.getArguments())
+                    if (argument.getKind() == com.oracle.truffle.api.bytecode.Instruction.Argument.Kind.CONSTANT) {
+                        Object constant = argument.asConstant();
+                        if (constant instanceof com.oracle.truffle.api.nodes.RootNode node) targets.add(node.getCallTarget());
+                        else if (constant instanceof RootCallTarget target) targets.add(target);
+                        else if (constant instanceof Closure closure) targets.add(closure.target);
+                    }
+        }
+        targets.addAll(coldApplications.values());
+        if (nonlocalDemand != null) targets.add(nonlocalDemand.target);
+        targets.addAll(hostEntries.values());
+        return List.copyOf(targets);
+    }
+
     @Override public void initializeGlobals() {
         for (String id : pendingInitializers) Objects.requireNonNull(globals.get(id)).read();
         pendingInitializers = List.of();

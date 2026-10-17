@@ -13,7 +13,7 @@ import java.util.Objects;
 import static thc.runtime.Alternative.*;
 import static thc.runtime.RuntimeFault.fault;
 
-class Case extends Expr {
+class Case extends Expr implements AstResumeStep {
     protected final int binderSlot;
     @Children protected Alternative[] alternatives;
     @Child private LocalBinding scrutinee;
@@ -128,14 +128,24 @@ class Case extends Expr {
     @Override public void prepareTuple(int[] slots, int offset) {
         for (Alternative alternative : alternatives) alternative.getBody().prepareTuple(slots, offset);
     }
+    @ExplodeLoop @Override public boolean needsCallState() {
+        // An unknown subclass may add execution beyond selection and its children.
+        Class<?> kind = getClass();
+        if (kind != Case.class && kind != DefaultCase.class && kind != DataCase.class && kind != LongCase.class)
+            return true;
+        if (scrutinee.needsCallState()) return true;
+        for (Alternative alternative : alternatives)
+            if (alternative.getBody().needsCallState()) return true;
+        return false;
+    }
     protected final void prepare(VirtualFrame frame) { prepare(frame, null, 0); }
     protected final void prepare(VirtualFrame frame, int[] destination, int offset) {
         try { scrutinee.write(frame); }
         catch (AstCapture cut) {
+            if (destination == null) throw cut.append(this);
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame frame, Object input) {
-                    Expr branch = select(frame);
-                    return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
+                    return select(frame).executeTuple(frame, destination, offset);
                 }
             });
         } catch (DelimitedCut cut) {
@@ -151,6 +161,8 @@ class Case extends Expr {
             });
         }
     }
+    /** The saved scrutinee write is complete; this immutable recipe owns no activation state. */
+    @Override public final Object resume(VirtualFrame frame, Object input) { return select(frame).execute(frame); }
     private Expr select(VirtualFrame frame) {
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
