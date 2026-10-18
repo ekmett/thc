@@ -181,7 +181,10 @@ public final class TypedInputs {
         GuestRoot source = node.getRootNode() instanceof GuestRoot root ? root : null;
         GuestRoot targetRoot = ColdCallChecks.guestRoot(target.getRootNode());
         long mask = source == null ? 0L : source.bloom(frame);
-        if (source == null || (mask & targetRoot.mask) == targetRoot.mask) {
+        boolean leaf = source != null && CompilerDirectives.inCompiledCode() &&
+            CompilerDirectives.isPartialEvaluationConstant(targetRoot) &&
+            targetRoot instanceof FunctionRoot ast && ast.canEnterWithoutTailBounce();
+        if (!leaf && (source == null || (mask & targetRoot.mask) == targetRoot.mask)) {
             if (metrics.getEnabled()) {
                 metrics.incrementTailBounces();
                 HandoffState state = ColdCallChecks.typedInput(targetRoot.getTypedInput()).state();

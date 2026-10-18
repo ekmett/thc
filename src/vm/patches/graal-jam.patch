@@ -1,0 +1,990 @@
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/GraalHotSpotVMConfig.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/GraalHotSpotVMConfig.java
+@@ -503,6 +503,10 @@
+     public final long stubArrayPartition = getFieldValue("StubRoutines::_array_partition", Long.class, "address");
+ 
+     // Allocation stubs that return null when allocation fails
++    public final long jamRememberAddress = gc == HotSpotGraalRuntime.HotSpotGC.Jam ? getAddress("JamBarrierSet::record_narrow") : 0;
++    public final long jamTrackStartsAddress = gc == HotSpotGraalRuntime.HotSpotGC.Jam ? getFieldAddress("JamHeap::_track_starts", "bool") : 0;
++    public final long jamRecordStartAddress = gc == HotSpotGraalRuntime.HotSpotGC.Jam ? getAddress("JamHeap::record_start") : 0;
++
+     public final long newInstanceOrNullAddress = getAddress("JVMCIRuntime::new_instance_or_null");
+     public final long newArrayOrNullAddress = getAddress("JVMCIRuntime::new_array_or_null");
+     public final long newMultiArrayOrNullAddress = getAddress("JVMCIRuntime::new_multi_array_or_null");
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/HotSpotBackendFactory.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/HotSpotBackendFactory.java
+@@ -274,17 +274,20 @@
+         boolean useDeferredInitBarriers = config.useDeferredInitBarriers;
+         ResolvedJavaType objectArrayType = metaAccess.lookupJavaType(Object[].class);
+         ResolvedJavaField referentField = HotSpotReplacementsUtil.referentField(metaAccess);
+-        if (config.gc == HotSpotGraalRuntime.HotSpotGC.Z) {
+-            return new HotSpotZBarrierSet(objectArrayType, referentField);
+-        } else if (config.gc == HotSpotGraalRuntime.HotSpotGC.Shenandoah) {
+-            return new HotSpotShenandoahBarrierSet(objectArrayType, referentField, config);
+-        } else if (config.gc == HotSpotGraalRuntime.HotSpotGC.Epsilon) {
+-            return new NoBarrierSet();
+-        } else if (config.useG1GC()) {
+-            return new HotSpotG1BarrierSet(objectArrayType, referentField, useDeferredInitBarriers, config);
+-        } else {
+-            return new CardTableBarrierSet(objectArrayType, useDeferredInitBarriers);
+-        }
++        return switch (config.gc) {
++            case Z -> new HotSpotZBarrierSet(objectArrayType, referentField);
++            case Shenandoah -> new HotSpotShenandoahBarrierSet(objectArrayType, referentField, config);
++            case Epsilon -> new NoBarrierSet();
++            case G1 -> new HotSpotG1BarrierSet(objectArrayType, referentField, useDeferredInitBarriers, config);
++            case Serial, Parallel -> new CardTableBarrierSet(objectArrayType, useDeferredInitBarriers);
++            case Jam -> new CardTableBarrierSet(objectArrayType, false) {
++                @Override
++                protected boolean barrierPrecise(jdk.graal.compiler.nodes.memory.FixedAccessNode node, ValueNode base,
++                                jdk.graal.compiler.nodes.spi.CoreProviders context) {
++                    return true;
++                }
++            };
++        };
+     }
+ 
+     private static class HotSpotG1BarrierSet extends G1BarrierSet {
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/HotSpotGraalRuntime.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/HotSpotGraalRuntime.java
+@@ -234,6 +234,7 @@
+         Parallel("UseParallelGC"),
+         G1("UseG1GC"),
+         Epsilon("UseEpsilonGC"),
++        Jam(true, false, true, config -> config.getStore().getFlags().containsKey("UseJamGC") && config.getFlag("UseJamGC", Boolean.class)),
+         // GR-54355 ZGC and Shenandoah require extra work to support vectorization
+         Z("UseZGC", false),
+         Shenandoah("UseShenandoahGC", false);
+@@ -294,7 +295,12 @@
+          */
+         static HotSpotGC forName(int name, GraalHotSpotVMConfig config) {
+             for (HotSpotGC gc : HotSpotGC.values()) {
+-                if (config.getConstant("CollectedHeap::" + gc.name(), Integer.class, -1, gc.expectNamePresent) == name) {
++                String constant = "CollectedHeap::" + gc.name();
++                // An optional collector may be absent on an unmodified HotSpot VM.
++                if (!gc.expectNamePresent && !config.getStore().getConstants().containsKey(constant)) {
++                    continue;
++                }
++                if (config.getConstant(constant, Integer.class) == name) {
+                     return gc;
+                 }
+             }
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/meta/HotSpotHostForeignCallsProvider.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/meta/HotSpotHostForeignCallsProvider.java
+@@ -87,6 +87,7 @@
+ 
+ import org.graalvm.collections.EconomicMap;
+ import org.graalvm.word.LocationIdentity;
++import org.graalvm.word.WordBase;
+ import org.graalvm.word.impl.Word;
+ 
+ import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
+@@ -176,6 +177,17 @@
+  */
+ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCallsProviderImpl implements ArrayCopyForeignCalls {
+ 
++    // Native bookkeeping, disjoint from Java fields. Only lowered Jam snippets
++    // access these locations; collection consumes them at safepoints.
++    public static final LocationIdentity JAM_OBJECT_STARTS_LOCATION = NamedLocationIdentity.mutable("JamObjectStarts");
++    public static final LocationIdentity JAM_REMEMBERED_SLOTS_LOCATION = NamedLocationIdentity.mutable("JamRememberedSlots");
++
++    public static final HotSpotForeignCallDescriptor JAM_RECORD_START = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, JAM_OBJECT_STARTS_LOCATION,
++                    "jam_record_start", void.class, Word.class);
++
++    public static final HotSpotForeignCallDescriptor JAM_REMEMBER = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, JAM_REMEMBERED_SLOTS_LOCATION,
++                    "jam_remember", void.class, Object.class, WordBase.class, long.class);
++
+     public static final HotSpotForeignCallDescriptor JAVA_TIME_MILLIS = new HotSpotForeignCallDescriptor(LEAF_NO_VZERO, NO_SIDE_EFFECT, NO_LOCATIONS, "javaTimeMillis", long.class);
+     public static final HotSpotForeignCallDescriptor JAVA_TIME_NANOS = new HotSpotForeignCallDescriptor(LEAF_NO_VZERO, NO_SIDE_EFFECT, NO_LOCATIONS, "javaTimeNanos", long.class);
+ 
+@@ -463,6 +475,8 @@
+ 
+     public void initialize(HotSpotProviders providers, OptionValues options) {
+         GraalHotSpotVMConfig c = runtime.getVMConfig();
++        if (c.jamRememberAddress != 0) registerForeignCall(JAM_REMEMBER, c.jamRememberAddress, NativeCall);
++        if (c.jamRecordStartAddress != 0) registerForeignCall(JAM_RECORD_START, c.jamRecordStartAddress, NativeCall);
+         registerForeignCall(DEOPT_BLOB_UNPACK, c.deoptBlobUnpack, NativeCall);
+         if (c.deoptBlobUnpackWithExceptionInTLS != 0) {
+             registerForeignCall(DEOPT_BLOB_UNPACK_WITH_EXCEPTION_IN_TLS, c.deoptBlobUnpackWithExceptionInTLS, NativeCall);
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/replacements/HotSpotSerialWriteBarrierSnippets.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/replacements/HotSpotSerialWriteBarrierSnippets.java
+@@ -71,12 +71,21 @@
+         private final SnippetInfo serialArrayRangeWriteBarrier;
+ 
+         private final SerialWriteBarrierLowerer lowerer;
++        private final HotSpotJamWriteBarrierSnippets.Templates jam;
+ 
+         @SuppressWarnings("this-escape")
+         public Templates(OptionValues options, Group.Factory factory, HotSpotProviders providers) {
+             super(options, providers);
+             this.lowerer = new SerialWriteBarrierLowerer(factory);
+ 
++            // libgraal encodes snippets under the builder GC, which need not be Jam.
++            var jamTemplates = new HotSpotJamWriteBarrierSnippets.Templates(options, providers);
++            if (providers.getConfig().gc == jdk.graal.compiler.hotspot.HotSpotGraalRuntime.HotSpotGC.Jam) {
++                jam = jamTemplates;
++                serialImpreciseWriteBarrier = serialPreciseWriteBarrier = serialArrayRangeWriteBarrier = null;
++                return;
++            }
++            jam = null;
+             HotSpotSerialWriteBarrierSnippets receiver = new HotSpotSerialWriteBarrierSnippets();
+ 
+             if (Assertions.assertionsEnabled()) {
+@@ -111,10 +120,12 @@
+         }
+ 
+         public void lower(SerialWriteBarrierNode barrier, LoweringTool tool) {
++            if (jam != null) { jam.lower(barrier, tool); return; }
+             lowerer.lower(this, serialPreciseWriteBarrier, serialImpreciseWriteBarrier, barrier, tool);
+         }
+ 
+         public void lower(SerialArrayRangeWriteBarrierNode barrier, LoweringTool tool) {
++            if (jam != null) { jam.lower(barrier, tool); return; }
+             lowerer.lower(this, serialArrayRangeWriteBarrier, barrier, tool);
+         }
+     }
+--- a/compiler/src/jdk.graal.compiler.test/src/jdk/graal/compiler/hotspot/test/DeferredBarrierAdditionTest.java
++++ b/compiler/src/jdk.graal.compiler.test/src/jdk/graal/compiler/hotspot/test/DeferredBarrierAdditionTest.java
+@@ -74,13 +74,16 @@
+ 
+     @Before
+     public void checkGC() {
+-        assumeTrue("this test only works for G1 and the serial collector",
+-                        config.gc == HotSpotGraalRuntime.HotSpotGC.G1 || config.gc == HotSpotGraalRuntime.HotSpotGC.Serial);
++        assumeTrue("this test only works for G1, Serial and Jam",
++                        config.gc == HotSpotGraalRuntime.HotSpotGC.G1 || config.gc == HotSpotGraalRuntime.HotSpotGC.Serial || config.gc == HotSpotGraalRuntime.HotSpotGC.Jam);
+     }
+ 
+     @Test
+     public void testGroupAllocation() throws Exception {
+-        testHelper("testCrossReferences", 1, getInitialOptions());
++        // Jam allocations may start in old space, so both initialization stores
++        // retain their barriers. The other collectors defer the latest one.
++        int expectedBarriers = config.gc == HotSpotGraalRuntime.HotSpotGC.Jam ? 2 : 1;
++        testHelper("testCrossReferences", expectedBarriers, getInitialOptions());
+     }
+ 
+     protected void testHelper(final String snippetName, final int expectedBarriers, OptionValues options) {
+--- a/compiler/src/jdk.graal.compiler.test/src/jdk/graal/compiler/hotspot/test/GraalHotSpotVMConfigAccessTest.java
++++ b/compiler/src/jdk.graal.compiler.test/src/jdk/graal/compiler/hotspot/test/GraalHotSpotVMConfigAccessTest.java
+@@ -29,12 +29,17 @@
+ 
+ import jdk.graal.compiler.api.test.Graal;
+ import jdk.graal.compiler.hotspot.GraalHotSpotVMConfig;
++import jdk.graal.compiler.hotspot.HotSpotGraalCompiler;
++import jdk.graal.compiler.hotspot.HotSpotGraalRuntime.HotSpotGC;
+ import jdk.graal.compiler.hotspot.HotSpotGraalRuntimeProvider;
++import jdk.graal.compiler.nodes.gc.CardTableBarrierSet;
+ import jdk.graal.compiler.runtime.RuntimeProvider;
+ import org.junit.Assert;
+ import org.junit.Test;
+ 
+ import jdk.vm.ci.common.JVMCIError;
++import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
++import jdk.vm.ci.hotspot.HotSpotVMConfigAccess;
+ 
+ public class GraalHotSpotVMConfigAccessTest {
+     @Test
+@@ -55,6 +60,36 @@
+         testErrorInternal(() -> config.getFlag("unknownFlagObject", Object.class), "unknownFlagObject");
+     }
+ 
++    @Test
++    public void testCollectorAdmission() {
++        HotSpotGraalRuntimeProvider rt = (HotSpotGraalRuntimeProvider) Graal.getRequiredCapability(RuntimeProvider.class);
++        GraalHotSpotVMConfig config = rt.getVMConfig();
++        HotSpotGraalCompiler compiler = (HotSpotGraalCompiler) HotSpotJVMCIRuntime.runtime().getCompiler();
++        int selected = config.getConstant("CollectedHeap::" + config.gc.name(), Integer.class);
++        Assert.assertTrue(compiler.isGCSupported(selected));
++        Assert.assertFalse(compiler.isGCSupported(-1));
++        if (config.getStore().getConstants().containsKey("CollectedHeap::Jam")) {
++            int jam = config.getConstant("CollectedHeap::Jam", Integer.class);
++            Assert.assertTrue(compiler.isGCSupported(jam));
++            Assert.assertNotEquals(config.getConstant("CollectedHeap::Serial", Integer.class).intValue(), jam);
++            Assert.assertNotEquals(config.getConstant("CollectedHeap::Epsilon", Integer.class).intValue(), jam);
++        }
++    }
++
++    @Test
++    public void testSelectedBarrierSet() {
++        HotSpotGraalRuntimeProvider rt = (HotSpotGraalRuntimeProvider) Graal.getRequiredCapability(RuntimeProvider.class);
++        GraalHotSpotVMConfig config = rt.getVMConfig();
++        boolean selected = new HotSpotVMConfigAccess(config.getStore()).getFlag("UseJamGC", Boolean.class, false);
++        Assert.assertEquals(selected, HotSpotGC.Jam.isSelected(config));
++        Assert.assertEquals(selected, config.gc == HotSpotGC.Jam);
++        if (selected) {
++            Assert.assertTrue(rt.getHostProviders().getPlatformConfigurationProvider().getBarrierSet() instanceof CardTableBarrierSet);
++            Assert.assertTrue(config.useCompressedOops);
++            Assert.assertEquals(3, config.getOopEncoding().getShift());
++        }
++    }
++
+     private static void testErrorInternal(Supplier<Object> fn, String expectedName) {
+         try {
+             Object obj = fn.get();
+--- a/compiler/src/jdk.graal.compiler.test/src/jdk/graal/compiler/hotspot/test/WriteBarrierAdditionTest.java
++++ b/compiler/src/jdk.graal.compiler.test/src/jdk/graal/compiler/hotspot/test/WriteBarrierAdditionTest.java
+@@ -87,7 +87,7 @@
+      * The set of GCs known at the time of writing of this test. The number of expected barrier
+      * might need to be adjusted for new GCs implementations.
+      */
+-    private static EnumSet<HotSpotGC> knownSupport = EnumSet.of(HotSpotGC.G1, HotSpotGC.Parallel, HotSpotGC.Serial);
++    private static EnumSet<HotSpotGC> knownSupport = EnumSet.of(HotSpotGC.G1, HotSpotGC.Parallel, HotSpotGC.Serial, HotSpotGC.Jam);
+ 
+     private final GraalHotSpotVMConfig config = runtime().getVMConfig();
+ 
+@@ -116,7 +116,7 @@
+ 
+     @Before
+     public void checkAssemblyBarriers() {
+-        Assume.assumeFalse("doesn't work with assembly barriers ", AssemblyGCBarriers.getValue(getInitialOptions()));
++        Assume.assumeFalse("doesn't work with G1 assembly barriers", config.useG1GC() && AssemblyGCBarriers.getValue(getInitialOptions()));
+     }
+ 
+     private int expectedBarriers;
+--- a/substratevm/mx.substratevm/suite.py
++++ b/substratevm/mx.substratevm/suite.py
+@@ -479,6 +479,43 @@
+             "jacoco" : "exclude",
+         },
+ 
++        "com.oracle.svm.core.jam": {
++            "subDir": "src",
++            "sourceDirs": [
++                "src",
++            ],
++            "dependencies": [
++                "com.oracle.svm.core",
++                "com.oracle.svm.core.genscavenge",
++                "com.oracle.svm.hosted",
++            ],
++            "requires" : [
++                "jdk.management",
++            ],
++            "requiresConcealed" : {
++                "java.base": [
++                    "jdk.internal.misc",
++                    "sun.nio.ch",
++                ],
++                "java.management": [
++                    "sun.management",
++                ],
++                "jdk.internal.vm.ci" : [
++                    "jdk.vm.ci.code",
++                    "jdk.vm.ci.meta",
++                    "jdk.vm.ci.meta.annotation",
++                ],
++            },
++            "checkstyle": "com.oracle.svm.core",
++            "javaCompliance" : "24+",
++            "annotationProcessors": [
++                "compiler:GRAAL_PROCESSOR",
++                "SVM_PROCESSOR",
++            ],
++            "workingSets": "SVM",
++            "jacoco" : "exclude",
++        },
++
+         "com.oracle.svm.core.g1": {
+             "subDir": "src",
+             "sourceDirs": ["src"],
+@@ -1992,6 +2029,7 @@
+                 "com.oracle.svm.core.windows",
+                 "com.oracle.svm.core.genscavenge",
+                 "com.oracle.svm.core.g1",
++                "com.oracle.svm.core.jam",
+                 "com.oracle.svm.jdwp.resident",
+             ],
+             "distDependencies": [
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/SubstrateOptions.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/SubstrateOptions.java
+@@ -589,6 +589,22 @@
+     public static boolean useG1GC() {
+         return SubstrateOptions.SupportedGCs.getValue().contains(GCOptionValue.G1.getValue());
+     }
++
++    @Fold
++    public static boolean useJamGC() {
++        return SubstrateOptions.SupportedGCs.getValue().contains(GCOptionValue.Jam.getValue());
++    }
++
++    @APIOption(name = "jam", group = GCGroup.class, customHelp = "Jam generational garbage collector")//
++    @Option(help = "Use the Jam garbage collector")//
++    public static final HostedOptionKey<Boolean> UseJamGC = new HostedOptionKey<>(false) {
++        @Override
++        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Boolean oldValue, Boolean newValue) {
++            if (newValue) {
++                SupportedGCs.update(values, ReplacingLocatableMultiOptionValue.DelimitedString.buildWithCommaDelimiter(GCOptionValue.Jam.getValue()));
++            }
++        }
++    };
+ 
+     public static class DeprecatedOptions {
+ 
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/graal/snippets/CEntryPointSnippets.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/graal/snippets/CEntryPointSnippets.java
+@@ -353,6 +353,7 @@
+         error = createIsolate0(isolate, arguments);
+         if (error != CEntryPointErrors.NO_ERROR) {
+             IsolateArgumentParser.singleton().tearDown(arguments);
++            CommittedMemoryProvider.get().abortInitialization();
+         }
+         return error;
+     }
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/graal/snippets/CFunctionSnippets.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/graal/snippets/CFunctionSnippets.java
+@@ -40,6 +40,7 @@
+ import com.oracle.svm.core.graal.nodes.VerificationMarkerNode;
+ import com.oracle.svm.core.graal.stackvalue.LoweredStackValueNode;
+ import com.oracle.svm.core.graal.stackvalue.StackValueNode.StackSlotIdentity;
++import com.oracle.svm.core.heap.Heap;
+ import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
+ import com.oracle.svm.core.nodes.CFunctionPrologueDataNode;
+ import com.oracle.svm.core.nodes.CFunctionPrologueNode;
+@@ -111,6 +112,10 @@
+ 
+     @Snippet
+     private static CPrologueData prologueSnippet(@ConstantParameter int newThreadStatus) {
++        /* Leave before pushing an anchor whose return address is not initialized yet. */
++        if (newThreadStatus == StatusSupport.STATUS_IN_NATIVE) {
++            Heap.getHeap().leaveThreadContext();
++        }
+         /* Push a JavaFrameAnchor to the thread-local linked list. */
+         JavaFrameAnchor anchor = (JavaFrameAnchor) LoweredStackValueNode.loweredStackValue(SizeOf.get(JavaFrameAnchor.class), SubstrateTarget.getWordSize(), frameAnchorIdentity);
+         JavaFrameAnchors.pushFrameAnchor(anchor);
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/handles/ObjectHandlesImpl.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/handles/ObjectHandlesImpl.java
+@@ -34,6 +34,8 @@
+ 
+ import jdk.internal.misc.Unsafe;
+ 
++import com.oracle.svm.shared.Uninterruptible;
++
+ /**
+  * This class implements {@link ObjectHandle word}-sized integer handles that refer to Java objects.
+  * {@link #create(Object) Creating}, {@link #get(ObjectHandle) dereferencing} and
+@@ -54,8 +56,15 @@
+ public final class ObjectHandlesImpl implements ObjectHandles {
+ 
+     /** Private subclass to distinguish from regular handles to {@link WeakReference} objects. */
+-    private static final class HandleWeakReference<T> extends WeakReference<T> {
++    private static class HandleWeakReference<T> extends WeakReference<T> {
+         HandleWeakReference(T referent) {
++            super(referent);
++        }
++    }
++
++    /* JNI weak globals remain readable until the phantom-reference phase. */
++    private static final class JNIWeakReference<T> extends HandleWeakReference<T> {
++        JNIWeakReference(T referent) {
+             super(referent);
+         }
+     }
+@@ -214,6 +223,15 @@
+         return create(new HandleWeakReference<>(obj));
+     }
+ 
++    public ObjectHandle createJNIWeak(Object obj) {
++        return create(new JNIWeakReference<>(obj));
++    }
++
++    @Uninterruptible(reason = "Classify a discovered JNI weak global without retaining its referent.")
++    public static boolean isJNIWeakReference(Object reference) {
++        return reference instanceof JNIWeakReference<?>;
++    }
++
+     @SuppressWarnings("unchecked")
+     @Override
+     public <T> T get(ObjectHandle handle) {
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/Heap.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/Heap.java
+@@ -75,6 +75,14 @@
+     @Uninterruptible(reason = "Current thread holds the ThreadsLock with exclusive write access.")
+     public abstract void detachThread(IsolateThread isolateThread);
+ 
++    /** Bind collector-local context on the executing OS thread after entering Java or VM state. */
++    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
++    public void enterThreadContext() { }
++
++    /** Restore enclosing native context before this thread leaves Java or VM state. */
++    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
++    public void leaveThreadContext() { }
++
+     public abstract void suspendAllocation();
+ 
+     public abstract void resumeAllocation();
+@@ -103,6 +111,9 @@
+      * a VM operation that causes a safepoint.
+      */
+     public abstract void walkCollectedHeapObjects(ObjectVisitor visitor);
++
++    /** Prepare optional enumeration metadata at a safepoint; true requests a full GC before walking. */
++    public boolean prepareForHeapWalk() { return false; }
+ 
+     /** Returns the number of classes in the heap (initialized as well as uninitialized). */
+     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/dump/HeapDumpSupportImpl.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/heap/dump/HeapDumpSupportImpl.java
+@@ -217,7 +217,8 @@
+         @Override
+         protected void operate(NativeVMOperationData d) {
+             HeapDumpVMOperationData data = (HeapDumpVMOperationData) d;
+-            if (data.getGCBefore()) {
++            boolean initializeStarts = Heap.getHeap().prepareForHeapWalk();
++            if (data.getGCBefore() || initializeStarts) {
+                 Heap.getHeap().getGC().collectCompletely(GCCause.HeapDump);
+             }
+             dumpHeap(data);
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/jni/JNIObjectHandles.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/jni/JNIObjectHandles.java
+@@ -347,7 +347,7 @@
+     }
+ 
+     static JNIObjectHandle createWeak(Object obj) {
+-        return encode(globalHandles.createWeak(obj));
++        return encode(globalHandles.createJNIWeak(obj));
+     }
+ 
+     static void destroyWeak(JNIObjectHandle weakRef) {
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/option/GCOptionValue.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/option/GCOptionValue.java
+@@ -39,6 +39,7 @@
+ public enum GCOptionValue {
+     Serial("serial"),
+     Epsilon("epsilon"),
++    Jam("jam"),
+     G1("G1");
+ 
+     private static UnmodifiableEconomicSet<String> supportedValues = null;
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/os/CommittedMemoryProvider.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/os/CommittedMemoryProvider.java
+@@ -55,6 +55,15 @@
+     int initialize(WordPointer heapBasePointer, IsolateArguments arguments);
+ 
+     /**
++     * Release provider-owned resources if initialization fails before the first thread attaches.
++     * There is no usable current thread. The image may already be visible to process-wide
++     * listeners, so implementations must not assume that its reservation can be freed.
++     */
++    @Uninterruptible(reason = "Initialization failed before a thread was attached.")
++    default void abortInitialization() {
++    }
++
++    /**
+      * Tear down <em>for the current isolate</em>. This must be the last method of this interface
+      * that is called in an isolate.
+      *
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/os/VirtualMemoryProvider.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/os/VirtualMemoryProvider.java
+@@ -30,6 +30,7 @@
+ import org.graalvm.word.UnsignedWord;
+ import org.graalvm.word.impl.Word;
+ import org.graalvm.word.WordBase;
++import com.oracle.svm.shared.Uninterruptible;
+ 
+ import jdk.graal.compiler.api.replacements.Fold;
+ 
+@@ -96,6 +97,19 @@
+     Pointer reserve(UnsignedWord nbytes, UnsignedWord alignment, boolean code);
+ 
+     /**
++     * Prepare an uncommitted, page-aligned part of a reservation for mappings made by a native
++     * collector. On success the exact range remains reserved and inaccessible, and can be
++     * replaced without releasing its addresses. Windows converts it to a placeholder. Addresses
++     * outside the range are unchanged. The caller must restore the reservation before freeing it.
++     *
++     * @return 0 when successful, or a non-zero implementation-specific error code.
++     */
++    @Uninterruptible(reason = "Called before creating a native collector.")
++    default int prepareForExternalMapping(PointerBase start, UnsignedWord nbytes) {
++        return 0;
++    }
++
++    /**
+      * Map a region of an open file to the specified address range. When {@linkplain Access#WRITE
+      * write access} is requested and mapped memory is written, that memory is copied before
+      * writing, and no modifications are ever written to the underlying file (copy on write). If the
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/thread/VMOperationControl.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/thread/VMOperationControl.java
+@@ -687,7 +687,7 @@
+ 
+     protected static class JavaVMOperationQueue extends AllocationFreeQueue<JavaVMOperation> {
+         private JavaVMOperation head;
+-        private JavaVMOperation tail; // can point to an incorrect value if head is null
++        private JavaVMOperation tail;
+ 
+         JavaVMOperationQueue(String name) {
+             super(name);
+@@ -717,6 +717,9 @@
+             }
+             JavaVMOperation resultElement = head;
+             head = resultElement.getNext();
++            if (head == null) {
++                tail = null;
++            }
+             resultElement.setNext(null);
+             return resultElement;
+         }
+@@ -731,10 +734,13 @@
+             if (prev == null) {
+                 assert head == remove;
+                 head = remove.getNext();
+-                remove.setNext(null);
+             } else {
+                 prev.setNext(remove.getNext());
+             }
++            if (tail == remove) {
++                tail = prev;
++            }
++            remove.setNext(null);
+         }
+     }
+ 
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/thread/VMThreads.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/thread/VMThreads.java
+@@ -818,8 +818,9 @@
+             return statusTL.getVolatile();
+         }
+ 
+-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
++        @Uninterruptible(reason = "Restore the heap context before publishing native status.")
+         public static void setStatusNative() {
++            Heap.getHeap().leaveThreadContext();
+             statusTL.setVolatile(STATUS_IN_NATIVE);
+         }
+ 
+@@ -845,9 +846,13 @@
+         }
+ 
+         /** A guarded transition from native to another status. */
+-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
++        @Uninterruptible(reason = "Activate the heap context before any Java or VM work can execute.")
+         public static boolean compareAndSetNativeToNewStatus(int newStatus) {
+-            return statusTL.compareAndSet(STATUS_IN_NATIVE, newStatus);
++            boolean entered = statusTL.compareAndSet(STATUS_IN_NATIVE, newStatus);
++            if (entered) {
++                Heap.getHeap().enterThreadContext();
++            }
++            return entered;
+         }
+ 
+         /*
+--- a/substratevm/src/com.oracle.svm.core.graal.amd64/src/com/oracle/svm/core/graal/amd64/AMD64MemoryMaskingAndFencing.java
++++ b/substratevm/src/com.oracle.svm.core.graal.amd64/src/com/oracle/svm/core/graal/amd64/AMD64MemoryMaskingAndFencing.java
+@@ -45,6 +45,7 @@
+ import com.oracle.svm.shared.singletons.traits.BuiltinTraits.BuildtimeAccessOnly;
+ import com.oracle.svm.shared.singletons.traits.BuiltinTraits.NoLayeredCallbacks;
+ import com.oracle.svm.shared.singletons.traits.SingletonTraits;
++import com.oracle.svm.shared.util.SubstrateUtil;
+ import com.oracle.svm.shared.util.VMError;
+ 
+ import jdk.graal.compiler.core.common.CompressEncoding;
+@@ -105,7 +106,16 @@
+     public static class Options {
+         @Option(help = "AMD64 only spectre mitigation for runtime compiled code (masking or fencing before accesses).", type = OptionType.Expert, stability = OptionStability.EXPERIMENTAL) //
+         public static final RuntimeOptionKey<Boolean> MemoryMaskingAndFencing = new RuntimeOptionKey<>(false, Options::validateOptionAtBuildTime,
+-                        RelevantForCompilationIsolates);
++                        RelevantForCompilationIsolates) {
++            @Override
++            public void setRawCachedValue(Object value) {
++                // RuntimeOptions.set can update an option after startup validation has run.
++                if (!SubstrateUtil.HOSTED && SubstrateOptions.useJamGC() && Boolean.TRUE.equals(value)) {
++                    throw new IllegalArgumentException("Option " + getName() + " is not supported when using Jam");
++                }
++                super.setRawCachedValue(value);
++            }
++        };
+ 
+         @Platforms(Platform.HOSTED_ONLY.class)
+         private static void validateOptionAtBuildTime(RuntimeOptionKey<Boolean> optionKey) {
+@@ -121,6 +131,8 @@
+             if (optionKey.getValue()) {
+                 if (SubstrateOptions.useG1GC()) {
+                     throw UserError.invalidOptionValue(optionKey, optionKey.getValue(), "The option is not supported when using G1");
++                } else if (SubstrateOptions.useJamGC()) {
++                    throw UserError.invalidOptionValue(optionKey, optionKey.getValue(), "The option is not supported when using Jam");
+                 }
+             }
+         }
+@@ -131,6 +143,8 @@
+                 if (runtimeOptionKey.getValue()) {
+                     if (SubstrateOptions.useG1GC()) {
+                         throw new IllegalArgumentException("Option " + runtimeOptionKey.getName() + " is not supported when using G1");
++                    } else if (SubstrateOptions.useJamGC()) {
++                        throw new IllegalArgumentException("Option " + runtimeOptionKey.getName() + " is not supported when using Jam");
+                     } else if (!Platform.includedIn(Platform.AMD64.class)) {
+                         throw new IllegalArgumentException("Option " + runtimeOptionKey.getName() + " is only available on AMD64");
+                     }
+@@ -167,6 +181,12 @@
+             return;
+         }
+ 
++        if (SubstrateOptions.useJamGC()) {
++            // The masking phase requires the serial collector's address-range provider.
++            // Jam keeps ordinary address lowering and rejects enabling the mitigation.
++            return;
++        }
++
+         // The isolate heap should be a contiguous memory region
+         VMError.guarantee(ImageSingletons.lookup(CommittedMemoryProvider.class) instanceof AddressRangeCommittedMemoryProvider);
+ 
+--- a/substratevm/src/com.oracle.svm.core.windows/src/com/oracle/svm/core/windows/WindowsVirtualMemoryProvider.java
++++ b/substratevm/src/com.oracle.svm.core.windows/src/com/oracle/svm/core/windows/WindowsVirtualMemoryProvider.java
+@@ -329,6 +329,20 @@
+         return MemoryAPI.VirtualFree(start, size, MemoryAPI.MEM_RELEASE() | MEM_PRESERVE_PLACEHOLDER) != 0;
+     }
+ 
++    @Override
++    @Uninterruptible(reason = "Called before creating a native collector.")
++    public int prepareForExternalMapping(PointerBase start, UnsignedWord nbytes) {
++        if (!isAligned(start) || nbytes.equal(0) || !UnsignedUtils.isAMultiple(nbytes, getGranularity())) {
++            return -1;
++        }
++        MemoryAPI.MEMORY_BASIC_INFORMATION info = StackValue.get(MemoryAPI.MEMORY_BASIC_INFORMATION.class);
++        if (MemoryAPI.VirtualQuery(start, info, SizeOf.unsigned(MemoryAPI.MEMORY_BASIC_INFORMATION.class)).equal(0) ||
++                        info.State() != MemoryAPI.MEM_RESERVE() || info.RegionSize().belowThan(nbytes)) {
++            return -1;
++        }
++        return splitPlaceholder(start, nbytes) ? 0 : -1;
++    }
++
+     private static final CGlobalData<CCharPointer> MAP_VIEW_OF_FILE_3 = CGlobalDataFactory.createCString("MapViewOfFile3");
+     private static final CGlobalData<CFunctionPointerPointer<MapViewOfFile3>> MAP_VIEW_OF_FILE_3_POINTER = CGlobalDataFactory.createWord(WindowsUtils.UNINITIALIZED_POINTER);
+ 
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/replacements/HotSpotAllocationSnippets.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/replacements/HotSpotAllocationSnippets.java
+@@ -31,6 +31,8 @@
+ import static jdk.graal.compiler.hotspot.HotSpotBackend.NEW_ARRAY_OR_NULL;
+ import static jdk.graal.compiler.hotspot.HotSpotBackend.NEW_INSTANCE_OR_NULL;
+ import static jdk.graal.compiler.hotspot.HotSpotBackend.NEW_MULTI_ARRAY_OR_NULL;
++import static jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider.JAM_RECORD_START;
++import static jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider.JAM_OBJECT_STARTS_LOCATION;
+ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.HotSpotOptimizingFieldLocationIdentity.CLASS_ARRAY_KLASS_LOCATION;
+ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.HotSpotFieldLocationIdentity.CLASS_INIT_STATE_LOCATION;
+ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.HotSpotFieldLocationIdentity.CLASS_INIT_THREAD_LOCATION;
+@@ -65,6 +67,7 @@
+ import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
+ 
+ import org.graalvm.word.UnsignedWord;
++import org.graalvm.word.LocationIdentity;
+ import org.graalvm.word.impl.Word;
+ 
+ import jdk.graal.compiler.api.replacements.Fold;
+@@ -422,11 +425,25 @@
+         return getMinimalBulkZeroingSize(INJECTED_OPTIONVALUES);
+     }
+ 
++    @Fold
++    static long jamTrackStartsAddress(@InjectedParameter GraalHotSpotVMConfig config) {
++        return config.jamTrackStartsAddress;
++    }
++
++    @NodeIntrinsic(ForeignCallNode.class)
++    private static native void recordJamStart(@ConstantNodeParameter ForeignCallDescriptor descriptor, Word object);
++
+     @Override
+     public final void initializeObjectHeader(Word memory, Word hub, boolean isArray) {
+         KlassPointer klassPtr = KlassPointer.fromWord(hub);
+         Word markWord = Word.signed(HotSpotReplacementsUtil.defaultPrototypeMarkWord(INJECTED_VMCONFIG));
+         HotSpotReplacementsUtil.initializeObjectHeader(memory, markWord, klassPtr);
++        long starts = jamTrackStartsAddress(INJECTED_VMCONFIG);
++        Word flag = Word.unsigned(starts);
++        if (starts != 0 && flag.readByte(0, LocationIdentity.any()) != 0) {
++            // This leaf call records only the address; formatting finishes before any safepoint.
++            recordJamStart(JAM_RECORD_START, memory);
++        }
+     }
+ 
+     @Override
+@@ -563,6 +580,7 @@
+                             "allocateInstance",
+                             null,
+                             receiver,
++                            JAM_OBJECT_STARTS_LOCATION,
+                             MARK_WORD_LOCATION,
+                             HUB_WRITE_LOCATION,
+                             TLAB_TOP_LOCATION,
+@@ -572,6 +590,7 @@
+                             "allocateArray",
+                             null,
+                             receiver,
++                            JAM_OBJECT_STARTS_LOCATION,
+                             MARK_WORD_LOCATION,
+                             HUB_WRITE_LOCATION,
+                             TLAB_TOP_LOCATION,
+@@ -581,6 +600,7 @@
+                             "allocateArrayDynamic",
+                             null,
+                             receiver,
++                            JAM_OBJECT_STARTS_LOCATION,
+                             MARK_WORD_LOCATION,
+                             HUB_WRITE_LOCATION,
+                             TLAB_TOP_LOCATION,
+@@ -590,6 +610,7 @@
+                             "allocateInstanceDynamic",
+                             null,
+                             receiver,
++                            JAM_OBJECT_STARTS_LOCATION,
+                             MARK_WORD_LOCATION,
+                             HUB_WRITE_LOCATION,
+                             TLAB_TOP_LOCATION,
+--- a/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/graal/nodes/SubstrateCompressionNode.java
++++ b/substratevm/src/com.oracle.svm.core/src/com/oracle/svm/core/graal/nodes/SubstrateCompressionNode.java
+@@ -69,6 +69,12 @@
+     }
+ 
+     @Override
++    public boolean isBoundedScalarConversion() {
++        // Inherits scalar CompressionNode.generate; the backend emits only pointer arithmetic.
++        return true;
++    }
++
++    @Override
+     public JavaConstant nullConstant() {
+         /*
+          * Return null constant prior to the compression op.
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/nodes/HotSpotCompressionNode.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/hotspot/nodes/HotSpotCompressionNode.java
+@@ -86,6 +86,12 @@
+     }
+ 
+     @Override
++    public boolean isBoundedScalarConversion() {
++        // Inherits scalar CompressionNode.generate; the backend emits only pointer arithmetic.
++        return true;
++    }
++
++    @Override
+     protected Constant compress(Constant c) {
+         if (JavaConstant.NULL_POINTER.equals(c)) {
+             return HotSpotCompressedNullConstant.COMPRESSED_NULL;
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/nodes/CompressionNode.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/nodes/CompressionNode.java
+@@ -140,6 +140,19 @@
+         return this;
+     }
+ 
++    /**
++     * Whether this node emits only a finite scalar pointer conversion at runtime. An opt-in
++     * implementation must not emit calls, loops, allocation, safepoints, deoptimization, hidden
++     * barriers or runtime slow paths, including during subsequent lowering. Compiler-time
++     * construction and canonicalization are outside this contract.
++     *
++     * The default is conservative because subclasses may override {@link #generate}. VM-specific
++     * final node classes may opt in after auditing their lowering and backend emission.
++     */
++    public boolean isBoundedScalarConversion() {
++        return false;
++    }
++
+     @Override
+     public void generate(NodeLIRBuilderTool gen) {
+         boolean nonNull;
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/truffle/phases/TruffleLoopSafepointEliminationPhase.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/truffle/phases/TruffleLoopSafepointEliminationPhase.java
+@@ -26,9 +26,7 @@
+ 
+ import jdk.graal.compiler.graph.Node;
+ import jdk.graal.compiler.loop.phases.LoopSafepointEliminationPhase;
+-import jdk.graal.compiler.nodes.CallTargetNode;
+ import jdk.graal.compiler.nodes.FixedNode;
+-import jdk.graal.compiler.nodes.Invoke;
+ import jdk.graal.compiler.nodes.LoopBeginNode.SafepointState;
+ import jdk.graal.compiler.nodes.LoopEndNode;
+ import jdk.graal.compiler.nodes.StructuredGraph;
+@@ -37,21 +35,16 @@
+ import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
+ import jdk.graal.compiler.phases.tiers.MidTierContext;
+ import jdk.graal.compiler.truffle.KnownTruffleTypes;
+-import jdk.vm.ci.meta.ResolvedJavaMethod;
+ 
+ /**
+  * Extends the default Graal loop safepoint elimination phase and adds logic to disable guest
+- * safepoints when the loop contains truffle calls or when there is a plain counted loop without
+- * allocations.
++ * safepoints when there is a plain counted loop without allocations.
+  *
+  * @see LoopEndNode#getGuestSafepointState()
+  */
+ public final class TruffleLoopSafepointEliminationPhase extends LoopSafepointEliminationPhase {
+ 
+-    private final ResolvedJavaMethod callBoundary;
+-
+     public TruffleLoopSafepointEliminationPhase(KnownTruffleTypes types) {
+-        this.callBoundary = types.OptimizedCallTarget_callBoundary;
+     }
+ 
+     @Override
+@@ -72,11 +65,8 @@
+ 
+             @Override
+             protected boolean onCallInLoop(LoopSafepointPlan safepointPlan, LoopEndNode loopEnd, FixedNode currentCallNode) {
+-                if (currentCallNode instanceof Invoke && isTruffleCall((Invoke) currentCallNode)) {
+-                    // only truffle calls imply a truffle safepoint at method exits
+-                    safepointPlan.setGuestEndState(loopEnd, SafepointState.OPTIMIZER_DISABLED);
+-                    return true;
+-                }
++                // A bounded leaf callee can omit its return poll. A call alone no longer proves
++                // that the caller's guest loop reaches a Truffle safepoint.
+                 return false;
+             }
+ 
+@@ -88,16 +78,4 @@
+         instance.optimizeSafepoints().apply();
+     }
+ 
+-    private boolean isTruffleCall(Invoke call) {
+-        CallTargetNode target = call.callTarget();
+-        if (target == null) {
+-            return false;
+-        }
+-        ResolvedJavaMethod method = target.targetMethod();
+-        if (method == null) {
+-            return false;
+-        }
+-        return method.equals(callBoundary);
+-    }
+-
+ }
+--- a/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/truffle/phases/TruffleSafepointInsertionPhase.java
++++ b/compiler/src/jdk.graal.compiler/src/jdk/graal/compiler/truffle/phases/TruffleSafepointInsertionPhase.java
+@@ -24,22 +24,49 @@
+  */
+ package jdk.graal.compiler.truffle.phases;
+ 
++import jdk.graal.compiler.core.common.memory.BarrierType;
++import jdk.graal.compiler.core.common.memory.MemoryOrderMode;
++import jdk.graal.compiler.core.common.type.AbstractObjectStamp;
+ import jdk.graal.compiler.core.common.type.ObjectStamp;
++import jdk.graal.compiler.core.common.type.PrimitiveStamp;
+ import jdk.graal.compiler.core.common.type.StampFactory;
+ import jdk.graal.compiler.core.common.type.TypeReference;
+ import jdk.graal.compiler.debug.DebugCloseable;
+ import jdk.graal.compiler.debug.GraalError;
+ import jdk.graal.compiler.graph.Node;
++import jdk.graal.compiler.nodes.CompressionNode;
+ import jdk.graal.compiler.nodes.ConstantNode;
+ import jdk.graal.compiler.nodes.FixedNode;
++import jdk.graal.compiler.nodes.FixedWithNextNode;
+ import jdk.graal.compiler.nodes.FrameState;
+ import jdk.graal.compiler.nodes.LoopBeginNode;
+ import jdk.graal.compiler.nodes.LoopEndNode;
+ import jdk.graal.compiler.nodes.NodeView;
++import jdk.graal.compiler.nodes.ParameterNode;
++import jdk.graal.compiler.nodes.PiArrayNode;
++import jdk.graal.compiler.nodes.PiNode;
+ import jdk.graal.compiler.nodes.ReturnNode;
++import jdk.graal.compiler.nodes.StartNode;
+ import jdk.graal.compiler.nodes.StructuredGraph;
+ import jdk.graal.compiler.nodes.ValueNode;
++import jdk.graal.compiler.nodes.calc.AddNode;
++import jdk.graal.compiler.nodes.calc.AndNode;
++import jdk.graal.compiler.nodes.calc.LeftShiftNode;
++import jdk.graal.compiler.nodes.calc.MulNode;
++import jdk.graal.compiler.nodes.calc.NarrowNode;
++import jdk.graal.compiler.nodes.calc.NegateNode;
++import jdk.graal.compiler.nodes.calc.OrNode;
++import jdk.graal.compiler.nodes.calc.RightShiftNode;
++import jdk.graal.compiler.nodes.calc.SignExtendNode;
++import jdk.graal.compiler.nodes.calc.SubNode;
++import jdk.graal.compiler.nodes.calc.UnsignedRightShiftNode;
++import jdk.graal.compiler.nodes.calc.XorNode;
++import jdk.graal.compiler.nodes.calc.ZeroExtendNode;
+ import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
++import jdk.graal.compiler.nodes.memory.FloatingReadNode;
++import jdk.graal.compiler.nodes.memory.ReadNode;
++import jdk.graal.compiler.nodes.memory.address.AddressNode;
++import jdk.graal.compiler.nodes.memory.address.OffsetAddressNode;
+ import jdk.graal.compiler.nodes.spi.NodeWithState;
+ import jdk.graal.compiler.phases.Phase;
+ import jdk.graal.compiler.phases.util.Providers;
+@@ -102,9 +129,11 @@
+             return;
+         }
+ 
+-        for (ReturnNode returnNode : graph.getNodes(ReturnNode.TYPE)) {
+-            try (DebugCloseable s = returnNode.withNodeSourcePosition()) {
+-                insertSafepoint(graph, returnNode);
++        if (!isBoundedLeaf(graph)) {
++            for (ReturnNode returnNode : graph.getNodes(ReturnNode.TYPE)) {
++                try (DebugCloseable s = returnNode.withNodeSourcePosition()) {
++                    insertSafepoint(graph, returnNode);
++                }
+             }
+         }
+         for (LoopBeginNode loopBeginNode : graph.getNodes(LoopBeginNode.TYPE)) {
+@@ -128,6 +157,74 @@
+                 insertSafepoint(graph, (FixedNode) callTarget.invoke());
+             }
+         }
++    }
++
++    /**
++     * Proves a finite, straight-line sequence of scalar operations with no implicit guest work.
++     * Every graph node is checked, including floating nodes: absence of Java invokes alone would
++     * miss lowered calls, barriers, allocations and bulk intrinsics. Exact classes keep unfamiliar
++     * operations and subclasses conservative. VM-specific pointer conversions require an explicit
++     * bounded scalar contract and a scalar result stamp. There is no graph-size or root-name heuristic.
++     *
++     * The accepted operations cannot introduce a call or a loop during later lowering. Plain heap
++     * reads must already be barrier-free, non-null and non-deoptimizing. The finite dataflow graph
++     * and fixed chain therefore bound the work by this compilation's scalar operations. Callers
++     * must retain their own guest loop safepoints; a return from this graph does not imply a poll.
++     */
++    static boolean isBoundedLeaf(StructuredGraph graph) {
++        int fixedNodes = 0;
++        for (Node node : graph.getNodes()) {
++            if (node instanceof FixedNode) {
++                fixedNodes++;
++            }
++            Class<?> type = node.getClass();
++            if (type == StartNode.class || type == ReturnNode.class || type == ConstantNode.class || type == ParameterNode.class ||
++                            type == FrameState.class || type == PiNode.class || type == PiArrayNode.class || type == OffsetAddressNode.class) {
++                continue;
++            }
++            if (node instanceof CompressionNode compression && compression.isBoundedScalarConversion() && isScalar(compression)) {
++                continue;
++            }
++            if (type == ReadNode.class) {
++                ReadNode read = (ReadNode) node;
++                if (read.getBarrierType() == BarrierType.NONE && read.getMemoryOrder() == MemoryOrderMode.PLAIN && !read.getUsedAsNullCheck() &&
++                                isPlainHeapAddress(read.getAddress()) && isScalar(read)) {
++                    continue;
++                }
++            } else if (type == FloatingReadNode.class) {
++                FloatingReadNode read = (FloatingReadNode) node;
++                if (read.getBarrierType() == BarrierType.NONE && isPlainHeapAddress(read.getAddress()) && isScalar(read)) {
++                    continue;
++                }
++            } else if ((type == AddNode.class || type == SubNode.class || type == MulNode.class || type == AndNode.class || type == OrNode.class || type == XorNode.class ||
++                            type == LeftShiftNode.class || type == RightShiftNode.class || type == UnsignedRightShiftNode.class || type == NegateNode.class ||
++                            type == NarrowNode.class || type == SignExtendNode.class || type == ZeroExtendNode.class) &&
++                            ((ValueNode) node).stamp(NodeView.DEFAULT) instanceof PrimitiveStamp) {
++                continue;
++            }
++            return false;
++        }
++        // Also reject incomplete graphs and any fixed cycle, even if all its nodes were accepted.
++        FixedNode current = graph.start();
++        int remaining = fixedNodes;
++        while (current != null && remaining-- > 0) {
++            if (current.getClass() == ReturnNode.class) {
++                return remaining == 0;
++            }
++            if (!(current instanceof FixedWithNextNode)) {
++                return false;
++            }
++            current = ((FixedWithNextNode) current).next();
++        }
++        return false;
++    }
++
++    private static boolean isScalar(ValueNode node) {
++        return node.stamp(NodeView.DEFAULT) instanceof PrimitiveStamp || node.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp;
++    }
++
++    private static boolean isPlainHeapAddress(AddressNode address) {
++        return address.getClass() == OffsetAddressNode.class && address.getBase().stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp stamp && stamp.nonNull();
+     }
+ 
+     private void insertSafepointAtLoopBegin(StructuredGraph graph, LoopBeginNode loopBeginNode) {

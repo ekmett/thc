@@ -33,6 +33,7 @@ public final class LocalBinding extends Node {
         if (referenceKind == CoreKind.ADDRESS) return value.executeRequiredAddress(frame);
         return value.execute(frame);
     }
+    boolean needsCallState() { return value.needsCallState(); }
     public void write(VirtualFrame frame) {
         try { writeValue(frame); }
         catch (AstCapture cut) { throw appendWrite(cut); }

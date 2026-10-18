@@ -15,12 +15,14 @@ public final class AstControl {
     public static final AstControl INSTANCE = new AstControl();
     private AstControl() {}
     public static boolean enabled(Node node) {
-        return node.getRootNode() instanceof GhcBCORoot ||
-            node.getRootNode() instanceof FunctionRoot root && root.getEnableAsync$org_intelligence_thc();
+        var owner = node.getRootNode();
+        return owner instanceof GhcBCORoot ||
+            owner instanceof FunctionRoot root && root.getEnableAsync$org_intelligence_thc();
     }
     public static boolean captures(Node node) {
-        return node.getRootNode() instanceof GhcBCORoot ||
-            node.getRootNode() instanceof FunctionRoot root && root.getCapturesContinuations$org_intelligence_thc();
+        var owner = node.getRootNode();
+        return owner instanceof GhcBCORoot ||
+            owner instanceof FunctionRoot root && root.getCapturesContinuations$org_intelligence_thc();
     }
     private static final class ResumeChild implements AstResumeStep {
         private final Object child;
@@ -37,6 +39,10 @@ public final class AstControl {
     static AstCapture captureForce(Node node, Force force, Object value, PendingWait wait) {
         RetryForce retry = new RetryForce(node, force, value); retry.wait = wait;
         return new AstCapture(wait, SynchronousMasking.current(node)).append(retry);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    static AstCapture captureBlockedForce(Node node, Force force, Object value, AsyncRequest request) {
+        return new AstCapture(request, SynchronousMasking.current(node)).append(new RetryForce(node, force, value));
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureChild(Node node, CallSegmentSuspended suspended) {
@@ -76,21 +82,24 @@ public final class AstControl {
         }
     }
     public static Object force(VirtualFrame frame, Node node, Force force, Object value) {
+        if (!(value instanceof Thunk)) return value;
         if (!captures(node)) return force.execute(frame, value);
         return forceCallback(frame, node, force, value);
     }
     /** A shared callback owns an explicit one-shot resume scope in either backend. */
     static Object forceCallback(VirtualFrame frame, Node node, Force force, Object value) {
         try { return force.execute(frame, value); }
-        catch (ThunkSuspended suspended) {
-            throw captureChild(node, suspended);
-        } catch (CallSegmentSuspended suspended) {
-            throw captureChild(node, suspended);
-        } catch (PendingWait cut) {
-            throw captureForce(node, force, value, cut);
-        } catch (AsyncBlocked blocked) {
-            throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(new RetryForce(node, force, value));
+        catch (RuntimeException failure) {
+            throw captureForceFailure(node, force, value, failure);
         }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private static RuntimeException captureForceFailure(Node node, Force force, Object value, RuntimeException failure) {
+        if (failure instanceof ThunkSuspended suspended) return captureChild(node, suspended);
+        if (failure instanceof CallSegmentSuspended suspended) return captureChild(node, suspended);
+        if (failure instanceof PendingWait cut) return captureForce(node, force, value, cut);
+        if (failure instanceof AsyncBlocked blocked) return captureBlockedForce(node, force, value, blocked.getRequest());
+        return failure;
     }
     public static Object complete(Node node, Object result) { return complete(node, result, null, null, false); }
     public static Object complete(Node node, Object result, RootCallTarget target) { return complete(node, result, target, null, false); }
@@ -99,8 +108,10 @@ public final class AstControl {
         return complete(node, result, expectedTarget, tupleShape, identityTail, false);
     }
     static Object complete(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail, boolean caughtIOAction) {
+        if (!(result instanceof TailYield) && !(result instanceof AstTailYield) &&
+            !(result instanceof SavedGuestContinuation) && !(result instanceof ContinuationResult)) return result;
         if (!captures(node)) return result;
-        return completeCallback(node, result, expectedTarget, tupleShape, identityTail, caughtIOAction);
+        return completeSuspended(node, result, expectedTarget, tupleShape, identityTail, caughtIOAction);
     }
     static Object completeCallback(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail) {
         return completeCallback(node, result, expectedTarget, tupleShape, identityTail, false);

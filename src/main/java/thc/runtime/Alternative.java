@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
@@ -37,6 +38,8 @@ final class Alternative extends Node {
         // NodeUtil clones it, losing the identity guard around its disabled counters.
         matchProfile = profileChoice ? CountingConditionProfile.create() : null;
     }
+    /** Admit both match outcomes before cold compilation, without observing a guest. */
+    void prepareForAOT() { if (matchProfile != null) matchProfile.disable(); }
     public int getKind() { return kind; }
     public Object getValue() { return value; }
     public int[] getFields() { return fields; }
@@ -51,9 +54,14 @@ final class Alternative extends Node {
     DataLayout layout(VirtualFrame frame) {
         return constructorIndex < 0 ? (DataLayout) value : Program.instance(frame, programSlot).constructorLayout(constructorIndex);
     }
+    @ExplodeLoop private boolean deadReference(int slot) {
+        for (int dead : deadReferences) if (dead == slot) return true;
+        return false;
+    }
     void restore(DataValue data, int index, VirtualFrame frame, int slot) {
-        if (value instanceof DataLayout.Reusable storage) storage.restore(layout(frame), data, index, frame, slot);
-        else layout(frame).restore(data, index, frame, slot);
+        boolean dead = CompilerDirectives.inCompiledCode() && deadReference(slot);
+        if (value instanceof DataLayout.Reusable storage) storage.restore(layout(frame), data, index, frame, slot, dead);
+        else layout(frame).restore(data, index, frame, slot, dead);
     }
     void restoreVector(DataValue data, int index, VirtualFrame frame, int[] slots) {
         if (value instanceof DataLayout.Reusable storage) storage.restoreVector(layout(frame), data, index, frame, slots, 0);

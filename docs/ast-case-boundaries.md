@@ -15,6 +15,13 @@ arm: the scrutinee runs once, existing match profiles choose the alternative,
 and original constructor/payload restoration precedes the call. No additional
 branch profile or ever-seen flag is introduced.
 
+Explicit AST AOT preparation admits both outcomes of existing `Alternative`
+counting profiles before compilation. This keeps untouched
+choices reachable on the first installed call without running guest code.
+Ordinary JIT roots continue to learn their choice probabilities from execution.
+Unboxed-sum `SumCase` profiles remain adaptive on cold preparation; their shared
+profile-array clone ownership needs a separate correction.
+
 The call inherits the caller's Bloom ancestry. It is not an ordinary non-tail
 call with a reset Bloom and local trampoline. An outer backedge therefore
 crosses the side root and reaches its original loop owner. Capture-capable side
@@ -74,17 +81,17 @@ that a body survives partial evaluation.
 Lowering prepares an empty pass-through target in its language context. It
 retains exact capture metadata and the original slot numbering, but no copied
 arm body or guest invocation state. The compiler callback retires the failed
-physical target. At the next fresh entry, recovery clones the owning function
-and extracts its deferred arm into the replacement's independently prepared
-target. This structural change advances the replacement's finite generation
-without executing the guest or seeding observed profiles. The failed caller
-target is never rearmed.
-
+physical target. At the next entry, recovery installs the deferred arm body in
+its context's prepared target, explicitly invalidates any previously compiled
+empty pass-through code, and publishes the separated call-site route. It does
+not execute the guest or seed observed profiles. The owning function remains
+the original terminal target and enters through its cold trampoline.
 Only that failure-created edge has an inlining veto; eager side roots retain
-normal inliner discretion. Caller clones have independent generations and may
-share their context's prepared side code and immutable capture layout, never
-frames or values. The prepared side target itself is not split/cloned. Source
-metadata and exact primitive capture storage survive the extraction.
+normal inliner discretion. Ordinary caller clones may share their context's
+prepared side code and immutable capture layout, never frames or values. Failed
+callers do not clone for recovery. The prepared side target itself is not
+split/cloned. Source metadata and exact primitive capture storage survive the
+extraction.
 
 This is not arbitrary recursive graph partitioning: an oversized extracted
 side body can still exceed its own compilation budget and execute interpreted.
@@ -109,23 +116,25 @@ compiled graph, and does not request recovery.
 The compiler callback disables automatic admission and inlining without preparing
 guest code. Publishing an owned failure receipt invalidates the source's
 one-shot compilation assumption, including when a separate side target failed.
-Healthy entries therefore do not poll the receipt on every call. Copies start
-with an independent valid assumption. A cold trampoline consumes only its
-claimed receipt; pending sibling failures remain eligible for reduction.
-The next fresh function entry claims the failed task, clones the body with independent
-case targets and fresh loop state, and applies the finite extraction to that
-replacement. Entry publication adopts the child and reports the structural change
-atomically. Old `executeBody` paths, tail anchors and saved frames remain on their
-original body; no guest invocation is replayed. A failed same-frame side selects
-the corresponding nested region in the copied owning function, even when that
-function's enclosing target was successfully installed. Recovery-created entries
-and side edges veto inlining so a small trace cannot rebuild the failed parent
-graph. Deferred default sides are also prepared independently for the replacement.
-If no smaller region remains, fresh AST entry uses a cold trampoline over a new
-frame with the original arguments; it consumes ingress once and never publishes
-an unchanged retryable clone. Existing body executions and parked continuations
-keep their frame, program counter and lexical cleanup. See the
-[stock-runtime workflow](contributing.md) for eligibility and limitations.
+Healthy entries therefore do not poll the receipt on every call. A cold
+trampoline consumes only its claimed receipt; pending sibling failures remain
+eligible for reduction.
+The next function entry keeps its original adopted body, frame descriptor and
+call target. It applies one finite extraction on that body under the atomic
+rewrite lock, reports the structural change, then uses a cold trampoline with
+a new frame and the original arguments. Ingress is consumed once. The failed
+whole entry cannot compile or inline again, including through whole-body OSR;
+recovery never creates another whole-root candidate.
+A failed same-frame side selects only a proper nested region within that exact
+side's body. Earlier boundaries remain in place and failed sides stay
+interpreted. Only newly separated regions acquire targets; their side edges
+veto inlining so a small trace cannot rebuild the failed parent graph. Deferred
+default sides likewise publish their prepared route on the original body.
+If no eligible region remains, the entry stays cold without another compilation
+request. Existing body executions, tail anchors and parked continuations keep
+their exact frame, program counter, lexical cleanup and source owner; no guest
+invocation is replayed. See the [stock-runtime workflow](contributing.md) for
+eligibility and limitations.
 
 The pinned terminal runtime rejects explicit submissions and queued work for
 retired targets, and honors the launcher's diagnostic-retry opt-out. Stock

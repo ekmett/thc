@@ -217,6 +217,14 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         for (String id : consumerBindings.keySet()) demand.prepareCode(id);
     }
 
+    @Override public List<RootCallTarget> compilationTargets() {
+        var targets = new ArrayList<RootCallTarget>();
+        var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
+        for (var program : demand.preparedPrograms())
+            for (var target : program.compilationTargets()) if (seen.add(target)) targets.add(target);
+        return List.copyOf(targets);
+    }
+
     public List<ManagedExportAdmission> registerStartup() {
         var registrations = new ArrayList<ManagedExportAdmission>(); var pending = new ArrayList<CoreModuleAdmission>();
         for (var module : directory.getModules()) if (module.registrationObligations()) pending.add(admission(module));

@@ -365,6 +365,20 @@ class CoreCompactRecordsTest {
             module(binding(expression), (records, file) -> assertThrows(RuntimeException.class, () -> records.binding(0)));
         }
     }
+    @Test void vectorPrimitivePayloadKeepsFollowingRepresentationsAndMetadata() throws Exception {
+        // Independent docs/compact-core-format.md ShapeUse/Shape/EvaluationTree bytes.
+        // A two-byte lane count and following IntRep distinguish payload boundaries;
+        // Shape.vector is a separate record with deliberately different values.
+        byte[] shape = bytes(0, 8, 2, 2, 16, 128, 2, 8, 0, 2, 4, 0, 0, 0, 0, 0, 0, 2, 1);
+        module(shape, (records, file) -> assertEquals(
+            Map.of("kind", "vector", "primReps", List.of("VecRep 256 FloatElemRep", "IntRep"),
+                "vector", Map.of("lanes", 4L, "element", "Int8ElemRep"), "evaluated", true),
+            records.representation(0)));
+        module(bytes(0, 8, 2, 1, 16, 4, 10), (records, file) ->
+            assertThrows(IllegalStateException.class, () -> records.representation(0)));
+        module(bytes(0, 8, 2, 1, 16, 128), (records, file) ->
+            assertThrows(IllegalArgumentException.class, () -> records.representation(0)));
+    }
     private Map<String, Object> leaf(boolean evaluated) { return map("kind", "long", "primReps", List.of("IntRep"), "evaluated", evaluated); }
     @SafeVarargs private final Map<String, Object> tuple(boolean evaluated, Map<String, Object>... children) {
         return map("kind", "unknown", "primReps", Collections.nCopies(children.length, "IntRep"),

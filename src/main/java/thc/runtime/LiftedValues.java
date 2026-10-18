@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import jam.vm.Lifted;
+import thc.vm.Lifted;
 
 /** Nonforcing resolution in the existing boxed Object domain. */
 public final class LiftedValues {

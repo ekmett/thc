@@ -53,6 +53,9 @@ public final class EntryRoot extends ContextRoot {
         return force.execute(frame, dispatch.execute(frame, fn, args));
     }
     @Override public String getName() { return "THC host entry/" + arity; }
+    @Override protected com.oracle.truffle.api.nodes.ExecutionSignature prepareForAOT() {
+        return com.oracle.truffle.api.nodes.ExecutionSignature.GENERIC;
+    }
 
     private static final class HostInputSource extends InputSource {
         HostInputSource(ArgumentLayout layout) { super(layout); }

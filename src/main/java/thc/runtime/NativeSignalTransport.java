@@ -101,8 +101,7 @@ public final class NativeSignalTransport implements ProcessSignalTransport {
             String suffix = abi.librarySuffix();
             try (var input = NativeSignalTransport.class.getResourceAsStream("/thc/native/native-process-signal-api" + suffix)) {
                 if (input == null) throw new IOException("Missing native process signal bridge");
-                var library = Files.createTempFile("thc-process-signals-", suffix);
-                library.toFile().deleteOnExit();
+                var library = NativeLibraryFiles.createTempFile("thc-process-signals-", suffix);
                 Files.copy(input, library, StandardCopyOption.REPLACE_EXISTING);
                 // Late handlers may retain this code after a session closes.
                 return SymbolLookup.libraryLookup(library, Arena.global());

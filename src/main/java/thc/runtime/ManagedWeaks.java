@@ -9,7 +9,7 @@ import com.oracle.truffle.api.nodes.Node;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
-import jam.vm.Weak;
+import thc.vm.Weak;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 

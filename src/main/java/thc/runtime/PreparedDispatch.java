@@ -13,8 +13,8 @@ import com.oracle.truffle.api.profiles.InlinedConditionProfile;
 
 /**
  * Immutable call-site setup is independent of observing a function target.
- * An untouched compiled site shares the existing generic application algorithm;
- * ordinary interpreter calls still populate the unchanged adaptive target PIC.
+ * An untouched compiled site uses published exact scalar code when available,
+ * otherwise generic application; interpreter calls retain their adaptive PIC.
  */
 public final class PreparedDispatch extends Node {
     private final int count;
@@ -27,6 +27,7 @@ public final class PreparedDispatch extends Node {
     @Child private IndirectCallerNode caller;
     @Child private Force force;
     @Child private GenericInputCall typed;
+    @Child private volatile InputCallArm preparedScalar;
     @CompilerDirectives.CompilationFinal private volatile boolean observed;
 
     public PreparedDispatch(int count, boolean tail, Metrics metrics, boolean[] evaluated,
@@ -47,8 +48,25 @@ public final class PreparedDispatch extends Node {
         typed = new GenericInputCall(new ScalarArrayInputSource(layout), count, tail, metrics, null, 0, true);
     }
 
+    /** Prepare a published exact scalar code shape without entering its guest body. */
+    void prepareForAOT(Closure function) {
+        if (metrics == null || coldApplication != null || function == null || function.arity != count ||
+                function.suppliedCount != 0 || function.supplied.length != 0 ||
+                layout != null && layout.getRequiresTyped() ||
+                !(function.target.getRootNode() instanceof GuestRoot root) ||
+                root.getTypedInput() != null || root.getTupleResult() != null) return;
+        atomic(() -> {
+            if (preparedScalar == null)
+                preparedScalar = insert(new InputCallArm(new ScalarArrayInputSource(layout), count, tail,
+                    metrics, null, 0, function, true));
+            return null;
+        });
+    }
     public Object execute(VirtualFrame frame, Closure function, Object[] arguments) {
         boolean cold = metrics == null || !observed && CompilerDirectives.inCompiledCode();
+        InputCallArm prepared = preparedScalar;
+        if (cold && prepared != null && prepared.matches(function))
+            return prepared.execute(frame, function, arguments);
         // Overapplication owns a live suffix even when an earlier exact call has
         // populated the interpreter PIC. The shared root retains that suffix
         // across every prefix capture; exact calls and PAPs keep their target PIC.

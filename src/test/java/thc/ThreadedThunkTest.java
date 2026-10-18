@@ -80,9 +80,9 @@ class ThreadedThunkTest {
             var blackhole = entered(context, () -> assertThrows(RuntimeFault.class, () -> driver.force(recursive[0])));
             assertTrue(blackhole.getMessage().contains("Blackhole"));
             assertSame(blackhole, entered(context, () -> assertThrows(RuntimeFault.class, () -> driver.force(recursive[0]))));
-            var started = new CountDownLatch(1); var release = new CountDownLatch(1); var evaluations = new AtomicInteger(); var payload = new Object();
+            var started = new CountDownLatch(1); var release = new CountDownLatch(1); var evaluations = new AtomicInteger(); var payload = new Object(); var original = new GuestException[1];
             var failed = entered(context, () -> new Thunk(new RootNode(null) {
-                @Override public Object execute(VirtualFrame frame) { evaluations.incrementAndGet(); started.countDown(); await(release); throw new GuestException(payload, this); }
+                @Override public Object execute(VirtualFrame frame) { evaluations.incrementAndGet(); started.countDown(); await(release); original[0] = new GuestException(payload, this); throw original[0]; }
             }.getCallTarget(), null));
             try (var pool = Executors.newFixedThreadPool(2)) {
                 var first = pool.submit(() -> entered(context, () -> assertThrows(GuestException.class, () -> driver.force(failed))));
@@ -90,8 +90,17 @@ class ThreadedThunkTest {
                 var second = pool.submit(() -> entered(context, () -> assertThrows(GuestException.class, () -> driver.force(failed))));
                 release.countDown(); var a = first.get(5, TimeUnit.SECONDS); var b = second.get(5, TimeUnit.SECONDS);
                 assertNotSame(a, b); assertSame(payload, a.getPayload()); assertSame(payload, b.getPayload());
+                assertSame(original[0], a); assertSame(a.getLocation(), b.getLocation()); assertFalse(a.getSomeException()); assertFalse(b.getSomeException());
             }
             assertEquals(1, evaluations.get()); assertEquals(3, failed.getState()); assertNull(failed.getTarget());
+            var locationless = new GuestException(payload, null, true);
+            var noLocation = entered(context, () -> new Thunk(new RootNode(null) {
+                @Override public Object execute(VirtualFrame frame) { throw locationless; }
+            }.getCallTarget(), null));
+            assertSame(locationless, entered(context, () -> assertThrows(GuestException.class, () -> driver.force(noLocation))));
+            var memoized = entered(context, () -> assertThrows(GuestException.class, () -> driver.force(noLocation)));
+            assertNotSame(locationless, memoized); assertSame(payload, memoized.getPayload());
+            assertSame(driver.force, memoized.getLocation()); assertTrue(memoized.getSomeException());
         }
     }
     @Test void spuriousWakeupsDoNotStealOwnershipOrPublishAnAnswer() throws Exception {

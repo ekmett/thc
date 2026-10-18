@@ -369,6 +369,82 @@ class AstContinuationTest {
         } finally { context.leave(); } }
     }
     @ParameterizedTest @ValueSource(booleans = {false, true})
+    void applicationFunctionCutDefersArgumentsUntilAValidResume(boolean compiled) throws Exception {
+        var builder = Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false")
+            .option("engine.MultiTier", "false")
+            .option("engine.Splitting", "false")
+            .option("engine.CompilationFailureAction", "Throw");
+        if (!compiled) builder.option("engine.Compilation", "false");
+        try (var context = builder.build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var number = CoreRepresentations.parse(longRep);
+                var closureProof = CoreRepresentations.parse(map("kind", "closure",
+                    "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true));
+                // Function prefix, installed prefix, first operand, second operand, callee.
+                int[] effects = new int[5];
+                Expr function = new Expr() {
+                    { setRepresentation(closureProof); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects[0]++;
+                        if (CompilerDirectives.inCompiledCode()) effects[1]++;
+                        throw new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this));
+                    }
+                };
+                Expr first = new Expr() {
+                    { setRepresentation(number); }
+                    @Override public Object execute(VirtualFrame frame) { effects[2]++; return 12L; }
+                };
+                Expr second = new Expr() {
+                    { setRepresentation(number); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(1, effects[2]); effects[3]++; return 3L;
+                    }
+                };
+                var callee = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false, false}, false); }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects[4]++;
+                        return (Long) frame.getArguments()[1] * 100L + (Long) frame.getArguments()[2];
+                    }
+                };
+                var closure = new Closure(null, 2, callee.getCallTarget());
+                var body = new Application(function, new Expr[]{first, second}, false, new Metrics(false));
+                body.setRepresentation(number);
+                var owner = new FunctionRoot(language, new FrameLayout().build(),
+                    "application function-cut control", null, new int[0], new int[0], new int[0],
+                    body, new Metrics(false), new CoreRepresentation[0], number, null,
+                    new boolean[0], null, null, new int[0], null, false, new int[0][],
+                    false, FunctionRootRole.FUNCTION, true);
+                var target = (com.oracle.truffle.runtime.OptimizedCallTarget) owner.getCallTarget();
+                if (compiled) {
+                    assertFalse(target.wasExecuted()); target.prepareForAOT();
+                    assertTrue(target.compile(true)); assertTrue(target.isValidLastTier());
+                    assertFalse(target.wasExecuted());
+                }
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{0L}));
+                assertArrayEquals(new int[]{1, compiled ? 1 : 0, 0, 0, 0}, effects);
+                assertEquals(1203L, saved.continueWith(closure));
+                assertArrayEquals(new int[]{1, compiled ? 1 : 0, 1, 1, 1}, effects);
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(closure));
+
+                var invalid = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{0L}));
+                assertEquals(2, effects[0]);
+                assertArrayEquals(new int[]{1, 1, 1}, new int[]{effects[2], effects[3], effects[4]});
+                assertThrows(RuntimeFault.class, () -> invalid.continueWith(new Object()));
+                assertArrayEquals(new int[]{1, 1, 1}, new int[]{effects[2], effects[3], effects[4]});
+                assertEquals(2, effects[0], "A rejected resume cannot replay function evaluation");
+                assertThrows(RuntimeFault.class, () -> invalid.continueWith(closure));
+                assertEquals(0, AstStacks.astStackScope(owner).getDepth());
+                assertFalse(AstStacks.astStackScope(owner).getDriving());
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(owner));
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
     void firstInstalledMVarEntryPreservesTupleAcrossColdCapture(boolean nested) throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             context.initialize("thc"); context.enter(); Program program; RootCallTarget target; Language.State state; TupleShape shape;

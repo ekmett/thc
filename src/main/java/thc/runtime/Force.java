@@ -47,16 +47,11 @@ public final class Force extends Node {
             invocationMetrics = root.invocationMetrics(frame);
         }
         if (!seenThunk) {
-            // An untouched compiled demand has no target/profile history. Keep its
-            // real thunk execution cold without training or retiring the caller.
-            if (CompilerDirectives.inCompiledCode()) return executeCold(original, invocationMetrics);
             CompilerDirectives.transferToInterpreterAndInvalidate();
             seenThunk = true;
         }
         return executeThunk(original, invocationMetrics);
     }
-    @TruffleBoundary(transferToInterpreterOnException = false)
-    private Object executeCold(Thunk original, Metrics invocationMetrics) { return executeThunk(original, invocationMetrics); }
 
     private Object executeThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
@@ -78,7 +73,7 @@ public final class Force extends Node {
             }
             // The continuation owns its callee frame; never materialize this caller.
             if (suspendedChild(observed) != null) return resumeChain(original, false, false, invocationMetrics);
-            Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics);
+            Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics, true);
             if (result != RETRY) return result;
         }
     }
@@ -195,7 +190,8 @@ public final class Force extends Node {
         return request != null && request.getTarget() == Thread.currentThread() &&
             request.getTargetId() == GuestThreads.current(this).currentId() && request.getState() == AsyncRequestState.CLAIMED;
     }
-    private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics) {
+    private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics,
+                              boolean retryOuterAfterWait) {
         boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;
         while (true) {
             if (!capturing) switch (original.getState()) {
@@ -236,12 +232,17 @@ public final class Force extends Node {
                 }
                 switch (claim) {
                     case 0 -> { return evaluateOwned(original, continuation, resumeValue, metrics); }
-                    case 1 -> awaitOwner(original);
+                    case 1 -> {
+                        awaitOwner(original);
+                        // Ordinary demand refreshes in its outer loop; a resumed
+                        // chain must retain its exact observation and injected input.
+                        if (retryOuterAfterWait) return RETRY;
+                    }
                     case 2 -> {
                         if (metrics.getEnabled()) metrics.incrementBlackholes();
                         throw fault("Blackhole: cyclic thunk entered while evaluating");
                     }
-                    case 3 -> { return RETRY; }
+                    default -> { return RETRY; }
                 }
             } catch (Throwable failure) {
                 // A safepoint can transfer control after the ownership store.
@@ -260,12 +261,19 @@ public final class Force extends Node {
         var seen = new IdentityHashMap<Object, Boolean>();
         Object leaf = original;
         while (true) {
+            // Authorize the entire descent before its first ownership mutation.
+            // Every retained child follows this same logical wait; rescanning each
+            // suffix would be quadratic. Claims below still recheck the exact
+            // continuation and its current wait under the boundary's monitor.
+            SavedGuestContinuation descent = continuationOf(leaf);
+            BytecodeContinuations.preflightWait(descent);
+            PendingWait descentWait = PendingWait.of(descent);
+            descent = null;
             SavedGuestContinuation leafContinuation;
             Object injected = Unit.INSTANCE;
             while (true) {
                 if (seen.put(leaf, true) != null) throw fault("Suspended thunk dependency cycle");
                 leafContinuation = continuationOf(leaf);
-                BytecodeContinuations.preflightWait(leafContinuation);
                 if (delimitedInvocation && leafContinuation != null && leafContinuation.getYielded() instanceof DelimitedCut)
                     throw new UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain");
                 Object child = suspendedChild(leafContinuation);
@@ -276,9 +284,18 @@ public final class Force extends Node {
                     break;
                 }
                 if (child instanceof Thunk thunk) {
-                    BytecodeContinuations.preflightWait(continuationOf(thunk));
-                    PendingWait pending = PendingWait.of(thunk.getValue());
-                    if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) awaitOwner(thunk);
+                    if (descentWait != null && !descentWait.abandoned() && descentWait.owner != GuestThreads.executingCurrent(this)) {
+                        // A shared child can change after the descent snapshot.
+                        // Authorize its current dependency before registering a wait.
+                        BytecodeContinuations.preflightWait(continuationOf(thunk));
+                        descentWait = null;
+                        awaitOwner(thunk);
+                        // A successful wait can publish a new child state or wait.
+                        // Refresh this descent; no snapshot crosses the host wait.
+                        SavedGuestContinuation refreshed = continuationOf(leaf);
+                        BytecodeContinuations.preflightWait(refreshed);
+                        descentWait = PendingWait.of(refreshed);
+                    }
                 }
                 parked.addLast(new Parked(leaf, leafContinuation));
                 if (drainSpills) {
@@ -287,6 +304,7 @@ public final class Force extends Node {
                 }
                 leaf = child;
             }
+            descentWait = null;
             Object current = leaf;
             SavedGuestContinuation expected = leafContinuation;
             // Traversal has transferred ownership to the active boundary. These
@@ -301,7 +319,7 @@ public final class Force extends Node {
                 Object outcome;
                 try {
                     Object answer = switch (current) {
-                        case Thunk thunk -> executeOne(thunk, expected, input, invocationMetrics);
+                        case Thunk thunk -> executeOne(thunk, expected, input, invocationMetrics, false);
                         case CallSegment segment -> executeCallSegment(segment, expected, input, invocationMetrics);
                         default -> throw fault("Invalid suspended continuation boundary");
                     };
@@ -659,49 +677,62 @@ public final class Force extends Node {
             }
             Object result = returned instanceof TailYield tail ? tail.getContinuation() :
                 returned instanceof AstTailYield tail ? tail.getContinuation() : returned;
-            if (result instanceof SavedGuestContinuation || result instanceof ContinuationResult) {
+            SavedGuestContinuation saved;
+            if (result instanceof SavedGuestContinuation direct) {
+                suspensionProfile.enter();
+                saved = direct;
+            } else if (result instanceof ContinuationResult raw) {
                 // Resolve the cold bytecode view only after the suspension profile.
                 suspensionProfile.enter();
-                SavedGuestContinuation saved = savedGuestContinuation(result);
-                if (saved == null) CompilerDirectives.transferToInterpreter();
-                java.util.Objects.requireNonNull(saved);
-                if (saved.getYielded() instanceof DelimitedCut) throw fault("control0# cannot capture across a thunk update");
-                Object expectedRoot = continuation != null ? continuation.getSourceRoot() :
-                    thunk.getTarget() == null ? null : thunk.getTarget().getRootNode();
-                if (!(returned instanceof TailYield) && !(returned instanceof AstTailYield) && !sameContinuationBody(saved.getSourceRoot(), expectedRoot))
-                    throw new IllegalStateException("Nested guest yield has no captured caller segment");
-                AsyncRequest request = asyncRequest(saved);
-                publishContinuation(thunk, saved);
-                throw new ThunkSuspended(thunk, request, stackSpill(saved));
+                saved = BytecodeContinuations.view(raw);
+            } else {
+                if (result instanceof Thunk) throw fault("Thunk target violated WHNF convention");
+                synchronized (thunk.getMonitor()) {
+                    thunk.setValue(result); thunk.setTarget(null); thunk.setEnvironment(null);
+                    thunk.setOwner(null); thunk.setState(2); thunk.notifyUpdate();
+                }
+                return result;
             }
-            if (result instanceof Thunk) throw fault("Thunk target violated WHNF convention");
-            synchronized (thunk.getMonitor()) {
-                thunk.setValue(result); thunk.setTarget(null); thunk.setEnvironment(null);
-                thunk.setOwner(null); thunk.setState(2); thunk.notifyUpdate();
-            }
-            return result;
-        } catch (DelimitedCut cut) {
-            RuntimeFault failure = new RuntimeFault("control0# cannot capture across a thunk update");
-            publishFailure(thunk, failure); throw failure;
-        } catch (ThunkSuspended failure) {
-            if (failure.getThunk() != thunk) suspendOwned(thunk);
-            throw failure;
-        } catch (AsyncThunkUnwind failure) {
-            suspendOwned(thunk); throw failure;
-        } catch (GuestException failure) {
-            publishFailure(thunk, new MemoizedGuestFailure(failure.getPayload(),
-                failure.getLocation() == null ? this : failure.getLocation(), failure.getSomeException()));
-            throw failure;
-        } catch (RuntimeFault failure) {
-            publishFailure(thunk, failure); throw failure;
+            if (saved.getYielded() instanceof DelimitedCut) throw fault("control0# cannot capture across a thunk update");
+            Object expectedRoot = continuation != null ? continuation.getSourceRoot() :
+                thunk.getTarget() == null ? null : thunk.getTarget().getRootNode();
+            if (!(returned instanceof TailYield) && !(returned instanceof AstTailYield) && !sameContinuationBody(saved.getSourceRoot(), expectedRoot))
+                throw new IllegalStateException("Nested guest yield has no captured caller segment");
+            AsyncRequest request = asyncRequest(saved);
+            publishContinuation(thunk, saved);
+            throw new ThunkSuspended(thunk, request, stackSpill(saved));
         } catch (Throwable failure) {
-            // Any host unwind can follow effects; never reset to unevaluated and replay.
-            suspendOwned(thunk); throw failure;
+            throw rethrow(settleOwnedFailure(thunk, failure));
         }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Throwable settleOwnedFailure(Thunk thunk, Throwable failure) {
+        if (failure instanceof DelimitedCut) return rejectDelimitedCapture(thunk);
+        if (failure instanceof ThunkSuspended suspended) {
+            if (suspended.getThunk() != thunk) suspendOwned(thunk);
+        } else if (failure instanceof AsyncThunkUnwind) {
+            suspendOwned(thunk);
+        } else if (failure instanceof GuestException guest) {
+            publishFailure(thunk, new MemoizedGuestFailure(guest.getPayload(),
+                guest.getLocation() == null ? this : guest.getLocation(), guest.getSomeException()));
+        } else if (failure instanceof RuntimeFault) {
+            publishFailure(thunk, failure);
+        } else {
+            // Any host unwind can follow effects; never reset to unevaluated and replay.
+            suspendOwned(thunk);
+        }
+        return failure;
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private RuntimeFault rejectDelimitedCapture(Thunk thunk) {
+        RuntimeFault failure = new RuntimeFault("control0# cannot capture across a thunk update");
+        publishFailure(thunk, failure);
+        return failure;
     }
     private boolean sameContinuationBody(Object actual, Object expected) {
         return actual == expected || actual instanceof GuestRoot left && expected instanceof GuestRoot right && left.isSelf(right.getCallTarget());
     }
+    @TruffleBoundary(transferToInterpreterOnException = false)
     private void publishContinuation(Thunk thunk, SavedGuestContinuation continuation) {
         // Thread-local side effects cannot unwind between capture and ownership release.
         TruffleSafepoint safepoint = TruffleSafepoint.getCurrent();

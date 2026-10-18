@@ -3,7 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
-import jam.vm.Lifted;
+import thc.vm.Lifted;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
@@ -55,6 +55,11 @@ public final class Thunk implements Lifted {
     void awaitUpdate() throws InterruptedException { hasWaited = true; wait(); }
     /** Caller holds this thunk's monitor. Once contended, retain every later wakeup. */
     void notifyUpdate() {
+        if (hasWaited || demandWaiters != null) notifyWaiters();
+    }
+    /** Wakeup bookkeeping stays under the publishing caller's monitor. */
+    @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary(transferToInterpreterOnException = false)
+    private void notifyWaiters() {
         if (hasWaited) notifyAll();
         if (demandWaiters != null) for (int i = 0; i < demandWaiters.size(); ++i) demandWaiters.get(i).changedLocked();
     }

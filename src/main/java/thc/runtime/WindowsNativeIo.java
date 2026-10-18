@@ -53,7 +53,7 @@ public final class WindowsNativeIo implements AutoCloseable {
         if (displacement != 0) throw fault("Windows IO selection permits only its one-byte CBool read");
         return 0;
     }
-    private void current() {
+    @TruffleBoundary private void current() {
         if (Language.currentState(null) != context || context.getWindowsNativeIo() != this || closed) throw fault("Windows native IO belongs to another or closed context");
         if (!context.getEnv().isNativeAccessAllowed()) throw new SecurityException("Windows native IO requires native access");
     }
@@ -386,8 +386,8 @@ public final class WindowsNativeIo implements AutoCloseable {
                 }
                 if (!HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)).equals(receipt.get("dllSha256")))
                     throw fault("Windows IO boundary DLL hash differs from its ABI receipt");
-                var file = Files.createTempFile("thc-windows-io-", ".dll");
-                file.toFile().deleteOnExit(); Files.write(file, bytes);
+                var file = NativeLibraryFiles.createTempFile("thc-windows-io-", ".dll");
+                Files.write(file, bytes);
                 var lookup = SymbolLookup.libraryLookup(file, Arena.global());
                 var linker = Linker.nativeLinker();
                 var abi = call(linker, lookup, "abi", FunctionDescriptor.of(JAVA_LONG));

@@ -104,7 +104,7 @@ class CoreUnitLoadTest {
                     });
                     assertEquals(kind.equals("function-addr") ? 1L : 43L, entry.execute(0).asLong());
                 }
-                assertTrue(opens[0] >= 0, "Native label code must reach the checkpoint before linking");
+                assertTrue(opens[0] >= 0, "Native label code must reach the prepared checkpoint boundary");
                 assertEquals(opens[0], CoreFileMappings.shared.statistics().mappingOpens());
             }
         }

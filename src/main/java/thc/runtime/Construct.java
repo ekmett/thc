@@ -31,6 +31,10 @@ final class Construct extends Expr {
         for (int i = 0; i < vectorSlots.length; i++)
             if (vectorSlots[i] != null) fields[i].prepareTuple(vectorSlots[i], 0);
     }
+    @ExplodeLoop @Override public boolean needsCallState() {
+        for (Expr field : fields) if (field.needsCallState()) return true;
+        return programSlot == FrameLayout.BLOOM_FILTER;
+    }
     @ExplodeLoop @Override public DataValue execute(VirtualFrame frame) {
         if (reusable != null) return executeReusable(frame);
         if (layout.getHasBoxedValueCache()) return layout.createLong(fields[0].executeRequiredLong(frame));

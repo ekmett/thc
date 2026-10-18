@@ -10,6 +10,11 @@ final class GlobalRead extends Expr {
     private final int programSlot;
     GlobalRead(GlobalBinding binding) { this.binding = binding; bindingIndex = -1; programSlot = -1; }
     GlobalRead(int bindingIndex, int programSlot) { binding = null; this.bindingIndex = bindingIndex; this.programSlot = programSlot; }
+    /** Observe fixed publication only; indexed reusable cells remain invocation-owned. */
+    Closure publishedClosure() {
+        Object value = binding == null ? null : binding.peek();
+        return value instanceof Closure closure ? closure : null;
+    }
     @Override public Object execute(VirtualFrame frame) {
         try { return read(frame); }
         catch (CallSegmentSuspended suspended) {
