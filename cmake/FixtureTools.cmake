@@ -7,6 +7,15 @@ if(THC_CI_SELECTION)
   # CI may acquire missing dependencies from the frozen cabal.project index.
   list(REMOVE_ITEM cabal_options --offline)
 endif()
+# Restored workspace outputs do not contain the external Cabal store. Resolve
+# its closure explicitly on a consumer; ordinary fixture compilation stays offline.
+set(cabal_dependency_options ${cabal_options})
+list(REMOVE_ITEM cabal_dependency_options --offline)
+add_custom_target(fixture-tool-dependencies
+  COMMAND ${fixture_env} "${CABAL}" build ${cabal_dependency_options}
+    --only-dependencies ${cabal_targets} "-j${THC_BUILD_JOBS}"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Acquire the declared fixture tool dependency closure")
 execute_process(COMMAND ${fixture_env} "${CABAL}" build ${cabal_options}
   ${cabal_targets} --dry-run
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)

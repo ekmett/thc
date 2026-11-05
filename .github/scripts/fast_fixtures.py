@@ -106,7 +106,7 @@ def quarantined_classes(root):
         and blocked.intersection(_group_order(manifest, [owner]))}
 
 
-def prepare_cmake(root, selection, run):
+def prepare_cmake(root, selection, run, *, acquire_dependencies=False):
     """Select graph targets; Ninja, not directory receipts, owns freshness."""
     root = Path(root).resolve()
     manifest, owners = _manifest(root)
@@ -124,7 +124,7 @@ def prepare_cmake(root, selection, run):
                          + "; see docs/fixture-inputs.log. No legacy preparation was run.")
     targets = [manifest["groups"][name]["cmakeTarget"] for name in groups
                if manifest["groups"][name].get("cmakeTarget")]
-    build_cmake_targets(targets, run)
+    build_cmake_targets(targets, run, acquire_dependencies=acquire_dependencies)
     result = {"mode": "cmake", "targets": targets}
     gradle_targets = [manifest["groups"][name]["gradleTask"] for name in groups
                      if manifest["groups"][name].get("gradleTask")]
@@ -139,7 +139,7 @@ def prepare_cmake(root, selection, run):
     return result
 
 
-def build_cmake_targets(targets, run):
+def build_cmake_targets(targets, run, *, acquire_dependencies=False):
     if not targets:
         return
     configure = ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"]
@@ -147,6 +147,9 @@ def build_cmake_targets(targets, run):
         if os.environ.get(tool):
             configure.append("-D" + tool + "=" + os.environ[tool])
     run("fixture-configure", configure)
+    if acquire_dependencies:
+        run("fixture-tool-dependencies", ["cmake", "--build", "build/fixtures", "--parallel", "4",
+                                          "--target", "fixture-tool-dependencies"])
     run("fixture-build", ["cmake", "--build", "build/fixtures", "--parallel", "4", "--target", *targets])
 
 

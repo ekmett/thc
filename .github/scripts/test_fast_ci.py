@@ -926,6 +926,22 @@ class FastRunnerTest(unittest.TestCase):
                     for mode in ('default', 'dense'):
                         self.assertTrue((recorder.directory / mode / 'xml/TEST-thc.runtime.HandoffTest.xml').exists())
 
+    def test_scheduled_dependency_failure_stops_before_junit(self):
+        import fast_select
+        selection = self.batch_selection()
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(fast_select, "group_selection", return_value=selection), \
+             patch.object(ci.fixtures, "_manifest", return_value=({"groups": {}},
+                 {name: None for name in selection["junit"]["classes"]})), \
+             patch.object(ci.fixtures, "prepare_cmake", side_effect=RuntimeError("dependency failed")) as prepare, \
+             patch.object(recorder, "command") as command:
+            with self.assertRaisesRegex(RuntimeError, "dependency failed"):
+                ci.run_group(recorder, "selected", cadence="intensive")
+            prepare.assert_called_once_with(self.root, selection, command, acquire_dependencies=True)
+            command.assert_not_called()
+        self.assertFalse(recorder.data.get("passed", False))
+
     def test_batch_runs_once_and_preserves_both_actual_mode_outputs(self):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
