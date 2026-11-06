@@ -178,6 +178,8 @@ jobs:
             build/ci/setup-results/
             build/reports/tests/
             build/test-results/
+            build/driver-haskell-tests/commands/
+            build/driver-haskell-tests/commands.log
             build/libraries/cases.json
             build/libraries/oracle.tsv
             build/libraries/oracle-validation.json

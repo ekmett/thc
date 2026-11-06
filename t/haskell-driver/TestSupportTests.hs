@@ -13,26 +13,31 @@
 -- Tests for test support.
 module TestSupportTests (tests, helperMode) where
 
-import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, takeMVar, threadDelay, throwTo)
+import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, takeMVar, tryReadMVar, threadDelay, throwTo)
 import Control.Exception (AsyncException(ThreadKilled, UserInterrupt), SomeException, bracket, displayException, finally, fromException, try)
-import Control.Monad (forM_, void, when)
-import Data.Aeson (Value, encode, object, (.=))
+import Control.Monad (filterM, forM_, void, when)
+import Data.Aeson (Value(..), eitherDecodeStrict', encode, object, toJSON, (.=))
+import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (isInfixOf)
+import Data.String (fromString)
 import System.Directory (createDirectory, createDirectoryIfMissing, createDirectoryLink,
-  doesDirectoryExist, doesFileExist, getTemporaryDirectory, pathIsSymbolicLink, removeFile, removePathForcibly)
+  doesDirectoryExist, doesFileExist, getTemporaryDirectory, listDirectory, pathIsSymbolicLink, removeFile, removePathForcibly)
 import System.Environment (getEnvironment, getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>), takeDirectory)
-import System.IO (IOMode(WriteMode), hClose, hPutStrLn, openTempFile, stderr, stdout, withFile)
+import System.IO (IOMode(WriteMode), hClose, hFlush, hPutStr, hPutStrLn, openTempFile, stderr, stdout, withFile)
+import qualified System.IO as IO
 import System.Info (os)
 import qualified System.Process as Process
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
 import THC.Driver.Process (runProducer)
-import TestSupport (Env(..), Result(..), assertContains, runExe, withFixtureNamed)
+import TestSupport (Env(..), Result(..), assertContains, captureStream, runExe, runPreparation, withFixtureNamed)
 
 tests :: Test
 tests = TestLabel "driver test support" $ TestList
@@ -108,6 +113,100 @@ tests = TestLabel "driver test support" $ TestList
         after <- BS.readFile writes
         assertEqual "timeout cleanup stops descendant file writes before returning" before after)
         `finally` writeFile stop ""
+  , TestLabel "capture retains split CRLF before decoding" $ TestCase $ withHarness $ \environment -> do
+      self <- getExecutablePath
+      bracket Process.createPipe (\(input, output) -> hClose input `finally` hClose output) $ \(input, output) -> do
+        IO.hSetNewlineMode output IO.noNewlineTranslation
+        let path = scratch environment </> "newline-output"
+            expected = if os == "mingw32" then "a\nb\rc\r" else "a\r\nb\rc\r"
+        finished <- newEmptyMVar
+        reader <- forkFinally (captureStream input path) (putMVar finished)
+        (do
+          hPutStr output "a\r"
+          hFlush output
+          let await = do
+                (status, text, _) <- Process.readProcessWithExitCode self ["--test-support-read", path] ""
+                if status == ExitSuccess && text == "a\r" then pure () else threadDelay 10000 >> await
+          assertEqual "partial CR is persisted before LF arrives" (Just ()) =<< timeout 3000000 await
+          incomplete <- tryReadMVar finished
+          case incomplete of
+            Nothing -> pure ()
+            Just other -> assertFailure ("capture completed before EOF: " ++ show other)
+          hPutStr output "\nb\rc\r"
+          hClose output
+          result <- timeout 3000000 (takeMVar finished)
+          case result of
+            Just (Right text) -> assertEqual "native newline conversion and trailing CR" expected text
+            other -> assertFailure ("capture did not finish: " ++ show other)
+          assertEqual "sidecar retains original bytes" "a\r\nb\rc\r" =<< BS.readFile path)
+          `finally` killThread reader
+  , TestLabel "in-flight capture retains identity and partial output" $ TestCase $ withHarness $ \environment -> do
+      self <- getExecutablePath
+      let directory = root environment
+          commands = scratch environment </> "commands"
+          invocation = environment { driver = self }
+      forM_ [("preparation", ThreadKilled), ("execution", UserInterrupt)] $ \(phase, exception) -> do
+        let scope = directory </> phase
+            writes = scope </> "descendant-writes"
+            arguments = ["--test-support-writer", "live", scope]
+            action = if phase == "preparation"
+              then runPreparation invocation scope arguments
+              else runExe invocation scope (Just "bytecode") 5 self arguments
+        createDirectory scope
+        prior <- doesDirectoryExist commands >>= \exists -> if exists then listDirectory commands else pure []
+        finished <- newEmptyMVar
+        worker <- forkFinally action (putMVar finished)
+        (do
+          let await = do
+                present <- doesDirectoryExist commands
+                names <- if present then listDirectory commands else pure []
+                case filter (`notElem` prior) names of
+                  [name] -> do
+                    let evidence = commands </> name
+                    active <- doesFileExist writes
+                    (status, output, _) <- Process.readProcessWithExitCode self
+                      ["--test-support-observe", evidence] ""
+                    case eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)) :: Either String [String] of
+                      Right streams@[a, b] | active && status == ExitSuccess &&
+                        not (null a) && not (null b) -> pure (evidence, streams)
+                      _ -> threadDelay 10000 >> await
+                  _ -> threadDelay 10000 >> await
+          ready <- timeout 3000000 await
+          (evidence, streams) <- maybe (assertFailure "partial output was not retained while the child was running" >> fail "unreachable") pure ready
+          assertEqual "partial streams before completion" ["partial café ☃", "diagnostic λ"] streams
+          assertBool "no completion marker before cancellation" . not =<< doesFileExist (evidence </> "exit.txt")
+          metadata <- eitherDecodeStrict' <$> BS.readFile (evidence </> "command.json")
+          case metadata of
+            Right (Object fields) -> forM_
+              [ ("executable", String (fromString self)), ("arguments", toJSON arguments)
+              , ("cwd", String (fromString scope)), ("phase", String (fromString phase))
+              , ("backend", if phase == "preparation" then Null else String "bytecode")
+              , ("timeoutSeconds", if phase == "preparation" then Null else Number 5)
+              ] $ \(key, expected) -> assertEqual ("command " ++ show key) (Just expected) (KeyMap.lookup key fields)
+            other -> assertFailure ("invalid command identity: " ++ show other)
+          throwTo worker exception
+          outcome <- timeout 3000000 (takeMVar finished)
+          case outcome of
+            Just (Left problem) -> assertEqual "capture preserves cancellation" (Just exception) (fromException problem)
+            other -> assertFailure ("capture cancellation did not finish: " ++ show other)
+          before <- BS.readFile writes
+          threadDelay 250000
+          assertEqual "capture cancellation stops descendant writes" before =<< BS.readFile writes
+          assertBool "cancelled capture has no completed exit" . not =<< doesFileExist (evidence </> "exit.txt"))
+          `finally` (writeFile (scope </> "stop-descendant") "" >> killThread worker)
+      completed <- runExe invocation directory Nothing 5 self ["--test-support-text"]
+      assertEqual "unicode and partial final stdout are unchanged" "café ☃\nlast" (out completed)
+      assertEqual "unicode stderr is unchanged" "λ\nlast" (err completed)
+      assertEqual "text command status" ExitSuccess (code completed)
+      names <- listDirectory commands
+      assertEqual "each invocation keeps its own evidence" 3 (length names)
+      exits <- filterM (doesFileExist . (</> "exit.txt") . (commands </>)) names
+      assertEqual "only successful capture has a completion marker" 1 (length exits)
+      forM_ exits $ \name -> do
+        let evidence = commands </> name
+        assertEqual "completed stdout matches oracle" (out completed) =<< readFile (evidence </> "stdout.txt")
+        assertEqual "completed stderr matches oracle" (err completed) =<< readFile (evidence </> "stderr.txt")
+        assertEqual "completed exit status retained" "ExitSuccess\n" =<< readFile (evidence </> "exit.txt")
   , TestLabel "production process ownership" $ TestCase $ withHarness $ \environment -> do
       self <- getExecutablePath
       let directory = root environment
@@ -187,6 +286,24 @@ tests = TestLabel "driver test support" $ TestList
 -- Reuse this test executable so the lifetime control needs no shell or toolchain.
 helperMode :: [String] -> Maybe (IO ())
 helperMode arguments = case arguments of
+  ["--test-support-read", path] -> Just $ readFile path >>= putStr
+  ["--test-support-observe", evidence] -> Just $ do
+    -- GHC prevents reading a file held open for writing in the same process.
+    -- A separate observer models cancellation artifact collection.
+    output <- readFile (evidence </> "stdout.txt")
+    diagnostic <- readFile (evidence </> "stderr.txt")
+    BL.putStr (encode [output, diagnostic])
+  ["--test-support-text"] -> Just $ do
+    putStr "café ☃\nlast"
+    hPutStr stderr "λ\nlast"
+  ["--test-support-writer", "live", directory] -> Just $ do
+    putStr "partial café ☃"
+    hPutStr stderr "diagnostic λ"
+    hFlush stdout
+    hFlush stderr
+    case helperMode ["--test-support-writer", "hold", directory] of
+      Just action -> action
+      Nothing -> fail "missing bounded writer"
   ["--test-support-tree", mode, directory] -> Just $ do
     self <- getExecutablePath
     (_, _, _, child) <- Process.createProcess

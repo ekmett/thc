@@ -11,7 +11,7 @@
 --
 -- Temporary-project, subprocess and bundle-inspection helpers for driver tests.
 module TestSupport
-  ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, runPreparation, checked, json, readJson, readCore
+  ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, captureStream, run, runExe, runPreparation, checked, json, readJson, readCore
   , readSourceManifest, readPublishedCore, readCoreBytes, readPublishedCoreBytes
   , field, array, string, strings, bool, number, objects, named
   , assertContains, assertSuccess, assertFailure, assertNoStdout
@@ -22,7 +22,8 @@ import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
 import Control.Exception (bracket, evaluate, finally, mask, onException)
 import Control.Monad (forM, forM_, void)
-import Data.Aeson (Value(..), eitherDecodeStrict', toJSON)
+import Data.Aeson (Value(..), eitherDecodeStrict', encode, toJSON, (.=))
+import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
@@ -163,14 +164,16 @@ runPreparation :: Env -> FilePath -> [String] -> IO Result
 runPreparation env cwd arguments = do
   process <- testProcess env cwd Nothing (driver env) arguments
   started <- getMonotonicTimeNSec
-  result <- captureProcess process
+  evidence <- commandEvidence env cwd Nothing Nothing (driver env) arguments started
+  result <- captureProcess evidence process
   recordResult started env cwd (driver env) arguments result
 
 runExe :: Env -> FilePath -> Maybe String -> Int -> FilePath -> [String] -> IO Result
 runExe env cwd backend seconds executable arguments = do
   process <- testProcess env cwd backend executable arguments
   started <- getMonotonicTimeNSec
-  completed <- timeout (seconds * 1000000) (captureProcess process)
+  evidence <- commandEvidence env cwd backend (Just seconds) executable arguments started
+  completed <- timeout (seconds * 1000000) (captureProcess evidence process)
   case completed of
     Nothing -> do
       appendFile (scratch env </> "commands.log")
@@ -179,18 +182,34 @@ runExe env cwd backend seconds executable arguments = do
       HUnit.assertFailure ("timed out: " ++ unwords arguments) >> fail "unreachable"
     Just result -> recordResult started env cwd executable arguments result
 
+-- Persist identity before launching: a job-level cancellation may prevent both
+-- capture and recordResult from returning. Each invocation retains separate
+-- streams; a missing exit.txt means capture did not complete, not test success.
+commandEvidence :: Env -> FilePath -> Maybe String -> Maybe Int -> FilePath -> [String] -> Word64 -> IO FilePath
+commandEvidence env cwd backend seconds executable arguments started = do
+  let parent = scratch env </> "commands"
+  createDirectoryIfMissing True parent
+  (path, handle) <- openTempFile parent "command-"
+  hClose handle
+  removeFile path
+  createDirectory path
+  BL.writeFile (path </> "command.json") (encode (Aeson.object
+    [ Key.fromString "executable" .= executable, Key.fromString "arguments" .= arguments, Key.fromString "cwd" .= cwd
+    , Key.fromString "phase" .= (case seconds of Nothing -> "preparation" :: String; Just _ -> "execution")
+    , Key.fromString "backend" .= backend, Key.fromString "timeoutSeconds" .= seconds, Key.fromString "startedMonotonicNSec" .= started
+    ]))
+  pure path
+
 -- process's exception cleanup signals only the direct child on POSIX and
 -- reaps asynchronously. Stop our private group/job before closing pipes or
 -- letting the fixture bracket remove files that descendants may still write.
-captureProcess :: Process.CreateProcess -> IO (ExitCode, String, String)
-captureProcess command = bracket (Process.createProcess command
+captureProcess :: FilePath -> Process.CreateProcess -> IO (ExitCode, String, String)
+captureProcess evidence command = bracket (Process.createProcess command
     { Process.std_in = Process.CreatePipe, Process.std_out = Process.CreatePipe
     , Process.std_err = Process.CreatePipe, Process.create_group = True
     , Process.use_process_jobs = True }) cleanup $ \handles -> mask $ \restore ->
   case handles of
     (Just input, Just output, Just diagnostic, child) -> do
-      stdout <- IO.hGetContents output
-      stderr <- IO.hGetContents diagnostic
       -- Use process's own reader-thread lifetime helper. Wait for both EOFs
       -- before reaping so a departed parent's PID still owns its POSIX group.
       -- withForkWait's wait actions consume their completions. Separate
@@ -198,19 +217,42 @@ captureProcess command = bracket (Process.createProcess command
       -- after the normal path has already consumed one reader's completion.
       outputEOF <- newEmptyMVar
       diagnosticEOF <- newEmptyMVar
-      withForkWait (void (evaluate (length stdout)) >> putMVar outputEOF ()) $ \waitOutput ->
-        withForkWait (void (evaluate (length stderr)) >> putMVar diagnosticEOF ()) $ \waitDiagnostic ->
+      withForkWait (captureStream output (evidence </> "stdout.txt") >>= putMVar outputEOF) $ \waitOutput ->
+        withForkWait (captureStream diagnostic (evidence </> "stderr.txt") >>= putMVar diagnosticEOF) $ \waitDiagnostic ->
           restore (do
             ignoreSigPipe (hClose input)
             waitOutput
             waitDiagnostic
             status <- waitOwnedProcess child
+            stdout <- readMVar outputEOF
+            stderr <- readMVar diagnosticEOF
+            writeFile (evidence </> "exit.txt") (show status ++ "\n")
             pure (status, stdout, stderr)) `onException`
-              cancelCapturedProcess child (readMVar outputEOF >> readMVar diagnosticEOF)
+              cancelCapturedProcess child (void (readMVar outputEOF >> readMVar diagnosticEOF))
     _ -> fail "Driver test subprocess pipes were unavailable"
   where
     cleanup (input, output, diagnostic, child) = stopProcessTree child `finally`
       (ignoreSigPipe (mapM_ hClose input) `finally` (mapM_ hClose output `finally` mapM_ hClose diagnostic))
+
+-- | Retain available bytes before decoding: a partial multibyte character or
+-- CRLF must not withhold earlier output during a stalled command. Capture owns
+-- fresh default-mode process pipes; ordinary readFile applies the same locale
+-- encoding and native newline conversion as their original String capture.
+-- Read only after closing the writer (GHC locks open output files), and force
+-- the String before announcing EOF so cleanup still owns the process group.
+captureStream :: IO.Handle -> FilePath -> IO String
+captureStream input path = do
+  IO.withBinaryFile path IO.WriteMode copy
+  contents <- readFile path
+  void (evaluate (length contents))
+  pure contents
+  where
+    copy evidence = do
+      chunk <- BS.hGetSome input 32768
+      if BS.null chunk then pure () else do
+        BS.hPut evidence chunk
+        IO.hFlush evidence
+        copy evidence
 
 testProcess :: Env -> FilePath -> Maybe String -> FilePath -> [String] -> IO Process.CreateProcess
 testProcess env cwd backend executable arguments = do

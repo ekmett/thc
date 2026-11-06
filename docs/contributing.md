@@ -69,6 +69,16 @@ then it falls back to killing its still-owned group. Crashed, non-cooperating
 or externally hard-killed POSIX owners can leave descendants in private groups.
 Windows job ownership contains nested producers directly.
 
+Driver test subprocesses retain their command, phase, backend and execution
+budget in unique directories under `build/driver-haskell-tests/commands/`.
+`stdout.txt` and `stderr.txt` retain raw bytes, flushed as output arrives,
+including partial lines and encoded characters. Returned oracle text still uses
+the platform's normal decoding and newline conversion. `exit.txt` appears only
+after capture completes; its absence means an incomplete invocation, not a
+passing check. Intensive cancellation artifacts
+include these directories and `commands.log`. Preparation remains bounded by
+the outer job, while runtime checks retain their individual deadlines.
+
 Package integration checks retain their focused selectors for explicit runs.
 The driver suite's public-package smoke compares Integer, Text, ByteString and
 memory operations with native GHC on both backends and in both handoff modes.

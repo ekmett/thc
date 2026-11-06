@@ -259,6 +259,10 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         for producer in ("aggregate-heap", "fourway-aggregate", "generic-sum-transport",
                          "narrow-integer-transport"):
             self.assertNotIn("--offline -- " + producer, workflow)
+        retained = workflow.split("name: test-results-${{ runner.os }}", 1)[1].split("\n  library:", 1)[0]
+        self.assertIn("            build/driver-haskell-tests/commands/\n", retained)
+        self.assertIn("            build/driver-haskell-tests/commands.log\n", retained)
+        self.assertNotIn("            build/driver-haskell-tests/\n", retained)
         self.assertNotIn("  foreign-exceptions:", workflow)
         self.assertNotIn("inputs.cadence", workflow)
         common = (WORKFLOW.parent / "test-common.yml").read_text()
