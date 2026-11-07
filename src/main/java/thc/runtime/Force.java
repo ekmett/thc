@@ -669,17 +669,7 @@ public final class Force extends Node {
                     if (target == null) throw fault("Unevaluated thunk has no body");
                     returned = calls.call(target, thunk.getEnvironment(), metrics);
                 } catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail, metrics); }
-            } else {
-                // A saved logical activation may move between host carrier threads.
-                MaskingState ambient = SynchronousMasking.current(this);
-                StackAnnotationState annotations = StackAnnotations.current(this);
-                try {
-                    try { returned = continuation.continueWith(resumeValue); }
-                    catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail, metrics); }
-                } finally {
-                    SynchronousMasking.set(this, ambient); StackAnnotations.set(this, annotations);
-                }
-            }
+            } else returned = resumeOwnedContinuation(continuation, resumeValue, metrics);
             Object result = returned instanceof TailYield tail ? tail.getContinuation() :
                 returned instanceof AstTailYield tail ? tail.getContinuation() : returned;
             if (result instanceof SavedGuestContinuation || result instanceof ContinuationResult) {
@@ -720,6 +710,18 @@ public final class Force extends Node {
         } catch (Throwable failure) {
             // Any host unwind can follow effects; never reset to unevaluated and replay.
             suspendOwned(thunk); throw failure;
+        }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Object resumeOwnedContinuation(SavedGuestContinuation continuation, Object resumeValue, Metrics invocationMetrics) {
+        // A saved logical activation may move between host carrier threads.
+        MaskingState ambient = SynchronousMasking.current(this);
+        StackAnnotationState annotations = StackAnnotations.current(this);
+        try {
+            try { return continuation.continueWith(resumeValue); }
+            catch (TailCall tail) { tailCallProfile.enter(); return trampoline.execute(tail, invocationMetrics); }
+        } finally {
+            SynchronousMasking.set(this, ambient); StackAnnotations.set(this, annotations);
         }
     }
     private boolean sameContinuationBody(Object actual, Object expected) {
