@@ -154,19 +154,19 @@ class HandoffReferenceTest {
             var capturedRoot = new FunctionRoot(language, capturedLayout.build(), "rejected environment", captures, new int[]{capturedSlot}, new int[0], new int[0], capturedBody, new Metrics(false), new CoreRepresentation[0], reference, null,
                 new boolean[0], capturedEntry, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, false);
             var capturedCaller = new InvokeWorker(capturedRoot.getCallTarget());
-            // The entry owns the loan when capture validation fails after snapshotting.
+            // The entry owns the loan when capture validation fails after argument restoration.
             assertThrows(RuntimeFault.class, () -> Calls.target(capturedCaller.getCallTarget(), new Object[]{0L, new Object()})); assertEquals(1, saved.size()); released(language);
             var value = new Object();
             assertSame(value, Calls.target(capturedCaller.getCallTarget(), new Object[]{0L, captures.captureValues(new Object[]{value})})); released(language);
             assertSame(original, Calls.target(caller.getCallTarget(), new Object[]{0L, original, 9L})); released(language);
         });
     }
-    @Test void referenceSnapshotsSurviveReleaseFailureDeoptimizationAndReuse() throws ReflectiveOperationException {
+    @Test void referenceFramesSurviveReleaseFailureDeoptimizationAndReuse() throws ReflectiveOperationException {
         withLanguage(language -> {
             var proof = new CoreRepresentation(CoreKind.OBJECT, true, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
             var layout = new FrameLayout(); int slot = layout.bind("value"); var entry = Objects.requireNonNull(HandoffEntry.create(language, layout, List.of(proof), proof, false));
             var saved = new ArrayList<MaterializedFrame>(); var body = new RememberReference(slot, saved); body.setRepresentation(proof);
-            var root = new FunctionRoot(language, layout.build(), "reference snapshots", null, new int[0], new int[]{slot}, new int[]{0}, body, new Metrics(false), new CoreRepresentation[]{proof}, proof, null,
+            var root = new FunctionRoot(language, layout.build(), "reference frames", null, new int[0], new int[]{slot}, new int[]{0}, body, new Metrics(false), new CoreRepresentation[]{proof}, proof, null,
                 new boolean[]{false}, entry, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, false);
             var caller = new InvokeWorker(root.getCallTarget()); var original = new Object();
             assertSame(original, Calls.target(caller.getCallTarget(), new Object[]{0L, original}));
@@ -174,8 +174,8 @@ class HandoffReferenceTest {
             assertEquals("deopt", Calls.target(caller.getCallTarget(), new Object[]{0L, "deopt"})); assertTrue(body.compiledBeforeDeopt);
             var replacement = new Object(); assertSame(replacement, Calls.target(caller.getCallTarget(), new Object[]{0L, replacement}));
             for (var frame : saved) assertEquals(0, frame.getArguments().length);
-            assertSame(original, saved.get(0).getObject(entry.getSnapshotSlots()[1]));
-            assertEquals("fail", saved.get(1).getObject(entry.getSnapshotSlots()[1])); assertEquals("deopt", saved.get(2).getObject(entry.getSnapshotSlots()[1]));
+            assertSame(original, saved.get(0).getObject(slot));
+            assertEquals("fail", saved.get(1).getObject(slot)); assertEquals("deopt", saved.get(2).getObject(slot));
             language.getHandoffState().get().setReturnLong(-913L);
             assertSame(body.boxedResult, Calls.target(caller.getCallTarget(), new Object[]{0L, "boxed"})); released(language);
         });

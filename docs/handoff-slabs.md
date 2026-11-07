@@ -29,12 +29,11 @@ reusable storage object per layout. Separate contexts share no payload roots or
 mutable layout registry.
 
 All operands, PAP prefixes and required entry forcing are evaluated or staged
-before acquiring a loan. Entry copies the original packet into durable frame
-snapshot slots, restores live argument and environment slots, then clears and
-releases the loan before executing guest code. Nested calls can therefore reuse
-the storage without changing an older activation's arguments. The snapshots
-survive materialization and deoptimization; a debugger adapter for them is not
-implemented.
+before acquiring a loan. Entry validates the packet and restores its arguments
+and environment into the live frame, then clears and releases the loan before
+executing guest code. Nested calls can therefore reuse the storage without
+changing an older activation's live values. These frame locals retain their
+values through materialization and deoptimization.
 
 A tail transfer owns its loan until the receiving root restores it. Generation
 checks prevent unwinding an older call from releasing a reused loan. Copy and

@@ -66,24 +66,4 @@ class ColdFunctionFrameTest {
         var wide = root(proof, false, FrameSlotKind.Object);
         assertEquals(FrameSlotKind.Object, wide.root.getFrameDescriptor().getSlotKind(wide.slot));
     }
-    @Test void denseSnapshotKindsComeFromTheActualPacketLayoutBeforeAnyLoan() {
-        try (var context = Main.executionContext(false)) {
-            context.initialize("thc"); context.enter();
-            try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var layout = new FrameLayout(); int[] slots = {layout.bind("snapshot 0"), layout.bind("snapshot 1")};
-                int destination = layout.bind("destination");
-                var packet = new HandoffLayout(language, 0, List.of("long", "reference"));
-                var entry = new HandoffEntry(language, packet, true, slots, destination);
-                var body = new Expr() { @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("No guest entry during preparation"); } };
-                var root = new FunctionRoot(language, layout.build(), "dense cold frame", null, new int[0], new int[0], new int[0],
-                    body, new Metrics(true), new CoreRepresentation[0], body.getRepresentation(), body.getCoreSourceLocation(),
-                    new boolean[0], entry, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, false);
-                assertEquals(FrameSlotKind.Long, root.getFrameDescriptor().getSlotKind(slots[0]));
-                assertEquals(FrameSlotKind.Object, root.getFrameDescriptor().getSlotKind(slots[1]));
-                assertEquals(FrameSlotKind.Long, root.getFrameDescriptor().getSlotKind(destination));
-                assertEquals(0L, entry.state().getCalls()); assertEquals(0, entry.state().getArguments().getDepth());
-            } finally { context.leave(); }
-        }
-    }
 }

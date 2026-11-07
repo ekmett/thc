@@ -239,12 +239,7 @@ public final class FunctionRoot extends GuestRoot {
             else kind = FrameSlotKind.Object;
             initialize(descriptor, argumentSlots[i], kind);
         }
-        if (handoff != null) {
-            for (int i = 0; i < handoff.getSnapshotSlots().length; i++)
-                initialize(descriptor, handoff.getSnapshotSlots()[i], handoff.getArguments().isInt(i) ?
-                    FrameSlotKind.Int : handoff.getArguments().isLong(i) ? FrameSlotKind.Long : FrameSlotKind.Object);
-            initialize(descriptor, handoff.getDestinationSlot(), FrameSlotKind.Long);
-        }
+        if (handoff != null) initialize(descriptor, handoff.getDestinationSlot(), FrameSlotKind.Long);
         argumentReferences = new Class<?>[argumentProofs.length];
         for (int i = 0; i < argumentProofs.length; i++) argumentReferences[i] = argumentProofs[i].referenceCarrier();
         strictArguments = new boolean[argumentSlots.length];
@@ -557,7 +552,6 @@ public final class FunctionRoot extends GuestRoot {
         if (!initial && entry.destination(frame) < 0) throw new IllegalStateException("Check failed.");
         try {
             if (initial) {
-                entry.snapshot(frame, input);
                 frame.setLong(entry.getDestinationSlot(), 0L);
                 frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(entry.getArguments().getLong(input, 0)));
             }

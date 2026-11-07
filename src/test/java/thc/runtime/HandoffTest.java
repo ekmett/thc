@@ -167,8 +167,8 @@ class HandoffTest {
     }
     @Test void lexicalForksKeepOuterFormalsAcrossResidualCallsAndCarrierReuse() throws Exception {
         withLanguage(false, language -> {
-            // The case binder shadows the formal only inside its alternative. Its
-            // slots and the entry snapshot share allocation, never lexical names.
+            // The case binder shadows the formal only inside its alternative.
+            // Case-local slots must not alias outer formals.
             var scoped = list("case", prim("+#", v("n"), n(10)), "n", list(list("default", null, List.of(), call("leaf", v("n"))))); var data = module(List.of(binding("leaf", prim("+#", v("n"), n(100))), binding("worker", prim("+#", scoped, v("n"))), binding("entry", prim("-#", call("worker", v("n")), call("leaf", v("n")))))); var program = new Program(language, data);
             Runnable check = () -> { for (long input : new long[]{0L, -5L, 3_000_000_017L, Long.MIN_VALUE, Long.MAX_VALUE}) { assertEquals(input + 10L, invoke(program, input)); assertReleased(language.getHandoffState().get()); } }; check.run(); for (String id : List.of("leaf", "worker", "entry")) compile(program.entryTarget(id)); check.run(); assertTrue(language.getHandoffState().get().getCalls() > 0);
         });
@@ -190,7 +190,7 @@ class HandoffTest {
             var layout = new FrameLayout(); int argument = layout.bind("n"); var entry = Objects.requireNonNull(HandoffEntry.create(language, layout, List.of(proof), proof, false)); var saved = new ArrayList<MaterializedFrame>(); var body = new RememberFrame(argument, saved);
             var root = new FunctionRoot(language, layout.build(), "retained slab frame", null, new int[0], new int[]{argument}, new int[]{0}, body, new Metrics(false), new CoreRepresentation[]{proof}, proof, null, new boolean[]{false}, entry, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, false); var caller = new InvokeWorker(root.getCallTarget());
             assertEquals(3_000_000_018L, Calls.target(caller.getCallTarget(), new Object[]{0L, 3_000_000_017L})); assertThrows(RuntimeFault.class, () -> Calls.target(caller.getCallTarget(), new Object[]{0L, 999L})); assertReleased(language.getHandoffState().get()); assertEquals(11L, Calls.target(caller.getCallTarget(), new Object[]{0L, 10L})); boolean allEmpty = true; for (var frame : saved) if (frame.getArguments().length != 0) { allEmpty = false; break; } assertTrue(allEmpty);
-            assertEquals(3_000_000_017L, saved.get(0).getLong(argument)); assertEquals(3_000_000_017L, saved.get(0).getLong(entry.getSnapshotSlots()[1])); assertEquals(999L, saved.get(1).getLong(entry.getSnapshotSlots()[1])); compile(root.getCallTarget()); assertEquals(778L, Calls.target(caller.getCallTarget(), new Object[]{0L, 777L})); assertTrue(body.compiledBeforeDeopt, "The frame must be reconstructed from installed guest code"); assertEquals(16L, Calls.target(caller.getCallTarget(), new Object[]{0L, 15L})); assertEquals(777L, saved.get(3).getLong(entry.getSnapshotSlots()[1])); assertEquals(3_000_000_017L, saved.get(0).getLong(entry.getSnapshotSlots()[1])); assertReleased(language.getHandoffState().get());
+            assertEquals(3_000_000_017L, saved.get(0).getLong(argument)); assertEquals(999L, saved.get(1).getLong(argument)); compile(root.getCallTarget()); assertEquals(778L, Calls.target(caller.getCallTarget(), new Object[]{0L, 777L})); assertTrue(body.compiledBeforeDeopt, "The frame must be reconstructed from installed guest code"); assertEquals(16L, Calls.target(caller.getCallTarget(), new Object[]{0L, 15L})); assertEquals(777L, saved.get(3).getLong(argument)); assertEquals(3_000_000_017L, saved.get(0).getLong(argument)); assertReleased(language.getHandoffState().get());
         });
     }
 }
