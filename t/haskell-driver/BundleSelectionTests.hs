@@ -16,7 +16,7 @@ module BundleSelectionTests (tests) where
 
 import qualified Crypto.Hash.SHA256 as SHA
 import Control.Monad (forM, forM_)
-import Data.Aeson (Value(..), encode, object, (.=))
+import Data.Aeson (Value(..), encode, object, eitherDecodeStrict', (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
@@ -25,17 +25,21 @@ import qualified Data.Map.Strict as Map
 import Data.Either (isLeft)
 import Data.Maybe (isNothing)
 import Numeric (showHex)
-import System.Directory (getModificationTime, removeFile, setModificationTime)
+import System.Directory (getModificationTime, removeFile, setModificationTime, createDirectoryIfMissing, doesFileExist)
+import System.Environment (lookupEnv)
+import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
 import System.IO.Error (tryIOError)
+import System.Process (readProcessWithExitCode)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Compact.Module (encodeModuleValue, readModuleMetadata)
 import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.Project (Bundle(..), BundleReceipt(..), readGlobalBundle, readBundle,
   exceptionBridgeModules, projectWindowsWiredBundle, readCapturedStoreBundles,
-  InstalledBundle(..), readCapturedInstalledBundles, installedRecords, componentCoreRecords)
+  InstalledBundle(..), readCapturedInstalledBundles, installedRecords, componentCoreRecords,
+  publishCapturedStoreUnit)
 import THC.Driver.Installed (InstalledUnit(InstalledUnit, registeredId, installedDepends, installedInterfaces))
-import THC.Driver.Zip (encodeZip)
+import THC.Driver.Zip (encodeZip, decodeZip)
 import THC.Driver.NativeDependencies (readNativeProduct)
 import TestSupport (Env, withFixtureNamed)
 
@@ -87,6 +91,62 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
       BS.writeFile manifest (encoded (supplied [row]))
       BS.appendFile path "changed"
       assertBool "supplied digest is checked against the validated archive" . isLeft =<< tryIOError (load request)
+  , TestLabel "captured publisher retains compiler interface ways for its consumer" $ TestCase $
+      scratch "captured interfaces" $ \directory -> do
+      compiler <- maybe "ghc" id <$> lookupEnv "GHC"
+      packageTool <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+      let capture = directory </> "capture"
+          objects = capture </> "test-unit/objects"
+          capturedCore = capture </> "test-unit/core"
+          source = directory </> "A.hs"
+          store = directory </> "store"
+          dist = directory </> "dist"
+          plan = directory </> "plan.json"
+          destination = directory </> "published.zip"
+          manifest = directory </> "captured.json"
+          interfaces = destination ++ ".interfaces"
+          request = object ["coreInterfaceView" .= object ["retained" .= True]]
+      forM_ [objects,capturedCore,store,dist] (createDirectoryIfMissing True)
+      writeFile source "module A (value) where\nvalue :: Int\nvalue = 7\n"
+      (status,_,diagnostic) <- readProcessWithExitCode compiler
+        ["-c","-dynamic-too","-this-unit-id","test-unit","-odir",objects,"-hidir",objects,source] ""
+      assertEqual diagnostic ExitSuccess status
+      vanilla <- BS.readFile (objects </> "A.hi")
+      dynamic <- BS.readFile (objects </> "A.dyn_hi")
+      assertBool "native GHC produces distinct vanilla and dynamic interfaces" (vanilla /= dynamic)
+      BS.writeFile (capturedCore </> "A.cbd") =<< encodeModuleValue (core "test-unit" "A")
+      writeFile (capture </> "test-unit/interfaces-ready") ""
+      -- This is a closed bundle-reader plan control. The interfaces above are
+      -- genuine GHC products; no native/compiler Core provenance is claimed.
+      BS.writeFile plan (encoded (object ["compiler-id" .= ("ghc-9.14.1"::String),
+        "compiler-abi" .= ("reader-control"::String),"arch" .= ("x86_64"::String),
+        "os" .= ("linux"::String),"install-plan" .= [object ["id" .= ("test-unit"::String),
+          "type" .= ("configured"::String),"style" .= ("global"::String),"depends" .= ([]::[String])]]]))
+      bundle <- publishCapturedStoreUnit packageTool plan store dist capture "test-unit" destination
+      assertEqual "publication preserves vanilla compiler bytes" vanilla =<< BS.readFile (interfaces </> "A.hi")
+      assertEqual "publication preserves dynamic compiler bytes" dynamic =<< BS.readFile (interfaces </> "A.dyn_hi")
+      assertBool "publication completes the consumer's interface receipt" =<< doesFileExist (interfaces </> "complete")
+      archiveBytes <- BS.readFile destination
+      entries <- either fail pure =<< decodeZip archiveBytes
+      inner <- either fail pure . eitherDecodeStrict' $ maybe (error "published manifest") id (lookup "manifest.json" entries)
+      let exportKey = case inner of
+            Object fields -> maybe (error "published export key") id (KM.lookup "exportKey" fields)
+            _ -> error "published manifest object"
+          row = object ["unit" .= ("test-unit"::String),"path" .= destination,
+            "sha256" .= bundleHash bundle,"buildKey" .= bundleBuildKey bundle,"exportKey" .= exportKey]
+      BS.writeFile manifest (encoded (object ["format" .= ("thc-captured-store-bundles"::String),
+        "schema" .= (1::Int),"request" .= request,"bundles" .= [row]]))
+      let consume = readCapturedStoreBundles True request [("test-unit",[])] manifest
+      selected <- consume
+      assertEqual "real consumer admits the captured publisher output"
+        (Just (snapshot bundle)) (snapshot <$> Map.lookup "test-unit" selected)
+      receipt <- BS.readFile (interfaces </> "complete")
+      removeFile (interfaces </> "complete")
+      assertBool "consumer rejects missing replay interfaces" . isLeft =<< tryIOError consume
+      BS.writeFile (interfaces </> "complete") receipt
+      BS.appendFile (interfaces </> "A.hi") "changed"
+      assertBool "consumer verification rejects changed compiler bytes" . isLeft =<< tryIOError consume
+      assertEqual "interface controls leave the published Core archive unchanged" archiveBytes =<< BS.readFile destination
   , TestCase $ scratch "captured installed" $ \directory -> do
       let path = directory </> "installed.zip"
           manifest = directory </> "captured.json"
