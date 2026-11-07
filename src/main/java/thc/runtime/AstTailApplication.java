@@ -24,7 +24,7 @@ public final class AstTailApplication extends Expr {
     @CompilationFinal(dimensions = 1) private final int[] strictPositions;
     @Children private Force[] forces;
     public AstTailApplication(Expr function, Expr[] arguments, AstSelfLayout layout, int[] temporaries, Metrics metrics) {
-        setRepresentation(new CoreRepresentation(CoreKind.UNKNOWN, true, false, null, null, null, null, null, null));
+        setRepresentation(CoreRepresentation.UNKNOWN);
         this.layout = layout; this.temporaries = temporaries;
         suppliedCount = layout.getArity() - arguments.length;
         this.function = new Evaluate(function, metrics);

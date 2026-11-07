@@ -38,7 +38,7 @@ public final class AstTypedApplication extends Expr {
         } else vectorSlots = null;
         if (vector != null) prepareTuple(vectorSlots, 0);
         CoreRepresentation proof = shape == null ? CoreRepresentation.UNKNOWN : shape.getProof();
-        setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(),
+        setRepresentation(proof.copy(proof.getKind(), shape != null, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(),
             proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
     }
     @Override public void prepareTuple(int[] slots, int offset) {
