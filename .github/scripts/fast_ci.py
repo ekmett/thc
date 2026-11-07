@@ -435,6 +435,113 @@ def install_jam(recorder):
     return home
 
 
+LINUX_NATIVE_PACKAGES = ("clang-18", "llvm-18", "libgmp-dev", "cmake", "ninja-build")
+
+
+def acquire_process(argv, seconds):
+    """Own an acquisition-only group through deadline or caller cancellation."""
+    pending = None
+
+    def cancelled(signum, frame):
+        nonlocal pending
+        # Raising here could interrupt Popen between waitpid and recording the exit.
+        pending = signum
+
+    handlers = {sig: signal.signal(sig, cancelled) for sig in (signal.SIGTERM, signal.SIGINT)}
+    deadline = time.monotonic() + seconds
+    code = 124
+    try:
+        with subprocess.Popen(argv, start_new_session=True) as child:
+            try:
+                while pending is None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        code = child.wait(timeout=min(remaining, 0.05))
+                    except subprocess.TimeoutExpired:
+                        continue
+                    break
+            finally:
+                # Kill the group before reaping its leader. No dpkg work runs here.
+                if child.returncode is None:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.wait()
+    finally:
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
+    if pending is not None:
+        raise InterruptedError(f"Acquisition cancelled by signal {pending}")
+    return code
+
+
+def install_linux_native(apt_etc=Path("/etc/apt")):
+    """Bound acquisition before installing; mirror failover never interrupts dpkg."""
+    require((platform.system(), platform.machine()) == ("Linux", "x86_64") and os.geteuid() == 0,
+            "Native apt setup requires root on Linux x64")
+
+    def installed():
+        result = subprocess.run(["dpkg-query", "-W", "-f=${Status}\\n", *LINUX_NATIVE_PACKAGES],
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        return result.returncode == 0 and result.stdout.splitlines() == ["install ok installed"] * len(LINUX_NATIVE_PACKAGES)
+
+    if not installed():
+        # A cold ~150MB native toolchain normally takes minutes. Five minutes
+        # per mirror is an acquisition safeguard, not the commit performance target.
+        options = ["-o", "Acquire::Retries=0", "-o", "Acquire::http::Timeout=30",
+                   "-o", "Acquire::https::Timeout=30", "-o", "APT::Update::Error-Mode=any"]
+
+        def acquire(source_options):
+            deadline = time.monotonic() + 300
+            for operation in (["update"], ["install", "--yes", "--download-only", *LINUX_NATIVE_PACKAGES]):
+                remaining = deadline - time.monotonic()
+                if remaining < 1:
+                    return False
+                code = acquire_process(["apt-get", *options, *source_options, *operation], remaining)
+                if code:
+                    print(f"Native apt acquisition failed ({code}): {operation[0]}", flush=True)
+                    return False
+            return True
+
+        with tempfile.TemporaryDirectory(prefix="thc-apt-sources-") as temporary:
+            stage = Path(temporary)
+            source_options = []
+            if not acquire(source_options):
+                # Match exact Ubuntu runner URIs, including its mirror+file
+                # transport. Keep suites, components, Signed-By and other repos.
+                uri = re.compile(r"(?<!\S)(?:https?://azure\.archive\.ubuntu\.com/ubuntu/?|"
+                                 r"mirror\+file:/etc/apt/apt-mirrors\.txt)(?=\s|$)")
+                parts = stage / "sources.list.d"
+                # The privileged apt frontend parses sources before starting workers.
+                parts.mkdir(mode=0o700)
+                (stage / "sources.list").touch(mode=0o600)
+                changed = False
+                paths = [apt_etc / "sources.list", *sorted((apt_etc / "sources.list.d").glob("*.list")),
+                         *sorted((apt_etc / "sources.list.d").glob("*.sources"))]
+                for source in paths:
+                    if not source.is_file():
+                        continue
+                    original = source.read_text()
+                    def alternate(match):
+                        return "https://archive.ubuntu.com/ubuntu" + ("/" if match[0].endswith("/") else "")
+                    rewritten = uri.sub(alternate, original)
+                    changed |= rewritten != original
+                    destination = stage / "sources.list" if source == apt_etc / "sources.list" else parts / source.name
+                    destination.write_text(rewritten)
+                    destination.chmod(0o600)
+                require(changed, "Native apt acquisition failed; no supported Ubuntu mirror to replace")
+                source_options = ["-o", f"Dir::Etc::sourcelist={stage / 'sources.list'}",
+                                  "-o", f"Dir::Etc::sourceparts={parts}"]
+                print("Retrying native apt acquisition via https://archive.ubuntu.com/ubuntu", flush=True)
+                require(acquire(source_options), "Native apt acquisition failed on both mirror attempts")
+            # Preserve apt signature/hash validation and forbid hidden network
+            # acquisition during installation. Install failure is final, no retry.
+            subprocess.run(["apt-get", *options, *source_options,
+                            "install", "--yes", "--no-download", *LINUX_NATIVE_PACKAGES], check=True)
+        require(installed(), "Native apt setup did not install every required package")
+    subprocess.run(["/usr/lib/llvm-18/bin/clang", "--version"], check=True)
+
+
 def setup_toolchain(recorder):
     """Restore independent caches and check out sources, then install misses."""
     host = (platform.system(), platform.machine())
@@ -487,21 +594,15 @@ command -v cmake && command -v ninja || brew install cmake ninja
 '''
         llvm_bin = "/opt/homebrew/opt/llvm@18/bin"
     else:
-        native = r'''
-set -euo pipefail
-if ! dpkg-query -W -f='${Status}\n' clang-18 llvm-18 libgmp-dev cmake ninja-build 2>/dev/null | awk '$0 != "install ok installed" {bad=1} END {exit bad}'; then
-  sudo apt-get update
-  sudo apt-get install --yes clang-18 llvm-18 libgmp-dev cmake ninja-build
-fi
-/usr/lib/llvm-18/bin/clang --version
-'''
+        native = None
         llvm_bin = "/usr/lib/llvm-18/bin"
     commands = [
         ("source-submodules", ["git", "-c", "core.autocrlf=false", "submodule", "update", "--init", "--depth", "1", "--jobs", "4"]),
         ("haskell-toolchain", ["bash", "-c", haskell]),
         ("graalvm-toolchain", [sys.executable, str(recorder.root / ".github/scripts/fast_ci.py"),
                                "install-jam", "--report-dir", str(recorder.directory / "jam-acquisition")]),
-        ("native-toolchain", ["bash", "-c", native]),
+        ("native-toolchain", ["bash", "-c", native] if native is not None else
+         ["sudo", "-n", sys.executable, "-B", str(recorder.root / ".github/scripts/fast_ci.py"), "install-linux-native"]),
     ]
     layers = json.loads(os.environ.get("THC_CACHE_LAYERS", "{}"))
     if layers:
@@ -1090,7 +1191,7 @@ def main(argv=None):
         split = argv.index("--")
         argv, execution = argv[:split], argv[split + 1:]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain", "jam-identity", "install-jam", "verify-jam", "commit-checks", "jvm-group", "check-command"))
+    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain", "install-linux-native", "jam-identity", "install-jam", "verify-jam", "commit-checks", "jvm-group", "check-command"))
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
@@ -1102,6 +1203,15 @@ def main(argv=None):
     parser.add_argument("--base", default=os.environ.get("FAST_BASE_SHA", ""))
     parser.add_argument("--head", default=os.environ.get("FAST_HEAD_SHA", "HEAD"))
     args = parser.parse_args(argv)
+    # Privileged native setup owns no checkout/report files. Its caller records
+    # the phase and log; avoid root-owned artifacts and Git ownership checks.
+    if args.command == "install-linux-native":
+        try:
+            install_linux_native()
+            return 0
+        except (RuntimeError, OSError, subprocess.CalledProcessError) as error:
+            print("Native setup failed: " + str(error), file=sys.stderr)
+            return 1
     # Each fresh graph test invocation retains its own XML, including failures.
     # Re-running Ninja must not require the user to empty a report directory.
     report_dir = args.report_dir.resolve()

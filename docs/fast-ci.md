@@ -167,3 +167,23 @@ Per-commit, hourly and nightly reports together describe the coverage; a smoke
 selection does not establish whole-program compatibility. See
 [contributing](contributing.md) for local commands and
 [Core compatibility checks](coverage.md) for native comparisons.
+
+### Hosted Linux package acquisition
+
+Both hosted setup paths use `fast_ci.py install-linux-native` for clang-18,
+llvm-18, libgmp-dev, CMake and Ninja. An installed complete package set skips
+acquisition. Cold setup gives index refresh and archive download a combined
+five-minute budget per attempt, with 30-second HTTP/HTTPS inactivity timeouts
+and no repeated requests before mirror failover. The privileged helper kills
+and reaps its acquisition process group on deadline or cancellation. These are failure safeguards,
+separate from the seven-minute commit CI performance target.
+
+On failure, setup tries once more using Ubuntu's HTTPS archive in temporary
+source files. It replaces only the Azure Ubuntu URI or the hosted runner's
+`mirror+file:/etc/apt/apt-mirrors.txt` URI; suites, components, signing keys and
+other repositories remain unchanged. APT must successfully refresh all indexes
+and verify/download every required package before installation. Installation
+uses `--no-download`, is not interrupted to switch mirrors, and must leave the
+complete required package set installed. Neither mirror failure nor package
+installation failure permits tests to proceed. Persistent hosts continue to
+provision their native packages outside the workflow.
