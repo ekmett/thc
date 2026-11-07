@@ -84,6 +84,8 @@ final class FunctionBody extends Node {
             return unexpected.getResult();
         }
     }
+    boolean ordinaryIntResult() { return !rawResult && !initializer && tuple == null && exactInt; }
+    boolean ordinaryLongResult() { return !rawResult && !initializer && tuple == null && !exactInt && resultKind == CoreKind.LONG; }
     long executeLong(VirtualFrame frame) { return value.executeRequiredLong(frame); }
     int executeInt(VirtualFrame frame) { return value.executeRequiredInt(frame); }
 }

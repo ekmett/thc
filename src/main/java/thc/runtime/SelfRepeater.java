@@ -19,6 +19,18 @@ final class SelfRepeater extends Node implements RepeatingNode {
         root.forceEntry(frame);
         root.pollBeforeBody(this);
         HandoffEntry entry = root.getHandoff();
+        // The ordinary route already demands these exact primitive results.
+        // Evaluate once before selecting the caller's result transport.
+        if (entry != null && entry.getResultInt() && body.ordinaryIntResult()) {
+            boolean returning = entry.destination(frame) >= 0;
+            int result = body.executeInt(frame);
+            return returning ? entry.finishInt(frame, result) : result;
+        }
+        if (entry != null && entry.getResultLong() && body.ordinaryLongResult()) {
+            boolean returning = entry.destination(frame) >= 0;
+            long result = body.executeLong(frame);
+            return returning ? entry.finishLong(frame, result) : result;
+        }
         if (entry != null && entry.getResultInt() && entry.destination(frame) >= 0) return entry.finishInt(frame, body.executeInt(frame));
         if (entry != null && entry.getResultLong() && entry.destination(frame) >= 0) return entry.finishLong(frame, body.executeLong(frame));
         return body.execute(frame);
