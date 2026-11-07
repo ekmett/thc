@@ -39,6 +39,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
     public ContextThreadLocal<HandoffState> getHandoffState() { return handoffState; }
     private final ContextThreadLocal<GuestThreads.PollState> threadPollState = locals.createContextThreadLocal((context, thread) -> context.pollStates.get(thread));
     private final ContextThreadLocal<CarrierLocal.Cell<MaskingState>> threadMaskingState = locals.createContextThreadLocal((context, thread) -> context.maskingState.cell$org_intelligence_thc(thread));
+    public ContextThreadLocal<CarrierLocal.Cell<MaskingState>> getThreadMaskingState() { return threadMaskingState; }
     private final ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> threadAnnotations = locals.createContextThreadLocal((context, thread) -> context.stackAnnotations.cell$org_intelligence_thc(thread));
     private static final ContextReference<ContextState> CONTEXTS = ContextReference.create(Language.class);
     public static State currentState() { return currentState(null); }

@@ -3,10 +3,12 @@
 package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import thc.Language;
 public final class SynchronousMasking {
     public static final SynchronousMasking INSTANCE = new SynchronousMasking();
+    private static final LanguageReference<Language> LANGUAGES = LanguageReference.create(Language.class);
     private SynchronousMasking() {}
-    public static MaskingState current(Node node) { return Language.currentState(node).getThreadMaskingState().get().getValue(); }
+    public static MaskingState current(Node node) { return LANGUAGES.get(node).getThreadMaskingState().get().getValue(); }
     @TruffleBoundary public static void set(Node node, MaskingState state) { Language.currentState(node).getMaskingState().set(state); }
 }
