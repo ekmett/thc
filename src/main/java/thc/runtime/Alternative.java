@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.profiles.CountingConditionProfile;
@@ -76,13 +77,14 @@ final class Alternative extends Node {
         return matchProfile == null ? matches : matchProfile.profile(matches);
     }
     private boolean matchesLiteral(VirtualFrame frame, int slot) {
+        // Case preparation initializes the binder; sibling widening still needs activation tags.
         if (value instanceof Integer literal) {
-            if (frame.isInt(slot)) return frame.getInt(slot) == literal;
+            if (frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Int || frame.isInt(slot)) return frame.getInt(slot) == literal;
             Object scrutinee = numericObject(frame, slot);
             return scrutinee instanceof Integer number && number.intValue() == literal.intValue();
         }
         if (value instanceof Long literal) {
-            if (frame.isLong(slot)) return frame.getLong(slot) == literal;
+            if (frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Long || frame.isLong(slot)) return frame.getLong(slot) == literal;
             Object scrutinee = numericObject(frame, slot);
             return scrutinee instanceof Long number && number.longValue() == literal.longValue();
         }
