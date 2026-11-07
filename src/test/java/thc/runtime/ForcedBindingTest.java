@@ -68,6 +68,59 @@ class ForcedBindingTest {
             assertEquals(1, evaluations[0]); assertEquals(1L, metrics.getThunkEvaluations());
         });
     }
+    @Test void compiledWritebackPreservesChangedPrimitiveActivationAfterDescriptorWidening() throws Exception {
+        entered(language -> {
+            var builder = FrameDescriptor.newBuilder(); builder.addSlot(FrameSlotKind.Long, "binding", null);
+            var descriptor = builder.build(); var compiled = new boolean[1];
+            var sibling = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
+            FrameAccess.writeObject(sibling, 0, new Object());
+            var original = new Thunk(new RootNode(null) {
+                @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Writeback must not demand the old thunk"); }
+            }.getCallTarget(), null);
+            var root = new RootNode(null, descriptor) {
+                @Child private LocalRead local = new LocalRead(0, false);
+                @Override public Object execute(VirtualFrame frame) {
+                    compiled[0] = CompilerDirectives.inCompiledCode();
+                    // An older activation can retain primitive storage after a sibling widens the descriptor.
+                    frame.setLong(0, (long) frame.getArguments()[0]);
+                    local.writeForced(frame, original, 99L);
+                    return frame.getLong(0);
+                }
+            };
+            var target = root.getCallTarget(); compile(target);
+            assertEquals(Long.MIN_VALUE, Calls.target(target, new Object[]{Long.MIN_VALUE}));
+            assertTrue(compiled[0], "The first invocation must enter installed code"); assertTrue(valid(target));
+            assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(0)); assertEquals(0, original.getState());
+        });
+    }
+    @Test void compiledLazyDataAndClosureReadsRetainUndemandedThunkIdentity() throws Exception {
+        entered(language -> {
+            for (var kind : List.of(CoreKind.DATA, CoreKind.CLOSURE)) {
+                var builder = FrameDescriptor.newBuilder(); builder.addSlot(FrameSlotKind.Illegal, "lazy reference", null);
+                var descriptor = builder.build(); var compiled = new boolean[1];
+                var original = new Thunk(new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Reading a lazy reference must not demand it"); }
+                }.getCallTarget(), null);
+                var initial = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
+                assertEquals(FrameSlotKind.Illegal, descriptor.getSlotKind(0));
+                FrameAccess.write(initial, 0, original);
+                assertTrue(initial.isObject(0)); assertSame(original, initial.getObject(0));
+                var proof = new CoreRepresentation(kind, false, true, List.of("BoxedRep (Just Lifted)"));
+                var root = new RootNode(null, descriptor) {
+                    @Child private Expr local = new LocalRead(0, false).proven(proof);
+                    @Override public Object execute(VirtualFrame frame) {
+                        compiled[0] = CompilerDirectives.inCompiledCode();
+                        FrameAccess.write(frame, 0, frame.getArguments()[0]);
+                        return local.execute(frame);
+                    }
+                };
+                var target = root.getCallTarget(); compile(target);
+                assertSame(original, Calls.target(target, new Object[]{original}));
+                assertTrue(compiled[0], "The first invocation must enter installed code"); assertTrue(valid(target));
+                assertEquals(0, original.getState()); assertFalse(proof.getEvaluated());
+            }
+        });
+    }
     @Test void recursiveCellIdentitySurvivesStrictRhsForcingBeforeGroupPublication() throws Exception {
         entered(language -> {
             var answerLayout = new DataLayout(language, "Answer", "Answer", new String[0]); var answer = answerLayout.create(new Object[0]);
