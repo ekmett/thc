@@ -61,16 +61,16 @@ public final class Force extends Node {
     private Object executeThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
         while (true) {
+            SavedGuestContinuation observed = null;
             switch (original.getState()) {
                 case 2 -> { if (invocationMetrics.getEnabled()) invocationMetrics.incrementThunkHits(); return original.getValue(); }
                 case 3 -> throw rethrowFailure(original);
                 case 4 -> throw fault("Interrupted thunk has no resumable continuation");
-            }
-            SavedGuestContinuation observed = null;
-            if (original.getState() == 5) {
-                resumeProfile.enter();
-                observed = savedGuestContinuation(original.getValue());
-                BytecodeContinuations.preflightWait(observed);
+                case 5 -> {
+                    resumeProfile.enter();
+                    observed = savedGuestContinuation(original.getValue());
+                    BytecodeContinuations.preflightWait(observed);
+                }
             }
             PendingWait pending = PendingWait.of(observed);
             if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) {
@@ -78,7 +78,7 @@ public final class Force extends Node {
             }
             // The continuation owns its callee frame; never materialize this caller.
             if (suspendedChild(observed) != null) return resumeChain(original, false, false, invocationMetrics);
-            Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics);
+            Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics, true);
             if (result != RETRY) return result;
         }
     }
@@ -195,10 +195,11 @@ public final class Force extends Node {
         return request != null && request.getTarget() == Thread.currentThread() &&
             request.getTargetId() == GuestThreads.current(this).currentId() && request.getState() == AsyncRequestState.CLAIMED;
     }
-    private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics) {
+    private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics,
+                              boolean retryOuterAfterWait) {
         boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;
         while (true) {
-            if (!capturing) switch (original.getState()) {
+            if (!retryOuterAfterWait && !capturing) switch (original.getState()) {
                 case 2 -> { if (metrics.getEnabled()) metrics.incrementThunkHits(); return original.getValue(); }
                 case 3 -> throw rethrowFailure(original);
                 case 4 -> throw fault("Interrupted thunk has no resumable continuation");
@@ -236,12 +237,17 @@ public final class Force extends Node {
                 }
                 switch (claim) {
                     case 0 -> { return evaluateOwned(original, continuation, resumeValue, metrics); }
-                    case 1 -> awaitOwner(original);
+                    case 1 -> {
+                        awaitOwner(original);
+                        // Ordinary demand refreshes in its outer loop; a resumed
+                        // chain must retain its exact observation and injected input.
+                        if (retryOuterAfterWait) return RETRY;
+                    }
                     case 2 -> {
                         if (metrics.getEnabled()) metrics.incrementBlackholes();
                         throw fault("Blackhole: cyclic thunk entered while evaluating");
                     }
-                    case 3 -> { return RETRY; }
+                    default -> { return RETRY; }
                 }
             } catch (Throwable failure) {
                 // A safepoint can transfer control after the ownership store.
@@ -318,7 +324,7 @@ public final class Force extends Node {
                 Object outcome;
                 try {
                     Object answer = switch (current) {
-                        case Thunk thunk -> executeOne(thunk, expected, input, invocationMetrics);
+                        case Thunk thunk -> executeOne(thunk, expected, input, invocationMetrics, false);
                         case CallSegment segment -> executeCallSegment(segment, expected, input, invocationMetrics);
                         default -> throw fault("Invalid suspended continuation boundary");
                     };
