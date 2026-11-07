@@ -1311,12 +1311,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         var b = e.builder;
         b.beginBlock();
         var request = b.createLocal("pending async request", FrameSlotKind.Object);
-        var active = b.createLocal("async logical mask", FrameSlotKind.Object);
-        var annotations = b.createLocal("yielded annotations", FrameSlotKind.Object);
-        // Every runtime writer uses setObject for these exact reference carriers.
-        for (var local : List.of(request, active, annotations)) {
-            b.beginStaticStoreObject(local); b.emitLoadNull(); b.endStaticStoreObject();
-        }
+        // Declared Object tags are prepared before compilation. Each taken cut
+        // writes its scratch locals before reading them.
         b.beginIfThen();
         if (mandatory) b.emitPollMandatoryAsync(request);
         else if (processResult == null) b.emitPollAsync(request);
@@ -1326,6 +1322,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.endPollProcessCompleted();
         }
         b.beginBlock();
+        var active = b.createLocal("async logical mask", FrameSlotKind.Object);
+        var annotations = b.createLocal("yielded annotations", FrameSlotKind.Object);
         b.beginReenterPendingAsyncMask(active);
         beginAnnotationYield(e, annotations);
         b.emitParkPendingAsyncMask(request, Objects.requireNonNull(e.checkpointRootEntry), active);
