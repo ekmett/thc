@@ -1729,7 +1729,10 @@ public final class Program implements ExecutableProgram {
         List<CoreRepresentation> results = new ArrayList<>();
         List<Integer> kinds = new ArrayList<>();
         boolean allLong = true, anyAggregate = false, anyScalar = false;
+        int alternativeStart = local.layout.nextSlot();
+        int alternativeEnd = alternativeStart;
         for (int a = 0; a < alternatives.length; a++) {
+            local.layout.alternativeSlot(alternativeStart);
             List<Object> alt = rawAlternatives.get(a);
             Scope child = local.child();
             String kind = (String) alt.get(0);
@@ -1806,7 +1809,9 @@ public final class Program implements ExecutableProgram {
             allLong &= tag != LITERAL_ALTERNATIVE || value instanceof Long;
             anyAggregate |= body.getRepresentation().isAggregate();
             anyScalar |= !body.getRepresentation().isAggregate();
+            alternativeEnd = Math.max(alternativeEnd, local.layout.nextSlot());
         }
+        local.layout.alternativeSlot(alternativeEnd);
         CoreRepresentation declared = CoreRepresentations.caseResult(expr);
         if (!declared.isAggregate() && anyAggregate && anyScalar) throw new RuntimeFault("Missing exact aggregate case result proof");
         CoreRepresentations.validateDeclaredCaseResult(declared, results);
