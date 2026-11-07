@@ -36,6 +36,11 @@ class GraphRecoverySizeFailureTest {
         Controls.siblingFailure(true);
     }
 
+    @Test void sideFailureInvalidatesTheHealthyEntryBeforeItsNextCall() throws Exception {
+        Truffle.getRuntime();
+        Controls.installedSource();
+    }
+
     private static final class Controls {
         private static final String CODE_SIZE =
                 "jdk.vm.ci.code.BailoutException: Code installation failed: code is too large";
@@ -60,6 +65,42 @@ class GraphRecoverySizeFailureTest {
             return Engine.newBuilder().allowExperimentalOptions(true)
                     .option("engine.BackgroundCompilation", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000").build();
+        }
+
+        static void installedSource() throws Exception {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("compiler.MaximumGraalGraphSize", "200000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var arm = new AstSameFrameArm(new Literal(7L));
+                    var root = new FunctionRoot(language, new FrameLayout().build(), "installed source", null,
+                        new int[0], new int[0], new int[0], arm, new Metrics(false));
+                    var target = (OptimizedCallTarget) root.getCallTarget();
+                    assertTrue(AstSameFrameArm.extract(arm));
+                    var side = (OptimizedCallTarget) sideTarget(arm);
+                    target.compile(true); target.waitForCompilation();
+                    assertTrue(target.isValidLastTier()); assertFalse(target.wasExecuted());
+                    int installations = target.getSuccessfulCompilationCount();
+                    listener(Language.currentState().getGraphRecovery()).onCompilationFailed(
+                        side, CODE_SIZE, true, true, 2, () -> "unused");
+                    assertFalse(target.isValid(), "A source must not retain code that assumes no side failure");
+                    assertEquals(7L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(installations, target.getSuccessfulCompilationCount());
+                    assertFalse(side.isValid());
+                    var freshRoot = root.copyForRecovery();
+                    assertTrue(freshRoot.noGraphFailure.isValid(), "A fresh source must compile without the old failure poll");
+                    var fresh = (OptimizedCallTarget) freshRoot.getCallTarget();
+                    fresh.compile(true); fresh.waitForCompilation();
+                    assertTrue(fresh.isValidLastTier());
+                    listener(Language.currentState().getGraphRecovery()).onCompilationFailed(
+                        side, CODE_SIZE, true, true, 2, () -> "unused");
+                    assertTrue(fresh.isValidLastTier(), "A late old failure must not invalidate a fresh source");
+                    assertEquals(7L, Calls.target(fresh, new Object[]{0L}));
+                } finally { context.leave(); }
+            }
         }
 
         private static RootCallTarget sideTarget(AstSameFrameArm arm) throws Exception {

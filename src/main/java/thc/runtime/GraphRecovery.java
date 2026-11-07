@@ -103,11 +103,18 @@ public final class GraphRecovery implements AutoCloseable {
         Failure updated;
         do {
             observed = root.graphFailure.get();
-            if (observed != null && observed.observations.stream().anyMatch(o -> o.target == target)) return;
+            if (observed != null && observed.observations.stream().anyMatch(o -> o.target == target)) {
+                root.noGraphFailure.invalidate();
+                return;
+            }
             var observations = new ArrayList<Observation>(observed == null ? List.of() : observed.observations);
             observations.add(new Observation(target, reason, bailout, permanent));
             updated = new Failure(List.copyOf(observations), observed != null && observed.claimed);
         } while (!root.graphFailure.compareAndSet(observed, updated));
+        // Publish the receipt before invalidating entries that omitted its read.
+        // This also reaches inlined source entries when a separate side failed.
+        // The assumption stays invalid until a fresh source is constructed.
+        root.noGraphFailure.invalidate();
     }
 
     Failure claim(ContextRoot root) {

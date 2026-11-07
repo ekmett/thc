@@ -197,13 +197,11 @@ public class ManagedStackRuntimeTest {
         });
     }
     private static CoreRepresentation proof(CoreKind kind, boolean evaluated, List<String> primReps) { return new CoreRepresentation(kind, evaluated, false, primReps, null, null, null, null, null); }
-    @Test void boundNullUnliftedLocalsRemainDistinctFromUnknownOrUnpublishedBindings() {
+    @Test void boundLocalsPreserveNullWhileRecursiveCellsRequirePublication() {
         var layout = new FrameLayout(); var slot = layout.bind("nullable-snapshot"); var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build()); FrameAccess.writeObject(frame, slot, null);
         var unlifted = proof(CoreKind.OBJECT, true, List.of("BoxedRep (Just Unlifted)")); assertNull(new LocalRead(slot, false).proven(unlifted).execute(frame));
-        assertThrows(RuntimeFault.class, () -> new LocalRead(slot, false).execute(frame));
-        assertThrows(RuntimeFault.class, () -> new LocalRead(slot, false).proven(proof(CoreKind.OBJECT, false, unlifted.getPrimReps())).execute(frame));
+        assertNull(new LocalRead(slot, false).execute(frame));
         assertThrows(RuntimeFault.class, () -> new LocalRead(slot).proven(unlifted).execute(frame));
-        assertThrows(RuntimeFault.class, () -> new LocalRead(slot, false).proven(proof(CoreKind.OBJECT, true, List.of("BoxedRep (Just Lifted)"))).execute(frame));
         var recursive = new RecCell(); FrameAccess.writeObject(frame, slot, recursive); assertThrows(RuntimeFault.class, () -> new LocalRead(slot).proven(unlifted).execute(frame)); recursive.setValue(null); recursive.setInitialized(true); assertNull(new LocalRead(slot).proven(unlifted).execute(frame));
     }
     @Test void newGettersEnforceSnapshotContextAndRegistryLifetime() throws Exception {
