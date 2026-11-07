@@ -63,9 +63,13 @@ public final class LocalRead extends Expr {
     }
     /** Recursive captures retain cell identity until the whole group is published. */
     public void writeForced(VirtualFrame frame, Thunk original, Object result) {
-        if (!frame.isObject(slot)) return;
+        if (!referenceStorage && !frame.isObject(slot)) return;
         Object binding = frame.getObject(slot);
-        if (binding == original) FrameAccess.INSTANCE.write(frame, slot, result);
+        if (binding == original) {
+            // Allocation-time reference storage cannot narrow after this demand.
+            if (referenceStorage) frame.setObject(slot, result);
+            else FrameAccess.INSTANCE.write(frame, slot, result);
+        }
         else if (cell && binding instanceof RecCell recursive) {
             synchronized (recursive) {
                 if (recursive.getInitialized() && recursive.getValue() == original) recursive.setValue(result);
