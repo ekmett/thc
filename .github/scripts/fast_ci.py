@@ -441,29 +441,29 @@ LINUX_NATIVE_PACKAGES = ("clang-18", "llvm-18", "libgmp-dev", "cmake", "ninja-bu
 def acquire_process(argv, seconds):
     """Own an acquisition-only group through deadline or caller cancellation."""
     pending = None
-    armed = False
 
     def cancelled(signum, frame):
         nonlocal pending
+        # Raising here could interrupt Popen between waitpid and recording the exit.
         pending = signum
-        # Defer signals during spawn and cleanup; neither may abandon a child.
-        if armed:
-            raise InterruptedError(f"Acquisition cancelled by signal {signum}")
 
     handlers = {sig: signal.signal(sig, cancelled) for sig in (signal.SIGTERM, signal.SIGINT)}
+    deadline = time.monotonic() + seconds
+    code = 124
     try:
         with subprocess.Popen(argv, start_new_session=True) as child:
             try:
-                armed = True
-                if pending is not None:
-                    raise InterruptedError(f"Acquisition cancelled by signal {pending}")
-                code = child.wait(timeout=seconds)
-            except subprocess.TimeoutExpired:
-                code = 124
+                while pending is None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        code = child.wait(timeout=min(remaining, 0.05))
+                    except subprocess.TimeoutExpired:
+                        continue
+                    break
             finally:
-                armed = False
-                # The leader is still unreaped on timeout/interruption. Kill its
-                # whole group before waiting; there is no dpkg work in this phase.
+                # Kill the group before reaping its leader. No dpkg work runs here.
                 if child.returncode is None:
                     os.killpg(child.pid, signal.SIGKILL)
                     child.wait()
@@ -505,7 +505,6 @@ def install_linux_native(apt_etc=Path("/etc/apt")):
 
         with tempfile.TemporaryDirectory(prefix="thc-apt-sources-") as temporary:
             stage = Path(temporary)
-            stage.chmod(0o755)  # apt's unprivileged acquisition worker reads sources.
             source_options = []
             if not acquire(source_options):
                 # Match exact Ubuntu runner URIs, including its mirror+file
@@ -513,9 +512,9 @@ def install_linux_native(apt_etc=Path("/etc/apt")):
                 uri = re.compile(r"(?<!\S)(?:https?://azure\.archive\.ubuntu\.com/ubuntu/?|"
                                  r"mirror\+file:/etc/apt/apt-mirrors\.txt)(?=\s|$)")
                 parts = stage / "sources.list.d"
-                parts.mkdir(mode=0o755)
-                parts.chmod(0o755)
-                (stage / "sources.list").touch(mode=0o644)
+                # The privileged apt frontend parses sources before starting workers.
+                parts.mkdir(mode=0o700)
+                (stage / "sources.list").touch(mode=0o600)
                 changed = False
                 paths = [apt_etc / "sources.list", *sorted((apt_etc / "sources.list.d").glob("*.list")),
                          *sorted((apt_etc / "sources.list.d").glob("*.sources"))]
@@ -529,7 +528,7 @@ def install_linux_native(apt_etc=Path("/etc/apt")):
                     changed |= rewritten != original
                     destination = stage / "sources.list" if source == apt_etc / "sources.list" else parts / source.name
                     destination.write_text(rewritten)
-                    destination.chmod(0o644)
+                    destination.chmod(0o600)
                 require(changed, "Native apt acquisition failed; no supported Ubuntu mirror to replace")
                 source_options = ["-o", f"Dir::Etc::sourcelist={stage / 'sources.list'}",
                                   "-o", f"Dir::Etc::sourceparts={parts}"]

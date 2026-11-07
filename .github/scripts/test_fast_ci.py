@@ -267,6 +267,21 @@ class FastRunnerTest(unittest.TestCase):
                     for reader in readers:
                         os.close(reader)
 
+    def test_acquisition_cancellation_does_not_signal_reaped_process_group(self):
+        handle_exit = subprocess.Popen._handle_exitstatus
+
+        def cancel_after_reap(child, status, *args, **kwargs):
+            self.assertIsNone(child.returncode)
+            os.kill(os.getpid(), signal.SIGTERM)
+            return handle_exit(child, status, *args, **kwargs)
+
+        # POSIX waitpid has already reaped the real child at this boundary.
+        with patch.object(subprocess.Popen, "_handle_exitstatus", cancel_after_reap), \
+                patch.object(ci.os, "killpg", wraps=os.killpg) as kill_group:
+            with self.assertRaisesRegex(InterruptedError, "Acquisition cancelled"):
+                ci.acquire_process([sys.executable, "-c", "pass"], 5)
+        kill_group.assert_not_called()
+
     def test_linux_native_acquisition(self):
         # Intentional source fixtures model both supported Ubuntu runner formats.
         sources = self.root / "apt"
@@ -278,6 +293,7 @@ class FastRunnerTest(unittest.TestCase):
         (sources / "sources.list").write_text(legacy)
         (parts / "ubuntu.sources").write_text(deb822)
         (parts / "vendor.list").write_text(vendor)
+        (parts / "vendor.list").chmod(0o600)
         packages = ["clang-18", "llvm-18", "libgmp-dev", "cmake", "ninja-build"]
         installed = "install ok installed\n" * len(packages)
         scenarios = {
@@ -315,7 +331,11 @@ class FastRunnerTest(unittest.TestCase):
                                 copy = Path(opt.split("=", 1)[1])
                                 self.assertEqual(legacy.replace("http://azure.archive.ubuntu.com/ubuntu/", "https://archive.ubuntu.com/ubuntu/"), copy.read_text())
                                 self.assertEqual(deb822.replace("mirror+file:/etc/apt/apt-mirrors.txt", "https://archive.ubuntu.com/ubuntu"), (copy.parent / "sources.list.d/ubuntu.sources").read_text())
-                                self.assertEqual(vendor, (copy.parent / "sources.list.d/vendor.list").read_text())
+                                staged_vendor = copy.parent / "sources.list.d/vendor.list"
+                                self.assertEqual(vendor, staged_vendor.read_text())
+                                self.assertEqual(0o700, copy.parent.stat().st_mode & 0o777)
+                                self.assertEqual(0o700, staged_vendor.parent.stat().st_mode & 0o777)
+                                self.assertEqual(0o600, staged_vendor.stat().st_mode & 0o777)
                         code = next(remaining)
                         if code and kwargs.get("check"):
                             raise subprocess.CalledProcessError(code, argv)
