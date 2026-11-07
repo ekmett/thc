@@ -339,13 +339,6 @@ extra-source-files:
   t/fixtures/compiler/OriginalMemcpyNative.hs
   t/fixtures/compiler/OriginalErfNative.hs
   t/fixtures/compiler/OriginalErfEntry.hs
-  nih/pinned/zlib-1.2.11/README
-  nih/pinned/zlib-1.2.11/adler32.c
-  nih/pinned/zlib-1.2.11/crc32.c
-  nih/pinned/zlib-1.2.11/crc32.h
-  nih/pinned/zlib-1.2.11/zconf.h
-  nih/pinned/zlib-1.2.11/zlib.h
-  nih/pinned/zlib-1.2.11/zutil.h
   t/fixtures/run-native-variants/cabal.project
   t/fixtures/run-native-variants/native-variants.cabal
   t/fixtures/run-native-variants/Main.hs

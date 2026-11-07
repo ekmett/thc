@@ -150,7 +150,8 @@ public class PackageNativeOriginalsTest {
     private void checkDigest(List<String> row, PackageScalarLink link, Map<PackageScalarSignature, RootCallTarget> entries) {
         String symbol = row.getFirst(), carrier = row.get(1); int offset = Integer.parseInt(row.get(2)), count = Integer.parseInt(row.get(3)); long seed = Long.parseLong(row.get(4));
         byte[] bytes = checksumBytes(count + offset);
-        var storage = PinnedMemory.allocate(carrier.equals("AddrRep") ? bytes.length : count, 8);
+        boolean hostZlib = symbol.equals("adler32") || symbol.equals("crc32");
+        var storage = ManagedAllocation.mutable(carrier.equals("AddrRep") ? bytes.length : count, 8, hostZlib);
         int start = carrier.equals("AddrRep") ? 0 : offset;
         for (int i = start; i < bytes.length; i++) storage.writeByte(i - start, bytes[i]);
         var segment = storage.nativeSegment();
@@ -165,7 +166,7 @@ public class PackageNativeOriginalsTest {
             default -> throw new AssertionError("Unexpected original digest symbol");
         };
         assertEquals(Long.parseLong(row.get(5)), entries.get(signature).call(arguments), row.toString());
-        assertSame(segment, storage.nativeSegment(), "native checksums retain the allocation created for the guest");
+        assertSame(segment, storage.nativeSegment(), "checksum calls preserve the backing created for the guest");
         for (int i = start; i < bytes.length; i++) assertEquals(Byte.toUnsignedLong(bytes[i]), storage.readByte(i - start), "checksums preserve their input");
     }
     @Test public void originalDigestCxxAndZlibMatchNativeAcrossOffsetsAndLoopBoundaries() throws Exception {

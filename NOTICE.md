@@ -13,14 +13,13 @@ Jam commit `92a0cbcda6b9413dc2df3b2a6e327f06d90ea94b`. Its
 `BSD-2-Clause OR Apache-2.0` terms and Edward Kmett copyright are retained in
 the source and [upstream license](nih/licenses/jam-LICENSE.txt).
 
-## zlib checksum source provider
+## Pinned zlib sources
 
 `nih/pinned/zlib-1.2.11` contains unchanged checksum sources and supporting
 headers from zlib 1.2.11. They retain the zlib license and original Mark Adler /
 Jean-loup Gailly notices in `zlib.h` and `README`. The upstream repository is recorded in `.gitmodules`; Git pins its exact
-release commit. See `nih/README.md` for checkout instructions. THC compiles
-these functions as LLVM over managed buffers; it does not replace them with
-handwritten checksum implementations.
+release commit. See `nih/README.md` for checkout instructions. THC resolves
+checksum imports through the package-declared native zlib library.
 
 ## Cadenza runtime adaptation
 

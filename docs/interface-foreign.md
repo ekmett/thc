@@ -112,8 +112,9 @@ or the installed GHC floating/math package, including its rounding behavior.
 
 Zlib checksum imports also use the package's configured native zlib linkage.
 Acquisition does not require a particular zlib source version or embed a second
-checksum implementation. Buffers passed to host zlib must have native storage
-from their creation, as described below.
+checksum implementation. Strict `ByteString` payloads are allocated with pinned
+storage and can be passed to host zlib. Raw JVM `byte[]` and unpinned guest
+arrays fail native pointer conversion (`asPointer`).
 
 ## Pass buffers and pointers
 

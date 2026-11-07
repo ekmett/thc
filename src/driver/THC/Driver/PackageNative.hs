@@ -1403,6 +1403,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     let inputs = sourceInputs
+    -- The CBD schema requires the providers list, even without source providers.
     let proof = object $ ["schema" .= (if null finalizers then 1 else 2::Int),"format" .= (format::String),
           "profile" .= ("thc-package-c-ffi-v1"::String),"unit" .= unit,"target" .= target,
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,

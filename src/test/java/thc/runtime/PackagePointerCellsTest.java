@@ -51,6 +51,12 @@ class PackagePointerCellsTest {
         int initialize_version(z_stream *s, const char *version) {
             ++effects; return deflateInit_(s, Z_DEFAULT_COMPRESSION, version, sizeof(z_stream));
         }
+        unsigned long checksum_adler32(unsigned long seed, const unsigned char *bytes, unsigned int size) {
+            return adler32(seed, bytes, size);
+        }
+        unsigned long checksum_crc32(unsigned long seed, const unsigned char *bytes, unsigned int size) {
+            return crc32(seed, bytes, size);
+        }
         int finish(z_stream *s) { return deflate(s, Z_FINISH); }
         void end_stream(z_stream *s) { ++effects; (void)deflateEnd(s); }
         _Static_assert(sizeof(Cell) == 32, "Cell layout");
@@ -102,7 +108,9 @@ class PackagePointerCellsTest {
             signature("return_interior", "AddrRep", "AddrRep"), signature("count_only", "void", "AddrRep"),
             signature("finalize_cell", "void", "AddrRep"), signature("initialize", "Int32Rep", "AddrRep"),
             signature("initialize_version", "Int32Rep", "AddrRep", "AddrRep"),
-            signature("finish", "Int32Rep", "AddrRep"), signature("end_stream", "void", "AddrRep"));
+            signature("finish", "Int32Rep", "AddrRep"), signature("end_stream", "void", "AddrRep"),
+            signature("checksum_adler32", "WordRep", "WordRep", "ByteArray#", "Word32Rep"),
+            signature("checksum_crc32", "WordRep", "WordRep", "AddrRep", "Word32Rep"));
         return new Fixture(new PackageScalarLink("pointer-cells-test", "x86_64-unknown-linux-gnu", sha, sha, bytes, abi,
             "llvm-embedded-elf", Set.of("finalize_cell", "end_stream", "count_only")), expected);
     }
@@ -220,6 +228,26 @@ class PackagePointerCellsTest {
                 assertSame(ManagedAddress.nullAddress(), stream.readAddressByteOffset(56), "deflateEnd clears native state");
                 assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
                 assertEquals(1L, call(fixture, "count"), "C finalizer must not replay");
+            } finally { context.leave(); }
+        }
+    }
+    @Test void hostZlibChecksumsReadPinnedByteArrayAndInteriorAddress() throws Exception {
+        var fixture = fixture();
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language.currentState().getPackageCbits().link(fixture.link());
+                byte[] digits = "123456789".getBytes(StandardCharsets.US_ASCII);
+                var input = PinnedMemory.allocate(digits.length + 1, 8);
+                input.copyBytesIn(digits, 0, 0, digits.length);
+                var bytes = ManagedByteArray.freezeGuest(input);
+                assertEquals(0x091e01deL, call(fixture, "checksum_adler32", 1L, bytes, digits.length));
+
+                var offsetInput = PinnedMemory.allocate(digits.length + 1, 8);
+                offsetInput.writeByte(0, 0x5a);
+                offsetInput.copyBytesIn(digits, 0, 1, digits.length);
+                var address = ManagedAddress.fromGuestByteArray(offsetInput).plus(1);
+                assertEquals(0xcbf43926L, call(fixture, "checksum_crc32", 0L, address, digits.length));
             } finally { context.leave(); }
         }
     }
