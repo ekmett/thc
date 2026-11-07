@@ -168,13 +168,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     /** Called after the initial or resumed physical activation has unwound. */
     protected final Object finishStackEntry(Object result) {
+        CoreRepresentation proof = getScalarResultProof();
+        if (proof.isInt()) return result instanceof Integer ? result : finishSuspendedStackEntry(result);
+        if (proof.isLong()) return result instanceof Long ? result : finishSuspendedStackEntry(result);
+        if (proof.isFloat()) return result instanceof Float ? result : finishSuspendedStackEntry(result);
+        if (proof.isDouble()) return result instanceof Double ? result : finishSuspendedStackEntry(result);
         if (result instanceof TailYield || result instanceof AstTailYield ||
                 result instanceof SavedGuestContinuation || result instanceof ContinuationResult)
             return finishSuspendedStackEntry(result);
         return result;
     }
 
-    /** Settle a saved control result outside the completed physical activation. */
+    /** Classify and settle a possible control result outside the completed physical activation. */
     @TruffleBoundary(transferToInterpreterOnException = false) private Object finishSuspendedStackEntry(Object result) {
         Object value = result instanceof TailYield tail ? tail.getContinuation() :
                 result instanceof AstTailYield tail ? tail.getContinuation() : result;
