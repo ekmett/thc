@@ -39,7 +39,6 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
-import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives, nativeSymbolArchivesWithProduct, nativeWindowsRtsInputs)
 import THC.Driver.Installed (boundedInterfaceProcess)
@@ -164,7 +163,7 @@ linkInstalledNativeWithProduct compiler packageTool libdir arguments directory u
     configured <- either fail pure (nativeCompilerArguments arguments)
     sources <- mapM (stubSource . snd) selected
     writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
-      unit root signatures [] sources perModule [] (const Nothing) addresses (map fst archives) True
+      unit root signatures [] sources perModule (const Nothing) addresses (map fst archives) True
     let original = [(name,bytes) | (name,bytes) <- modules, name `elem` map fst selected]
     linked <- fst <$> finishPackageNativeWithDependencies packageTool ownedProduct [] []
       (root </> "pieces") root root unit (Just []) original
@@ -647,8 +646,8 @@ captureConfiguredNativeObject pieces sourceRoot compiler arguments = do
 -- Called while the package source and generated headers are still alive.
 -- The CBD written by the late Core pass does not contain retained annotations;
 -- hydrate exactly those interfaces which contain this unit's foreign calls.
-capturePackageNative :: FilePath -> FilePath -> FilePath -> FilePath -> [String] -> String -> FilePath -> IO ()
-capturePackageNative repository helper libdir compiler arguments unit directory = do
+capturePackageNative :: FilePath -> FilePath -> FilePath -> [String] -> String -> FilePath -> IO ()
+capturePackageNative helper libdir compiler arguments unit directory = do
   let core = directory </> "core"
       objects = directory </> "objects"
   paths <- sort . filter ((== ".cbd") . takeExtension) <$> files core
@@ -689,7 +688,6 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
       sources <- mapM (\(value,signatures') -> if any (\(_,convention,_,_,_) -> convention == "capi") signatures'
           then stubSource value else pure "")
         (zip retained perModule)
-      let nativeDirectory = directory </> "native"
       imports <- concat <$> mapM (either fail pure . nativeImports unit) retained
       let signedVariants symbol = length (nub [map pointerAbi arguments' |
             (name,_,_,arguments',_) <- signatures, name == symbol]) > 1
@@ -707,27 +705,14 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
               header `elem` adaptedHeaders] of
               header:_ -> Just header
               [] -> Nothing
-      -- Capture candidate source providers while the configured package headers
-      -- still exist. Final linking selects only actually unresolved symbols,
-      -- so a package-owned implementation is never replaced by the provider.
-      providers <- if any zlibChecksumImport imports then do
-        implementations <- zlibChecksumSources repository
-        forM implementations $ \(symbol, source) -> do
-          let output = nativeDirectory </> "providers/zlib" </> symbol
-          createDirectoryIfMissing True output
-          (bitcode,target,inputs) <- compileC compiler root configured output (Just source)
-          digest <- sha <$> BS.readFile bitcode
-          pure (object ["provider" .= ("zlib-checksums-1.2.11"::String), "symbols" .= [symbol],
-            "bitcode" .= bitcode,"bitcodeSha256" .= digest,"target" .= target,"inputs" .= inputs])
-        else pure []
       writeNativeWrappers compiler root arguments configured unit directory signatures finalizers
-        sources perModule providers wrapperHeader addresses [] False
+        sources perModule wrapperHeader addresses [] False
 
 -- The adapter compiler is shared by source acquisition and installed FCallIds.
 -- Both paths carry the original declared ABI, actual CAPI source and headers.
 writeNativeWrappers :: FilePath -> FilePath -> [String] -> [String] -> String -> FilePath ->
-  [Signature] -> [String] -> [String] -> [[Signature]] -> [Value] -> (String -> Maybe String) -> [(String,Bool)] -> [FilePath] -> Bool -> IO ()
-writeNativeWrappers compiler root arguments configured unit directory signatures finalizers sources perModule providers wrapperHeader addresses dataLibraries installed = do
+  [Signature] -> [String] -> [String] -> [[Signature]] -> (String -> Maybe String) -> [(String,Bool)] -> [FilePath] -> Bool -> IO ()
+writeNativeWrappers compiler root arguments configured unit directory signatures finalizers sources perModule wrapperHeader addresses dataLibraries installed = do
   let nativeDirectory = directory </> "native"
   nativeTarget <- if installed then do
     clang <- tool "THC_CLANG" "clang"
@@ -751,7 +736,7 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
     digest <- sha <$> BS.readFile path
     pure (object ["path" .= path,"sha256" .= digest])
   let inputIdentity = object $ ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,"installed" .= installed,
-        "sources" .= sources,"providers" .= providers,"addresses" .= addresses,"dataLibraries" .= dataInputs,
+        "sources" .= sources,"providers" .= ([]::[Value]),"addresses" .= addresses,"dataLibraries" .= dataInputs,
         "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers] ++
         ["adapterArguments" .= adapterArguments | not (null adapterArguments)]
       provisional = sha (BL.toStrict (encode inputIdentity))
@@ -828,7 +813,7 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
   roots <- mapM canonicalizePath (nub [path | (flag,path) <- zip arguments (drop 1 arguments), flag `elem` ["-odir","-outputdir"]])
   writeJson (directory </> "native.json") (object
     ["unit" .= unit,"installed" .= installed,"root" .= root,"objectRoots" .= roots,"bitcode" .= bitcode,"target" .= target,
-     "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,"providers" .= providers,
+     "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,"providers" .= ([]::[Value]),
      "dataLibraries" .= dataLibraries,"dataSymbols" .= [entry | (_,True,entry) <- entries],
      "finalizers" .= [entry | ((symbol,"ccall","unsafe",arguments',"void"),False,entry) <- entries,
        arguments' `elem` [["AddrRep"],["AddrRep","AddrRep"]], symbol `elem` finalizers],
@@ -869,11 +854,6 @@ nativeAddressDeclarations unit value = do
   -- or compiler state. These exact RTS objects remain context-owned overrides.
   pure [(symbol,function) | (symbol,function) <- symbols, function || symbol `notElem`
     ["enabled_capabilities","ghc_unique_counter64","ghc_unique_inc","RtsFlags","rts_IOManagerIsWin32Native"]]
-
-zlibChecksumImport :: Value -> Bool
-zlibChecksumImport value = member value "header" == Just "zlib.h" &&
-  maybe False (\emitted -> member emitted "symbol" `elem` [Just "adler32", Just "crc32"])
-    (member value "emitted")
 
 headerInputs :: FilePath -> Value -> IO [Value]
 headerInputs generated value = do
@@ -1268,20 +1248,6 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
           output <- command directory nm ["--undefined-only","--format=posix",final]
           pure [nativeIrSymbol target name | line <- lines output, name:_ <- [words line]]
     _ <- trim prepared
-    initialExternals <- unresolved
-    candidates' <- maybe (pure []) (either fail pure . parseValue) (member record "providers")
-    providers <- filterM (\value -> any (`elem` initialExternals) <$> (get value "symbols" :: IO [String])) candidates'
-    unless (null providers) $ do
-      providerBitcodes <- forM providers $ \value -> do
-        check (member value "target" == Just (toJSON (target::String))) "package native source provider target differs"
-        path <- get value "bitcode"
-        digest <- sha <$> BS.readFile path
-        check (member value "bitcodeSha256" == Just (toJSON digest)) "package native source provider bitcode changed"
-        pure path
-      let resolved = directory </> "native/resolved.bc"
-      _ <- command directory link (prepared : providerBitcodes ++ ["-o",resolved])
-      _ <- trim resolved
-      pure ()
     externals <- unresolved
     declarations <- fmap concat $ forM archived $ \(_,_,value) -> do
       either fail pure (nativeStaticExports value)
@@ -1316,8 +1282,8 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     -- raw Core address labels must not select native Haskell closures here.
     nativeArchives <- if member record "installed" == Just (Bool True) && not (null nativeExternals)
       then do
-        -- Inspect the final module: source providers can introduce declarations
-        -- after linkedSource was read. nm alone does not distinguish undefined
+        -- Inspect the final module: intrinsic lowering can change declarations.
+        -- nm alone does not distinguish undefined
         -- functions from data references to native text, such as info tables.
         let finalIR = directory </> "native/package.ll"
         _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
@@ -1436,13 +1402,12 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
           Just (object ["sha256" .= sha dependencyBytes,"hex" .= hex dependencyBytes]),runtimeInputs)
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
-    providerInputs <- mapM (\value -> get value "inputs") providers
-    let inputs = sourceInputs ++ providerInputs
+    let inputs = sourceInputs
     let proof = object $ ["schema" .= (if null finalizers then 1 else 2::Int),"format" .= (format::String),
           "profile" .= ("thc-package-c-ffi-v1"::String),"unit" .= unit,"target" .= target,
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,
           "exports" .= public,"dependencies" .= dependencies,
-          "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,
+          "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= ([]::[Value]),
             "nativeProduct" .= (nativeProductProof <$> ownedProduct),
             "dependencies" .= [object ["declaredPath" .= path,"unit" .= member peer "unit",
               "componentSha256" .= member peer "componentSha256","bitcodeSha256" .= member peer "bitcodeSha256"] |

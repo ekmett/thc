@@ -93,7 +93,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         assertEqual diagnostic ExitSuccess status
       withCurrentDirectory root $ do
         captureNativeObject (root </> "pieces") compiler nativeArguments
-        capturePackageNative repository helper libdir compiler arguments "fixture-unit" directory
+        capturePackageNative helper libdir compiler arguments "fixture-unit" directory
       let cbd = directory </> "core/units/u-fixture-unit/Demand.cbd"
       before <- BS.readFile cbd
       original <- either assertFailure pure (readModuleValue before)
@@ -130,6 +130,57 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       assertEqual "hit performs no forwarding/LLVM construction" produced =<< getModificationTime forwarding
       assertEqual "identical immutable input produces identical qualified CBD" after =<< BS.readFile cbd
       writeFile (root </> "qualified-cbd.path") cbd
+  , TestLabel "checksum imports use the configured native zlib dependency" $ TestCase $ withScratch $ \root -> do
+      repository <- lookupEnv "THC_TEST_ROOT" >>= maybe getCurrentDirectory pure
+      compiler <- tool "GHC" "ghc"
+      packageTool <- tool "GHC_PKG" "ghc-pkg"
+      helper <- tool "THC_TEST_INTERFACE" "thc-interface"
+      libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
+        [selectedLibdir] -> pure selectedLibdir
+        _ -> assertFailure "selected GHC must report one library directory"
+      let directory = root </> "acquired"
+          objects = directory </> "objects"
+          source = root </> "Checksum.hs"
+          arguments = ["-odir",objects,"-hidir",objects,"-lz"] ++
+            ["-dynamic" | Host.os /= "mingw32"] ++ ["-this-unit-id","fixture-unit"]
+      createDirectoryIfMissing True objects
+      writeFile source $ unlines
+        ["{-# LANGUAGE ForeignFunctionInterface #-}", "module Checksum (adler, crc) where",
+         "import Foreign.C.Types", "import Foreign.Ptr",
+         "foreign import ccall unsafe \"zlib.h adler32\" adler :: CULong -> Ptr CUChar -> CUInt -> IO CULong",
+         "foreign import ccall unsafe \"zlib.h crc32\" crc :: CULong -> Ptr CUChar -> CUInt -> IO CULong"]
+      withEnvironment [("THC_CORE_OUT",directory </> "core"),("THC_GHC_OUT",objects)] $ do
+        let exportArguments = ["-this-unit-id=fixture-unit","-fwrite-if-simplified-core",
+              "-fplugin-opt=THC.Plugin:post-tidy","-fplugin-opt=THC.Plugin:unit-qualified",
+              "-fplugin-opt=THC.Plugin:foreign-import-provenance",source]
+        (status,_,diagnostic) <- if Host.os == "mingw32"
+          then do
+            powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
+            let response = root </> "export.args"
+            writeFile response (escapeArgs exportArguments)
+            readProcessWithExitCode powershell
+              ["-NoProfile","-File",repository </> "bin/export-core.ps1","@" ++ response] ""
+          else readProcessWithExitCode (repository </> "bin/export-core.sh") exportArguments ""
+        assertEqual diagnostic ExitSuccess status
+      withCurrentDirectory root $
+        capturePackageNative helper libdir compiler arguments "fixture-unit" directory
+      let cbd = directory </> "core/units/u-fixture-unit/Checksum.cbd"
+      original <- either assertFailure pure . readModuleValue =<< BS.readFile cbd
+      (_,descriptor) <- finishPackageNativeWithDependencies packageTool Nothing [] [] (root </> "pieces")
+        directory directory "fixture-unit" (Just []) [("Checksum",cbd)]
+      assertBool "configured checksum import publishes a native component" (descriptor /= Nothing)
+      acquired <- either assertFailure pure . readModuleValue =<< BS.readFile cbd
+      let proof = maybe (error "checksum native link") id (lookupField "packageNativeLink" acquired)
+          inputs = maybe (error "checksum build inputs") id (lookupField "buildInputs" proof)
+      assertEqual "original typed checksum import provenance survives native linking"
+        (lookupField "staticForeignImports" original) (lookupField "staticForeignImports" acquired)
+      assertEqual "ordinary checksum has no replacement source provider"
+        (Just (toJSON ([]::[Value]))) (lookupField "providers" inputs)
+      assertEqual "the native library owns the unresolved checksum symbol"
+        (Just (toJSON (["adler32","crc32"]::[String]))) (lookupField "unresolved" inputs)
+      assertBool "normal declared zlib linkage is recorded"
+        ("-lz" `isInfixOf` show (lookupField "nativeLibraries" inputs))
+      assertBool "native dependency bytes are retained" (lookupField "nativeLibrary" proof /= Nothing)
   , TestLabel "capture verifies the sole adapter root, ABI and final canonical provider" $ TestCase $ do
       withScratch $ \root -> do
         clang <- tool "THC_CLANG" "clang"

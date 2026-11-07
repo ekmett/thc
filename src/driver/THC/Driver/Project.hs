@@ -2635,7 +2635,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
       (Nothing,Nothing,Nothing) -> do
         selectedHelper <- prepareInterfaceHelper context (contextRoot context)
         Directory.withCurrentDirectory sourceDir $
-          capturePackageNative (contextRoot context) (installedHelper selectedHelper) (installedLibdir selectedHelper)
+          capturePackageNative (installedHelper selectedHelper) (installedLibdir selectedHelper)
             (componentCompiler component) (arguments ++ replay) (unitId unit) staging
         updated <- forM exported $ \path -> do
           value <- readCoreMetadata path

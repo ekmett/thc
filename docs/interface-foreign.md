@@ -110,6 +110,11 @@ Float/Double import boundary.
 This component test does not qualify full Core lowering with the exception runtime
 or the installed GHC floating/math package, including its rounding behavior.
 
+Zlib checksum imports also use the package's configured native zlib linkage.
+Acquisition does not require a particular zlib source version or embed a second
+checksum implementation. Buffers passed to host zlib must have native storage
+from their creation, as described below.
+
 ## Pass buffers and pointers
 
 A managed Haskell buffer is not a native machine address. Choose storage that
