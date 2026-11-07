@@ -29,6 +29,11 @@ public final class LocalBinding extends Node {
         generic = !preferLong || proof.getPresent() && !exactLong;
     }
     boolean needsCallState() { return value.needsCallState(); }
+    boolean readsRawReference(int destination, int otherTemporary) {
+        return slot == destination && typedSlots == null && generic && !exactLong &&
+            (referenceKind == CoreKind.UNKNOWN || referenceKind == CoreKind.OBJECT) &&
+            value instanceof LocalRead local && local.readsReferenceOutside(destination, otherTemporary);
+    }
     public Object evaluate(VirtualFrame frame) {
         if (referenceKind == CoreKind.DATA) return value.executeRequiredDataValue(frame);
         if (referenceKind == CoreKind.CLOSURE) return value.executeRequiredClosure(frame);

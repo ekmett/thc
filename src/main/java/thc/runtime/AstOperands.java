@@ -24,6 +24,15 @@ public final class AstOperands extends Expr {
         return body.needsCallState();
     }
     @Override public void prepareTuple(int[] slots, int offset) { body.prepareTuple(slots, offset); }
+    private PointerEquality directReferenceComparison() {
+        // Only current, unwrapped generic reference reads qualify. Neither source
+        // can alias a temporary written by preparation; typed demand stays staged.
+        if (operands.length == 2 && temporaries.length == 2 && temporaries[0] != temporaries[1] &&
+            body instanceof PointerEquality comparison && comparison.readsReferenceSlots(temporaries[0], temporaries[1]) &&
+            operands[0].readsRawReference(temporaries[0], temporaries[1]) &&
+            operands[1].readsRawReference(temporaries[1], temporaries[0])) return comparison;
+        return null;
+    }
     @ExplodeLoop private void prepare(VirtualFrame frame, int start) {
         for (int index = start; index < operands.length; index++) {
             try { operands[index].write(frame); }
@@ -114,6 +123,8 @@ public final class AstOperands extends Expr {
     @Override public long executeLong(VirtualFrame frame) throws com.oracle.truffle.api.nodes.UnexpectedResultException {
         boolean suspended = false;
         try {
+            PointerEquality comparison = directReferenceComparison();
+            if (comparison != null) return comparison.executeLocalReferences(frame, operands[0], operands[1]);
             prepareBody(frame, null, 0);
             return body.executeLong(frame);
         } catch (AstCapture cut) {

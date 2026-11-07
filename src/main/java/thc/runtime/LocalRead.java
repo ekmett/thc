@@ -17,6 +17,10 @@ public final class LocalRead extends Expr {
         this.slot = slot; this.cell = cell; this.referenceStorage = referenceStorage;
     }
     @Override public boolean needsCallState() { return slot == FrameLayout.BLOOM_FILTER; }
+    boolean readsReferenceSlot(int expected) { return !cell && referenceStorage && slot == expected; }
+    boolean readsReferenceOutside(int first, int second) {
+        return !cell && referenceStorage && slot != first && slot != second && getRepresentation().getKind() == CoreKind.OBJECT;
+    }
     // Initialized non-cell locals use their live primitive storage; widened activations retain tag checks.
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
         return (!cell && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Int) || frame.isInt(slot)

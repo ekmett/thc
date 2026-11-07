@@ -13,6 +13,13 @@ final class PointerEquality extends Expr {
         setRepresentation(new CoreRepresentation(CoreKind.LONG, true, false, null, null, null, null, null, null));
     }
     @Override public boolean needsCallState() { return left.needsCallState() || right.needsCallState(); }
+    boolean readsReferenceSlots(int first, int second) {
+        return left instanceof LocalRead a && a.readsReferenceSlot(first) &&
+            right instanceof LocalRead b && b.readsReferenceSlot(second);
+    }
+    long executeLocalReferences(VirtualFrame frame, LocalBinding first, LocalBinding second) {
+        return first.evaluate(frame) == second.evaluate(frame) ? 1L : 0L;
+    }
     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
     @Override public long executeLong(VirtualFrame frame) {
         return left.execute(frame) == right.execute(frame) ? 1L : 0L;
