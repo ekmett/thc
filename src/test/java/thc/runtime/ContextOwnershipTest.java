@@ -209,12 +209,12 @@ class ContextOwnershipTest {
                         env.err().write(42); assertArrayEquals(new byte[]{42}, errors.toByteArray());
                         assertSame(current.getThreads().pollState(Thread.currentThread()), current.getThreadPollState().get());
                         assertNull(current.getThreadPollState().get().getCurrent());
-                        assertSame(current.getMaskingState().cell(Thread.currentThread()), current.getThreadMaskingState().get());
-                        assertSame(MaskingState.UNMASKED, current.getThreadMaskingState().get().getValue());
+                        assertSame(current.getMaskingState().cell(Thread.currentThread()), language.getThreadMaskingState().get());
+                        assertSame(MaskingState.UNMASKED, language.getThreadMaskingState().get().getValue());
                         current.getMaskingState().set(MaskingState.MASKED_INTERRUPTIBLE);
-                        assertSame(MaskingState.MASKED_INTERRUPTIBLE, current.getThreadMaskingState().get().getValue());
-                        assertSame(current.getStackAnnotations().cell(Thread.currentThread()), current.getThreadAnnotations().get());
-                        assertSame(StackAnnotationState.EMPTY, current.getThreadAnnotations().get().getValue());
+                        assertSame(MaskingState.MASKED_INTERRUPTIBLE, language.getThreadMaskingState().get().getValue());
+                        assertSame(current.getStackAnnotations().cell(Thread.currentThread()), language.getThreadAnnotations().get());
+                        assertSame(StackAnnotationState.EMPTY, language.getThreadAnnotations().get().getValue());
                         assertTrue(current.getSingleThreadedAssumption().isValid());
                     } finally { active.leave(); }
                 } catch (Throwable error) { failure.set(error); }
@@ -228,7 +228,7 @@ class ContextOwnershipTest {
                 try {
                     assertSame(state.get(), Language.currentState());
                     assertFalse(state.get().getSingleThreadedAssumption().isValid(), "The prepatch carrier must count as first");
-                    assertSame(MaskingState.UNMASKED, state.get().getThreadMaskingState().get().getValue());
+                    assertSame(MaskingState.UNMASKED, language.getThreadMaskingState().get().getValue());
                 } finally { active.leave(); }
             }
             assertNull(field(owner, "state"), "Runtime disposal must detach its authority");

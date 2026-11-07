@@ -4,10 +4,12 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import java.util.List;
 import thc.Language;
 
 public final class StackAnnotations {
+    private static final LanguageReference<Language> LANGUAGES = LanguageReference.create(Language.class);
     private StackAnnotations() {}
     public static void validate(List<CoreRepresentation> arguments, List<?> flags, CoreRepresentation result) {
         CoreRepresentation annotation = arguments.isEmpty() ? null : arguments.getFirst();
@@ -16,7 +18,7 @@ public final class StackAnnotations {
             throw RuntimeFault.fault("annotateStack#: expected a lazy lifted annotation and State action");
         CoreProfileAction.validate(arguments.subList(1, arguments.size()), flags.subList(1, flags.size()), result);
     }
-    public static StackAnnotationState current(Node node) { return Language.currentState(node).getThreadAnnotations().get().getValue(); }
+    public static StackAnnotationState current(Node node) { return LANGUAGES.get(node).getThreadAnnotations().get().getValue(); }
     @TruffleBoundary public static void set(Node node, StackAnnotationState state) { Language.currentState(node).getStackAnnotations().set(state); }
     public static StackAnnotationState enter(Node node, Object annotation) {
         StackAnnotationState prior = current(node); set(node, prior.push(annotation)); return prior;

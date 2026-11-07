@@ -38,9 +38,11 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
     private final ContextThreadLocal<HandoffState> handoffState = locals.createContextThreadLocal((context, thread) -> new HandoffState());
     public ContextThreadLocal<HandoffState> getHandoffState() { return handoffState; }
     private final ContextThreadLocal<GuestThreads.PollState> threadPollState = locals.createContextThreadLocal((context, thread) -> context.pollStates.get(thread));
+    public ContextThreadLocal<GuestThreads.PollState> getThreadPollState() { return threadPollState; }
     private final ContextThreadLocal<CarrierLocal.Cell<MaskingState>> threadMaskingState = locals.createContextThreadLocal((context, thread) -> context.maskingState.cell$org_intelligence_thc(thread));
     public ContextThreadLocal<CarrierLocal.Cell<MaskingState>> getThreadMaskingState() { return threadMaskingState; }
     private final ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> threadAnnotations = locals.createContextThreadLocal((context, thread) -> context.stackAnnotations.cell$org_intelligence_thc(thread));
+    public ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> getThreadAnnotations() { return threadAnnotations; }
     private static final ContextReference<ContextState> CONTEXTS = ContextReference.create(Language.class);
     public static State currentState() { return currentState(null); }
     public static State currentState(Node node) {
@@ -142,8 +144,6 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         private final GuestThreads threads;
         private final SparkPool sparks;
         private final ContextThreadLocal<GuestThreads.PollState> threadPollState;
-        private final ContextThreadLocal<CarrierLocal.Cell<MaskingState>> threadMaskingState;
-        private final ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> threadAnnotations;
         private final RuntimeTraceServices runtimeTrace;
         private final Object compilationOwner = new Object();
         private final RuntimeJitServices runtimeJit;
@@ -212,8 +212,6 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
             packageCbits = new PackageScalarLibraries(env);
             nativeCallbacks = new NativeCallbacks(this);
             threadPollState = language.threadPollState;
-            threadMaskingState = language.threadMaskingState;
-            threadAnnotations = language.threadAnnotations;
             runtimeTrace = new RuntimeTraceServices(env.err());
             runtimeJit = new RuntimeJitServices(this);
             stm = new ManagedSTM();
@@ -272,8 +270,6 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         public GuestThreads getThreads() { return threads; }
         public SparkPool getSparks() { return sparks; }
         public ContextThreadLocal<GuestThreads.PollState> getThreadPollState() { return threadPollState; }
-        public ContextThreadLocal<CarrierLocal.Cell<MaskingState>> getThreadMaskingState() { return threadMaskingState; }
-        public ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> getThreadAnnotations() { return threadAnnotations; }
         public RuntimeTraceServices getRuntimeTrace() { return runtimeTrace; }
         public RuntimeJitServices getRuntimeJit() { return runtimeJit; }
         public GraphRecovery getGraphRecovery() { return graphRecovery; }
