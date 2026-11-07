@@ -33,6 +33,7 @@ class FrameAccessThreadTest {
             var descriptor = builder.build();
             var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
             var read = new LocalRead(slot, false).proven(proof);
+            var generic = new LocalRead(slot, false).proven(new CoreRepresentation(CoreKind.OBJECT));
             java.util.function.Supplier<Object> typedRead = () -> switch (value) {
                 case Integer ignored -> read.executeRequiredInt(frame);
                 case Long ignored -> read.executeRequiredLong(frame);
@@ -46,6 +47,7 @@ class FrameAccessThreadTest {
             FrameAccess.writeObject(sibling, slot, value);
             assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(slot));
             assertEquals(value, typedRead.get(), "descriptor widening preserves older activation tags");
+            assertEquals(value, generic.execute(frame), "Broad Object reads retain the older activation's scalar tag");
             FrameAccess.write(frame, slot, value);
             assertTrue(frame.isObject(slot));
             assertEquals(value, typedRead.get(), "a proved scalar may have boxed frame storage");
