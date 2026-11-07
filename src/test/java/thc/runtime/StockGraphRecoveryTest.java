@@ -38,18 +38,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Timeout;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(90)
 class StockGraphRecoveryTest {
-    @BeforeAll static void requireStockRuntime() {
-        var origin = Truffle.getRuntime().getClass().getProtectionDomain().getCodeSource().getLocation().getPath();
-        org.junit.jupiter.api.Assumptions.assumeTrue(origin.endsWith("/truffle-runtime-25.3.4.1.jar"),
-                "requires -Pthc.stockTruffle=true; the overlay retries inside compilation instead");
-    }
     @Test void stockAstOsrCallbackExposesOriginalOwnerThroughPublicChildren() { ownership(false); }
     @Test void stockBytecodeOsrCallbackExposesOriginalOwnerThroughPublicChildren() { ownership(true); }
     @Test void terminalStockFailureRecoversOnlyFreshEntryWithoutReplayingEffects() {
@@ -79,6 +73,14 @@ class StockGraphRecoveryTest {
     @Test void launcherReportsRealCompilerFailureWithoutUnwindingGuestEntry() throws Exception {
         Truffle.getRuntime();
         Controls.launcherPolicy();
+    }
+    @Test void transientFailureRetiresPhysicalTargetButCancellationDoesNot() {
+        Truffle.getRuntime();
+        Controls.failureAdmission();
+    }
+    @Test void thousandNodeBudgetRetiresFailedEntryWhileSmallTraceStillInstalls() {
+        Truffle.getRuntime();
+        Controls.smallBudget();
     }
     @Test void realBytecodeOsrFailureFinishesOldLoopThenFreshEntryRunsCompiledOsr() {
         Truffle.getRuntime();
@@ -122,7 +124,8 @@ class StockGraphRecoveryTest {
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.OSRCompilationThreshold", "1024")
-                .option("engine.CompilationFailureAction", "Throw").build();
+                .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.DiagnoseFailure", "false").build();
              var first = Context.newBuilder("thc").engine(engine).build();
              var second = Context.newBuilder("thc").engine(engine).build()) {
             first.initialize("thc"); second.initialize("thc");
@@ -141,7 +144,104 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build();
+        }
+        static void failureAdmission() {
+            try (var context = strictContext()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    for (boolean shared : List.of(false, true)) {
+                        var root = new FunctionRoot(language, new FrameLayout().build(), "transient failure", null,
+                                new int[0], new int[0], new int[0], new AstSameFrameArm(new Heavy(new long[4096],
+                                new AtomicInteger(), new AtomicReference<RootNode>())), new Metrics(true));
+                        if (shared) root.shareCompilationOwnership();
+                        var target = (OptimizedCallTarget) root.getCallTarget();
+                        var service = Language.currentState().getGraphRecovery();
+                        // Callback controls exercise flags independently of the actual compiler tests.
+                        service.failed(target,
+                                "jdk.graal.compiler.core.common.CancellationBailoutException: Compilation cancelled",
+                                true, false);
+                        assertNull(root.graphFailure.get());
+                        service.failed(target,
+                                "jdk.vm.ci.code.BailoutException: transient compilation failure", true, false);
+                        assertTrue(root.compilationFailureObserved, "owned and shared failed targets must be terminal");
+                        if (shared) {
+                            assertNull(root.graphFailure.get(), "shared code cannot publish context-owned recovery");
+                        } else {
+                            assertNotNull(root.graphFailure.get(), "even a nonpermanent failed graph must be retired");
+                            assertEquals("jdk.vm.ci.code.BailoutException: transient compilation failure", root.graphFailure.get().reason());
+                            assertTrue(root.graphFailure.get().bailout()); assertFalse(root.graphFailure.get().permanent());
+                        }
+                        assertFalse(target.canBeInlined(), "retired code cannot be absorbed into a caller's graph");
+                        assertEquals(0, root.prepareGraphBudgetRetry(0), "the failed source must not extract and rearm itself");
+                        assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
+                        if (shared) assertNull(recovered(root), "shared code stays unowned after failure");
+                        else assertNotNull(recovered(root), "a transient failure also installs a smaller fresh entry");
+                        assertFalse(root.isCloningAllowed(), "the failed source cannot be split into unchanged retryable clones");
+                    }
+                } finally { context.leave(); }
+            }
+        }
+        static void smallBudget() {
+            try (var context = thc.Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), thc.ContextProfile.LAUNCHER)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "2")
+                    .build()) {
+                context.initialize("thc"); context.enter();
+                var runtime = (OptimizedTruffleRuntime) Truffle.getRuntime();
+                var attempts = new AtomicInteger(); var failures = new AtomicInteger();
+                OptimizedTruffleRuntimeListener listener = null;
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
+                    var root = new FunctionRoot(language, new FrameLayout().build(), "1000 node exhausted root", null,
+                            new int[0], new int[0], new int[0], new Heavy(new long[4096], effects, source), new Metrics(true));
+                    var target = (OptimizedCallTarget) root.getCallTarget();
+                    listener = new OptimizedTruffleRuntimeListener() {
+                        @Override public void onCompilationStarted(OptimizedCallTarget compiling, AbstractCompilationTask task) {
+                            if (compiling == target) attempts.incrementAndGet();
+                        }
+                        @Override public void onCompilationFailed(OptimizedCallTarget failed, String reason,
+                                boolean bailout, boolean permanent, int tier, java.util.function.Supplier<String> stack) {
+                            if (failed == target) {
+                                assertTrue(GraphRecovery.graphTooBig(reason, bailout, permanent));
+                                assertTrue(reason.endsWith("Limit: 1000."), "launcher must use the small speculative budget");
+                                failures.incrementAndGet();
+                            }
+                        }
+                    };
+                    runtime.addListener(listener);
+                    target.compile(true);
+                    assertEquals(1, attempts.get()); assertEquals(1, failures.get());
+                    assertEquals(0, effects.get()); assertNotNull(root.graphFailure.get());
+                    assertTrue(root.graphFailure.get().bailout()); assertTrue(root.graphFailure.get().permanent());
+                    assertEquals(0, root.prepareGraphBudgetRetry(0), "the old runtime hook cannot rearm a failed physical target");
+                    for (int i = 0; i < 20; i++)
+                        assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(20, effects.get()); assertSame(root, source.get());
+                    assertEquals(1, attempts.get(), "hot interpreted entries cannot resubmit the failed target");
+                    assertEquals(1, failures.get()); assertFalse(target.isValid());
+                    assertNull(recovered(root)); assertFalse(root.isCloningAllowed());
+                    var smallArm = new AstSameFrameArm(new Expr() {
+                        @Override public Object execute(VirtualFrame frame) {
+                            return CompilerDirectives.inCompiledCode() ? 17L : 19L;
+                        }
+                    });
+                    var smallOwner = new FunctionRoot(language, new FrameLayout().build(), "small trace owner", null,
+                            new int[0], new int[0], new int[0], smallArm, new Metrics(false));
+                    var small = (OptimizedCallTarget) new AstSameFrameArm.ArmRoot(smallOwner, smallArm, 0).getCallTarget();
+                    small.prepareForAOT();
+                    small.compile(true); assertTrue(small.isValidLastTier());
+                    var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, smallOwner.getFrameDescriptor());
+                    assertEquals(17L, Calls.target(small, new Object[]{frame}),
+                            "the first installed same-frame side trace call must execute compiled code");
+                } finally {
+                    if (listener != null) runtime.removeListener(listener);
+                    context.leave();
+                }
+            }
         }
         private static FunctionRoot capturedRoot(Language language, CaptureLayout capture, Expr body, Metrics metrics, boolean async) {
             var layout = new FrameLayout(); int seed = layout.bind("seed", FrameSlotKind.Long);
@@ -277,6 +377,7 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -396,6 +497,7 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build();
                  var first = Context.newBuilder("thc").engine(engine).build();
                  var second = Context.newBuilder("thc").engine(engine).build()) {
@@ -457,6 +559,7 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "1")
                     .option("engine.CompilationFailureAction", "Print")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -491,6 +594,7 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -613,6 +717,7 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -654,6 +759,7 @@ class StockGraphRecoveryTest {
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.OSRCompilationThreshold", "1024")
                     .option("engine.CompilationFailureAction", "Print")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -765,6 +871,7 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build();
                  var workers = Executors.newFixedThreadPool(2)) {
                 context.initialize("thc"); context.enter();
@@ -829,11 +936,13 @@ class StockGraphRecoveryTest {
         static void launcherPolicy() throws Exception {
             try (var context = thc.Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), thc.ContextProfile.LAUNCHER)
                     .option("engine.SingleTierCompilationThreshold", "2")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build();
                  var worker = Executors.newSingleThreadExecutor()) {
                 context.initialize("thc"); context.enter();
                 var runtime = (OptimizedTruffleRuntime) Truffle.getRuntime();
                 var reached = new CountDownLatch(1); var release = new CountDownLatch(1);
+                var attempts = new AtomicInteger();
                 OptimizedTruffleRuntimeListener listener = null;
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -852,6 +961,7 @@ class StockGraphRecoveryTest {
                     listener = new OptimizedTruffleRuntimeListener() {
                         @Override public void onCompilationStarted(OptimizedCallTarget compiling, AbstractCompilationTask task) {
                             if (compiling != target) return;
+                            attempts.incrementAndGet();
                             reached.countDown();
                             try {
                                 if (!release.await(30, TimeUnit.SECONDS))
@@ -891,6 +1001,7 @@ class StockGraphRecoveryTest {
                     assertEquals(expected, Calls.target(target, new Object[]{0L}));
                     assertEquals(4, effects.get()); assertSame(fresh, source.get());
                     assertTrue(metrics.getCompiledEntries() > before, "the real entry must execute installed replacement code");
+                    assertEquals(1, attempts.get(), "a physical failed target must never attempt compilation again");
                 } finally {
                     release.countDown();
                     if (listener != null) runtime.removeListener(listener);
@@ -904,6 +1015,7 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -965,7 +1077,8 @@ class StockGraphRecoveryTest {
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
-                    .option("engine.CompilationFailureAction", "Throw").build()) {
+                    .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false").build()) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -1015,6 +1128,7 @@ class StockGraphRecoveryTest {
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.OSRCompilationThreshold", "1024")
                     .option("engine.CompilationFailureAction", "Print")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -1086,6 +1200,7 @@ class StockGraphRecoveryTest {
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();
                 try {

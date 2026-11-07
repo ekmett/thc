@@ -1,0 +1,49 @@
+--- a/com/oracle/truffle/runtime/OptimizedCallTarget.java
++++ b/com/oracle/truffle/runtime/OptimizedCallTarget.java
+@@ -156,7 +156,7 @@
+     }
+     /** Failed physical targets are terminal; recovery creates a fresh target. */
+     public static int terminalTargetPolicyVersion() {
+-        return 1;
++        return 2;
+     }
+     private final boolean declaredUnprofiledReturn;
+ 
+--- a/com/oracle/truffle/runtime/OptimizedDirectCallNode.java
++++ b/com/oracle/truffle/runtime/OptimizedDirectCallNode.java
+@@ -145,7 +145,8 @@
+ 
+     @Override
+     public boolean isCallTargetCloningAllowed() {
+-        return getCallTarget().getRootNode().isCloningAllowed();
++        OptimizedCallTarget target = getCallTarget();
++        return !target.isCompilationFailed() && target.getRootNode().isCloningAllowed();
+     }
+ 
+     public int getCallCount() {
+@@ -206,8 +207,12 @@
+                 return;
+             }
+ 
++            OptimizedCallTarget currentTarget = getCallTarget();
++            // Retirement can occur after the splitting strategy's admission check.
++            if (currentTarget.isCompilationFailed()) {
++                return;
++            }
+             assert isCallTargetCloningAllowed();
+-            OptimizedCallTarget currentTarget = getCallTarget();
+ 
+             OptimizedCallTarget splitTarget = currentTarget.cloneUninitialized();
+             currentTarget.removeDirectCallNode(this);
+@@ -225,7 +230,10 @@
+ 
+     @Override
+     public boolean cloneCallTarget() {
++        if (getCallTarget().isCompilationFailed()) {
++            return false;
++        }
+         TruffleSplittingStrategy.forceSplitting(this);
+-        return true;
++        return !getCallTarget().isCompilationFailed();
+     }
+ }

@@ -19,13 +19,8 @@ import org.junit.jupiter.api.Test;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Listener-boundary classification controls; genuine installation failure evidence is separate. */
+/** Listener-boundary ownership and sibling receipt controls. */
 class GraphRecoverySizeFailureTest {
-    @Test void acceptsOnlyExactPermanentSizeFailures() throws Exception {
-        Truffle.getRuntime();
-        Controls.classification();
-    }
-
     @Test void sizeReceiptsKeepTheirOwnerAndSingleClaim() throws Exception {
         Truffle.getRuntime();
         Controls.ownership();
@@ -143,46 +138,6 @@ class GraphRecoverySizeFailureTest {
                     int innerIndex = NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).indexOf(inner);
                     var copiedInner = NodeUtil.findAllNodeInstances(fresh, AstSameFrameArm.class).get(innerIndex);
                     assertNotNull(sideTarget(copiedInner), "recovery must reduce the failed sibling's nested arm");
-                } finally { context.leave(); }
-            }
-        }
-
-        static void classification() throws Exception {
-            try (var engine = engine(); var context = Context.newBuilder("thc").engine(engine).build()) {
-                context.initialize("thc"); context.enter();
-                try {
-                    var root = root(); var target = (OptimizedCallTarget) root.getCallTarget();
-                    var listener = listener(Language.currentState().getGraphRecovery());
-                    for (String reason : new String[]{GRAPH_SIZE, CODE_SIZE}) {
-                        root.graphFailure.set(null);
-                        listener.onCompilationFailed(target, reason, true, true, 2, () -> "unused");
-                        var receipt = root.graphFailure.get();
-                        assertNotNull(receipt, reason);
-                        assertSame(target, receipt.target()); assertEquals(reason, receipt.reason());
-                        assertFalse(receipt.claimed()); assertFalse(target.isValid());
-                    }
-                    for (String reason : new String[]{null, "", "prefix " + CODE_SIZE, CODE_SIZE + " suffix",
-                            CODE_SIZE + "\n", CODE_SIZE + "\r\n", " " + CODE_SIZE, CODE_SIZE + " ",
-                            "java.lang.RuntimeException: " + CODE_SIZE,
-                            "jdk.vm.ci.code.BailoutException:java.lang.RuntimeException:java.lang.Exception:\n" + CODE_SIZE,
-                            "jdk.vm.ci.code.BailoutException: Code installation failed: code cache is full",
-                            "jdk.vm.ci.code.BailoutException: Code installation failed: dependencies failed",
-                            "jdk.vm.ci.code.BailoutException: Code installation failed: nmethod reclaimed",
-                            "jdk.graal.compiler.core.common.RetryableBailoutException: Compilable not ready for compilation.",
-                            "jdk.graal.compiler.core.common.RetryableBailoutException: Compilation cancelled.",
-                            "jdk.graal.compiler.core.common.PermanentBailoutException: Compilation timeout.",
-                            "prefix " + GRAPH_SIZE, GRAPH_SIZE + "\n"}) {
-                        root.graphFailure.set(null);
-                        listener.onCompilationFailed(target, reason, true, true, 2, () -> "unused");
-                        assertNull(root.graphFailure.get(), reason);
-                    }
-                    for (String reason : new String[]{GRAPH_SIZE, CODE_SIZE}) {
-                        for (boolean[] flags : new boolean[][]{{false, false}, {false, true}, {true, false}}) {
-                            root.graphFailure.set(null);
-                            listener.onCompilationFailed(target, reason, flags[0], flags[1], 2, () -> "unused");
-                            assertNull(root.graphFailure.get(), reason + " bailout=" + flags[0] + " permanent=" + flags[1]);
-                        }
-                    }
                 } finally { context.leave(); }
             }
         }

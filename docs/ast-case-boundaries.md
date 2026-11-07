@@ -73,12 +73,12 @@ that a body survives partial evaluation.
 
 Lowering prepares an empty pass-through target in its language context. It
 retains exact capture metadata and the original slot numbering, but no copied
-arm body or guest invocation state. Only the real graph-budget callback clones
-the lowered body into that prepared target and replaces the caller's inline arm
-with `AstCaseArm`. This actual structural change advances a finite per-caller
-generation through the pinned [compilation lifecycle](../tools/truffle-protocol/README.md).
-The failed graph can then be discarded and the same caller target compiled from
-its smaller body, without executing the guest or seeding observed profiles.
+arm body or guest invocation state. The compiler callback retires the failed
+physical target. At the next fresh entry, recovery clones the owning function
+and extracts its deferred arm into the replacement's independently prepared
+target. This structural change advances the replacement's finite generation
+without executing the guest or seeding observed profiles. The failed caller
+target is never rearmed.
 
 Only that failure-created edge has an inlining veto; eager side roots retain
 normal inliner discretion. Caller clones have independent generations and may
@@ -88,25 +88,45 @@ metadata and exact primitive capture storage survive the extraction.
 
 This is not arbitrary recursive graph partitioning: an oversized extracted
 side body can still exceed its own compilation budget and execute interpreted.
-No graph limit is increased and no other permanent compilation failure is
-rearmed. `DeferredDefaultArmTest` covers actual Core graph-budget recovery,
+No graph limit is increased and no failed physical target is rearmed.
+`StockGraphRecoveryTest` covers actual Core graph-budget recovery,
 original first-installed calls, the matching unextractable failure, small arms
 remaining inline, scalar raw-bit preservation, caller clones and context-local
 side targets. Explicit callback unit controls are distinct from the test that
 provokes the compiler's actual budget failure.
 
-## Stock-runtime entry recovery
+## Fresh-entry recovery
 
-With stock Truffle, the compiler callback only records failure. The next fresh
-function entry claims the terminal failed task, clones the body with independent
+The launcher uses a 1,000-node speculative graph budget and disables diagnostic
+recompilation. Every actual compilation failure retires its physical target,
+including a transient bailout. Its original reason and flags remain in the
+context-owned receipt; a later success does not erase a failure. Shared prepared
+roots are also retired, but no context claims their recovery or publishes a
+replacement for them. Cancellation
+is reported separately as an abandoned task, not a successfully or unsuccessfully
+compiled graph, and does not request recovery.
+
+The compiler callback disables automatic admission and inlining without preparing
+guest code. The next fresh function entry claims the failed task, clones the body with independent
 case targets and fresh loop state, and applies the finite extraction to that
 replacement. Entry publication adopts the child and reports the structural change
 atomically. Old `executeBody` paths, tail anchors and saved frames remain on their
 original body; no guest invocation is replayed. A failed same-frame side selects
 the corresponding nested region in the copied owning function, even when that
-function's enclosing target was successfully installed. Deferred default sides
-are also prepared independently for the replacement. See the
+function's enclosing target was successfully installed. Recovery-created entries
+and side edges veto inlining so a small trace cannot rebuild the failed parent
+graph. Deferred default sides are also prepared independently for the replacement.
+If no smaller region remains, fresh AST entry uses a cold trampoline over a new
+frame with the original arguments; it consumes ingress once and never publishes
+an unchanged retryable clone. Existing body executions and parked continuations
+keep their frame, program counter and lexical cleanup. See the
 [stock-runtime workflow](contributing.md) for eligibility and limitations.
+
+The pinned terminal runtime rejects explicit submissions and queued work for
+retired targets, and honors the launcher's diagnostic-retry opt-out. Stock
+Truffle still bypasses its terminal flag at explicit `compile()` entry and
+forces diagnostic retries for `Throw`, `Diagnose` and `ExitVM`; application-only
+recovery on stock Truffle does not establish the full never-retry contract.
 
 ## Internal tail-spill compaction
 

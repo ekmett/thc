@@ -1,0 +1,186 @@
+--- a/com/oracle/truffle/runtime/OptimizedCallTarget.java
++++ b/com/oracle/truffle/runtime/OptimizedCallTarget.java
+@@ -149,11 +149,13 @@
+ 
+     /** The AST to be executed when this call target is called. */
+     private final RootNode rootNode;
+-    private volatile long graphBudgetGeneration;
+-    private volatile long graphBudgetRecoveries;
+ 
+     /** Exact pinned counterpart of RootNode.graphBudgetPolicyVersion(). */
+     public static int graphBudgetPolicyVersion() {
++        return 1;
++    }
++    /** Failed physical targets are terminal; recovery creates a fresh target. */
++    public static int terminalTargetPolicyVersion() {
+         return 1;
+     }
+     private final boolean declaredUnprofiledReturn;
+@@ -900,7 +902,7 @@
+     final boolean acceptForCompilation() {
+         // We use #toString here (rather than rootNode.getName) since that is what is printed in the
+         // compilation logs
+-        return engine.acceptForCompilation(this);
++        return !compilationFailed && engine.acceptForCompilation(this);
+     }
+ 
+     final boolean isCompilationFailed() {
+@@ -970,17 +972,7 @@
+      * for compilation.
+      */
+     public final boolean compile(boolean lastTierCompilation) {
+-        while (true) {
+-            long recovery = graphBudgetRecoveries;
+-            boolean installed = compile(lastTierCompilation, CompilationTask.SubmissionReason.EXPLICIT);
+-            // A compiler callback cannot submit or wait on its own unfinished
+-            // task. Only a completed synchronous request can retry here.
+-            // Every iteration requires a newly changed language boundary.
+-            if (installed || engine.backgroundCompilation || isSubmittedForCompilation() ||
+-                            graphBudgetRecoveries == recovery) {
+-                return installed;
+-            }
+-        }
++        return compile(lastTierCompilation, CompilationTask.SubmissionReason.EXPLICIT);
+     }
+ 
+     private boolean compile(boolean lastTierCompilation, CompilationTask.SubmissionReason submissionReason) {
+@@ -996,7 +988,6 @@
+ 
+     static final class OSRCompilation {
+         final OptimizedCallTarget target;
+-        private long recoveries;
+         private CompilationTask task;
+ 
+         OSRCompilation(OptimizedCallTarget target) {
+@@ -1008,17 +999,13 @@
+                 return;
+             }
+             target.maybeWaitForTask(task);
+-            // Only a completed foreground failure with a real structural
+-            // change permits another request. Background submission stays
+-            // nonwaiting; cancellation alone does not create a retry.
+-            if (!target.engine.backgroundCompilation && !target.isValid() &&
+-                            !target.isSubmittedForCompilation() && target.graphBudgetRecoveries > recoveries) {
+-                target.compile(true);
+-            }
+         }
+     }
+ 
+     private boolean compile(boolean lastTierCompilation, CompilationTask.SubmissionReason submissionReason, OSRCompilation osrRequest) {
++        if (compilationFailed) {
++            return false;
++        }
+         boolean lastTier = !engine.firstTierOnly && lastTierCompilation;
+         if (!needsCompile(lastTier)) {
+             return true;
+@@ -1044,6 +1031,10 @@
+             // Do not try to compile this target concurrently,
+             // but do not block other threads if compilation is not asynchronous.
+             synchronized (this) {
++                // Failure may have been published while this request waited for the target.
++                if (compilationFailed) {
++                    return false;
++                }
+                 if (!needsCompile(lastTier)) {
+                     return true;
+                 }
+@@ -1078,10 +1069,6 @@
+                             return false;
+                         }
+ 
+-                        if (osrRequest != null) {
+-                            osrRequest.recoveries = graphBudgetRecoveries;
+-                        }
+-                        this.graphBudgetGeneration = rootNode.getGraphBudgetGeneration();
+                         this.compilationTask = task = runtime().submitForCompilation(this, lastTier, submissionReason);
+                     } catch (RejectedExecutionException e) {
+                         return false;
+@@ -1265,22 +1252,9 @@
+ 
+     @Override
+     public final void onCompilationFailed(Supplier<String> serializedException, boolean silent, boolean bailout, boolean permanentBailout, boolean graphTooBig) {
+-        if (graphTooBig) {
+-            if (computeBlockCompilations()) {
+-                // retry compilation
+-                return;
+-            }
+-            long next = rootNode.prepareGraphBudgetRetry(graphBudgetGeneration);
+-            if (next > graphBudgetGeneration) {
+-                graphBudgetGeneration = next;
+-                graphBudgetRecoveries++;
+-                // Preserve normal inlining eligibility. This is not terminal
+-                // failure, and no installed guest code or execution is replayed.
+-                return;
+-            }
+-        }
+-
+-        handleCompilationFailure(serializedException, silent, bailout, permanentBailout);
++        // Neither partial-block fallback nor language rewrites may retry this physical target.
++        // A graph-budget bailout is terminal even when the compiler labels it retryable.
++        handleCompilationFailure(serializedException, silent, bailout, permanentBailout || graphTooBig);
+     }
+ 
+     private void handleCompilationFailure(Supplier<String> serializedException, boolean silent, boolean bailout, boolean permanentBailout) {
+--- a/com/oracle/truffle/runtime/BackgroundCompileQueue.java
++++ b/com/oracle/truffle/runtime/BackgroundCompileQueue.java
+@@ -195,6 +195,9 @@
+     }
+ 
+     public CompilationTask submitCompilation(Priority priority, OptimizedCallTarget target, CompilationTask.SubmissionReason submissionReason) {
++        if (target.isCompilationFailed()) {
++            throw new RejectedExecutionException("Compilation target has permanently failed");
++        }
+         final WeakReference<OptimizedCallTarget> targetReference = new WeakReference<>(target);
+         CompilationTask compilationTask = CompilationTask.createCompilationTask(priority, targetReference, nextId(), submissionReason);
+         return submitTask(compilationTask, target);
+--- a/com/oracle/truffle/runtime/OptimizedTruffleRuntime.java
++++ b/com/oracle/truffle/runtime/OptimizedTruffleRuntime.java
+@@ -750,6 +750,10 @@
+     protected final void doCompile(OptimizedCallTarget callTarget, AbstractCompilationTask task) {
+         Objects.requireNonNull(callTarget, "Cannot compile null call target.");
+         Objects.requireNonNull(task, "Compilation task required.");
++        if (callTarget.isCompilationFailed()) {
++            listeners.onCompilationDequeued(callTarget, this, "Compilation target has permanently failed", task.tier());
++            return;
++        }
+         List<OptimizedCallTarget> oldBlockCompilations = callTarget.blockCompilations;
+         if (oldBlockCompilations != null) {
+             for (OptimizedCallTarget blockTarget : oldBlockCompilations) {
+@@ -768,7 +772,7 @@
+         compileImpl(callTarget, task);
+ 
+         List<OptimizedCallTarget> newBlockCompilations = callTarget.blockCompilations;
+-        if (oldBlockCompilations == null && newBlockCompilations != null && !newBlockCompilations.isEmpty()) {
++        if (!callTarget.isCompilationFailed() && oldBlockCompilations == null && newBlockCompilations != null && !newBlockCompilations.isEmpty()) {
+             // retry with block compilations
+             ((CompilationTask) task).reset();
+             listeners.onCompilationQueued(callTarget, task.tier());
+@@ -778,6 +782,11 @@
+ 
+     @SuppressWarnings("try")
+     private void compileImpl(OptimizedCallTarget callTarget, AbstractCompilationTask task) {
++        // A queued request can outlive terminal failure. Drop it before compiler entry.
++        if (callTarget.isCompilationFailed()) {
++            listeners.onCompilationDequeued(callTarget, this, "Compilation target has permanently failed", task.tier());
++            return;
++        }
+         boolean compilationStarted = false;
+         try {
+             TruffleCompiler compiler = getTruffleCompiler(callTarget);
+--- a/com/oracle/truffle/runtime/EngineData.java
++++ b/com/oracle/truffle/runtime/EngineData.java
+@@ -379,11 +379,11 @@
+      */
+     private void updateCompilerOptions(Map<String, String> options) {
+         if (compilationFailureAction == ExceptionAction.ExitVM) {
+-            options.put("compiler.DiagnoseFailure", "true");
++            options.putIfAbsent("compiler.DiagnoseFailure", "true");
+         } else if (compilationFailureAction == ExceptionAction.Diagnose) {
+-            options.put("compiler.DiagnoseFailure", "true");
++            options.putIfAbsent("compiler.DiagnoseFailure", "true");
+         } else if (compilationFailureAction == ExceptionAction.Throw) {
+-            options.put("compiler.DiagnoseFailure", "true");
++            options.putIfAbsent("compiler.DiagnoseFailure", "true");
+         }
+         if (TruffleOptions.AOT && traceTransferToInterpreter) {
+             options.put("compiler.NodeSourcePositions", "true");

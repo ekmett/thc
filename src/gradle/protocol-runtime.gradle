@@ -25,11 +25,14 @@ def requireRuntimeArchive = { File file, String hash ->
 }
 def prepareProtocolRuntime = tasks.register("prepareProtocolRuntime", Sync) {
     from(provider { zipTree(protocolRuntimeSource.singleFile) })
-    include("com/oracle/truffle/runtime/OptimizedCallTarget.java",
+    include("com/oracle/truffle/runtime/OptimizedCallTarget.java", "com/oracle/truffle/runtime/OptimizedDirectCallNode.java",
+        "com/oracle/truffle/runtime/EngineData.java", "com/oracle/truffle/runtime/BackgroundCompileQueue.java",
+        "com/oracle/truffle/runtime/OptimizedTruffleRuntime.java",
         "com/oracle/truffle/runtime/BaseOSRRootNode.java", "com/oracle/truffle/runtime/OptimizedOSRLoopNode.java",
         "com/oracle/truffle/runtime/BytecodeOSRMetadata.java")
     into(layout.buildDirectory.dir("protocol-runtime/source"))
-    inputs.files("tools/truffle-protocol/declared-return-runtime.patch", "tools/truffle-protocol/graph-budget-runtime.patch")
+    inputs.files("tools/truffle-protocol/declared-return-runtime.patch", "tools/truffle-protocol/graph-budget-runtime.patch",
+        "tools/truffle-protocol/terminal-target-runtime.patch", "tools/truffle-protocol/terminal-splitting-runtime.patch")
     doFirst {
         requireRuntimeArchive(protocolRuntimeSource.singleFile,
             "bc365db6f4765d57bc4779508dbe0fcdd2c379b4027eb954fd5b0c9e55c8a519")
@@ -45,6 +48,16 @@ def prepareProtocolRuntime = tasks.register("prepareProtocolRuntime", Sync) {
             environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
             commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/graph-budget-runtime.patch").absolutePath)
         }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/terminal-target-runtime.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/terminal-splitting-runtime.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
         checkBuild(destinationDir.toPath().resolve("com/oracle/truffle/runtime/OptimizedCallTarget.java").toFile().getText("UTF-8")
             .contains("declaredReturnPolicyVersion")) { "Declared return runtime patch was not applied" }
     }
@@ -58,13 +71,16 @@ def compileProtocolRuntime = tasks.register("compileProtocolRuntime", JavaCompil
     targetCompatibility = "17"
     // --release hides JVMCI; these are the pinned runtime's existing JVMCI inputs.
     options.compilerArgs.addAll(["-proc:none", "--add-modules=jdk.internal.vm.ci",
-        "--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED"])
+        "--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED",
+        "--add-exports=jdk.internal.vm.ci/jdk.vm.ci.code=ALL-UNNAMED",
+        "--add-exports=jdk.internal.vm.ci/jdk.vm.ci.code.stack=ALL-UNNAMED",
+        "--add-exports=jdk.internal.vm.ci/jdk.vm.ci.services=ALL-UNNAMED"])
 }
 def protocolRuntimeJar = tasks.register("protocolRuntimeJar", Jar) {
     group = "build"
     description = "Build the pinned runtime with an explicit per-root polymorphic completion declaration."
     archiveBaseName.set("thc-truffle-runtime")
-    archiveVersion.set("$protocolRuntimeVersion-return1-budget1-aot1")
+    archiveVersion.set("$protocolRuntimeVersion-return1-budget1-aot1-terminal2")
     destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime"))
     preserveFileTimestamps = false
     reproducibleFileOrder = true
@@ -73,7 +89,10 @@ def protocolRuntimeJar = tasks.register("protocolRuntimeJar", Jar) {
         exclude("com/oracle/truffle/runtime/OptimizedCallTarget.class", "com/oracle/truffle/runtime/OptimizedCallTarget\$*.class",
             "com/oracle/truffle/runtime/BaseOSRRootNode.class",
             "com/oracle/truffle/runtime/OptimizedOSRLoopNode*.class", "com/oracle/truffle/runtime/BytecodeOSRMetadata*.class",
-            "META-INF/MANIFEST.MF")
+            "com/oracle/truffle/runtime/OptimizedDirectCallNode.class", "com/oracle/truffle/runtime/OptimizedDirectCallNode\$*.class",
+            "com/oracle/truffle/runtime/EngineData.class", "com/oracle/truffle/runtime/EngineData\$*.class",
+            "com/oracle/truffle/runtime/BackgroundCompileQueue.class", "com/oracle/truffle/runtime/BackgroundCompileQueue\$*.class",
+            "com/oracle/truffle/runtime/OptimizedTruffleRuntime.class", "com/oracle/truffle/runtime/OptimizedTruffleRuntime\$*.class", "META-INF/MANIFEST.MF")
     }
     from("tools/truffle-protocol/LICENSE-UPL.txt") { into("META-INF") }
     inputs.files(protocolRuntimeBinary)
@@ -84,7 +103,7 @@ def protocolRuntimeJar = tasks.register("protocolRuntimeJar", Jar) {
             manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
         }
         manifest.attributes(["Implementation-Title": "THC declared root completion Truffle runtime",
-            "Implementation-Version": "$protocolRuntimeVersion-return1-budget1-aot1",
+            "Implementation-Version": "$protocolRuntimeVersion-return1-budget1-aot1-terminal2",
             "Upstream-Source-SHA256": "bc365db6f4765d57bc4779508dbe0fcdd2c379b4027eb954fd5b0c9e55c8a519"])
     }
 }
@@ -108,6 +127,9 @@ tasks.register("verifyProtocolRuntimeSelection") {
         checkBuild(runtime.count { it.name == overlay.name } == 1) { "Expected exactly one declared runtime artifact" }
         def replaced = { String name -> name == "META-INF/MANIFEST.MF" ||
             name == "com/oracle/truffle/runtime/OptimizedCallTarget.class" ||
+            ["EngineData", "BackgroundCompileQueue", "OptimizedTruffleRuntime", "OptimizedDirectCallNode"].any { base ->
+                name == "com/oracle/truffle/runtime/${base}.class" || name.startsWith('com/oracle/truffle/runtime/' + base + '$')
+            } ||
             name == "com/oracle/truffle/runtime/BaseOSRRootNode.class" ||
             name == "com/oracle/truffle/runtime/OptimizedOSRLoopNode.class" ||
             name.startsWith("com/oracle/truffle/runtime/OptimizedOSRLoopNode\$") ||
@@ -130,6 +152,8 @@ tasks.register("verifyProtocolRuntimeSelection") {
                     protocolRuntimeDigest(overlay.bytes) + "  " + overlay.name + "\n" +
                     protocolRuntimeDigest(file("tools/truffle-protocol/declared-return-runtime.patch").bytes) + "  declared-return-runtime.patch\n" +
                     protocolRuntimeDigest(file("tools/truffle-protocol/graph-budget-runtime.patch").bytes) + "  graph-budget-runtime.patch\n" +
+                    protocolRuntimeDigest(file("tools/truffle-protocol/terminal-target-runtime.patch").bytes) + "  terminal-target-runtime.patch\n" +
+                    protocolRuntimeDigest(file("tools/truffle-protocol/terminal-splitting-runtime.patch").bytes) + "  terminal-splitting-runtime.patch\n" +
                     "Preserved upstream nonreplacement entries: " + original.count { !replaced(it.name) } + "\n", "UTF-8")
             }
         }
@@ -207,56 +231,25 @@ tasks.register("testOsrSourceOwnership", JavaExec) {
 }
 tasks.named("check") { dependsOn("testOsrSourceOwnership") }
 
-def compileGraphBudgetControl = tasks.register("compileGraphBudgetControl", JavaCompile) {
-    source("tools/truffle-protocol/tests/GraphBudgetProbe.java", "tools/truffle-protocol/tests/OsrSchedulingProbe.java")
+def compileOsrSchedulingControl = tasks.register("compileOsrSchedulingControl", JavaCompile) {
+    source("tools/truffle-protocol/tests/OsrSchedulingProbe.java")
     classpath = returnPolicyRuntime
     options.release.set(17)
     options.compilerArgs.add("-proc:none")
-    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/graph-budget"))
-}
-tasks.register("testGraphBudgetRecovery", JavaExec) {
-    group = "verification"
-    description = "Check actual graph-budget failure, structural extraction, task completion and first compiled call."
-    dependsOn("verifyProtocolRuntimeSelection")
-    classpath = files(compileGraphBudgetControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
-    mainClass.set("protocolprobe.GraphBudgetProbe")
-    enableAssertions = true
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
-    maxHeapSize = "1g"
-}
-tasks.named("check") { dependsOn("testGraphBudgetRecovery") }
-
-def osrBudgetControls = [Loop: "osr", Bytecode: "bytecode-osr", Exhausted: "osr-exhausted", Background: "osr-background",
-                        FastFailure: "osr-fast-failure", RetryPublication: "osr-retry-publication"].collect { label, mode ->
-    tasks.register("testOsrGraphBudget" + label, JavaExec) {
-        group = "verification"
-        description = "Check actual OSR graph-budget lifecycle: $mode."
-        dependsOn("verifyProtocolRuntimeSelection")
-        classpath = files(compileGraphBudgetControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
-        mainClass.set("protocolprobe.GraphBudgetProbe")
-        args(mode)
-        enableAssertions = true
-        jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
-        maxHeapSize = "1g"
-        timeout.set(java.time.Duration.ofSeconds(60))
-    }
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/osr-scheduling"))
 }
 def testOsrScheduling = tasks.register("testOsrScheduling", JavaExec) {
     group = "verification"
     description = "Check real OSR first-winner publication, replacement and cancellation without holding the AST lock while waiting."
     dependsOn("verifyProtocolRuntimeSelection")
-    classpath = files(compileGraphBudgetControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
+    classpath = files(compileOsrSchedulingControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
     mainClass.set("protocolprobe.OsrSchedulingProbe")
     enableAssertions = true
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
     maxHeapSize = "1g"
     timeout.set(java.time.Duration.ofSeconds(60))
 }
-tasks.register("testOsrGraphBudgetRecovery") {
-    group = "verification"
-    dependsOn(osrBudgetControls, testOsrScheduling)
-}
-tasks.named("check") { dependsOn("testOsrGraphBudgetRecovery") }
+tasks.named("check") { dependsOn(testOsrScheduling) }
 
 def compileRuntimeLinkageControl = tasks.register("compileRuntimeLinkageControl", JavaCompile) {
     source("tools/truffle-protocol/tests/RuntimeLinkageProbe.java")
@@ -301,3 +294,31 @@ tasks.named("testReturnPolicy") { dependsOn(testRuntimeLinkageConfiguration) }
     }
     tasks.named("testReturnPolicy") { dependsOn(task) }
 }
+
+// A failed physical target is never resubmitted; recovery publishes a different target.
+def terminalTargetRuntime = configurations.getByName("runtimeClasspath")
+def compileTerminalTargetControl = tasks.register("compileTerminalTargetControl", JavaCompile) {
+    source("tools/truffle-protocol/tests/TerminalLanguage.java", "tools/truffle-protocol/tests/TerminalTargetProbe.java")
+    classpath = terminalTargetRuntime
+    options.annotationProcessorPath = configurations.annotationProcessor + terminalTargetRuntime
+    options.release.set(17)
+    options.compilerArgs.add("-proc:full")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/terminal-target"))
+}
+def terminalTargetControls = [false, true].collectMany { background ->
+    ["options", "admission", "queued", "real", "osr", "split", "automatic", "splitlate"].collect { probe ->
+        tasks.register("testTerminalTarget" + probe.capitalize() + (background ? "Background" : "Foreground"), JavaExec) {
+            group = "verification"
+            dependsOn("verifyProtocolRuntimeSelection")
+            classpath = files(compileTerminalTargetControl.flatMap { it.destinationDirectory }) + terminalTargetRuntime
+            mainClass.set("com.oracle.truffle.runtime.TerminalTargetProbe")
+            args(probe, background.toString())
+            enableAssertions = true
+            jvmArgs("--enable-native-access=ALL-UNNAMED")
+            maxHeapSize = "1g"
+            timeout.set(java.time.Duration.ofSeconds(30))
+        }
+    }
+}
+tasks.register("testTerminalTarget") { group = "verification"; dependsOn(terminalTargetControls) }
+tasks.named("check") { dependsOn("testTerminalTarget") }
