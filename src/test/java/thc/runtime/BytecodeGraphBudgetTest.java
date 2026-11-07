@@ -368,6 +368,47 @@ class BytecodeGraphBudgetTest {
         input.put("bindings", bindings); return input;
     }
 
+    // Strict lets keep this capacity control free of nested scalar regions.
+    // The wide decision fits only after it can split inside the narrow side.
+    @Test void overflowingWideDecisionInANarrowSideLoadsWithoutExecuting() throws Exception {
+        var input = new LinkedHashMap<>(decision(64,
+                List.of(binder("step", CLOSURE, true)), LONG, arm -> {
+            List<Object> body = variable("value127", LONG);
+            for (int call = 127; call >= 0; call--) {
+                var argument = call == 0 ? number(arm * 1000L)
+                        : variable("value" + (call - 1), LONG);
+                var binding = new LinkedHashMap<>(binder("value" + call, LONG, false));
+                binding.put("expr", node("app", variable("step", CLOSURE),
+                        List.of(argument), List.of(false), false, false, Map.of("rep", LONG)));
+                body = node("let", false, List.of(binding), body, Map.of("rep", LONG));
+            }
+            return body;
+        }));
+        var bindings = new ArrayList<Map<String, Object>>(
+                (List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var wide = (List<Object>) lambda.get(2);
+        lambda.set(2, node("case", node("con", "C0", 0, Map.of("rep", DATA)),
+                "outerChoice", List.of(
+                        node("data", "C0", List.of(), wide),
+                        node("data", "C1", List.of(), number(0))),
+                Map.of("rep", LONG, "binder", binder("outerChoice", DATA, true))));
+        entry.put("expr", lambda);
+        bindings.set(0, entry);
+        input.put("bindings", bindings);
+
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                assertNotNull(program.entryTarget("entry"));
+                assertEquals(0, entries(program), "Preparation must not execute the entry");
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void aLaterSmallRegionCannotRestoreAnUnencodableInlineCopy() throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
@@ -623,6 +664,76 @@ class BytecodeGraphBudgetTest {
                 var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
                 assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
                 assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
+    // A narrow region never emits its inline copy. The closure under it keeps
+    // one prepared root, in the side that runs it, also below a nested region.
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void aNarrowRegionKeepsItsClosureOnlyInTheSideThatRunsIt(boolean nested) throws Exception {
+        var marker = new LinkedHashMap<>(binder("f", CLOSURE, true));
+        marker.put("expr", node("lam", List.of(binder("marker", LONG, false)),
+                node("app", node("prim", "+#"), List.of(variable("marker", LONG), variable("value2", LONG)),
+                        List.of(false, false), false, false, Map.of("rep", LONG)),
+                Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(false))));
+        var marked = node("let", false, List.of(marker), node("app", variable("f", CLOSURE),
+                List.of(variable("value2", LONG)), List.of(false), false, false, Map.of("rep", LONG)), Map.of("rep", LONG));
+        var inner = new ArrayList<List<Object>>();
+        for (int arm = 0; arm < 3; arm++)
+            inner.add(node("data", "C" + arm, List.of(), capacityCalls(3, 10 + arm, arm == 1 ? marked : variable("value2", LONG), LONG)));
+        var nestedCase = node("case", variable("y", DATA), "inner", inner, Map.of("rep", LONG, "binder", binder("inner", DATA, true)));
+        var input = decision(3, List.of(binder("step", CLOSURE, true), binder("y", DATA, true)), LONG,
+                arm -> arm != 1 ? capacityCalls(3, arm, variable("value2", LONG), LONG) : nested ? nestedCase : capacityCalls(3, arm, marked, LONG));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var sides = regionSides((BytecodeRoot) target.getRootNode());
+                assertEquals(3, sides.size());
+                if (nested) assertEquals(3, regionSides((BytecodeRoot) sides.get(1).getRootNode()).size());
+                assertEquals(1L, java.util.regex.Pattern.compile("(?m)^lambda marker$").matcher(program.bytecodeDump()).results().count(),
+                        "a discarded inline copy keeps no closure root");
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { return (Long) frame.getArguments()[1] + 1; }
+                }.getCallTarget());
+                var chosen = program.constructorLayout("C1");
+                assertEquals(nested ? 22006L : 2006L, Calls.target(target, new Object[]{0L, chosen.allocate(), step, chosen.allocate()}));
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
+    // A scalar region keeps a live inline copy. A side would prepare the rest
+    // of a strict chain again at each level, so it keeps such a case inline.
+    @Test void aSideKeepsANestedScalarSuffixInItsOwnActivation() throws Exception {
+        var chain = capacityCalls(16, 1, variable("value15", LONG), LONG);
+        var input = decision(3, List.of(binder("step", CLOSURE, true)), LONG,
+                arm -> arm == 1 ? chain : capacityCalls(3, arm, variable("value2", LONG), LONG));
+        var alone = new LinkedHashMap<>(input);
+        alone.put("bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                "expr", node("lam", List.of(binder("step", CLOSURE, true)), chain,
+                        Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(false))))));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { return (Long) frame.getArguments()[1] + 1; }
+                }.getCallTarget());
+                var top = new BytecodeProgram(language, alone, true).entryTarget("entry");
+                var topSides = regionSides((BytecodeRoot) top.getRootNode());
+                assertEquals(1, topSides.size(), "the chain is a scalar region in an original root");
+                assertEquals(List.of(), regionSides((BytecodeRoot) topSides.getFirst().getRootNode()));
+                assertEquals(1016L, Calls.target(top, new Object[]{0L, step}));
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var sides = regionSides((BytecodeRoot) target.getRootNode());
+                assertEquals(3, sides.size());
+                assertEquals(List.of(), regionSides((BytecodeRoot) sides.get(1).getRootNode()),
+                        "a side keeps a nested scalar region inline");
+                assertEquals(1016L, Calls.target(target, new Object[]{0L, program.constructorLayout("C1").allocate(), step}));
             } finally { threads.leaveCurrent(); context.leave(); }
         }
     }
