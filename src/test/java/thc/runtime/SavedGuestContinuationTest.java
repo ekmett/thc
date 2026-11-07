@@ -764,6 +764,15 @@ class SavedGuestContinuationTest {
                 first.setValue(firstSaved); first.setState(5); second.setValue(secondSaved); second.setState(5);
                 var failure = assertThrows(RuntimeFault.class, () -> new Driver().force(first));
                 assertTrue(failure.getMessage().contains("dependency cycle"), failure.getMessage());
+                var entrySaved = new Saved(target.getRootNode(), new ThunkSuspended(first),
+                    input -> fail("Private entry suffix ran"));
+                var entry = new CallSegment(entrySaved);
+                var entryFailure = assertThrows(RuntimeFault.class, () -> new Driver().force(entry));
+                assertEquals("Suspended guest dependency cycle", entryFailure.getMessage());
+                assertEquals(5, entry.getState());
+                assertSame(entrySaved, entry.getValue());
+                assertNull(entry.getOwner());
+                assertEquals(0, entrySaved.resumes);
                 assertEquals(5, first.getState()); assertEquals(5, second.getState());
                 assertSame(firstSaved, first.getValue()); assertSame(secondSaved, second.getValue());
                 assertNull(first.getOwner()); assertNull(second.getOwner());
