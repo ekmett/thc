@@ -25,7 +25,7 @@ import qualified Data.Map.Strict as Map
 import Data.Either (isLeft)
 import Data.Maybe (isNothing)
 import Numeric (showHex)
-import System.Directory (getModificationTime, removeFile, setModificationTime, createDirectoryIfMissing, doesFileExist)
+import System.Directory (getModificationTime, removeFile, setModificationTime, createDirectoryIfMissing, doesFileExist, doesPathExist)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
@@ -115,18 +115,23 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
       dynamic <- BS.readFile (objects </> "A.dyn_hi")
       assertBool "native GHC produces distinct vanilla and dynamic interfaces" (vanilla /= dynamic)
       BS.writeFile (capturedCore </> "A.cbd") =<< encodeModuleValue (core "test-unit" "A")
-      writeFile (capture </> "test-unit/interfaces-ready") ""
       -- This is a closed bundle-reader plan control. The interfaces above are
       -- genuine GHC products; no native/compiler Core provenance is claimed.
       BS.writeFile plan (encoded (object ["compiler-id" .= ("ghc-9.14.1"::String),
         "compiler-abi" .= ("reader-control"::String),"arch" .= ("x86_64"::String),
         "os" .= ("linux"::String),"install-plan" .= [object ["id" .= ("test-unit"::String),
           "type" .= ("configured"::String),"style" .= ("global"::String),"depends" .= ([]::[String])]]]))
-      bundle <- publishCapturedStoreUnit packageTool plan store dist capture "test-unit" destination
+      let publish = publishCapturedStoreUnit packageTool plan store dist capture "test-unit" destination
+      assertBool "publication rejects an incomplete interface capture" . isLeft =<< tryIOError publish
+      assertEqual "failed interface publication leaves the archive unpublished" False =<< doesPathExist destination
+      assertEqual "failed interface publication leaves its companion unpublished" False =<< doesPathExist interfaces
+      writeFile (capture </> "test-unit/interfaces-ready") ""
+      bundle <- publish
       assertEqual "publication preserves vanilla compiler bytes" vanilla =<< BS.readFile (interfaces </> "A.hi")
       assertEqual "publication preserves dynamic compiler bytes" dynamic =<< BS.readFile (interfaces </> "A.dyn_hi")
       assertBool "publication completes the consumer's interface receipt" =<< doesFileExist (interfaces </> "complete")
       archiveBytes <- BS.readFile destination
+      assertBool "publication refuses to replace existing output" . isLeft =<< tryIOError publish
       entries <- either fail pure =<< decodeZip archiveBytes
       inner <- either fail pure . eitherDecodeStrict' $ maybe (error "published manifest") id (lookup "manifest.json" entries)
       let exportKey = case inner of

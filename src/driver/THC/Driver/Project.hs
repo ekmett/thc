@@ -22,7 +22,7 @@ module THC.Driver.Project
   , selectedPackageTool, componentCoreRecords
   ) where
 
-import Control.Exception (bracket, evaluate, finally, onException)
+import Control.Exception (bracket, evaluate, finally, mask_, onException)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isAlphaNum, isHexDigit, isSpace)
 import GHC.ResponseFile (expandResponse)
@@ -2308,8 +2308,6 @@ publishCapturedStoreUnit packageTool planPath store dist capture identifier dest
   selectedDist <- makeAbsolute dist
   selectedCapture <- makeAbsolute capture
   selectedDestination <- makeAbsolute destination
-  present <- doesFileExist destination
-  require (not present) "captured store publication refuses an existing output"
   plan <- readJson planPath
   compiler <- field plan "compiler-id" :: IO String
   abi <- field plan "compiler-abi" :: IO String
@@ -2325,16 +2323,35 @@ publishCapturedStoreUnit packageTool planPath store dist capture identifier dest
   let buildKey = shaHex (BL.toStrict (encode
         ("thc-captured-store-native-build-v1" :: String,compiler,abi,platform,map sourceIdentity closure)))
       exportKey = shaHex (BL.toStrict (encode (buildKey,producer)))
-  createDirectoryIfMissing True (takeDirectory destination)
-  databases <- nativeCaptureDatabases selectedStore selectedDist
-  packGlobalBundle packageTool (takeDirectory selectedCapture </> "native-pieces") databases selectedCapture planned unit buildKey exportKey selectedDestination
-  result <- readGlobalBundle True selectedDestination identifier (unitDepends unit) buildKey exportKey
-  bundle <- maybe (fail "new captured unit failed its ordinary bundle validation") pure result
-  unless (null (bundleModules bundle)) $ do
-    requireFile (selectedCapture </> identifier </> "interfaces-ready")
-    names <- mapM (`field` "name") (bundleModules bundle)
-    publishReplayInterfaces (selectedCapture </> identifier </> "objects") names False selectedDestination
-  pure bundle
+  let parent = takeDirectory selectedDestination
+      interfaces = replayInterfacePath selectedDestination
+      temporary = do
+        (path, handle) <- openTempFile parent "captured-bundle-"
+        hClose handle
+        pure path
+      cleanup path = removePathForcibly path `finally` removePathForcibly (replayInterfacePath path)
+  createDirectoryIfMissing True parent
+  withLock (selectedDestination ++ ".lock") $ do
+    present <- Directory.doesPathExist selectedDestination
+    companion <- Directory.doesPathExist interfaces
+    require (not present && not companion) "captured store publication refuses an existing output"
+    databases <- nativeCaptureDatabases selectedStore selectedDist
+    bracket temporary cleanup $ \staging -> do
+      packGlobalBundle packageTool (takeDirectory selectedCapture </> "native-pieces") databases
+        selectedCapture planned unit buildKey exportKey staging
+      result <- readGlobalBundleCold staging identifier (unitDepends unit) buildKey exportKey
+      bundle <- maybe (fail "new captured unit failed its ordinary bundle validation") pure result
+      let publish = renameFile staging selectedDestination
+      if null (bundleModules bundle) then publish else do
+        requireFile (selectedCapture </> identifier </> "interfaces-ready")
+        names <- mapM (`field` "name") (bundleModules bundle)
+        publishReplayInterfaces (selectedCapture </> identifier </> "objects") names False staging
+        -- The archive is the consumer entry point. Make it visible only after
+        -- its verified interface companion is in place.
+        mask_ $ do
+          Directory.renameDirectory (replayInterfacePath staging) interfaces
+          publish `onException` removePathForcibly interfaces
+      pure bundle { bundlePath = selectedDestination }
 
 -- Actual completed Cabal registration sources; callers retain their selected
 -- store configuration rather than deriving it from a Core staging directory.
