@@ -559,11 +559,14 @@ class BytecodeGraphBudgetTest {
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void localEncodingCapacityNarrowsSidesBeforePublishingTheOriginalTarget(boolean parentOnly) throws Exception {
-        // The pinned emitter limits local IDs to 65535. Sixteen scalar calls
-        // in each of 256 arms cross that capacity while each 32-arm side fits.
-        int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 16 : 64;
+        // Both inputs contain 4,096 calls. Distributing them across 256 arms
+        // overflows only the parent; concentrating them in the first 32 of 64
+        // arms also overflows one default-width side, without growing the input.
+        int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 16 : 128;
+        int selected = parentOnly ? arms - 1 : 31;
         var input = decision(arms, List.of(binder("step", CLOSURE, true)), LONG,
-                arm -> capacityCalls(repetitions, arm, variable("value" + (repetitions - 1), LONG), LONG));
+                arm -> !parentOnly && arm >= 32 ? number(arm * 1000L)
+                        : capacityCalls(repetitions, arm, variable("value" + (repetitions - 1), LONG), LONG));
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             var threads = Language.currentState().getThreads(); threads.enterCurrent();
@@ -577,6 +580,13 @@ class BytecodeGraphBudgetTest {
                 assertEquals(0, root.prepareGraphBudgetRetry(0), "capacity-only extraction is not a graph bailout");
                 assertTrue(instructions(root).values().stream().noneMatch(value -> value.contains("InlineCaseRegions")),
                         "the unencodable inline body must not be emitted");
+                var regionsField = BytecodeRoot.class.getDeclaredField("caseRegions"); regionsField.setAccessible(true);
+                var widthField = BytecodeCaseRegion.class.getDeclaredField("width"); widthField.setAccessible(true);
+                var regions = (BytecodeCaseRegion[]) regionsField.get(root);
+                assertTrue(regions.length > 0);
+                for (var region : regions) assertEquals(parentOnly,
+                        (int) widthField.get(region) == BytecodeCaseRegion.WIDTH,
+                        "Only the concentrated case must narrow its sides below the default width");
                 var beforeInstructions = instructions(root);
                 assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
                 var calls = new java.util.concurrent.atomic.AtomicInteger();
@@ -585,8 +595,8 @@ class BytecodeGraphBudgetTest {
                         calls.incrementAndGet(); return (Long) frame.getArguments()[1] + 1;
                     }
                 }.getCallTarget());
-                assertEquals((arms - 1) * 1000L + repetitions,
-                        Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
+                assertEquals(selected * 1000L + repetitions,
+                        Calls.target(target, new Object[]{0L, program.constructorLayout("C" + selected).allocate(), step}));
                 assertEquals(repetitions, calls.get(), "no preparation, retry or branch replay may execute a call");
                 assertEquals(1, entries(program));
                 assertSame(target, ((Closure) program.entryValue("entry")).target);
