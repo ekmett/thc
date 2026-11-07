@@ -168,6 +168,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     /** Called after the initial or resumed physical activation has unwound. */
     protected final Object finishStackEntry(Object result) {
+        if (result instanceof TailYield || result instanceof AstTailYield ||
+                result instanceof SavedGuestContinuation || result instanceof ContinuationResult)
+            return finishSuspendedStackEntry(result);
+        return result;
+    }
+
+    /** Settle a saved control result outside the completed physical activation. */
+    @TruffleBoundary(transferToInterpreterOnException = false) private Object finishSuspendedStackEntry(Object result) {
         Object value = result instanceof TailYield tail ? tail.getContinuation() :
                 result instanceof AstTailYield tail ? tail.getContinuation() : result;
         SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(value);
