@@ -246,6 +246,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Preserve the entry transaction directly in the local restored after a stack cut. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "transaction")
+    public static final class SnapshotStackTransaction {
+        @Specialization public static void snapshot(VirtualFrame frame, LocalAccessor transaction,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            transaction.setObject(bytecode, frame, Language.currentState(bytecode).stm.currentTransaction());
+        }
+    }
+
     @Operation public static final class CurrentTransaction {
         @Specialization public static Object read(@Bind Node node) { return Language.currentState(node).stm.currentTransaction(); }
     }

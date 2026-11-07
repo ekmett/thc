@@ -1084,7 +1084,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (enableAsync) {
                 var transaction = b.createLocal("stack transaction", FrameSlotKind.Object);
                 stackTransaction[0] = LocalAccessor.constantOf(transaction);
-                b.beginStaticStoreObject(transaction); b.emitCurrentTransaction(); b.endStaticStoreObject();
+                b.emitSnapshotStackTransaction(transaction);
             }
             if (resumable) {
                 // Each snapshot has one exact reference write. Yield parks to the caller's extent.
