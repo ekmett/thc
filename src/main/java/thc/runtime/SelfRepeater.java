@@ -47,7 +47,7 @@ final class SelfRepeater extends Node implements RepeatingNode {
             if (!root.isSelf(tail.getTarget())) throw tail;
             Metrics invocation = invocationMetrics(frame);
             if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
-            root.restoreHandoff(frame, tail.getArguments(), false);
+            root.restoreHandoff(frame, tail.getArguments(), false, null);
             return CONTINUE_LOOP_STATUS;
         } catch (TailCall tail) {
             if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");

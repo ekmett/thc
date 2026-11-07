@@ -545,7 +545,7 @@ public final class FunctionRoot extends GuestRoot {
             }
         } finally { entry.releaseChecked(input); }
     }
-    @ExplodeLoop public void restoreHandoff(VirtualFrame frame, HandoffStorage input, boolean initial) {
+    @ExplodeLoop public void restoreHandoff(VirtualFrame frame, HandoffStorage input, boolean initial, HandoffState ingressOwner) {
         HandoffEntry entry = handoff;
         if (entry == null) throw fault("Target does not support the handoff ABI");
         if (input.getLayout() != entry.getArguments() || !input.getLive$org_intelligence_thc()) throw new IllegalStateException("Check failed.");
@@ -571,7 +571,11 @@ public final class FunctionRoot extends GuestRoot {
                 if (!(entry.getArguments().getObject(input, 1) instanceof CapturedFrame environment)) throw fault("Invalid captured frame");
                 restoreCaptured(frame, environment);
             }
-        } finally { entry.state().getArguments().release(input, entry.getArguments()); }
+        } finally {
+            // Initial ingress retains the owner that supplied this loan only until
+            // release, before any guest body or continuation can run.
+            (ingressOwner != null ? ingressOwner : entry.state()).getArguments().release(input, entry.getArguments());
+        }
     }
     @Override public Object execute(VirtualFrame frame) {
         DirectCallNode redirect = recoveredEntry;
@@ -626,7 +630,7 @@ public final class FunctionRoot extends GuestRoot {
             HandoffStorage input = state.getPending();
             if (input == null) throw fault("Missing typed argument loan");
             state.setPending(null);
-            restoreHandoff(frame, input, true);
+            restoreHandoff(frame, input, true, state);
         } else {
             if (entry != null) entry.initializeOrdinary(frame);
             // Delimited roots retain ancestry eagerly for their independently saved frames.
@@ -707,7 +711,7 @@ public final class FunctionRoot extends GuestRoot {
             return caller.trampoline$org_intelligence_thc(entry.state(), tail);
         }
         if (transfer instanceof TailCall tail) restoreTail(frame, tail);
-        else if (transfer instanceof HandoffTailCall tail) restoreHandoff(frame, tail.getArguments(), false);
+        else if (transfer instanceof HandoffTailCall tail) restoreHandoff(frame, tail.getArguments(), false, null);
         else if (transfer != AstSelfCall.INSTANCE) throw transfer;
         if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
         // A resumed suffix returns an owned value, not its caller's stale return loan.
@@ -751,7 +755,7 @@ public final class FunctionRoot extends GuestRoot {
             if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
-            restoreHandoff(frame, tail.getArguments(), false);
+            restoreHandoff(frame, tail.getArguments(), false, null);
             return loop.execute(frame);
         } catch (TailCall tail) {
             tailCallProfile.enter();
