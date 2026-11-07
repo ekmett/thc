@@ -43,7 +43,8 @@ import TestSupport (setup)
 main :: IO ()
 main = do
   arguments <- getArgs
-  case TestSupportTests.helperMode arguments <|> InstalledHydrationTests.helperMode arguments of
+  case PlanTests.privateCabalCaptureHelper arguments <|>
+       TestSupportTests.helperMode arguments <|> InstalledHydrationTests.helperMode arguments of
     Just action -> action
     Nothing -> runTests arguments
 

@@ -10,22 +10,63 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for plan.
-module PlanTests (unitTests, integrationTests) where
+module PlanTests (unitTests, integrationTests, privateCabalCaptureHelper) where
 
 import Control.Monad (forM, forM_)
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
-import Data.List (sort, sortOn)
+import qualified Data.ByteString.Lazy as BL
+import Data.List (isPrefixOf, sort, sortOn)
 import System.Directory
   ( createDirectory, createDirectoryLink, doesFileExist, renameDirectory
-  , removeFile, canonicalizePath )
+  , removeFile, canonicalizePath, getCurrentDirectory )
+import System.Environment (getEnv, getEnvironment, getExecutablePath)
 import System.FilePath ((</>), takeDirectory)
 import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
+import NativeCacheTests (withEnvironment, withScratch)
 import TestSupport
+import THC.Driver.Project (runPrivateCabalCapture)
 
 -- These rejections stop before Cabal configures a package or invokes GHC.
 unitTests :: Env -> Test
-unitTests = tests False
+unitTests env = TestList [tests False env, privateCabalCaptureTest]
+
+privateCabalCaptureHelper :: [String] -> Maybe (IO ())
+privateCabalCaptureHelper arguments@(store : "build" : _)
+  | "--store-dir=" `isPrefixOf` store = Just $ do
+      receipt <- getEnv "THC_TEST_PRIVATE_CABAL_RECEIPT"
+      project <- getCurrentDirectory >>= canonicalizePath
+      selected <- getEnv "CABAL"
+      capture <- getEnv "THC_PROXY_CAPTURE"
+      BL.writeFile receipt (Aeson.encode (arguments, project, selected, capture))
+privateCabalCaptureHelper _ = Nothing
+
+privateCabalCaptureTest :: Test
+privateCabalCaptureTest = TestLabel "private store capture invokes selected Cabal" $ TestCase $
+  withScratch $ \temporary -> do
+    executable <- getExecutablePath
+    let project = temporary </> "project with spaces"
+        store = temporary </> "private store"
+        dist = temporary </> "private dist"
+        compiler = temporary </> "compiler proxy"
+        receipt = temporary </> "command.json"
+        capture = temporary </> "capture"
+        targets = ["app:exe:main", "app:exe:other"]
+        options = ["--project-file", project </> "Cabal 'fixture'.project", "--with-hc-pkg", temporary </> "package tool"]
+        overrides = [("CABAL", executable), ("THC_TEST_PRIVATE_CABAL_RECEIPT", receipt),
+                     ("THC_PROXY_CAPTURE", capture)]
+        expected = ["--store-dir=" ++ store, "build"] ++ targets ++
+          ["--enable-build-info", "--builddir", dist, "--with-compiler", compiler] ++ options
+    createDirectory project
+    -- Ensure a hard-coded PATH lookup cannot run real Cabal or use its store.
+    withEnvironment [("PATH", temporary)] $ do
+      inherited <- getEnvironment
+      let environment = overrides ++ filter ((`notElem` map fst overrides) . fst) inherited
+      runPrivateCabalCapture project store dist compiler targets options environment
+    canonical <- canonicalizePath project
+    assertEqual "selected executable receives the exact isolated capture command"
+      (Aeson.toJSON (expected, canonical, executable, capture)) =<< readJson receipt
 
 integrationTests :: Env -> Test
 integrationTests = tests True

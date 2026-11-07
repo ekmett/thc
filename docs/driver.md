@@ -21,6 +21,10 @@ The included example returns `()` without printing. The default provider acquire
 its library Core from the pinned GHC release; the alternative installed-Core
 provider is described below.
 
+Set `CABAL` to select the cabal-install executable. `thc build`, `thc run` and
+`thc acquire` run it for every Cabal call, including the private Cabal capture
+fallback. Without `CABAL`, they run `cabal` from `PATH`.
+
 ## Bash completion and external commands
 
 Enable completion in the current Bash session:
