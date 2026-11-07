@@ -169,7 +169,9 @@ public class LauncherDiagnosticsTest {
                 var out = new ByteArrayOutputStream(); var err = new ByteArrayOutputStream();
                 try (var stdout = new PrintStream(out, true, StandardCharsets.UTF_8); var stderr = new PrintStream(err, true, StandardCharsets.UTF_8)) {
                     System.setProperty("thc.backend", backend); property("thc.diagnostics", setting); System.setOut(stdout); System.setErr(stderr);
-                    var args = new ArrayList<>(List.of(source.toAbsolutePath().toString(), "entry", "7")); if (compiled) args.add("--compile"); Main.main(args.toArray(String[]::new));
+                    var args = new ArrayList<>(List.of(source.toAbsolutePath().toString(), "entry", "7")); if (compiled) args.add("--compile");
+                    assertDoesNotThrow(() -> Main.main(args.toArray(String[]::new)),
+                        backend + " compiled=" + compiled + " diagnostics=" + setting);
                 }
                 assertEquals("8", out.toString(StandardCharsets.UTF_8).trim()); var diagnostics = (Map<?, ?>) Json.parse(err.toString(StandardCharsets.UTF_8).trim());
                 assertEquals(compiled || "true".equals(setting), diagnostics.get("instrumented"));
