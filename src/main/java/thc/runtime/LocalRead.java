@@ -17,21 +17,21 @@ public final class LocalRead extends Expr {
         this.slot = slot; this.cell = cell; this.referenceStorage = referenceStorage;
     }
     @Override public boolean needsCallState() { return slot == FrameLayout.BLOOM_FILTER; }
-    // Initialized non-cell locals use their declared storage; widened activations retain tag checks.
+    // Initialized non-cell locals use their live primitive storage; widened activations retain tag checks.
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
-        return (!cell && getRepresentation().isInt() && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Int) || frame.isInt(slot)
+        return (!cell && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Int) || frame.isInt(slot)
             ? frame.getInt(slot) : super.executeInt(frame);
     }
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-        return (!cell && getRepresentation().isLong() && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Long) || frame.isLong(slot)
+        return (!cell && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Long) || frame.isLong(slot)
             ? frame.getLong(slot) : super.executeLong(frame);
     }
     @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
-        return (!cell && getRepresentation().isFloat() && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Float) || frame.isFloat(slot)
+        return (!cell && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Float) || frame.isFloat(slot)
             ? frame.getFloat(slot) : super.executeFloat(frame);
     }
     @Override public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-        return (!cell && getRepresentation().isDouble() && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Double) || frame.isDouble(slot)
+        return (!cell && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Double) || frame.isDouble(slot)
             ? frame.getDouble(slot) : super.executeDouble(frame);
     }
     @Override public Object execute(VirtualFrame frame) {
