@@ -1767,6 +1767,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = String.class, name = "symbol")
+    @ConstantOperand(type = CoreRepresentation.class, name = "proof")
+    public static final class ResolveCDataLabel {
+        @Specialization public static ManagedAddress resolve(String symbol, CoreRepresentation proof, Object layout) {
+            return CoreDataLabels.fromCore(symbol, proof, layout instanceof TargetLayout target ? target : null);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class LinkedPackageAddress {

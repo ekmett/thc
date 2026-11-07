@@ -22,7 +22,7 @@ public final class CoreDataLabels extends Expr {
         return resolve(symbol, layout);
     }
     @Override public ManagedAddress executeAddress(com.oracle.truffle.api.frame.VirtualFrame frame) { return execute(frame); }
-    private static void requireProof(CoreRepresentation proof) {
+    static void requireProof(CoreRepresentation proof) {
         if (proof == null || !proof.getPresent() || !proof.getEvaluated() || proof.getKind() != CoreKind.ADDRESS ||
             proof.isAggregate() || proof.isVector() || !List.of("AddrRep").equals(proof.getPrimReps()))
             throw fault("C data label requires exact evaluated AddrRep proof");

@@ -123,12 +123,41 @@ class ResumableThunkProofTest {
                 SynchronousMasking.set(root, MaskingState.MASKED_INTERRUPTIBLE);
                 var initializer = new GlobalBinding.Initializer(root.getCallTarget(), new Object[]{0L}, new Metrics(false), publications::incrementAndGet);
                 SynchronousMasking.set(root, MaskingState.UNMASKED);
-                var cell = new GlobalBinding("strict"); cell.defer(lock, () -> initializer);
-                assertNull(cell.peek()); assertEquals(0, evaluations.get());
+                var preparations = new AtomicInteger();
+                var cell = new GlobalBinding("strict"); cell.defer(lock, () -> { preparations.incrementAndGet(); return initializer; });
+                cell.prepareCode(); cell.prepareCode();
+                assertEquals(1, preparations.get());
+                assertNull(cell.peek()); assertEquals(0, evaluations.get()); assertEquals(0, publications.get());
                 assertSame(answer, cell.read()); assertSame(answer, cell.read());
                 assertSame(answer, cell.peek()); assertEquals(1, evaluations.get()); assertEquals(1, publications.get());
             } finally { context.leave(); }
         }
+    }
+
+    @Test void inertPreparationMemoizesFailuresButAllowsCancelledLoweringToRetry() {
+        var failure = new IllegalArgumentException("bad Core"); var attempts = new AtomicInteger();
+        var failed = new GlobalBinding("failed");
+        failed.defer(new PreparationLock(), () -> { attempts.incrementAndGet(); throw failure; });
+        assertSame(failure, assertThrows(IllegalArgumentException.class, failed::prepareCode));
+        assertSame(failure, assertThrows(IllegalArgumentException.class, failed::read));
+        assertEquals(1, attempts.get());
+        var cancelled = new GlobalBinding("cancelled"); var cancellations = new AtomicInteger(); var answer = new Object();
+        cancelled.defer(new PreparationLock(), () -> {
+            if (cancellations.getAndIncrement() == 0) throw new java.util.concurrent.CancellationException();
+            return answer;
+        });
+        assertThrows(java.util.concurrent.CancellationException.class, cancelled::prepareCode);
+        cancelled.prepareCode(); assertSame(answer, cancelled.read()); assertEquals(2, cancellations.get());
+        var interrupted = new GlobalBinding("interrupted"); var interruptions = new AtomicInteger();
+        interrupted.defer(new PreparationLock(), () -> {
+            if (interruptions.getAndIncrement() == 0) throw new InterruptedException();
+            return answer;
+        });
+        try {
+            assertThrows(InterruptedException.class, interrupted::prepareCode);
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally { Thread.interrupted(); }
+        interrupted.prepareCode(); assertSame(answer, interrupted.read()); assertEquals(2, interruptions.get());
     }
 
     @Test void suspendedGlobalReadPublishesItsCompletedValueWithoutReplayingInitializer() throws Exception {

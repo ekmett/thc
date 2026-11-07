@@ -245,6 +245,10 @@ public final class Program implements ExecutableProgram {
         }
     }
 
+    @Override public void prepareCode() {
+        for (Map<String,Object> binding : bindings) required(globals, (String) binding.get("id")).prepareCode();
+    }
+
     @Override public void initializeGlobals() {
         for (String id : pendingInitializers) required(globals, id).read();
         pendingInitializers = List.of();

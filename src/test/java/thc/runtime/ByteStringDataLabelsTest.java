@@ -99,6 +99,31 @@ class ByteStringDataLabelsTest {
                 "expr", List.of("lam", List.of(parameter), call, Map.of("rep", CLOSURE, "resultRep", WORD16)))));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test void demandPreparationDoesNotResolveUnlinkedNativeDataLiterals() {
+        for (String backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var strict = Map.<String,Object>of("id", "label", "name", "label", "arity", 0, "lifted", false,
+                    "rep", ADDRESS, "expr", List.of("lit", "data-addr", SYMBOL, Map.of("rep", ADDRESS)));
+                var read = (Map<String,Object>) ((List<?>) module().get("bindings")).getFirst();
+                var definitions = Map.of("read", read, "label", strict);
+                var demand = new CoreDemandBindings[1];
+                demand[0] = new CoreDemandBindings(definitions::containsKey, definitions::get, id -> null, (id, binding) -> {
+                    var selected = Map.<String,Object>of("bindings", List.of(binding), "constructors", List.of(), "demandBindings", demand[0]);
+                    return backend.equals("ast") ? new Program(language, selected) : new BytecodeProgram(language, selected);
+                }, true, definitions::containsKey);
+                for (String id : definitions.keySet()) {
+                    demand[0].prepareCode(id);
+                    assertNull(demand[0].cell(id).peek(), backend + " preparation cannot initialize a native label");
+                }
+                var failure = assertThrows(RuntimeFault.class, () -> demand[0].cell("label").read());
+                assertTrue(failure.getMessage().contains("Unlinked native data label"), failure.getMessage());
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void bothBackendsReadTheTableOnTheFirstInstalledCall() throws Exception {
         var link = library();
         for (String backend : List.of("ast", "bytecode"))

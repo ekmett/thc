@@ -18,6 +18,24 @@ class CoreFileMappingsTest {
     @TempDir Path directory;
     private Path file(String name, String text) throws Exception { return Files.writeString(directory.resolve(name), text); }
     private String text(MemorySegment segment) { return new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8); }
+    @Test void checkpointRejectsLiveReadersThenDropsIdleArenasWithoutDisablingRestore() throws Exception {
+        var source = file("checkpoint.cbd", "retained bytes");
+        try (var cache = new CoreFileMappings(1024, 2)) {
+            MemorySegment bytes;
+            try (var lease = cache.acquire(source, "v1")) {
+                bytes = lease.getBytes();
+                assertThrows(IllegalStateException.class, cache::prepareCheckpoint);
+                assertEquals("retained bytes", text(bytes));
+            }
+            cache.prepareCheckpoint();
+            assertFalse(bytes.scope().isAlive());
+            assertEquals(0, cache.statistics().idleMappings());
+            try (var restored = cache.acquire(source, "v1")) {
+                assertEquals("retained bytes", text(restored.getBytes()));
+                assertTrue(restored.getOpened());
+            }
+        }
+    }
     @Test void artifactMappingsShareBytesButClosingOneConsumerKeepsTheOtherAlive() throws Exception {
         var first = file("unit.cbd", "first artifact\n"); var second = file("other.cbd", "other artifact\n");
         try (var cache = new CoreFileMappings(1024, 2)) {

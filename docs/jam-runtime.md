@@ -16,6 +16,10 @@ THC uses that API directly. See
 
 ## Toolchain ownership
 
+The [pre-main CRaC workflow](crac.md) prepares reader-free reachable Core on
+Quartus. Actual checkpoint/restore needs a compatible supplier build tracked in
+[jam#54](https://github.com/ekmett/jam/issues/54); the current pinned JDK has no CRaC support.
+
 The VM, Graal compiler, SubstrateVM, `jam.vm.Weak` API and native collector
 libraries form one versioned dependency. `etc/jam-graalvm.json` records the
 producer revision, upstream source pins, transport digest and unpacked package

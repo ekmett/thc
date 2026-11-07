@@ -55,6 +55,34 @@ public final class GlobalBinding {
     @CompilerDirectives.TruffleBoundary
     private Object peekUnprepared() { return prepared ? preparedValue : null; }
 
+    /** Complete inert lowering without executing a staged guest initializer. */
+    @CompilerDirectives.TruffleBoundary
+    public void prepareCode() {
+        PreparationLock lock = preparationLock;
+        if (lock == null) {
+            if (!initialized) throw new RuntimeFault("Uninitialized global binding");
+            return;
+        }
+        try (var ownership = lock.acquire()) { prepareCodeLocked(); }
+    }
+
+    private void prepareCodeLocked() {
+        if (prepared || initializer != null) return;
+        if (preparationFailure != null) rethrow(preparationFailure);
+        if (preparing) throw new IllegalStateException("Recursive Core preparation for " + name);
+        preparing = true;
+        try {
+            if (prepare == null) throw new IllegalStateException("Uninitialized global binding");
+            Object result = prepare.get();
+            prepare = null;
+            if (result instanceof Initializer code) initializer = code;
+            else { preparedValue = result; prepared = true; }
+        } catch (CancellationException cancelled) { throw cancelled; }
+        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); rethrow(interrupted); }
+        catch (Exception failure) { preparationFailure = failure; prepare = null; rethrow(failure); }
+        finally { preparing = false; }
+    }
+
     /** The shared program lock protects lowering builders, never guest evaluation. */
     @CompilerDirectives.TruffleBoundary
     private Object prepareValue() {
@@ -65,22 +93,8 @@ public final class GlobalBinding {
         }
         Initializer pending;
         try (var ownership = lock.acquire()) {
+            prepareCodeLocked();
             if (prepared) return preparedValue;
-            if (preparationFailure != null) return rethrow(preparationFailure);
-            if (preparing) throw new IllegalStateException("Recursive Core preparation for " + name);
-            if (initializer == null) {
-                preparing = true;
-                try {
-                    if (prepare == null) throw new IllegalStateException("Uninitialized global binding");
-                    Object result = prepare.get();
-                    prepare = null;
-                    if (result instanceof Initializer code) initializer = code;
-                    else { preparedValue = result; prepared = true; return result; }
-                } catch (CancellationException cancelled) { throw cancelled; }
-                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return rethrow(interrupted); }
-                catch (Exception failure) { preparationFailure = failure; prepare = null; return rethrow(failure); }
-                finally { preparing = false; }
-            }
             pending = initializer;
         }
         // Guest code, foreign calls and waits must never run under the lowering lock.

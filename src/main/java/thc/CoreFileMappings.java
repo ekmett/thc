@@ -173,6 +173,12 @@ public final class CoreFileMappings implements AutoCloseable {
         idleBytes -= mapping.bytes.byteSize();
         dispose(mapping);
     }
+    /** A standalone launcher may checkpoint only after every CBD reader releases
+     * its lease. Drop the idle arenas too; the cache remains usable on restore. */
+    synchronized void prepareCheckpoint() {
+        if (leases != 0) throw new IllegalStateException("Cannot checkpoint with active CBD mapping leases: " + leases);
+        while (!idle.isEmpty()) evictOldest();
+    }
     /** Evict idle mappings at/below a normalized path before temporary-tree
      * cleanup or replacement, notably on Windows. Active leases remain pinned.
      * No files are inspected or removed; unrelated idle order is unchanged. */

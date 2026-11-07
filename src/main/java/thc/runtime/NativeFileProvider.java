@@ -71,23 +71,31 @@ public final class NativeFileProvider implements Closeable {
     }
     /** Helper process permission is independent of the Linux guest process transport. */
     public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, boolean allowProcesses, boolean interfaceHelper) {
+        return createContext(endpoints, profile, allowProcesses, interfaceHelper, null);
+    }
+    /** The callback completes before native directory ownership, provider construction
+     * and standard endpoint installation. Failure disposes the owning context. */
+    public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, boolean allowProcesses,
+            boolean interfaceHelper, Consumer<Context> beforeNativeStartup) {
         if (!supportedHost()) throw new UnsupportedOperationException("Native files require matching selected-ABI resources");
         if (allowProcesses && !NativeIO.supportedPosixHost())
             throw new UnsupportedOperationException("Native subprocesses require the Linux pidfd transport");
-        var filesystem = new NativeFileSystem(endpoints);
+        var filesystem = new NativeFileSystem(endpoints, beforeNativeStartup != null);
         Context context;
         try {
             context = withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
                 .allowCreateProcess(allowProcesses || interfaceHelper).allowIO(IOAccess.newBuilder().fileSystem(filesystem).build()), profile).build();
         } catch (Throwable failure) {
-            try { filesystem.getDirectoryOwner().close(); } catch (Throwable closing) { failure.addSuppressed(closing); }
+            try { filesystem.close(); } catch (Throwable closing) { failure.addSuppressed(closing); }
             throw propagate(failure);
         }
         try {
+            if (beforeNativeStartup != null) beforeNativeStartup.accept(context);
             context.initialize("thc"); context.enter();
             try {
                 var state = Language.currentState();
                 if (state.getNativeFiles() != null) throw new IllegalStateException("Check failed.");
+                filesystem.startNativeDirectory();
                 var provider = new NativeFileProvider(state.getEnv(), state.getThreads(), filesystem.getDirectoryOwner());
                 state.getFiles().installNative(provider, endpoints);
                 state.setNativeFiles(provider);
@@ -96,7 +104,7 @@ public final class NativeFileProvider implements Closeable {
             return context;
         } catch (Throwable failure) {
             try { context.close(); } catch (Throwable closing) { failure.addSuppressed(closing); }
-            try { filesystem.getDirectoryOwner().close(); } catch (Throwable closing) { failure.addSuppressed(closing); }
+            try { filesystem.close(); } catch (Throwable closing) { failure.addSuppressed(closing); }
             throw propagate(failure);
         }
     }
