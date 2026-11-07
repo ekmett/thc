@@ -43,6 +43,7 @@
     "thc.runtime.MixedBackendContinuationTest",
     "thc.runtime.SameFrameCaseTest",
     "thc.runtime.LocalJoinGraphBudgetTest",
+    "thc.runtime.LiftedReturnTest",
     "thc.ReusableProgramTest",
     "thc.ReusableHigherOrderTest",
     "thc.ReusableHeapTest",
