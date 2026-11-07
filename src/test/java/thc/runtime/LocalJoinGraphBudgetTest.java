@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.runtime.BaseOSRRootNode;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.runtime.OptimizedOSRLoopNode;
-import com.oracle.truffle.api.nodes.NodeUtil;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -66,55 +68,64 @@ class LocalJoinGraphBudgetTest {
                 "bindings", List.of(Map.of("id", "entry", "name", "entry", "source", "body", "lifted", true,
                 "rep", CLOSURE, "expr", lambda(List.of("count", "key"), body))));
     }
-    private static Context context() {
+    private static Context context(String failureAction) {
         return Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.OSRCompilationThreshold", "1024")
-                .option("engine.CompilationFailureAction", "Throw")
+                .option("engine.CompilationFailureAction", failureAction)
+                .option("compiler.DiagnoseFailure", "false")
                 .option("compiler.MaximumGraalGraphSize", "10000").option("compiler.CompilationTimeout", "30").build();
     }
     @Test void asyncLocalJoinRetainsItsBackedgeAndReturnsAfterRealBudgetRecovery() throws Exception {
-        try (var context = context()) {
+        // Report the foreground bailout without unwinding the running activation.
+        try (var context = context("Print")) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = new Program(language, module(4), true);
                 var target = (OptimizedCallTarget) program.entryTarget("entry");
+                var original = (FunctionRoot) target.getRootNode();
+                var redirect = FunctionRoot.class.getDeclaredField("recoveredEntry");
+                redirect.setAccessible(true);
                 assertEquals(0L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
-                // One real call crosses OSR; there is no training or replayed guest prefix.
+
+                // The first call crosses the OSR threshold without training.
                 // key=0 sums integers [16..143] in every iteration, then adds 17 once.
-                Object result;
-                try { result = Calls.target(target, new Object[]{0L, 1500L, 0L}); }
-                catch (Throwable failure) {
-                    var field = AstSameFrameArm.class.getDeclaredField("targets"); field.setAccessible(true);
-                    var failed = OptimizedCallTarget.class.getDeclaredField("compilationFailed"); failed.setAccessible(true);
-                    var arms = NodeUtil.findAllNodeInstances(target.getRootNode(), AstSameFrameArm.class);
-                    var states = new ArrayList<String>();
-                    for (var arm : arms) {
-                        var sides = (com.oracle.truffle.api.RootCallTarget[]) field.get(arm);
-                        if (sides == null) states.add("inline");
-                        else for (int mode = 0; mode < sides.length; mode++) {
-                            var side = (OptimizedCallTarget) sides[mode];
-                            if (failed.getBoolean(side)) states.add("failed-side-" + mode);
-                        }
-                    }
-                    throw new AssertionError("real OSR failed at generation " + ((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration() +
-                            ", slots=" + target.getRootNode().getFrameDescriptor().getNumberOfSlots() +
-                            ", arms=" + arms.size() + ", states=" + states, failure);
-                }
-                assertEquals(10193L, result);
-                assertTrue(((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration() > 0, "actual structural budget recovery");
-                assertEquals(1501L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue(), "no replayed join transfer");
+                assertEquals(10193L, Calls.target(target, new Object[]{0L, 1500L, 0L}));
+                assertEquals(1501L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue(),
+                        "the old activation must finish without replay");
+                assertEquals(0, original.getGraphBudgetGeneration());
+                assertNull(redirect.get(original));
+                var failure = original.graphFailure.get();
+                assertNotNull(failure, "the real OSR bailout belongs to the original root");
+                var retired = failure.target();
+                assertInstanceOf(BaseOSRRootNode.class, retired.getRootNode());
+                assertTrue(GraphRecovery.graphTooBig(failure.reason(), failure.bailout(), failure.permanent()), failure.reason());
+                assertFalse(retired.isSubmittedForCompilation());
+                assertFalse(retired.isValid());
+                assertFalse(retired.compile(true), "the failed physical target must not be retried");
+
+                assertEquals(10193L, Calls.target(target, new Object[]{0L, 1500L, 0L}));
+                assertEquals(3002L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue(),
+                        "only the two requested entries execute their join transfers");
                 assertSame(target, program.entryTarget("entry"));
-                var loops = NodeUtil.findAllNodeInstances(target.getRootNode(), OptimizedOSRLoopNode.class);
-                assertTrue(loops.stream().anyMatch(loop -> loop.getCompiledOSRLoop() != null), "real local-join OSR target");
+                assertEquals(0, original.getGraphBudgetGeneration());
+                var freshEntry = assertInstanceOf(DirectCallNode.class, redirect.get(original));
+                var freshTarget = assertInstanceOf(RootCallTarget.class, freshEntry.getCallTarget());
+                var fresh = assertInstanceOf(FunctionRoot.class, freshTarget.getRootNode());
+                assertNotSame(original, fresh);
+                assertTrue(fresh.getGraphBudgetGeneration() > 0, "fresh entry structurally reduces the old graph");
+                var loops = NodeUtil.findAllNodeInstances(fresh, OptimizedOSRLoopNode.class);
+                assertTrue(loops.stream().map(OptimizedOSRLoopNode::getCompiledOSRLoop)
+                        .anyMatch(osr -> osr != null && osr != retired && osr.isValidLastTier()),
+                        "the replacement must install real local-join OSR");
             } finally { context.leave(); }
         }
     }
 
     @Test void exhaustedLeafDoesNotRetryWithoutAnUnusedBoundary() throws Exception {
-        try (var context = context()) {
+        try (var context = context("Throw")) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
