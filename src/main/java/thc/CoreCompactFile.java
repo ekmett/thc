@@ -269,9 +269,9 @@ public final class CoreCompactFile implements AutoCloseable {
             CoreCompactFormat.Span span = current.header.get(CoreCompactFormat.Segment.STRINGS);
             MemorySegment strings = CoreCompactCursor.slice(member(current, "strings"), span.offset(), span.length());
             // Count only a valid selected range, including a failing UTF8 decode.
-            CoreCompactCursor.slice(strings, offset, length);
+            var selected = CoreCompactCursor.slice(strings, offset, length);
             counters.stringBytesRead += length;
-            return CoreCompactCursor.utf8(strings, offset, length);
+            return CoreCompactCursor.utf8(selected);
         }
     }
     /** Facts use their own final-header pool, never the executable string member. */
@@ -280,9 +280,9 @@ public final class CoreCompactFile implements AutoCloseable {
             Mapped current = mapping();
             var span = current.header.metadataStrings();
             var strings = CoreCompactCursor.slice(member(current, "header"), span.offset(), span.length());
-            CoreCompactCursor.slice(strings, offset, length);
+            var selected = CoreCompactCursor.slice(strings, offset, length);
             counters.headerBytesRead += length;
-            return CoreCompactCursor.utf8(strings, offset, length);
+            return CoreCompactCursor.utf8(selected);
         }
     }
     public <T> T debug(CoreCompactFormat.Segment segment, Decoder<T> decode) throws Throwable {

@@ -55,6 +55,32 @@ class FixtureGraphTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.prepare_cmake(self.root, self.selection("thc.FreeTest"), run)["targets"], [])
         run.assert_not_called()
 
+    def test_consumer_acquires_tool_dependencies_before_offline_fixture_build(self):
+        self.manifest["groups"]["alpha"]["cmakeTarget"] = "fixture-alpha"
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        run = mock.Mock()
+        fast_fixtures.prepare_cmake(self.root, self.selection("thc.AlphaTest"), run,
+                                    acquire_dependencies=True)
+        self.assertEqual(["fixture-configure", "fixture-tool-dependencies", "fixture-build"],
+                         [call.args[0] for call in run.call_args_list])
+        self.assertEqual(["cmake", "--build", "build/fixtures", "--parallel", "4",
+                          "--target", "fixture-tool-dependencies"], run.call_args_list[1].args[1])
+        self.assertEqual(["--target", "fixture-alpha"], run.call_args_list[2].args[1][-2:])
+        run.reset_mock()
+        fast_fixtures.prepare_cmake(self.root, self.selection("thc.FreeTest"), run,
+                                    acquire_dependencies=True)
+        run.assert_not_called()
+
+    def test_dependency_failure_stops_before_fixture_generation(self):
+        self.manifest["groups"]["alpha"]["cmakeTarget"] = "fixture-alpha"
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        run = mock.Mock(side_effect=[None, RuntimeError("dependency acquisition failed")])
+        with self.assertRaisesRegex(RuntimeError, "dependency acquisition failed"):
+            fast_fixtures.prepare_cmake(self.root, self.selection("thc.AlphaTest"), run,
+                                        acquire_dependencies=True)
+        self.assertEqual(["fixture-configure", "fixture-tool-dependencies"],
+                         [call.args[0] for call in run.call_args_list])
+
     def test_model_writers_require_the_declared_encoder(self):
         project = Path(__file__).resolve().parents[2]
         for name in ("thc.runtime.BigNatLiteralTest", "thc.StaticExportStartupTest",

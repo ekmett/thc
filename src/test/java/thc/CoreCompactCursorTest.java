@@ -69,8 +69,8 @@ class CoreCompactCursorTest {
         bytes[0] = -1; bytes[bytes.length - 1] = -1;
         System.arraycopy(text, 0, bytes, 1, text.length);
         var encoded = MemorySegment.ofArray(bytes);
-        assertEquals("é😀", CoreCompactCursor.utf8(encoded, 1, 6));
-        assertThrows(CharacterCodingException.class, () -> CoreCompactCursor.utf8(encoded, 0, 1));
+        assertEquals("é😀", CoreCompactCursor.utf8(CoreCompactCursor.slice(encoded, 1, 6)));
+        assertThrows(CharacterCodingException.class, () -> CoreCompactCursor.utf8(CoreCompactCursor.slice(encoded, 0, 1)));
         assertThrows(IllegalArgumentException.class, () -> CoreCompactCursor.slice(encoded, Long.MAX_VALUE, 2));
         assertThrows(IllegalArgumentException.class, () -> CoreCompactCursor.slice(encoded, 1, Long.MAX_VALUE));
         assertEquals(0L, CoreCompactCursor.slice(encoded, encoded.byteSize(), 0).byteSize());
