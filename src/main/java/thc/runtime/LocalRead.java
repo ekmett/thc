@@ -10,8 +10,12 @@ import static thc.runtime.RuntimeFault.fault;
 public final class LocalRead extends Expr {
     private final int slot;
     private final boolean cell;
+    private final boolean referenceStorage;
     public LocalRead(int slot) { this(slot, true); }
-    public LocalRead(int slot, boolean cell) { this.slot = slot; this.cell = cell; }
+    public LocalRead(int slot, boolean cell) { this(slot, cell, false); }
+    LocalRead(int slot, boolean cell, boolean referenceStorage) {
+        this.slot = slot; this.cell = cell; this.referenceStorage = referenceStorage;
+    }
     @Override public boolean needsCallState() { return slot == FrameLayout.BLOOM_FILTER; }
     // Initialized non-cell locals use their declared storage; widened activations retain tag checks.
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
@@ -32,8 +36,9 @@ public final class LocalRead extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) {
         CoreRepresentation proof = getRepresentation();
+        // Allocation-time Object storage remains a reference across all activations.
         // DATA/CLOSURE storage is a reference even before the value is demanded.
-        Object value = !cell && (proof.isEvaluatedReference() || proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE)
+        Object value = !cell && (referenceStorage || proof.isEvaluatedReference() || proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE)
             ? frame.getObject(slot) : FrameAccess.INSTANCE.read(frame, slot);
         // Lowering publishes ordinary bindings before use; cells carry publication state.
         if (!cell) return value;

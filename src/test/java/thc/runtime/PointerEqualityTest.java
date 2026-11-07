@@ -110,6 +110,16 @@ class PointerEqualityTest {
     }
     private record EqualPayload(long value) {}
     private record IdentityCase(Object left, Object right, long expected) {}
+    @Test @SuppressWarnings("removal")
+    void coldBoxedPrimitiveArgumentsRetainTheirReferenceIdentity() throws Exception {
+        eachBackend(pointer(variable("left"), variable("right")), (backend, program, language) -> {
+            Object first = new Long(3_000_000_017L);
+            Object equal = new Long(3_000_000_017L);
+            assertEquals(1L, invoke(program, first, first), backend + " shared boxed argument");
+            assertEquals(0L, invoke(program, first, equal), backend + " distinct equal boxed arguments");
+            assertEquals(1L, invoke(program, equal, equal), backend + " later shared boxed argument");
+        });
+    }
     private void checkIdentity(
         String backend, ExecutableProgram program, List<IdentityCase> cases, int index, boolean compiled) {
         var row = cases.get(index);

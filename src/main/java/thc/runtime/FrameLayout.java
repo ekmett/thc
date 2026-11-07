@@ -67,6 +67,8 @@ public final class FrameLayout {
             case UNKNOWN -> FrameSlotKind.Illegal;
         };
     }
+    /** Allocation-time storage, unaffected by widening in later activations. */
+    boolean referenceSlot(int slot) { return allocation.kinds.get(slot) == FrameSlotKind.Object; }
     public int bind(String name) { return bind(name, FrameSlotKind.Illegal); }
     public int bind(String name, FrameSlotKind kind) {
         int slot = allocation.bind(name, kind);

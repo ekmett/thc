@@ -538,6 +538,7 @@ public final class Program implements ExecutableProgram {
         }
         Local bind(String id, boolean primitive, CoreRepresentation proof, boolean cell, boolean[] entry,
                    CoreApplicationCertificates.Arity arityCertificate, FrameSlotKind kind) {
+            if (proof.hasBoxedPointer()) kind = FrameSlotKind.Object;
             Local local = new Local(layout.bind(id, kind), proof.getPresent() ? proof.isLong() : primitive, proof, cell, entry, null, arityCertificate);
             locals.put(id, local); joins.remove(id);
             return local;
@@ -591,7 +592,7 @@ public final class Program implements ExecutableProgram {
             int slot = layout.bind("<async operand " + bindings.size() + ">", kind);
             temporaries.add(slot);
             bindings.add(new LocalBinding(slot, value, proof.isLong()));
-            return new LocalRead(slot, false).proven(proof);
+            return new LocalRead(slot, false, layout.referenceSlot(slot)).proven(proof);
         }
         Expr finish(Expr body) {
             return bindings.isEmpty() ? body : new AstOperands(bindings.toArray(LocalBinding[]::new), ints(temporaries), body);
@@ -1609,7 +1610,7 @@ public final class Program implements ExecutableProgram {
                         yield local.proof.isVector() ? new VectorLocalRead(shape, local.tupleSlots) : new TupleLocalRead(shape, local.tupleSlots);
                     }
                     if (local.slot < 0 && local.proof.getKind() == CoreKind.VOID) yield new Literal(thc.runtime.Unit.INSTANCE).proven(local.proof);
-                    yield new LocalRead(local.slot, local.cell).proven(local.proof);
+                    yield new LocalRead(local.slot, local.cell, scope.layout.referenceSlot(local.slot)).proven(local.proof);
                 }
                 GlobalBinding global = globals.get(id);
                 if (global != null) {
