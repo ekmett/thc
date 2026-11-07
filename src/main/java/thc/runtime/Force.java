@@ -56,16 +56,16 @@ public final class Force extends Node {
     private Object executeThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
         while (true) {
+            SavedGuestContinuation observed = null;
             switch (original.getState()) {
                 case 2 -> { if (invocationMetrics.getEnabled()) invocationMetrics.incrementThunkHits(); return original.getValue(); }
                 case 3 -> throw rethrowFailure(original);
                 case 4 -> throw fault("Interrupted thunk has no resumable continuation");
-            }
-            SavedGuestContinuation observed = null;
-            if (original.getState() == 5) {
-                resumeProfile.enter();
-                observed = savedGuestContinuation(original.getValue());
-                BytecodeContinuations.preflightWait(observed);
+                case 5 -> {
+                    resumeProfile.enter();
+                    observed = savedGuestContinuation(original.getValue());
+                    BytecodeContinuations.preflightWait(observed);
+                }
             }
             PendingWait pending = PendingWait.of(observed);
             if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) {
