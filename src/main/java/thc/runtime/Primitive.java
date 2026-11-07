@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import static thc.runtime.RuntimeFault.fault;
 
 final class Primitive extends Expr {
@@ -52,6 +53,10 @@ final class Primitive extends Expr {
                  "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#" -> 2;
             default -> -1;
         };
+    }
+    @ExplodeLoop @Override public boolean needsCallState() {
+        for (Expr argument : arguments) if (argument.needsCallState()) return true;
+        return false;
     }
     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
     @Override public long executeLong(VirtualFrame frame) {

@@ -28,6 +28,7 @@ public final class LocalBinding extends Node {
         referenceKind = proof.getEvaluated() ? proof.getKind() : CoreKind.UNKNOWN;
         generic = !preferLong || proof.getPresent() && !exactLong;
     }
+    boolean needsCallState() { return value.needsCallState(); }
     public Object evaluate(VirtualFrame frame) {
         if (referenceKind == CoreKind.DATA) return value.executeRequiredDataValue(frame);
         if (referenceKind == CoreKind.CLOSURE) return value.executeRequiredClosure(frame);

@@ -12,6 +12,7 @@ final class PointerEquality extends Expr {
         this.left = left; this.right = right;
         setRepresentation(new CoreRepresentation(CoreKind.LONG, true, false, null, null, null, null, null, null));
     }
+    @Override public boolean needsCallState() { return left.needsCallState() || right.needsCallState(); }
     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
     @Override public long executeLong(VirtualFrame frame) {
         return left.execute(frame) == right.execute(frame) ? 1L : 0L;

@@ -25,6 +25,9 @@ public final class Evaluate extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         return value.executeTuple(frame, slots, offset);
     }
+    @Override public boolean needsCallState() {
+        return !value.getRepresentation().getEvaluated() || value.needsCallState();
+    }
     private Object forceResult(VirtualFrame frame, Object original) {
         Object result = AstControl.INSTANCE.force(frame, this, force, original);
         // A failed force never writes; already evaluated values need no write.
