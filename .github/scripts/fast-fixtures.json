@@ -83,6 +83,7 @@
     "thc.runtime.ManagedDescriptorDupTest",
     "thc.runtime.CoreMainThreadForeignTest",
     "thc.runtime.AstContinuationTest",
+    "thc.runtime.AstInstrumentationTest",
     "thc.runtime.BlockedOwnerProtocolTest",
     "thc.runtime.AstStackTest",
     "thc.runtime.GuestThreadsTest",
