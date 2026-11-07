@@ -178,7 +178,8 @@ public final class BytecodeStackPreparation {
     private static final String WRAPPER = """
             // THC balanced bytecode stack entry v1
             private Object continueAt(AbstractBytecodeNode bc, long bci, long sp, FrameWithoutBoxing frame, ContinuationRootNodeImpl continuationRootNode) {
-                if (!isAsyncEnabled()) return continueAtStackBody(bc, bci, sp, frame, continuationRootNode);
+                if (!isAsyncEnabled() || continuationRootNode == null && !requiresStackEntry())
+                    return continueAtStackBody(bc, bci, sp, frame, continuationRootNode);
                 thc.runtime.AstStackScope scope = thc.runtime.AstStacks.astStackScope(this);
                 boolean driver = !scope.getDriving();
                 if (driver) scope.setDriving(true);

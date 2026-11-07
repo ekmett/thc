@@ -68,6 +68,15 @@ a first suspension may deoptimize before resuming correctly. Continuation-local
 storage restores the saved frame's actual tags, including frames retained before
 a local widened. Preparation does not run guest code or seed exception profiles.
 
+An ordinary initial scalar entry can omit stack-limit and stack-driver descent
+bookkeeping when its complete lowered operation and operands cannot descend or
+suspend. This conservative proof currently covers constants, non-cell local
+reads, pointer comparison and compositions of scalar addition, subtraction and
+multiplication. Unknown operations, strict or typed ingress, captures, loops,
+case regions, delimited control and source instrumentation retain the driver.
+Entry polling and its transaction, mask and annotation snapshots remain intact;
+every resumed activation retains stack driving and saved-transaction restoration.
+
 An unobserved compiled conditional consumes its actual Boolean without quickening
 or inventing branch observations. Both real arms remain available while its two
 counters are zero, including stack guards and retry loops. Real interpreter

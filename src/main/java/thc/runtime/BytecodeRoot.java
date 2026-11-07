@@ -135,7 +135,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         return (!passThrough || rootCompilation) && super.prepareForCompilation(rootCompilation, tier, lastTier);
     }
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
+    @CompilerDirectives.CompilationFinal private boolean stackEntry = true;
     @Child private Force stackDriver;
+    final void configureStackEntry(boolean required) { stackEntry = required; }
+    /** Whether an initial activation may descend; resumed activations always retain the driver. */
+    public final boolean requiresStackEntry() { return stackEntry; }
     public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
     public final void configureStackDriver(Metrics metrics) {
         if (asyncEnabled) stackDriver = insert(new Force(metrics, true));

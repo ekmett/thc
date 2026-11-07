@@ -229,6 +229,7 @@ class SavedGuestContinuationTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var stm = Language.currentState().stm;
+                for (boolean stackEntry : new boolean[]{false, true})
                 for (boolean transactional : new boolean[]{false, true}) {
                     var savedTransaction = transactional ? stm.begin() : null;
                     var slot = new LocalAccessor[1];
@@ -245,6 +246,7 @@ class SavedGuestContinuationTest {
                         b.endRoot();
                     }).getNode(0);
                     root.configureAsync(true); root.configureStackDriver(metrics);
+                    root.configureStackEntry(stackEntry);
                     root.configureStackTransaction(slot[0]);
                     var saved = assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
                     assertSame(marker, saved.getResult());

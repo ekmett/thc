@@ -374,6 +374,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         default CoreRepresentation proof() { return UNKNOWN; }
         default CoreSourceLocation source() { return null; }
         default boolean loweredCase() { return false; }
+        /** True unless complete emission, including its children and cleanup, cannot descend or suspend. */
+        default boolean requiresCallState() { return true; }
     }
 
     private record LoweredCaseExpression(Expression expression) implements Expression {
@@ -384,10 +386,23 @@ public final class BytecodeProgram implements ExecutableProgram {
         @Override public CoreRepresentation proof() { return expression.proof(); }
         @Override public CoreSourceLocation source() { return expression.source(); }
         @Override public boolean loweredCase() { return true; }
+        @Override public boolean requiresCallState() { return expression.requiresCallState(); }
         @Override public boolean writesDestination() { return expression.writesDestination(); }
     }
 
+    /** A non-descending operation is non-descending exactly when every executed operand is. */
+    private record NonDescendingExpression(Expression operation, List<Expression> operands) implements Expression {
+        NonDescendingExpression { operands = List.copyOf(operands); }
+        @Override public void emit(Emission emission) { operation.emit(emission); }
+        @Override public boolean requiresCallState() {
+            return operands.stream().anyMatch(Expression::requiresCallState);
+        }
+    }
+
     private record ProvenExpression(Expression expression, CoreRepresentation proof) implements Expression {
+        @Override public boolean requiresCallState() {
+            return proof.isTypedTransport() || expression.requiresCallState();
+        }
         @Override public void emit(Emission emission) {
             if (!proof.isVector() || !writesDestination()) { expression.emit(emission); return; }
             var b = emission.builder;
@@ -494,6 +509,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private record LocalExpression(Local local, boolean resolve) implements Expression {
+        @Override public boolean requiresCallState() { return resolve && local.cell; }
         @Override public CoreRepresentation proof() { return local.proof; }
         @Override public void emit(Emission emission) {
             var b = emission.builder;
@@ -1073,6 +1089,18 @@ public final class BytecodeProgram implements ExecutableProgram {
     private RootCallTarget buildEncoded(String label, FunctionContext context, Expression body, boolean forceResult) {
         var source = body.source();
         var config = sources.getEnabled() && sources.getSpanCount() > 0 ? BytecodeConfig.WITH_SOURCE : BytecodeConfig.DEFAULT;
+        // Initial scalar leaves can omit descent bookkeeping. Polls still capture the
+        // entry mask, annotations and transaction, and every resumed entry uses the driver.
+        boolean requiresStackEntry = body.requiresCallState() || forceResult && force(body).requiresCallState()
+            || !(body.proof().isInt() || body.proof().isLong() || body.proof().isFloat() || body.proof().isDouble())
+            || config != BytecodeConfig.DEFAULT || source != null || delimited || context.mayLoop
+            || context.passThrough || context.preparingCaseRegion || context.capacityNesting
+            || context.caseEmission != null || context.caseRegionOrigin != null || !context.caseRegions.isEmpty()
+            || context.leadingCaseReturn != null || context.inputLayout != null || context.typedInput != null
+            || context.tuple != null
+            || !context.captures.isEmpty() || !context.vectorCaptures.isEmpty();
+        for (boolean strict : context.entryStrict) requiresStackEntry |= strict;
+        final boolean stackEntry = requiresStackEntry;
         var typedBloom = new LocalAccessor[1];
         var stackTransaction = new LocalAccessor[1];
         var root = BytecodeRootGen.create(language, config, b -> {
@@ -1208,7 +1236,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     restoreArgument(e, local, enableAsync && context.entryStrict[i], () -> b.emitLoadArgument(argument));
                 }
             }
-            if (enableAsync) {
+            if (enableAsync && stackEntry) {
                 // The saved PC follows ingress restoration, before any body effects.
                 b.beginIfThen(); b.emitStackLimit();
                 b.beginBlock();
@@ -1256,6 +1284,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         root.setLabel(label);
         root.configureForeignExceptionBridge(foreignExceptionBridge);
         root.configureAsync(enableAsync);
+        root.configureStackEntry(stackEntry);
         root.configureEagerAsyncPolls(eagerAsyncPolls);
         root.configureStackDriver(metrics);
         root.configureStackTransaction(stackTransaction[0]);
@@ -1693,7 +1722,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             case ManagedAddress ignored -> CoreKind.ADDRESS;
             default -> value == thc.runtime.Unit.INSTANCE ? CoreKind.VOID : CoreKind.OBJECT;
         };
-        return new ProvenExpression(e -> e.builder.emitLoadConstant(value),
+        return new ProvenExpression(new NonDescendingExpression(e -> e.builder.emitLoadConstant(value), List.of()),
             new CoreRepresentation(kind, true, false, null, null, null, null, null, null));
     }
 
@@ -5157,15 +5186,15 @@ public final class BytecodeProgram implements ExecutableProgram {
             break;
         }
         if (wideArithmetic || unknownArithmetic)
-            return new ProvenExpression(e -> {
+            return new ProvenExpression(new NonDescendingExpression(e -> {
                 int arithmetic = switch (operation) { case "Add" -> 0; case "Subtract" -> 1; default -> 2; };
                 if (unknownArithmetic) e.builder.beginBoxedLongArithmetic(arithmetic);
                 else e.builder.beginStaticLongArithmetic(arithmetic);
                 for (var arg : args) arg.emit(e);
                 if (unknownArithmetic) e.builder.endBoxedLongArithmetic();
                 else e.builder.endStaticLongArithmetic();
-            }, resultProof);
-        return new ProvenExpression(e -> {
+            }, args), resultProof);
+        Expression emitted = e -> {
             var b = e.builder;
             switch (operation) {
                 case "PopulationCountWidth" -> { b.beginPopulationCountWidth(bitShift); for (var arg : args) arg.emit(e); b.endPopulationCountWidth(); }
@@ -5221,7 +5250,12 @@ public final class BytecodeProgram implements ExecutableProgram {
                 case "AddressIndexByte" -> { b.beginAddressIndexByte(name.equals("indexInt8OffAddr#")); for (var arg : args) arg.emit(e); b.endAddressIndexByte(); }
                 case "AddressIndexManagedScalar" -> { b.beginAddressIndexManagedScalar(switch (name) { case "indexCharOffAddr#" -> ManagedAddressRead.CHAR; case "indexInt16OffAddr#" -> ManagedAddressRead.INT16; default -> ManagedAddressRead.WORD16; }); for (var arg : args) arg.emit(e); b.endAddressIndexManagedScalar(); }
             }
-        }, resultProof);
+        };
+        // These operations only consume their operands and produce a primitive long.
+        // Other primitives retain call state until their entire operation is proved safe.
+        if (Set.of("Add", "Subtract", "Multiply", "PointerEqual").contains(operation))
+            emitted = new NonDescendingExpression(emitted, args);
+        return new ProvenExpression(emitted, resultProof);
     }
 
     private Expression sumCase(List<Object> expr, Expression scrutinee, CoreRepresentation proof, Scope scope, boolean tail) {
