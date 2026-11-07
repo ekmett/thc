@@ -3558,7 +3558,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = MaskingState.class, name = "target")
     public static final class EnterMask {
-        @Specialization public static MaskingState enter(MaskingState target, @Bind("$node") Node node) {
+        // Reading the prior mask belongs to the same boundary as changing it.
+        @Specialization @TruffleBoundary public static MaskingState enter(MaskingState target, @Bind("$node") Node node) {
             MaskingState prior = SynchronousMasking.current(node);
             SynchronousMasking.set(node, target);
             return prior;
