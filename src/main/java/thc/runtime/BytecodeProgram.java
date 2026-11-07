@@ -684,7 +684,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 throw new IllegalStateException("Top-level closure has lexical captures");
             return new Closure(null, args.size(), fn.target);
         }
-        var fn = function((String) binding.get("name"), List.of(), expr, scope);
+        var fn = thunkFunction((String) binding.get("name"), List.of(), expr, scope);
         var tuple = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
         if (tuple != null) CoreRepresentations.requireScalar(tuple.getProof(), "thunk");
         if (fn.captureLayout != null || !fn.captures.isEmpty())
@@ -864,8 +864,10 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private record CapturedLocal(Local source, Local destination) {}
 
-    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer) {
-        return function(label, args, expression, outer, CoreRepresentations.expression(expression), new boolean[args.size()]);
+    private FunctionSpec thunkFunction(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer) {
+        // Keep the pending WHNF demand in this activation across calls.
+        return function(label, args, expression, outer, CoreRepresentations.expression(expression),
+            new boolean[args.size()], false, false, true, null, false, true);
     }
 
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
@@ -881,13 +883,18 @@ public final class BytecodeProgram implements ExecutableProgram {
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
             CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough, boolean entryPoll,
             List<?> regionOrigin) {
-        return function(label, args, expression, outer, resultProof, entryStrict, tail, passThrough, entryPoll,
-                regionOrigin, false);
+        return function(label, args, expression, outer, resultProof, entryStrict, tail, passThrough,
+            entryPoll, regionOrigin, false);
     }
-
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
             CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough, boolean entryPoll,
             List<?> regionOrigin, boolean capacityNesting) {
+        return function(label, args, expression, outer, resultProof, entryStrict, tail, passThrough,
+            entryPoll, regionOrigin, capacityNesting, false);
+    }
+    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
+            CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough, boolean entryPoll,
+            List<?> regionOrigin, boolean capacityNesting, boolean thunkDemand) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
         var context = new FunctionContext(args.size(), entryStrict.clone());
         context.passThrough = passThrough;
@@ -1022,7 +1029,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             throw new RuntimeFault("Sum function requires exact body and declared result proofs");
         var body = new ProvenExpression(compiled, evaluatedProof(compiled.proof().refine(resultProof), compiled.proof().getEvaluated()));
         context.tuple = body.proof.isTypedTransport() ? new TupleShape(body.proof, language) : null;
-        var target = build(label, context, body, !passThrough && !body.proof.getEvaluated());
+        var target = build(label, context, body, thunkDemand && !body.proof.getEvaluated());
         ((GuestRoot) target.getRootNode()).configureInputProofs(argumentProofs);
         captureSources.addAll(vectorSources);
         return new FunctionSpec(target, context.captureLayout, captureSources, vectorCount != 0);
@@ -1551,7 +1558,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression delay(List<Object> expr, Scope scope, String label) {
-        var fn = function(label, List.of(), expr, scope);
+        var fn = thunkFunction(label, List.of(), expr, scope);
         var tuple = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
         if (tuple != null) CoreRepresentations.requireScalar(tuple.getProof(), "thunk");
         var template = new BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout);
@@ -3804,7 +3811,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             && arguments.size() <= context.formalArity && context.formalArity > 0;
         // Roots without direct self-calls can still receive A -> B -> ... -> A.
         if (catchesTail) context.mayLoop = true;
-        return evaluated(e -> {
+        return e -> {
             var b = e.builder;
             if (enableAsync) { b.beginBlock(); emitAsyncPoll(e); }
             BytecodeLocal reentryResult = null;
@@ -3927,7 +3934,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.endBlock();
             }
             if (enableAsync) b.endBlock();
-        });
+        };
     }
 
     /** A join transfer is a parallel move followed by bytecode control flow in this activation. */
