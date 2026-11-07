@@ -64,6 +64,57 @@ class CaseBinderLifetimeTest {
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void usedBinderRemainsAvailableToTheSelectedCompiledArm(boolean defaults) throws Exception { check(true, defaults); }
 
+    @Test void scalarSiblingsReuseSlotsWithoutChangingCapturedValues() {
+        var left = capturedScalar("left", 11, true);
+        var right = capturedScalar("right", 22, false);
+        var expression = node("case", variable("choice"), "selected", List.of(
+            node("lit", node("int", "0"), List.of(), left),
+            node("default", null, List.of(), right)),
+            Map.of("rep", CLOSURE, "binder", binder("selected")));
+        var entry = node("lam", List.of(binder("choice"), binder("outer")), expression,
+            Map.of("rep", CLOSURE, "resultRep", CLOSURE));
+        var data = Map.<String, Object>of("bindings", List.of(Map.of("id", "entry", "name", "entry",
+            "lifted", true, "rep", CLOSURE, "expr", entry)));
+
+        try (var context = executionContext(false)) {
+            context.initialize("thc");
+            context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var target = new Program(language, data, false).entryTarget("entry");
+                var first = assertInstanceOf(Closure.class,
+                    ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 0L, 100L}));
+                var second = assertInstanceOf(Closure.class,
+                    ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 1L, 200L}));
+                assertEquals(111L, ScalarTestCalls.callScalarTestTarget(first.target,
+                    new Object[]{0L, first.environment, 0L}));
+                assertEquals(222L, ScalarTestCalls.callScalarTestTarget(second.target,
+                    new Object[]{0L, second.environment, 0L}));
+
+                var selection = NodeUtil.findFirstNodeInstance(target.getRootNode(), Case.class);
+                var firstArm = NodeUtil.findFirstNodeInstance(selection.alternatives[0].getBody(), Case.class);
+                var secondArm = NodeUtil.findFirstNodeInstance(selection.alternatives[1].getBody(), Case.class);
+                assertNotEquals(selection.binderSlot, firstArm.binderSlot);
+                assertEquals(firstArm.binderSlot, secondArm.binderSlot, "Disjoint scalar arms share a slot");
+            } finally {
+                context.leave();
+            }
+        }
+    }
+
+    private static List<Object> capturedScalar(String name, int value, boolean nested) {
+        var result = node("app", node("prim", "+#"), List.of(variable("outer"), variable(name)),
+            List.of(false, false), false, false, Map.of("rep", LONG));
+        var closure = node("lam", List.of(binder(name + "Unused")), result,
+            Map.of("rep", CLOSURE, "resultRep", LONG));
+        var body = nested ? node("case", node("lit", "int", "99"), "extra",
+            List.of(node("default", null, List.of(), closure)),
+            Map.of("rep", CLOSURE, "binder", binder("extra"))) : closure;
+        return node("case", node("lit", "int", Integer.toString(value)), name,
+            List.of(node("default", null, List.of(), body)),
+            Map.of("rep", CLOSURE, "binder", binder(name)));
+    }
+
     @Test void ordinaryUninitializedLocalsStillReadNull() {
         var layout = new FrameLayout();
         int ordinary = layout.bind("ordinary");
