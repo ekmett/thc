@@ -127,6 +127,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     public final long getGraphBudgetGeneration() { return casePlan == null ? 0 : casePlan.generation(); }
     public final long prepareGraphBudgetRetry(long failedGeneration) {
+        if (compilationFailureObserved) return failedGeneration;
         return casePlan == null ? failedGeneration : casePlan.recover(failedGeneration);
     }
     @Override protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {

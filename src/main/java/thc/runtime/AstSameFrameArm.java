@@ -175,6 +175,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
         // Optional graph-budget hooks when running with the THC runtime overlay.
         public long getGraphBudgetGeneration() { return arm.sideGeneration; }
         public long prepareGraphBudgetRetry(long failedGeneration) {
+            if (compilationFailureObserved) return failedGeneration;
             synchronized (arm) {
                 if (failedGeneration == arm.sideGeneration && extract(arm.body)) arm.sideGeneration++;
                 return arm.sideGeneration;

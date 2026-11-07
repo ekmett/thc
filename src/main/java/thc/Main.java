@@ -43,7 +43,8 @@ public final class Main {
             .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
             .option("engine.SingleTierCompilationThreshold", System.getProperty("polyglot.engine.SingleTierCompilationThreshold", "10000"))
             .option("compiler.CompilationTimeout", System.getProperty("polyglot.compiler.CompilationTimeout", "30"))
-            .option("compiler.MaximumGraalGraphSize", System.getProperty("polyglot.compiler.MaximumGraalGraphSize", "100000"));
+            .option("compiler.DiagnoseFailure", "false")
+            .option("compiler.MaximumGraalGraphSize", System.getProperty("polyglot.compiler.MaximumGraalGraphSize", "1000"));
     }
 
     /** Values and native resources must not outlive or cross this owning context. */
