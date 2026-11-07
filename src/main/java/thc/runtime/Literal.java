@@ -21,7 +21,7 @@ final class Literal extends Expr {
         };
         setRepresentation(new CoreRepresentation(kind, true, false, null, null, null, null, null, null));
     }
-    @Override public boolean needsCallState() { return false; }
+    @Override public boolean needsCallState() { return getCoreSourceLocation() != null; }
     @Override public Object execute(VirtualFrame frame) { return copyBytes ? BigNatLiterals.instantiate((byte[]) value) : value; }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException { return RuntimeTypesGen.expectInteger(value); }
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException { return RuntimeTypesGen.expectLong(value); }

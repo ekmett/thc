@@ -55,6 +55,7 @@ final class Primitive extends Expr {
         };
     }
     @ExplodeLoop @Override public boolean needsCallState() {
+        if (getCoreSourceLocation() != null) return true;
         for (Expr argument : arguments) if (argument.needsCallState()) return true;
         return false;
     }

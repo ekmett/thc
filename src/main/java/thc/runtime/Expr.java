@@ -83,6 +83,9 @@ public abstract class Expr extends Node implements InstrumentableNode {
      * inspect their current children so replacement invalidates compiled proofs.
      * Concrete and conservative so instrumentation wrappers retain their own
      * potentially reentrant behavior instead of delegating the child's proof.
+     * A node with its own source location must also retain call state: probes
+     * can attach after entry has selected its accounting path. Source metadata
+     * is assigned before adoption, so an unsourced node cannot acquire probes.
      */
     public boolean needsCallState() { return true; }
 

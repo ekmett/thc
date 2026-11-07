@@ -26,7 +26,7 @@ public final class Evaluate extends Expr {
         return value.executeTuple(frame, slots, offset);
     }
     @Override public boolean needsCallState() {
-        return !value.getRepresentation().getEvaluated() || value.needsCallState();
+        return getCoreSourceLocation() != null || !value.getRepresentation().getEvaluated() || value.needsCallState();
     }
     private Object forceResult(VirtualFrame frame, Object original) {
         Object result = AstControl.INSTANCE.force(frame, this, force, original);

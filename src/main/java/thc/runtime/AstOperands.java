@@ -20,13 +20,15 @@ public final class AstOperands extends Expr {
         setRepresentation(body.getRepresentation());
     }
     @ExplodeLoop @Override public boolean needsCallState() {
+        if (getCoreSourceLocation() != null) return true;
         for (LocalBinding operand : operands) if (operand.needsCallState()) return true;
         return body.needsCallState();
     }
     @Override public void prepareTuple(int[] slots, int offset) { body.prepareTuple(slots, offset); }
     private PointerEquality directReferenceComparison() {
-        // Only current, unwrapped generic reference reads qualify. Neither source
-        // can alias a temporary written by preparation; typed demand stays staged.
+        // Only current, unwrapped generic reference reads that cannot acquire
+        // probes qualify. Neither source can alias a temporary written by
+        // preparation; typed demand stays staged.
         if (operands.length == 2 && temporaries.length == 2 && temporaries[0] != temporaries[1] &&
             body instanceof PointerEquality comparison && comparison.readsReferenceSlots(temporaries[0], temporaries[1]) &&
             operands[0].readsRawReference(temporaries[0], temporaries[1]) &&

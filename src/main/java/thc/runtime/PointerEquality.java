@@ -12,9 +12,9 @@ final class PointerEquality extends Expr {
         this.left = left; this.right = right;
         setRepresentation(new CoreRepresentation(CoreKind.LONG, true, false, null, null, null, null, null, null));
     }
-    @Override public boolean needsCallState() { return left.needsCallState() || right.needsCallState(); }
+    @Override public boolean needsCallState() { return getCoreSourceLocation() != null || left.needsCallState() || right.needsCallState(); }
     boolean readsReferenceSlots(int first, int second) {
-        return left instanceof LocalRead a && a.readsReferenceSlot(first) &&
+        return getCoreSourceLocation() == null && left instanceof LocalRead a && a.readsReferenceSlot(first) &&
             right instanceof LocalRead b && b.readsReferenceSlot(second);
     }
     long executeLocalReferences(VirtualFrame frame, LocalBinding first, LocalBinding second) {
