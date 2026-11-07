@@ -1178,6 +1178,17 @@ public final class Program implements ExecutableProgram {
             String message = gap.getMessage() != null ? gap.getMessage() : "Unsupported Core";
             deferredUnsupported.add(message);
             Expr body = new UnsupportedExpression(message, metrics).located(lowering().source);
+            // A primitive result cannot carry a lazy diagnostic thunk. Trap
+            // when the operand executes, before a typed caller reads its carrier.
+            try {
+                var proof = CoreRepresentations.expression(expr);
+                if (!proof.isTypedTransport() && switch (proof.getKind()) {
+                    case LONG, FLOAT, DOUBLE, ADDRESS, VOID -> true;
+                    default -> false;
+                }) return body;
+            } catch (RuntimeFault unavailableProof) {
+                // Keep the original diagnostic when the operand lacks a usable proof.
+            }
             RootCallTarget target = new FunctionRoot(language, new FrameLayout().build(), "unsupported: " + message, null,
                 new int[0], new int[0], new int[0], body, metrics, new CoreRepresentation[0], body.getRepresentation(),
                 rootSource(body), new boolean[0], null, null, new int[0], null, false, new int[0][], false,
@@ -2708,7 +2719,7 @@ public final class Program implements ExecutableProgram {
     }
 
 
-    /** Unavailable scalars stay lazy; a demanded tuple traps before any destination write. */
+    /** Lifted or unproved gaps stay lazy; a demanded tuple traps before any destination write. */
     private static final class DiagnosticUnavailable extends Expr {
         private final RootCallTarget target;
         @Child private UnsupportedExpression tupleTrap;
