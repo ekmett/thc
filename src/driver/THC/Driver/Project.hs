@@ -19,7 +19,7 @@ module THC.Driver.Project
   , exportInstalledUnit, prepareInstalledBundle, prepareInstalledBundleWithVerification, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
   , publishCapturedStoreUnit, publishReplayInterfaces, readCapturedStoreBundles, readCapturedInstalledBundles
-  , selectedPackageTool, componentCoreRecords
+  , selectedPackageTool, componentCoreRecords, runPrivateCabalCapture
   ) where
 
 import Control.Exception (bracket, evaluate, finally, mask_, onException)
@@ -38,6 +38,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf, isSuffixOf, nub, nubBy, sort, sortOn, stripPrefix)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -2196,6 +2197,17 @@ readCapturedInstalledBundles verify compiler requested path = do
     pure (identifier, (unit, InstalledBundle owner bundle))
   pure (Map.fromList pairs)
 
+-- | Launch the selected components' private Cabal build with an isolated store,
+-- dist directory and compiler proxy. Keep the caller's Cabal executable and
+-- source cache, including access to cached Hackage tarballs in a fresh store.
+runPrivateCabalCapture :: FilePath -> FilePath -> FilePath -> FilePath -> [String] ->
+                          [String] -> [(String, String)] -> IO ()
+runPrivateCabalCapture project store dist wrapper targets options environment = do
+  let cabal = fromMaybe "cabal" (lookup "CABAL" environment)
+      arguments = ["--store-dir=" ++ store, "build"] ++ targets ++
+        ["--enable-build-info", "--builddir", dist, "--with-compiler", wrapper] ++ options
+  runCommandWithEnv True cabal arguments project (Just environment)
+
 captureGlobalUnits :: ExportContext -> FilePath -> [String] -> Map.Map String Unit -> [Unit] ->
                       [(Unit, String, String, FilePath)] -> IO () -> IO ()
 captureGlobalUnits context project target planned requested missing validateInputs = do
@@ -2213,14 +2225,8 @@ captureGlobalUnits context project target planned requested missing validateInpu
         store = staging </> "store"
         dist = staging </> "dist"
         capture = staging </> "capture"
-        -- Cabal's offline mode rejects Hackage sources in a fresh store even
-        -- when their tarballs are cached; use its normal source cache here.
-        -- Rebuild only the selected components' closure. `all` also builds
-        -- unrelated tests/apps and their dependencies in this fresh store.
-        arguments = ["--store-dir=" ++ store, "build"] ++ target ++
-                    ["--enable-build-info", "--builddir", dist, "--with-compiler", wrapper] ++
-                    contextProjectOptions context ++
-                    maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)
+        options = contextProjectOptions context ++
+          maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)
     writeFile wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
     permissions <- getPermissions wrapper
     setPermissions wrapper (permissions {Directory.executable = True})
@@ -2243,7 +2249,7 @@ captureGlobalUnits context project target planned requested missing validateInpu
                        ("THC_PROXY_CORE_DATABASES", Text.unpack (Text.decodeUtf8 (BL.toStrict (encode (helperDatabases view)))))]
                        | Just view <- [contextCoreView context]]
         environment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_BUILD_ADMISSION" : "THC_PROXY_ORIGINAL_BUILD" : "THC_PROXY_CORE_DATABASES" : "THC_PROXY_CORE_LIBDIR" : map fst overrides)) inherited
-    runCommandWithEnv True "cabal" arguments project (Just environment)
+    runPrivateCabalCapture project store dist wrapper target options environment
     plan <- readJson (dist </> "cache/plan.json")
     isolatedCompiler <- field plan "compiler-id"
     isolatedAbi <- field plan "compiler-abi"
