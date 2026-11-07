@@ -9,6 +9,8 @@ import tarfile
 import zipfile
 import json
 import os
+import select
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -225,6 +227,158 @@ class FastRunnerTest(unittest.TestCase):
             ci.setup_toolchain(recorder)
         self.assertIn("JAVA_HOME=" + str(java), (self.root / "env").read_text())
         self.assertIn(str(ghcup / "ghc/9.14.1/bin"), (self.root / "path").read_text())
+
+    def test_acquisition_deadline_and_cancellation_close_descendant_pipes(self):
+        self.assertEqual(7, ci.acquire_process([sys.executable, "-c", "raise SystemExit(7)"], 5))
+        child_code = ("import signal, subprocess, sys; "
+                      "subprocess.Popen([sys.executable, '-c', 'import signal; signal.pause()']); "
+                      "print('ready', flush=True); signal.pause()")
+        original_popen = subprocess.Popen
+        for interruption, during_spawn in ((None, False), (signal.SIGTERM, False),
+                                           (signal.SIGINT, False), (signal.SIGTERM, True)):
+            with self.subTest(interruption=interruption, during_spawn=during_spawn):
+                readers = []
+                handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT)}
+                def start(argv, **kwargs):
+                    child = original_popen(argv, stdout=subprocess.PIPE, **kwargs)
+                    # Synchronize on both processes owning the pipe, not a sleep.
+                    self.assertEqual(b"ready\n", child.stdout.readline())
+                    readers.append(os.dup(child.stdout.fileno()))
+                    if during_spawn:
+                        os.kill(os.getpid(), interruption)
+                    elif interruption:
+                        wait = child.wait
+                        def interrupt_once(*args, **kw):
+                            child.wait = wait
+                            os.kill(os.getpid(), interruption)
+                        child.wait = interrupt_once
+                    return child
+                try:
+                    with patch.object(ci.subprocess, "Popen", side_effect=start):
+                        if interruption:
+                            with self.assertRaises(InterruptedError):
+                                ci.acquire_process([sys.executable, "-c", child_code], 5)
+                        else:
+                            self.assertEqual(124, ci.acquire_process([sys.executable, "-c", child_code], 0.01))
+                    self.assertTrue(select.select(readers, [], [], 2)[0], "descendant still holds pipe open")
+                    self.assertEqual(b"", os.read(readers[0], 1))
+                    self.assertEqual(handlers, {sig: signal.getsignal(sig) for sig in handlers})
+                finally:
+                    for reader in readers:
+                        os.close(reader)
+
+    def test_acquisition_cancellation_does_not_signal_reaped_process_group(self):
+        handle_exit = subprocess.Popen._handle_exitstatus
+
+        def cancel_after_reap(child, status, *args, **kwargs):
+            self.assertIsNone(child.returncode)
+            os.kill(os.getpid(), signal.SIGTERM)
+            return handle_exit(child, status, *args, **kwargs)
+
+        # POSIX waitpid has already reaped the real child at this boundary.
+        with patch.object(subprocess.Popen, "_handle_exitstatus", cancel_after_reap), \
+                patch.object(ci.os, "killpg", wraps=os.killpg) as kill_group:
+            with self.assertRaisesRegex(InterruptedError, "Acquisition cancelled"):
+                ci.acquire_process([sys.executable, "-c", "pass"], 5)
+        kill_group.assert_not_called()
+
+    def test_linux_native_acquisition(self):
+        # Intentional source fixtures model both supported Ubuntu runner formats.
+        sources = self.root / "apt"
+        parts = sources / "sources.list.d"
+        parts.mkdir(parents=True)
+        legacy = "deb [signed-by=/keys/ubuntu.gpg] http://azure.archive.ubuntu.com/ubuntu/ resolute main universe\n"
+        deb822 = "Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: resolute resolute-updates resolute-security\nComponents: main universe\nSigned-By: /keys/ubuntu.gpg\n"
+        vendor = "deb https://packages.example.org/ubuntu stable main\n"
+        (sources / "sources.list").write_text(legacy)
+        (parts / "ubuntu.sources").write_text(deb822)
+        (parts / "vendor.list").write_text(vendor)
+        (parts / "vendor.list").chmod(0o600)
+        packages = ["clang-18", "llvm-18", "libgmp-dev", "cmake", "ninja-build"]
+        installed = "install ok installed\n" * len(packages)
+        scenarios = {
+            "cached": ([], 0, installed, False),
+            "primary": ([0, 0, 0], 1, installed, False),
+            "update-failed": ([100, 0, 0, 0], 1, installed, False),
+            "download-timed-out": ([0, 124, 0, 0, 0], 1, installed, False),
+            "download-killed": ([0, 137, 0, 0, 0], 1, installed, False),
+            "both-failed": ([100, 100], 1, installed, True),
+            "bad-signature": ([0, 100, 0, 100], 1, installed, True),
+            "install-failed": ([0, 0, 42], 1, installed, True),
+            "incomplete-install": ([0, 0, 0], 1, installed[:-21], True),
+        }
+        for name, (statuses, initial, final, fails) in scenarios.items():
+            with self.subTest(name=name):
+                remaining = iter(statuses)
+                apt_calls, queries = [], []
+                def run(argv, **kwargs):
+                    if argv[0] == "dpkg-query":
+                        self.assertEqual(packages, argv[-5:])
+                        first = not queries
+                        queries.append(argv)
+                        return subprocess.CompletedProcess(argv, initial if first else 0,
+                                                           installed if first and not initial else final)
+                    if "apt-get" in argv:
+                        apt_calls.append(argv)
+                        if "install" in argv and "--no-download" not in argv:
+                            self.assertIn("--download-only", argv)
+                        if "install" in argv:
+                            self.assertEqual(packages, argv[-5:])
+                        self.assertIn("Acquire::Retries=0", argv)
+                        self.assertIn("APT::Update::Error-Mode=any", argv)
+                        for opt in argv:
+                            if opt.startswith("Dir::Etc::sourcelist="):
+                                copy = Path(opt.split("=", 1)[1])
+                                self.assertEqual(legacy.replace("http://azure.archive.ubuntu.com/ubuntu/", "https://archive.ubuntu.com/ubuntu/"), copy.read_text())
+                                self.assertEqual(deb822.replace("mirror+file:/etc/apt/apt-mirrors.txt", "https://archive.ubuntu.com/ubuntu"), (copy.parent / "sources.list.d/ubuntu.sources").read_text())
+                                staged_vendor = copy.parent / "sources.list.d/vendor.list"
+                                self.assertEqual(vendor, staged_vendor.read_text())
+                                self.assertEqual(0o700, copy.parent.stat().st_mode & 0o777)
+                                self.assertEqual(0o700, staged_vendor.parent.stat().st_mode & 0o777)
+                                self.assertEqual(0o600, staged_vendor.stat().st_mode & 0o777)
+                        code = next(remaining)
+                        if code and kwargs.get("check"):
+                            raise subprocess.CalledProcessError(code, argv)
+                        return subprocess.CompletedProcess(argv, code)
+                    self.assertEqual(["/usr/lib/llvm-18/bin/clang", "--version"], argv)
+                    return subprocess.CompletedProcess(argv, 0)
+                def acquire(argv, seconds):
+                    self.assertNotIn("--no-download", argv)
+                    self.assertGreater(seconds, 0)
+                    self.assertLessEqual(seconds, 300)
+                    return run(argv).returncode
+                with patch.object(ci.os, "geteuid", return_value=0), \
+                        patch.object(ci, "acquire_process", side_effect=acquire), \
+                        patch.object(ci.platform, "system", return_value="Linux"), \
+                        patch.object(ci.platform, "machine", return_value="x86_64"), \
+                        patch.object(ci.subprocess, "run", side_effect=run), \
+                        patch.object(ci.time, "monotonic", side_effect=range(0, 100, 10)):
+                    if fails:
+                        with self.assertRaises((RuntimeError, subprocess.CalledProcessError)):
+                            ci.install_linux_native(sources)
+                    else:
+                        ci.install_linux_native(sources)
+                self.assertEqual(len(statuses), len(apt_calls))
+                self.assertEqual([], list(remaining))
+                self.assertEqual(legacy, (sources / "sources.list").read_text())
+                self.assertEqual(deb822, (parts / "ubuntu.sources").read_text())
+
+    def test_linux_native_acquisition_rejects_unknown_source_and_exhausted_budget(self):
+        sources = self.root / "apt-unknown"
+        sources.mkdir()
+        original = "deb https://azure.archive.ubuntu.com.example/ubuntu resolute main\n"
+        (sources / "sources.list").write_text(original)
+        for clock, expected_calls in (([0, 10], 2), ([0, 301], 1)):
+            with self.subTest(clock=clock), patch.object(ci.os, "geteuid", return_value=0), \
+                    patch.object(ci, "acquire_process", return_value=100) as acquire, \
+                    patch.object(ci.platform, "system", return_value="Linux"), \
+                    patch.object(ci.platform, "machine", return_value="x86_64"), \
+                    patch.object(ci.time, "monotonic", side_effect=clock), \
+                    patch.object(ci.subprocess, "run", return_value=subprocess.CompletedProcess([], 100, "")) as run:
+                with self.assertRaisesRegex(RuntimeError, "no supported Ubuntu mirror"):
+                    ci.install_linux_native(sources)
+                self.assertEqual(expected_calls, run.call_count + acquire.call_count)
+                self.assertEqual(original, (sources / "sources.list").read_text())
 
     def jam_pin(self, transport=None, runtime=None):
         pin = {"schema": 1, "producer": {"repository": "ekmett/jam", "commit": "a" * 40},
@@ -925,6 +1079,22 @@ class FastRunnerTest(unittest.TestCase):
                                                    exact_class='example.SelectedTest')
                     for mode in ('default', 'dense'):
                         self.assertTrue((recorder.directory / mode / 'xml/TEST-thc.runtime.HandoffTest.xml').exists())
+
+    def test_scheduled_dependency_failure_stops_before_junit(self):
+        import fast_select
+        selection = self.batch_selection()
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(fast_select, "group_selection", return_value=selection), \
+             patch.object(ci.fixtures, "_manifest", return_value=({"groups": {}},
+                 {name: None for name in selection["junit"]["classes"]})), \
+             patch.object(ci.fixtures, "prepare_cmake", side_effect=RuntimeError("dependency failed")) as prepare, \
+             patch.object(recorder, "command") as command:
+            with self.assertRaisesRegex(RuntimeError, "dependency failed"):
+                ci.run_group(recorder, "selected", cadence="intensive")
+            prepare.assert_called_once_with(self.root, selection, command, acquire_dependencies=True)
+            command.assert_not_called()
+        self.assertFalse(recorder.data.get("passed", False))
 
     def test_batch_runs_once_and_preserves_both_actual_mode_outputs(self):
         with patch.object(ci, "git", return_value="a" * 40):

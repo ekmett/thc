@@ -222,8 +222,7 @@ jobs:
         # Persistent hosts provision these packages outside the workflow.
         if: runner.os == 'Linux' && needs.automation.outputs.persistent != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev cmake ninja-build
+          sudo -n python3 -B .github/scripts/fast_ci.py install-linux-native
           echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
       - name: Check Linux native and LLVM build dependencies
         if: runner.os == 'Linux'
