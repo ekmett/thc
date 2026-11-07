@@ -554,12 +554,12 @@ class SavedGuestContinuationTest {
     private static final class Saved implements SavedGuestContinuation {
         private final Object savedRoot, savedYield;
         private final Function<Object, Object> resume;
-        int resumes;
+        int resumes, inspections;
         Saved(Object savedRoot, Object savedYield, Function<Object, Object> resume) {
             this.savedRoot = savedRoot; this.savedYield = savedYield; this.resume = resume;
         }
         @Override public Object getSourceRoot() { return savedRoot; }
-        @Override public Object getYielded() { return savedYield; }
+        @Override public Object getYielded() { inspections++; return savedYield; }
         @Override public Object getIdentity() { return this; }
         @Override public Object continueWith(Object input) { resumes++; return resume.apply(input); }
     }
@@ -629,6 +629,149 @@ class SavedGuestContinuationTest {
             } finally { context.leave(); }
         }
     }
+    @Test void completedDependencyChainsInspectOnlyLinearSavedEdges() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var target = new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { return fail("Original body replayed"); }
+                }.getCallTarget();
+                for (int route = 0; route < 3; route++) for (int length : new int[]{64, 128}) {
+                    var saved = new java.util.ArrayList<Saved>();
+                    var boundaries = new java.util.ArrayList<Object>();
+                    Object boundary = null;
+                    for (int index = 0; index < length; index++) {
+                        Object signal = boundary instanceof Thunk thunk ? new ThunkSuspended(thunk) :
+                            boundary instanceof CallSegment segment ? new CallSegmentSuspended(segment) : Unit.INSTANCE;
+                        long answer = index + 1L;
+                        var continuation = new Saved(target.getRootNode(), signal, input -> {
+                            if (answer == 1L) assertSame(Unit.INSTANCE, input);
+                            else {
+                                var child = assertInstanceOf(ChildResume.class, input);
+                                assertNull(child.getFailure()); assertEquals(answer - 1L, child.takeValue());
+                            }
+                            return answer;
+                        });
+                        boundary = route == 0 || route == 2 && index % 2 == 0
+                            ? parked(target, continuation) : new CallSegment(continuation);
+                        saved.add(continuation); boundaries.add(boundary);
+                    }
+                    for (var continuation : saved) continuation.inspections = 0;
+                    var driver = new Driver();
+                    assertEquals((long) length, driver.force(boundary));
+                    int inspections = saved.stream().mapToInt(continuation -> continuation.inspections).sum();
+                    assertTrue(inspections <= 24 * length,
+                        "Whole resume must inspect linearly: " + inspections + " yielded reads for " + length + " boundaries, route " + route);
+                    for (int index = 0; index < length; index++) {
+                        assertEquals(1, saved.get(index).resumes);
+                        assertEquals(2, boundaries.get(index) instanceof Thunk thunk ? thunk.getState() : ((CallSegment) boundaries.get(index)).getState());
+                    }
+                    assertEquals((long) length, driver.force(boundary));
+                    assertEquals(inspections, saved.stream().mapToInt(continuation -> continuation.inspections).sum());
+                }
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void releasedForeignWaitDoesNotRescanEveryReplacementSuffix() throws Exception {
+        try (var context = Main.executionContext(false);
+             var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            context.initialize("thc");
+            context.enter();
+            var threads = Language.currentState().getThreads();
+            threads.enterCurrent(null, true, true, null);
+            try {
+                var target = new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { return fail("Original body replayed"); }
+                }.getCallTarget();
+                var operation = new PendingWait.Operation() {
+                    public Object resume() { return fail("Displaced wait resumed"); }
+                    public boolean cancel() { return true; }
+                    public boolean ready() { return false; }
+                    public GuestThreadStatus status() { return GuestThreadStatus.MVAR; }
+                };
+                var wait = new PendingWait(operation, threads.pollState(Thread.currentThread()).getCurrent(),
+                    MaskingState.UNMASKED, target.getRootNode());
+                var displaced = new Saved(target.getRootNode(), wait, input -> fail("Displaced continuation resumed"));
+                var shared = parked(target, displaced);
+                var parent = new Saved(target.getRootNode(), new ThunkSuspended(shared),
+                    input -> assertInstanceOf(ChildResume.class, input).takeValue());
+                var boundary = new CallSegment(parent);
+
+                int length = 64;
+                var replacement = new java.util.ArrayList<Saved>();
+                Thunk child = null;
+                for (int index = 0; index < length; index++) {
+                    var next = new Saved(target.getRootNode(), child == null ? Unit.INSTANCE : new ThunkSuspended(child),
+                        input -> input == Unit.INSTANCE ? 42L : assertInstanceOf(ChildResume.class, input).takeValue());
+                    replacement.add(next);
+                    child = parked(target, next);
+                }
+                for (var saved : replacement) saved.inspections = 0;
+
+                var result = executor.submit(() -> {
+                    context.enter();
+                    try { return new Driver().force(boundary); }
+                    finally { context.leave(); }
+                });
+                try {
+                    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                    while (true) {
+                        synchronized (shared.getMonitor()) {
+                            if (shared.demandWaiters != null) {
+                                shared.setValue(replacement.getLast());
+                                shared.setState(5);
+                                shared.notifyUpdate();
+                                break;
+                            }
+                        }
+                        assertFalse(result.isDone(), "Observer completed before registering shared demand");
+                        assertTrue(System.nanoTime() < deadline, "Observer did not register shared demand");
+                        Thread.onSpinWait();
+                    }
+                    assertEquals(42L, result.get(5, java.util.concurrent.TimeUnit.SECONDS));
+                    assertFalse(wait.abandoned(), "The displaced wait must remain foreign and live");
+                    assertEquals(0, displaced.resumes);
+                    assertEquals(1, parent.resumes);
+                    for (var saved : replacement) assertEquals(1, saved.resumes);
+                    int inspections = replacement.stream().mapToInt(saved -> saved.inspections).sum();
+                    assertTrue(inspections <= 24 * length,
+                        "Resuming after the wait must inspect linearly: " + inspections + " yielded reads");
+                } finally {
+                    if (!result.isDone()) synchronized (shared.getMonitor()) {
+                        shared.setValue(42L);
+                        shared.setState(2);
+                        shared.notifyUpdate();
+                    }
+                }
+            } finally {
+                threads.leaveCurrent();
+                context.leave();
+            }
+        }
+    }
+
+    @Test void dependencyCycleRejectsBeforeAnyBoundaryChangesOwnership() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var target = new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { return fail("Original body replayed"); }
+                }.getCallTarget();
+                var first = new Thunk(target, null); var second = new Thunk(target, null);
+                var firstSaved = new Saved(target.getRootNode(), new ThunkSuspended(second), input -> fail("Cyclic suffix ran"));
+                var secondSaved = new Saved(target.getRootNode(), new ThunkSuspended(first), input -> fail("Cyclic suffix ran"));
+                first.setValue(firstSaved); first.setState(5); second.setValue(secondSaved); second.setState(5);
+                var failure = assertThrows(RuntimeFault.class, () -> new Driver().force(first));
+                assertTrue(failure.getMessage().contains("dependency cycle"), failure.getMessage());
+                assertEquals(5, first.getState()); assertEquals(5, second.getState());
+                assertSame(firstSaved, first.getValue()); assertSame(secondSaved, second.getValue());
+                assertNull(first.getOwner()); assertNull(second.getOwner());
+                assertEquals(0, firstSaved.resumes); assertEquals(0, secondSaved.resumes);
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void coldRecordResumesSharedChildBeforeParentAndPublishesOnce() {
         try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();
