@@ -370,10 +370,11 @@ class BytecodeGraphBudgetTest {
 
     // Strict lets keep this capacity control free of nested scalar regions.
     // The wide decision fits only after it can split inside the narrow side.
-    @Test void overflowingWideDecisionInANarrowSideLoadsWithoutExecuting() throws Exception {
+    @ParameterizedTest @ValueSource(ints = {0, 1, 2, 3})
+    void overflowingWideDecisionInASidePreservesReplayAndExecution(int form) throws Exception {
         var input = new LinkedHashMap<>(decision(64,
                 List.of(binder("step", CLOSURE, true)), LONG, arm -> {
-            List<Object> body = variable("value127", LONG);
+            List<Object> body = form == 2 ? joinedCall("k", List.of(), LONG) : variable("value127", LONG);
             for (int call = 127; call >= 0; call--) {
                 var argument = call == 0 ? number(arm * 1000L)
                         : variable("value" + (call - 1), LONG);
@@ -389,23 +390,68 @@ class BytecodeGraphBudgetTest {
         var entry = new LinkedHashMap<>(bindings.getFirst());
         var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
         var wide = (List<Object>) lambda.get(2);
-        lambda.set(2, node("case", node("con", "C0", 0, Map.of("rep", DATA)),
-                "outerChoice", List.of(
-                        node("data", "C0", List.of(), wide),
-                        node("data", "C1", List.of(), number(0))),
-                Map.of("rep", LONG, "binder", binder("outerChoice", DATA, true))));
+        if (form == 2) wide = node("let", false,
+                List.of(localJoin("k", List.of(), number(777), LONG)), wide, Map.of("rep", LONG));
+        if (form == 3) {
+            List<Object> chain = number(0);
+            for (int i = 1; i <= 24; i++) chain = node("app", node("prim", "+#"),
+                    List.of(number(i), chain), List.of(false, false), false, false, Map.of("rep", LONG));
+            var joined = node("let", false, List.of(localJoin("j", List.of(), chain, LONG)),
+                    joinedCall("j", List.of(), LONG), Map.of("rep", LONG));
+            wide = node("app", node("prim", "+#"), List.of(wide, joined),
+                    List.of(false, false), false, false, Map.of("rep", LONG));
+        }
+        // The same overflowing side under a constructor or scalar selector, and
+        // with a live join prefix or an adjacent join eligible for outlining.
+        lambda.set(2, form == 1
+                ? node("case", number(0), "outerChoice", List.of(
+                        node("lit", List.of("int", "0"), List.of(), wide),
+                        node("lit", List.of("int", "1"), List.of(), number(7)),
+                        node("default", null, List.of(), number(0))),
+                        Map.of("rep", LONG, "binder", binder("outerChoice", LONG, false)))
+                : node("case", node("con", "C0", 0, Map.of("rep", DATA)),
+                        "outerChoice", List.of(
+                                node("data", "C0", List.of(), wide),
+                                node("data", "C1", List.of(), number(0))),
+                        Map.of("rep", LONG, "binder", binder("outerChoice", DATA, true))));
         entry.put("expr", lambda);
         bindings.set(0, entry);
         input.put("bindings", bindings);
 
         try (var context = context()) {
             context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = new BytecodeProgram(language, input, true);
-                assertNotNull(program.entryTarget("entry"));
+                var target = program.entryTarget("entry");
                 assertEquals(0, entries(program), "Preparation must not execute the entry");
-            } finally { context.leave(); }
+                int splitSides = 0;
+                for (var side : regionSides((BytecodeRoot) target.getRootNode())) {
+                    var root = (BytecodeRoot) side.getRootNode();
+                    var original = instructions(root);
+                    assertTrue(original.values().stream().noneMatch(value -> value.contains("InlineCaseRegions")));
+                    var nested = regionSides(root);
+                    if (nested.isEmpty()) continue;
+                    splitSides++;
+                    for (var child : nested) assertFalse(child.getRootNode().getName().startsWith("join body"),
+                            "Capacity retry must not outline a join body");
+                    root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
+                    var clone = root.getClass().getDeclaredMethod("cloneUninitialized"); clone.setAccessible(true);
+                    assertEquals(original, instructions((BytecodeRoot) clone.invoke(root)));
+                }
+                assertEquals(1, splitSides, "Only the overflowing side needs nested extraction");
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(63000L + calls.getAndIncrement(), frame.getArguments()[1]);
+                        return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                assertEquals(form == 2 ? 777L : 63128L + (form == 3 ? 300L : 0L),
+                        Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
+                assertEquals(128, calls.get(), "Selected calls execute exactly once in source order");
+            } finally { threads.leaveCurrent(); context.leave(); }
         }
     }
 
