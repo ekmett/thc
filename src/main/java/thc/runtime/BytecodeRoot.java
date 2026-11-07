@@ -6125,15 +6125,26 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "operation")
     public static final class StaticLongArithmetic {
         @Specialization public static long apply(int operation, Object left, Object right) {
-            long x = staticLong(left);
-            long y = staticLong(right);
-            return switch (operation) {
-                case 0 -> x + y;
-                case 1 -> x - y;
-                case 2 -> x * y;
-                default -> throw fail("Invalid static Long arithmetic operation");
-            };
+            return longArithmetic(operation, staticLong(left), staticLong(right));
         }
+    }
+
+    /** Unknown operands retain the generic primitive operation's actual Java casts. */
+    @Operation
+    @ConstantOperand(type = int.class, name = "operation")
+    public static final class BoxedLongArithmetic {
+        @Specialization public static long apply(int operation, Object left, Object right) {
+            return longArithmetic(operation, (long) left, (long) right);
+        }
+    }
+
+    private static long longArithmetic(int operation, long left, long right) {
+        return switch (operation) {
+            case 0 -> left + right;
+            case 1 -> left - right;
+            case 2 -> left * right;
+            default -> throw fail("Invalid static Long arithmetic operation");
+        };
     }
 
     private static long staticLong(Object value) {

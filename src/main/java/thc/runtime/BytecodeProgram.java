@@ -5149,15 +5149,21 @@ public final class BytecodeProgram implements ExecutableProgram {
             e.builder.beginToLong(); args.getFirst().emit(e); e.builder.endToLong();
         }, resultProof);
         boolean wideArithmetic = Set.of("Add", "Subtract", "Multiply").contains(operation);
+        // Unknown inputs use the primitive operation's Java carrier checks;
+        // their runtime profiles need not select a second arithmetic implementation.
+        boolean unknownArithmetic = wideArithmetic && args.stream().anyMatch(arg -> arg.proof().getKind() == CoreKind.UNKNOWN);
         if (wideArithmetic) for (var arg : args) if (!staticWideLong(arg.proof())) {
             wideArithmetic = false;
             break;
         }
-        if (wideArithmetic)
+        if (wideArithmetic || unknownArithmetic)
             return new ProvenExpression(e -> {
-                e.builder.beginStaticLongArithmetic(switch (operation) { case "Add" -> 0; case "Subtract" -> 1; default -> 2; });
+                int arithmetic = switch (operation) { case "Add" -> 0; case "Subtract" -> 1; default -> 2; };
+                if (unknownArithmetic) e.builder.beginBoxedLongArithmetic(arithmetic);
+                else e.builder.beginStaticLongArithmetic(arithmetic);
                 for (var arg : args) arg.emit(e);
-                e.builder.endStaticLongArithmetic();
+                if (unknownArithmetic) e.builder.endBoxedLongArithmetic();
+                else e.builder.endStaticLongArithmetic();
             }, resultProof);
         return new ProvenExpression(e -> {
             var b = e.builder;

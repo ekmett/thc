@@ -10,6 +10,8 @@ import com.oracle.truffle.api.source.Source;
 import java.util.*;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import thc.runtime.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreBackendTestSupport.*;
@@ -43,13 +45,17 @@ class BytecodeStaticEntryTest {
     private BytecodeRoot cloneRoot(BytecodeRoot root) throws Exception {
         var method = root.getClass().getDeclaredMethod("cloneUninitialized"); method.setAccessible(true); return (BytecodeRoot) method.invoke(root);
     }
-    @Test void allThreeStatelessOperationsMatchBoundaryArithmeticOnTheirFirstCompiledCall() throws Exception {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void allThreeStatelessOperationsMatchBoundaryArithmeticOnTheirFirstCompiledCall(boolean unknown) throws Exception {
         withLanguage(language -> {
             for (int op = 0; op <= 2; op++) {
                 int operation = op; var metrics = new Metrics(true);
                 var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
-                    b.beginRoot(); b.emitEnterRoot(metrics); b.beginReturn(); b.beginStaticLongArithmetic(operation);
-                    b.emitLoadArgument(0); b.emitLoadArgument(1); b.endStaticLongArithmetic(); b.endReturn(); b.endRoot();
+                    b.beginRoot(); b.emitEnterRoot(metrics); b.beginReturn();
+                    if (unknown) b.beginBoxedLongArithmetic(operation); else b.beginStaticLongArithmetic(operation);
+                    b.emitLoadArgument(0); b.emitLoadArgument(1);
+                    if (unknown) b.endBoxedLongArithmetic(); else b.endStaticLongArithmetic();
+                    b.endReturn(); b.endRoot();
                 }).getNode(0);
                 var target = root.getCallTarget(); compile(target); assertEquals(0L, metrics.getCompiledEntries());
                 for (long[] pair : new long[][]{{Long.MAX_VALUE, 2L}, {Long.MIN_VALUE, -1L}, {0L, 0L}}) {
@@ -59,14 +65,18 @@ class BytecodeStaticEntryTest {
             }
         });
     }
-    @Test void staticLocalAndOperationsEnterColdCompiledCodeThenRetainSourceReplayAndCloneMetadata() throws Exception {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void staticLocalAndOperationsEnterColdCompiledCodeThenRetainSourceReplayAndCloneMetadata(boolean unknown) throws Exception {
         withLanguage(language -> {
             int[] sourceReads = {0}; var metrics = new Metrics(true); var certificate = FrameSlotKind.Long;
             var nodes = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
                 if (b.isParsingSources()) { sourceReads[0]++; b.beginSource(Source.newBuilder("thc", "f x = x + 2", "Cold.hs").build()); b.beginSourceSection(0, 11); }
                 b.beginRoot(); var local = b.createLocal("x", certificate); b.emitEnterRoot(metrics);
-                b.beginStaticStoreLong(local); b.emitLoadArgument(0); b.endStaticStoreLong(); b.beginReturn(); b.beginStaticLongArithmetic(0);
-                b.emitStaticLoadLong(local); b.emitLoadConstant(2L); b.endStaticLongArithmetic(); b.endReturn(); b.endRoot();
+                b.beginStaticStoreLong(local); b.emitLoadArgument(0); b.endStaticStoreLong(); b.beginReturn();
+                if (unknown) b.beginBoxedLongArithmetic(0); else b.beginStaticLongArithmetic(0);
+                b.emitStaticLoadLong(local); b.emitLoadConstant(2L);
+                if (unknown) b.endBoxedLongArithmetic(); else b.endStaticLongArithmetic();
+                b.endReturn(); b.endRoot();
                 if (b.isParsingSources()) { b.endSourceSection(); b.endSource(); }
             });
             var root = nodes.getNode(0); var target = root.getCallTarget(); assertEquals(0, sourceReads[0]); assertEquals(0L, metrics.getCompiledEntries()); compile(target);
@@ -116,6 +126,26 @@ class BytecodeStaticEntryTest {
         var binder = map("id", "x", "name", "x", "rep", rep, "lifted", lifted);
         var expr = list("lam", list(binder), list("var", "x", map("rep", rep)), map("rep", map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)")), "resultRep", rep));
         return new BytecodeProgram(language, map("bindings", list(map("id", "f", "name", "f", "arity", 1L, "lifted", true, "expr", expr)), "constructors", list()), async);
+    }
+    @Test void unknownWideArithmeticRetainsActualCarrierChecksAndOverflow() throws Exception {
+        withLanguage(language -> {
+            for (String operation : list("+#", "-#", "*#")) {
+                var body = list("app", list("prim", operation), list(list("var", "x"), list("var", "y")), list(false, false));
+                var expression = list("lam", list(map("id", "x", "name", "x", "lifted", false),
+                    map("id", "y", "name", "y", "lifted", false)), body);
+                var program = new BytecodeProgram(language, map("bindings", list(map("id", "f", "name", "f", "arity", 2L,
+                    "lifted", true, "expr", expression)), "constructors", list()), false);
+                var target = program.entryTarget("f");
+                assertThrows(NullPointerException.class, () -> Calls.target(target, new Object[]{0L, null, "wrong"}));
+                assertThrows(ClassCastException.class, () -> Calls.target(target, new Object[]{0L, 1, null}));
+                assertThrows(ClassCastException.class, () -> Calls.target(target, new Object[]{0L, 1L, "wrong"}));
+                long expected = switch (operation) { case "+#" -> Long.MIN_VALUE; case "-#" -> Long.MAX_VALUE - 1; default -> Long.MAX_VALUE; };
+                assertEquals(expected, Calls.target(target, new Object[]{0L, Long.MAX_VALUE, 1L}));
+                compile(target);
+                assertEquals(expected, Calls.target(target, new Object[]{0L, Long.MAX_VALUE, 1L})); valid(target);
+                assertThrows(NullPointerException.class, () -> Calls.target(target, new Object[]{0L, 1L, null}));
+            }
+        });
     }
     @Test void compilerCertifiesExactMarkersAndKeepsUnknownAndNarrowInputsOutOfWideSlots() throws Exception {
         withLanguage(language -> {
