@@ -85,15 +85,18 @@ public final class AstControl {
     /** A shared callback owns an explicit one-shot resume scope in either backend. */
     static Object forceCallback(VirtualFrame frame, Node node, Force force, Object value) {
         try { return force.execute(frame, value); }
-        catch (ThunkSuspended suspended) {
-            throw captureChild(node, suspended);
-        } catch (CallSegmentSuspended suspended) {
-            throw captureChild(node, suspended);
-        } catch (PendingWait cut) {
-            throw captureForce(node, force, value, cut);
-        } catch (AsyncBlocked blocked) {
-            throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(new RetryForce(node, force, value));
+        catch (RuntimeException failure) {
+            throw captureForceFailure(node, force, value, failure);
         }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private static RuntimeException captureForceFailure(Node node, Force force, Object value, RuntimeException failure) {
+        if (failure instanceof ThunkSuspended suspended) return captureChild(node, suspended);
+        if (failure instanceof CallSegmentSuspended suspended) return captureChild(node, suspended);
+        if (failure instanceof PendingWait cut) return captureForce(node, force, value, cut);
+        if (failure instanceof AsyncBlocked blocked)
+            return new AstCapture(blocked.getRequest(), SynchronousMasking.current(node)).append(new RetryForce(node, force, value));
+        return failure;
     }
     public static Object complete(Node node, Object result) { return complete(node, result, null, null, false); }
     public static Object complete(Node node, Object result, RootCallTarget target) { return complete(node, result, target, null, false); }

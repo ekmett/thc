@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -36,7 +37,11 @@ public final class LocalBinding extends Node {
     public void write(VirtualFrame frame) {
         try { writeValue(frame); }
         catch (AstCapture cut) { throw appendWrite(cut); }
-        catch (DelimitedCut cut) { throw cut.append(frame, (saved, input, ambient, outer) -> resumeWrite(saved, input.get())); }
+        catch (DelimitedCut cut) {
+            // append enters the interpreter too; enter before constructing its saved suffix.
+            CompilerDirectives.transferToInterpreter();
+            throw cut.append(frame, (saved, input, ambient, outer) -> resumeWrite(saved, input.get()));
+        }
     }
     @TruffleBoundary private AstCapture appendWrite(AstCapture cut) {
         return cut.append(this::resumeWrite);
@@ -62,7 +67,11 @@ public final class LocalBinding extends Node {
         if (referenceKind == CoreKind.DATA) { FrameAccess.INSTANCE.write(frame, slot, value.executeRequiredDataValue(frame)); return; }
         if (referenceKind == CoreKind.CLOSURE) { FrameAccess.INSTANCE.write(frame, slot, value.executeRequiredClosure(frame)); return; }
         if (referenceKind == CoreKind.ADDRESS) { FrameAccess.INSTANCE.write(frame, slot, value.executeRequiredAddress(frame)); return; }
-        if (generic) { FrameAccess.INSTANCE.write(frame, slot, value.execute(frame)); return; }
+        // A generic producer can still have a stable Long destination. Keep the
+        // post-evaluation storage check: evaluating it may widen a shared descriptor.
+        if (generic && frame.getFrameDescriptor().getSlotKind(slot) != FrameSlotKind.Long) {
+            FrameAccess.INSTANCE.write(frame, slot, value.execute(frame)); return;
+        }
         try { FrameAccess.INSTANCE.writeLong(frame, slot, value.executeLong(frame)); }
         catch (UnexpectedResultException unexpected) {
             generic = true;
