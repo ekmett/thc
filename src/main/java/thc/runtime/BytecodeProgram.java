@@ -5138,21 +5138,28 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (args.size() != (unary ? 1 : 2)) throw new RuntimeFault("Primitive arity mismatch: " + name);
         if (operation.equals("MultiplyIntMayOverflow")) for (var arg : args)
             if (!arg.proof().isLong()) throw new RuntimeFault("Primitive requires Long operands: " + name);
-        if (operation.equals("Identity")) return evaluated(e -> {
+        CoreKind resultKind = switch (operation) {
+            case "IntToAddress", "AddressPlus" -> CoreKind.ADDRESS;
+            // Address loads retain their separately lowered PrimRep.
+            case "Raise", "AddressIndexByte", "AddressIndexManagedScalar" -> CoreKind.UNKNOWN;
+            default -> CoreKind.LONG;
+        };
+        var resultProof = new CoreRepresentation(resultKind, true);
+        if (operation.equals("Identity")) return new ProvenExpression(e -> {
             e.builder.beginToLong(); args.getFirst().emit(e); e.builder.endToLong();
-        });
+        }, resultProof);
         boolean wideArithmetic = Set.of("Add", "Subtract", "Multiply").contains(operation);
         if (wideArithmetic) for (var arg : args) if (!staticWideLong(arg.proof())) {
             wideArithmetic = false;
             break;
         }
         if (wideArithmetic)
-            return evaluated(e -> {
+            return new ProvenExpression(e -> {
                 e.builder.beginStaticLongArithmetic(switch (operation) { case "Add" -> 0; case "Subtract" -> 1; default -> 2; });
                 for (var arg : args) arg.emit(e);
                 e.builder.endStaticLongArithmetic();
-            });
-        return evaluated(e -> {
+            }, resultProof);
+        return new ProvenExpression(e -> {
             var b = e.builder;
             switch (operation) {
                 case "PopulationCountWidth" -> { b.beginPopulationCountWidth(bitShift); for (var arg : args) arg.emit(e); b.endPopulationCountWidth(); }
@@ -5208,7 +5215,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 case "AddressIndexByte" -> { b.beginAddressIndexByte(name.equals("indexInt8OffAddr#")); for (var arg : args) arg.emit(e); b.endAddressIndexByte(); }
                 case "AddressIndexManagedScalar" -> { b.beginAddressIndexManagedScalar(switch (name) { case "indexCharOffAddr#" -> ManagedAddressRead.CHAR; case "indexInt16OffAddr#" -> ManagedAddressRead.INT16; default -> ManagedAddressRead.WORD16; }); for (var arg : args) arg.emit(e); b.endAddressIndexManagedScalar(); }
             }
-        });
+        }, resultProof);
     }
 
     private Expression sumCase(List<Object> expr, Expression scrutinee, CoreRepresentation proof, Scope scope, boolean tail) {
