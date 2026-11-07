@@ -5,6 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import java.util.ArrayList;
@@ -131,14 +132,8 @@ class Case extends Expr {
     protected final void prepare(VirtualFrame frame) { prepare(frame, null, 0); }
     protected final void prepare(VirtualFrame frame, int[] destination, int offset) {
         try { scrutinee.write(frame); }
-        catch (AstCapture cut) {
-            throw cut.append(new AstResumeStep() {
-                @Override public Object resume(VirtualFrame frame, Object input) {
-                    Expr branch = select(frame);
-                    return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
-                }
-            });
-        } catch (DelimitedCut cut) {
+        catch (AstCapture cut) { throw appendCapture(cut, destination, offset); }
+        catch (DelimitedCut cut) {
             if (!delimited) throw cut;
             throw cut.append(frame, new DelimitedStep() {
                 @Override public Object resume(MaterializedFrame frame, DelimitedResume input,
@@ -150,6 +145,16 @@ class Case extends Expr {
                 }
             });
         }
+    }
+    /** Construct the saved selection only at the capture boundary that owns it. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture appendCapture(AstCapture cut, int[] destination, int offset) {
+        return cut.append(new AstResumeStep() {
+            @Override public Object resume(VirtualFrame frame, Object input) {
+                Expr branch = select(frame);
+                return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
+            }
+        });
     }
     private Expr select(VirtualFrame frame) {
         int choice = literalIndex == null ? -1 : literalChoice(frame);
