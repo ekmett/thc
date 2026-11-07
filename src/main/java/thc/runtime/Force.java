@@ -26,7 +26,7 @@ public final class Force extends Node {
     private record MemoizedGuestFailure(Object payload, Node location, boolean someException) {}
     private final Metrics metrics;
     private final boolean asyncMode;
-    @Child private ThunkTargetCache calls;
+    @Child private DispatchThunkTarget calls;
     @Child private TailCallLoop trampoline;
     private final BranchProfile tailCallProfile = BranchProfile.create();
     private final BranchProfile resumeProfile = BranchProfile.create();
@@ -36,7 +36,7 @@ public final class Force extends Node {
     public Force(Metrics metrics) { this(metrics, false); }
     public Force(Metrics metrics, boolean asyncMode) {
         this.metrics = metrics; this.asyncMode = asyncMode;
-        calls = new ThunkTargetCache(metrics);
+        calls = DispatchThunkTargetNodeGen.create();
         trampoline = new TailCallLoop(metrics);
     }
     public Object execute(VirtualFrame frame, Object value) {
@@ -667,7 +667,7 @@ public final class Force extends Node {
                 try {
                     RootCallTarget target = thunk.getTarget();
                     if (target == null) throw fault("Unevaluated thunk has no body");
-                    returned = calls.call(target, thunk.getEnvironment(), metrics);
+                    returned = calls.execute(this, target, thunk.getEnvironment(), metrics);
                 } catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail, metrics); }
             } else returned = resumeOwnedContinuation(continuation, resumeValue, metrics);
             Object result = returned instanceof TailYield tail ? tail.getContinuation() :
