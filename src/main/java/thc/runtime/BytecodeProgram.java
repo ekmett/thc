@@ -1089,9 +1089,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (resumable) {
                 // Each snapshot has one exact reference write. Yield parks to the caller's extent.
                 e.checkpointRootEntry = b.createLocal("checkpoint root entry mask", FrameSlotKind.Object);
-                b.beginStaticStoreObject(e.checkpointRootEntry); b.emitCurrentMask(); b.endStaticStoreObject();
                 e.annotationRootEntry = b.createLocal("checkpoint root entry annotations", FrameSlotKind.Object);
-                b.beginStaticStoreObject(e.annotationRootEntry); b.emitCurrentAnnotations(); b.endStaticStoreObject();
+                b.emitSnapshotRootEntry(e.checkpointRootEntry, e.annotationRootEntry);
             }
             var argumentIndices = new HashMap<Integer, Integer>();
             for (int i = 0; i < context.arguments.size(); ++i) {

@@ -221,6 +221,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Save the caller extent directly in the root's owned continuation locals. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "mask")
+    @ConstantOperand(type = LocalAccessor.class, name = "annotations")
+    public static final class SnapshotRootEntry {
+        @Specialization public static void snapshot(VirtualFrame frame, LocalAccessor mask, LocalAccessor annotations,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            mask.setObject(bytecode, frame, SynchronousMasking.current(bytecode));
+            annotations.setObject(bytecode, frame, StackAnnotations.current(bytecode));
+        }
+    }
+
     @Operation public static final class CurrentTransaction {
         @Specialization public static Object read(@Bind Node node) { return Language.currentState(node).stm.currentTransaction(); }
     }
