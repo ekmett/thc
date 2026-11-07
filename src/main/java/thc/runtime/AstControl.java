@@ -76,6 +76,7 @@ public final class AstControl {
         }
     }
     public static Object force(VirtualFrame frame, Node node, Force force, Object value) {
+        if (!(value instanceof Thunk)) return value;
         if (!captures(node)) return force.execute(frame, value);
         return forceCallback(frame, node, force, value);
     }
@@ -99,8 +100,10 @@ public final class AstControl {
         return complete(node, result, expectedTarget, tupleShape, identityTail, false);
     }
     static Object complete(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail, boolean caughtIOAction) {
+        if (!(result instanceof TailYield) && !(result instanceof AstTailYield) &&
+            !(result instanceof SavedGuestContinuation) && !(result instanceof ContinuationResult)) return result;
         if (!captures(node)) return result;
-        return completeCallback(node, result, expectedTarget, tupleShape, identityTail, caughtIOAction);
+        return completeSuspended(node, result, expectedTarget, tupleShape, identityTail, caughtIOAction);
     }
     static Object completeCallback(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail) {
         return completeCallback(node, result, expectedTarget, tupleShape, identityTail, false);
