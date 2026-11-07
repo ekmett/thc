@@ -827,7 +827,11 @@ public final class Program implements ExecutableProgram {
             } else if (free.contains(arg.get("id")) || capturesContinuations && entryStrict[i]) {
                 argumentIndices.add(ArgumentLayout.offset(inputLayout, i));
                 argumentProofs.add(proof);
-                argumentSlots.add(scope.bind((String) arg.get("id"), !lifted && !Boolean.TRUE.equals(arg.get("coercion")), proof).slot);
+                // FunctionRoot publishes unknown formal carriers as Object before execution.
+                // Declare that storage while lowering so local reads retain its certificate.
+                FrameSlotKind kind = proof.getKind() == CoreKind.UNKNOWN ? FrameSlotKind.Object : FrameSlotKind.Illegal;
+                argumentSlots.add(scope.bind((String) arg.get("id"), !lifted && !Boolean.TRUE.equals(arg.get("coercion")),
+                    proof, false, null, null, kind).slot);
             }
         }
         CaptureLayout captures = null;
