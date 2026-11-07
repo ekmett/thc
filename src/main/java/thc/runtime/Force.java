@@ -194,7 +194,7 @@ public final class Force extends Node {
                               boolean retryOuterAfterWait) {
         boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;
         while (true) {
-            if (!capturing) switch (original.getState()) {
+            if (!retryOuterAfterWait && !capturing) switch (original.getState()) {
                 case 2 -> { if (metrics.getEnabled()) metrics.incrementThunkHits(); return original.getValue(); }
                 case 3 -> throw rethrowFailure(original);
                 case 4 -> throw fault("Interrupted thunk has no resumable continuation");
