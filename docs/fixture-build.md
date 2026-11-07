@@ -56,6 +56,12 @@ Every promised product must exist before the command succeeds. The synthetic-CBD
 encoder's `build/thc-fixtures.path` has one writer and explicit consumer edges.
 `fixture-tools` builds these shared prerequisites without generating the corpus;
 CI shares them only within the same source, workspace, platform and workflow attempt.
+The workspace bundle does not contain the external Cabal store. Scheduled groups
+with CMake fixtures first run `fixture-tool-dependencies`, which acquires only the
+shared tool dependencies selected by Cabal using the pinned compiler and frozen
+project index. Cache hits do not skip this closure check. The subsequent fixture
+build remains offline; fixture-free groups do not run acquisition. Local fixture
+builds remain offline unless this dependency target is explicitly requested.
 
 Native/Core compilation uses the selected global package database. Its interfaces,
 libraries, headers, registrations, settings and configured compiler/linker tools

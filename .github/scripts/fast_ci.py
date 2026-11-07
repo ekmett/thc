@@ -985,7 +985,8 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=Fals
                                   "junit": selection["junit"], "exactClass": exact_class, "reasons": []}
     # Unknown ownership fails above; a group job must never widen to all fixtures.
     recorder.data["nativeInputs"] = ({"mode": "cmake-graph"} if prepared else
-                                    fixtures.prepare_cmake(recorder.root, selection, recorder.command))
+                                    fixtures.prepare_cmake(recorder.root, selection, recorder.command,
+                                                           acquire_dependencies=True))
     for group in fixtures._group_order(manifest, {owners[c] for c in selection["junit"]["classes"] if owners[c]}):
         for index, check in enumerate(manifest["groups"][group].get("ciChecks", [])):
             if check["platform"] == platform.system():
