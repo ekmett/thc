@@ -59,28 +59,36 @@ public final class Force extends Node {
     private Object executeCold(Thunk original, Metrics invocationMetrics) { return executeThunk(original, invocationMetrics); }
 
     private Object executeThunk(Thunk original, Metrics invocationMetrics) {
+        Object result = attemptThunk(original, invocationMetrics);
+        return result == RETRY ? retryThunk(original, invocationMetrics) : result;
+    }
+    /** Contention and lost observations refresh before another ownership attempt. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Object retryThunk(Thunk original, Metrics invocationMetrics) {
+        Object result;
+        do { result = attemptThunk(original, invocationMetrics); } while (result == RETRY);
+        return result;
+    }
+    private Object attemptThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
-        while (true) {
-            SavedGuestContinuation observed = null;
-            switch (original.getState()) {
-                case 2 -> { if (invocationMetrics.getEnabled()) invocationMetrics.incrementThunkHits(); return original.getValue(); }
-                case 3 -> throw rethrowFailure(original);
-                case 4 -> throw fault("Interrupted thunk has no resumable continuation");
-                case 5 -> {
-                    resumeProfile.enter();
-                    observed = savedGuestContinuation(original.getValue());
-                    BytecodeContinuations.preflightWait(observed);
-                }
+        SavedGuestContinuation observed = null;
+        switch (original.getState()) {
+            case 2 -> { if (invocationMetrics.getEnabled()) invocationMetrics.incrementThunkHits(); return original.getValue(); }
+            case 3 -> throw rethrowFailure(original);
+            case 4 -> throw fault("Interrupted thunk has no resumable continuation");
+            case 5 -> {
+                resumeProfile.enter();
+                observed = savedGuestContinuation(original.getValue());
+                BytecodeContinuations.preflightWait(observed);
             }
-            PendingWait pending = PendingWait.of(observed);
-            if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) {
-                awaitOwner(original); continue;
-            }
-            // The continuation owns its callee frame; never materialize this caller.
-            if (suspendedChild(observed) != null) return resumeChain(original, false, false, invocationMetrics);
-            Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics, true);
-            if (result != RETRY) return result;
         }
+        PendingWait pending = PendingWait.of(observed);
+        if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) {
+            awaitOwner(original); return RETRY;
+        }
+        // The continuation owns its callee frame; never materialize this caller.
+        if (suspendedChild(observed) != null) return resumeChain(original, false, false, invocationMetrics);
+        return executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics, true);
     }
 
     /** Deliver at this exact captured caller while its shared child remains parked. */
