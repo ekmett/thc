@@ -3,6 +3,8 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -13,6 +15,7 @@ import thc.Language;
 public abstract class ContextRoot extends RootNode {
     private Object compilationOwner;
     AtomicReference<GraphRecovery.Failure> graphFailure = new AtomicReference<>();
+    @CompilationFinal Assumption noGraphFailure = Assumption.create("no source failure receipt");
     volatile boolean compilationFailureObserved;
 
     protected ContextRoot(TruffleLanguage<?> language, FrameDescriptor descriptor) {
@@ -34,6 +37,7 @@ public abstract class ContextRoot extends RootNode {
     @Override public Node copy() {
         ContextRoot copy = (ContextRoot) super.copy();
         copy.graphFailure = new AtomicReference<>();
+        copy.noGraphFailure = Assumption.create("no source failure receipt");
         copy.compilationFailureObserved = false;
         return copy;
     }
