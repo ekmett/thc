@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -24,6 +25,7 @@ public final class AstOperands extends Expr {
             try { operands[index].write(frame); }
             catch (AstCapture cut) { throw appendPrepare(cut, index + 1); }
             catch (DelimitedCut cut) {
+                CompilerDirectives.transferToInterpreter();
                 int next = index + 1;
                 throw cut.append(frame, (saved, input, ambient, outer) -> { input.get(); prepare(saved, next); return thc.runtime.Unit.INSTANCE; });
             }
@@ -36,6 +38,8 @@ public final class AstOperands extends Expr {
         try { prepare(frame, 0); }
         catch (AstCapture cut) { throw appendBody(cut, slots, offset); }
         catch (DelimitedCut cut) {
+            // append enters the interpreter too; construct its suffix only after that transfer.
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, (saved, input, ambient, outer) -> {
                 input.get(); return slots == null ? body.execute(saved) : body.executeTuple(saved, slots, offset);
             });
@@ -79,6 +83,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
@@ -95,6 +100,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
@@ -111,6 +117,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
@@ -127,6 +134,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
@@ -143,6 +151,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
@@ -159,6 +168,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
@@ -175,6 +185,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
@@ -191,6 +202,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
@@ -207,6 +219,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
