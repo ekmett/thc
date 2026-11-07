@@ -15,7 +15,7 @@ public final class EntryRoot extends ContextRoot {
     private final boolean typedResult;
     private final boolean forceResult;
     @Child private PreparedDispatch dispatch;
-    @Child private GenericInputCall typedDispatch;
+    @Child private InputDispatch typedDispatch;
     @Child private Force force;
     public EntryRoot(TruffleLanguage<?> language, int arity, Metrics metrics) {
         super(language, new FrameLayout().build());
@@ -38,7 +38,7 @@ public final class EntryRoot extends ContextRoot {
         // host signature still authenticates its logical shape and vector species.
         if (resultShape != null) TupleShape.requireCompatible(result, resultShape.getProof());
         TupleDestination destination = typedResult ? new HostDestination(resultShape != null ? resultShape : new TupleShape(result, language)) : null;
-        typedDispatch = new GenericInputCall(new HostInputSource(ArgumentLayout.fromProofs(inputs)), arity, false, metrics, destination, 0, true);
+        typedDispatch = new InputDispatch(new HostInputSource(ArgumentLayout.fromProofs(inputs)), arity, false, metrics, destination, 0, true);
     }
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);

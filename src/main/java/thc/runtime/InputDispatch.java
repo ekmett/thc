@@ -12,7 +12,7 @@ import java.util.Arrays;
 public final class InputDispatch extends Node {
     private final InputSource source;
     private final int count, start;
-    private final boolean tail;
+    private final boolean tail, coldGeneric;
     private final Metrics metrics;
     private final TupleDestination destination;
     @Children private volatile InputCallArm[] direct = new InputCallArm[0];
@@ -21,12 +21,19 @@ public final class InputDispatch extends Node {
     public InputDispatch(InputSource source, int count, boolean tail, Metrics metrics) { this(source, count, tail, metrics, null, 0); }
     public InputDispatch(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination) { this(source, count, tail, metrics, destination, 0); }
     public InputDispatch(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start) {
+        this(source, count, tail, metrics, destination, start, false);
+    }
+    public InputDispatch(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start,
+            boolean coldGeneric) {
         this.source = source; this.count = count; this.tail = tail; this.metrics = metrics; this.destination = destination; this.start = start;
-        generic = new GenericInputCall(source, count, tail, metrics, destination, start, metrics == null);
+        this.coldGeneric = coldGeneric;
+        generic = new GenericInputCall(source, count, tail, metrics, destination, start, coldGeneric || metrics == null);
     }
     public Object execute(VirtualFrame frame, Closure function) { return execute(frame, function, null); }
     @ExplodeLoop public Object execute(VirtualFrame frame, Closure function, Object[] values) {
-        if (metrics == null) return generic.execute(frame, function, values);
+        // An untouched host entry keeps its cold fallback without training a PIC in installed code.
+        if (metrics == null || coldGeneric && direct.length == 0 && CompilerDirectives.inCompiledCode())
+            return generic.execute(frame, function, values);
         for (InputCallArm arm : direct) if (arm.matches(function)) return arm.execute(frame, function, values);
         if (!megamorphic) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
