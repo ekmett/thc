@@ -260,6 +260,33 @@ class Int32VectorMemoryProofTest {
             }
         });
     }
+    @Test void aggregateAdmissionPreservesSharedReadCasesAndSiblingErrorOrder() {
+        for (var operation : operations) if (operation.isRead()) {
+            var f = fixture(operation);
+            var constructors = new LinkedHashMap<String, Map<String, Object>>();
+            for (var value : list(f.module.get("constructors"))) {
+                var constructor = map(value); constructors.put((String) constructor.get("id"), constructor);
+            }
+            var bindings = (List<Map<String, Object>>) (List<?>) f.module.get("bindings");
+            var binding = bindings.getFirst();
+            // The same vector-read subtree needs its structural exemptions at each site.
+            binding.put("shared", l(m("nested", f.body), f.body));
+            assertDoesNotThrow(() -> CoreRepresentations.validateAggregates(bindings, constructors));
+            var first = m("rep", m("kind", "first-invalid"));
+            var second = m("resultRep", m("kind", "second-invalid"));
+            binding.put("siblings", l(first, second));
+            var failure = assertThrows(RuntimeFault.class,
+                () -> CoreRepresentations.validateAggregates(bindings, constructors));
+            assertEquals("Unknown Core representation kind first-invalid", failure.getMessage());
+            first.put("rep", copy(integer));
+            failure = assertThrows(RuntimeFault.class,
+                () -> CoreRepresentations.validateAggregates(bindings, constructors));
+            assertEquals("Unknown Core representation kind second-invalid", failure.getMessage());
+            second.put("resultRep", copy(integer));
+            assertDoesNotThrow(() -> CoreRepresentations.validateAggregates(bindings, constructors));
+        }
+    }
+
     @Test void immediateReadCasesRejectEscapesWrongShapesAndPatternMetadata() throws Exception {
         var mutations = List.of("whole-escape", "missing-vector", "unsigned-result", "width", "components", "component-state",
             "default", "multiple", "constructor", "arity", "duplicate-pattern", "whole-pattern", "pattern-order",
