@@ -14,7 +14,7 @@ public final class Applications {
     }
     static Object[] appendWithHeader(int skip, Object[] prefix, int prefixSize, Object[] arguments, int count) {
         Object[] packet = new Object[skip + prefixSize + count];
-        System.arraycopy(prefix, 0, packet, skip, prefixSize);
+        if (prefixSize != 0) System.arraycopy(prefix, 0, packet, skip, prefixSize);
         System.arraycopy(arguments, 0, packet, skip + prefixSize, count);
         return packet;
     }
