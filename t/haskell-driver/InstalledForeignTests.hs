@@ -228,6 +228,26 @@ sourceTests env = TestLabel "original configured-source foreign provenance" $ Te
       pure (name, core)
     pure (original, hashes, before)
   let cache = scratch env </> "original-foreign-cache"
+  -- A selected canonical path can have an unconventional suffix. Matching
+  -- extension-derived files must not stand in for its actual bytes.
+  (aliasUnit, _, nominal) <- case originals of
+    first:_ -> pure first
+    [] -> fail "missing foreign source profile"
+  (aliasName, aliasOriginal) <- case filter ((`notElem` map fst nominal) . fst) (installedInterfaces aliasUnit) of
+    first:_ -> pure first
+    [] -> fail "missing non-nominal configured interface"
+  let aliasDirectory = scratch env </> "selected-interface-alias"
+      alias = aliasDirectory </> "selected.payload"
+      retarget entry@(name, _) = if name == aliasName then (name, alias) else entry
+  createDirectoryIfMissing True aliasDirectory
+  forM_ (if windows then ["hi"] else ["hi", "dyn_hi"]) $ \suffix ->
+    copyFile (replaceExtension aliasOriginal suffix) (replaceExtension alias suffix)
+  writeFile alias "different selected interface bytes"
+  aliased <- tryIOError $ prepareForeignInterfaces producer cache source context
+    [aliasUnit { installedInterfaces = map retarget (installedInterfaces aliasUnit) }]
+  case aliased of
+    Left problem -> assertContains ("selected GHC and source interfaces changed: " ++ aliasName) (show problem)
+    Right _ -> assertFailure "matching projected interfaces hid a different selected interface"
   selected <- foldM (\previousContext (original, _, before) -> do
     let identifier = registeredId original
         acquire = prepareForeignInterfaces producer cache source previousContext [original]

@@ -196,10 +196,11 @@ prepareForeignInterfaces producer cache source context registrations = do
       files <- recipeFiles config
       observed <- fileInventory files
       forM_ (installedInterfaces unit) $ \(name, installed) -> do
-        forM_ (interfaceSuffixes (recipeWay config)) $ \suffix -> do
+        forM_ (configuredInterfaceInputs (recipeWay config) installed) $ \(suffix, selectedPath) -> do
           let original = recipeBuilt config </> modulePath name <.> suffix
-          check (lookup (replaceExtension installed suffix) observed == lookup original observed)
-            ("selected GHC and source interfaces changed: " ++ name)
+          case (lookup selectedPath observed, lookup original observed) of
+            (Just selectedHash, Just originalHash) | selectedHash == originalHash -> pure ()
+            _ -> fail ("selected GHC and source interfaces changed: " ++ name)
       -- Includes each complete retained payload in the selected registered
       -- dependency closure, not ABI/mtime summaries or a GHC binary hash.
       (_, probe) <- probeCurrent
@@ -243,7 +244,7 @@ configuredRecipe producer context unit root names = do
     else pure root
   let windows = Host.os == "mingw32"
       way = installedInterfaceWay context
-      suffix = if way == VanillaInterfaces then "hi" else "dyn_hi"
+      suffix = selectedInterfaceSuffix way
       hscProfile = packageName /= "ghc-internal"
       includeDirectory = if packageName == "directory" then "." else "include"
       stage = root </> "_build/stage1"
@@ -289,7 +290,9 @@ configuredRecipe producer context unit root names = do
          fmap prettyShow (defaultLanguage info) == Just "Haskell2010" &&
          map prettyShow (defaultExtensions info) == (if hscProfile then [] else ["NoImplicitPrelude"]))
     "unsupported original library compiler option profile"
-  forM_ (installedInterfaces unit) $ \(name, installed) -> do
+  -- Only these interfaces supply original source/CPP provenance below.
+  -- The locked input census checks every selected and sibling interface.
+  forM_ [(name, path) | (name, path) <- installedInterfaces unit, name `elem` names] $ \(name, installed) -> do
     let original = built </> modulePath name <.> suffix
     left <- hashFile installed
     right <- hashFile original
@@ -340,7 +343,7 @@ configuredRecipe producer context unit root names = do
                    installedLibdir context </> "settings",
                    foreignPluginLibrary producer, foreignRegisteredLibrary producer, installedHelper context] ++ map fst sourceFiles ++
                   (if windows then [] else [root </> "hadrian/cfg/system.config", stage </> "lib/settings"]) ++
-                  [replaceExtension path extension | (_, path) <- installedInterfaces unit, extension <- interfaceSuffixes way]
+                  [observed | (_, path) <- installedInterfaces unit, (_, observed) <- configuredInterfaceInputs way path]
       configuredArgs = if windows then
         renderGhcOptions (compiler lbi) (hostPlatform lbi)
           (componentGhcOptions normal lbi info component (makeSymbolicPath built)) ++
@@ -393,6 +396,17 @@ configuredRecipe producer context unit root names = do
 interfaceSuffixes :: InterfaceWay -> [String]
 interfaceSuffixes VanillaInterfaces = ["hi"]
 interfaceSuffixes DynamicInterfaces = ["hi", "dyn_hi"]
+
+selectedInterfaceSuffix :: InterfaceWay -> String
+selectedInterfaceSuffix VanillaInterfaces = "hi"
+selectedInterfaceSuffix DynamicInterfaces = "dyn_hi"
+
+-- Discovery canonicalizes the selected path. A symlink's target can have a
+-- different suffix, so check its exact bytes as well as the derived paths.
+configuredInterfaceInputs :: InterfaceWay -> FilePath -> [(String, FilePath)]
+configuredInterfaceInputs way installed =
+  nub ([(suffix, replaceExtension installed suffix) | suffix <- interfaceSuffixes way] ++
+    [(selectedInterfaceSuffix way, installed)])
 
 registeredLibraries :: InterfaceWay -> Package.InstalledPackageInfo -> [FilePath]
 registeredLibraries way info = nub
