@@ -152,7 +152,7 @@ public final class CoreCompactRecords {
         for (String key : List.of("components", "alternatives")) field(cursor, fields, key, () -> list(cursor, () -> inline ? shape(cursor, true) : shapeUse(cursor)));
         field(cursor, fields, "tagSlot", cursor::unsigned);
         field(cursor, fields, "alternativeSlots", () -> list(cursor, () -> list(cursor, cursor::unsigned)));
-        return new Shape(Collections.unmodifiableMap(fields));
+        return new Shape(fields);
     }
     private Map<String,Object> evaluation(CoreCompactCursor cursor, Shape shape) throws Throwable {
         var result = new LinkedHashMap<>(shape.fields);
