@@ -86,6 +86,9 @@ public final class GlobalBinding {
     /** The shared program lock protects lowering builders, never guest evaluation. */
     @CompilerDirectives.TruffleBoundary
     private Object prepareValue() {
+        // Cold compiled callers may have folded prepared=false; the volatile
+        // recheck observes the completed value without taking lowering ownership.
+        if (prepared) return preparedValue;
         PreparationLock lock = preparationLock;
         if (lock == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();

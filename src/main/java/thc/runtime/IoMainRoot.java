@@ -28,4 +28,7 @@ public final class IoMainRoot extends ContextRoot {
         return thc.runtime.Unit.INSTANCE;
     }
     @Override public String getName() { return "THC IO main"; }
+    @Override protected com.oracle.truffle.api.nodes.ExecutionSignature prepareForAOT() {
+        return com.oracle.truffle.api.nodes.ExecutionSignature.GENERIC;
+    }
 }

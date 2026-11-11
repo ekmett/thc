@@ -32,11 +32,15 @@ public final class LocalJoinRegion extends Expr {
     private void run(VirtualFrame frame, int[] slots, int offset) {
         if (!delimited && !AstControl.captures(this)) { runUninterrupted(frame); return; }
         try { runUninterrupted(frame); }
-        catch (AstCapture cut) { throw cut.enclose(steps -> new ResumeAsyncRegion(this, steps, slots, offset)); }
+        catch (AstCapture cut) { throw encloseCapture(cut, slots, offset); }
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
             throw cut.append(frame, new ResumeRegion(this, slots, offset));
         }
+    }
+    @CompilerDirectives.TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture encloseCapture(AstCapture cut, int[] slots, int offset) {
+        return cut.enclose(steps -> new ResumeAsyncRegion(this, steps, slots, offset));
     }
     private static final class ResumeAsyncRegion implements AstResumeStep {
         private final LocalJoinRegion region;

@@ -28,14 +28,12 @@ public final class NativeProcessApi {
 
     private static SymbolLookup load() {
         try {
-            var file = Files.createTempFile("thc-process-", ".so");
-            try {
-                try (var input = NativeProcessApi.class.getResourceAsStream("/thc/native/native-process-api.so")) {
-                    if (input == null) throw new IllegalStateException("Missing native process bridge");
-                    Files.copy(input, file, StandardCopyOption.REPLACE_EXISTING);
-                }
-                return SymbolLookup.libraryLookup(file, Arena.global());
-            } finally { Files.deleteIfExists(file); }
+            var file = NativeLibraryFiles.createTempFile("thc-process-", ".so");
+            try (var input = NativeProcessApi.class.getResourceAsStream("/thc/native/native-process-api.so")) {
+                if (input == null) throw new IllegalStateException("Missing native process bridge");
+                Files.copy(input, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return SymbolLookup.libraryLookup(file, Arena.global());
         } catch (Throwable failure) { throw propagate(failure); }
     }
 

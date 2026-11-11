@@ -50,8 +50,12 @@ class CompilerRtsTest {
             assertThrows(RuntimeFault.class, () -> AtomicAddressOp.READ.numeric(counter, 0, 0));
             assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
             assertThrows(RuntimeFault.class, () -> counter.sameLocation(counter));
+            assertThrows(RuntimeFault.class, () -> counter.plus(0));
+            assertThrows(RuntimeFault.class, () -> alias.plus(1));
         } finally { second.leave(); second.close(); first.close(); }
         assertThrows(RuntimeFault.class, () -> AtomicAddressOp.READ.numeric(alias, 0, 0));
+        assertThrows(RuntimeFault.class, () -> counter.plus(0));
+        assertThrows(RuntimeFault.class, () -> alias.plus(1));
     }
     @Test void originalUniqueCellFetchAddIsAtomicAcrossGuestCarriers() throws Exception {
         try (var context = context()) {

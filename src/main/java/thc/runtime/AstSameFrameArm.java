@@ -26,7 +26,6 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     @Child private IndirectCallNode call = IndirectCallNode.create();
     @CompilationFinal(dimensions = 1) private volatile RootCallTarget[] targets;
     private volatile long sideGeneration;
-    private boolean copiedExtraction;
 
     AstSameFrameArm(Expr body) {
         this.body = body;
@@ -75,21 +74,9 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
 
     @Override public Node copy() {
         AstSameFrameArm clone = (AstSameFrameArm) super.copy();
-        clone.copiedExtraction = copiedExtraction || targets != null;
         clone.targets = null;
         clone.sideGeneration = 0;
         return clone;
-    }
-
-    /** Recovery clones keep prior boundaries, with fresh sides owned by the new
-     * body. Ordinary Truffle cloning retains its existing unextracted behavior. */
-    static void restoreCopiedExtractions(Node root) {
-        for (AstSameFrameArm arm : NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class)) {
-            if (arm.copiedExtraction) {
-                prepare(arm);
-                arm.copiedExtraction = false;
-            }
-        }
     }
 
     @Override public boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
@@ -143,12 +130,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
         }
         ContextRoot sourceRoot() { return (ContextRoot) arm.getRootNode(); }
 
-        boolean extractInCopy(FunctionRoot replacement) {
-            var originalArms = NodeUtil.findAllNodeInstances(sourceRoot(), AstSameFrameArm.class);
-            var copiedArms = NodeUtil.findAllNodeInstances(replacement, AstSameFrameArm.class);
-            int index = originalArms.indexOf(arm);
-            return index >= 0 && originalArms.size() == copiedArms.size() && extract(copiedArms.get(index).body);
-        }
+        boolean extractNested() { return extract(arm.body); }
         @Override public Object execute(VirtualFrame callFrame) {
             Object[] args = callFrame.getArguments();
             VirtualFrame frame = (MaterializedFrame) args[0];

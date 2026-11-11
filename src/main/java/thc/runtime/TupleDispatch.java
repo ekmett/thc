@@ -19,6 +19,8 @@ public final class TupleDispatch extends Node {
     private final ArgumentLayout inputLayout;
     @Children private volatile DirectTupleCaller[] direct = new DirectTupleCaller[0];
     @Child private GenericTupleCaller generic;
+    @Child private volatile GenericInputCall cold;
+    @CompilerDirectives.CompilationFinal private volatile boolean observed;
     @CompilationFinal private boolean megamorphic;
     @Child private volatile InputDispatch typed;
     public TupleDispatch(TupleDestination destination, Metrics metrics, int argsSize, boolean tail) {
@@ -30,6 +32,13 @@ public final class TupleDispatch extends Node {
         if (metrics == null) typed = new InputDispatch(new ScalarArrayInputSource(inputLayout), argsSize, tail, null, destination);
         else generic = new GenericTupleCaller(destination, metrics, tail, argsSize, inputLayout);
     }
+    /** Prepare immutable cold-call children without observing a guest target. */
+    void prepareForAOT() {
+        if (metrics != null && cold == null) atomic(() -> {
+            if (cold == null) cold = insert(new GenericInputCall(new ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination, 0, true));
+            return null;
+        });
+    }
     public void execute(VirtualFrame frame, Closure function, Object[] arguments) {
         try { executeCall(frame, function, arguments); }
         catch (DelimitedCut cut) {
@@ -40,10 +49,14 @@ public final class TupleDispatch extends Node {
     }
     @ExplodeLoop private void executeCall(VirtualFrame frame, Closure function, Object[] arguments) {
         if (metrics == null) { typed.execute(frame, function, arguments); return; }
+        if (cold != null && !observed && CompilerDirectives.inCompiledCode()) {
+            cold.execute(frame, function, arguments); return;
+        }
         if (function.target.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) {
             InputDispatch child = typed;
             if (child == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
+                observed = true;
                 child = atomic((Callable<InputDispatch>) () -> {
                     if (typed == null) typed = insert(new InputDispatch(new ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination));
                     return typed;
@@ -57,6 +70,7 @@ public final class TupleDispatch extends Node {
         }
         if (!megamorphic) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
+            observed = true;
             DirectTupleCaller caller = atomic((Callable<DirectTupleCaller>) () -> {
                 for (DirectTupleCaller existing : direct) if (existing.matches(function)) return existing;
                 if (megamorphic) return null;

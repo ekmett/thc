@@ -4,7 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
-import jam.vm.Lifted;
+import thc.vm.Lifted;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 /* Cadenza-derived closure/PAP convention; upstream notices remain in LICENSE.md and NOTICE.md. */

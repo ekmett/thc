@@ -47,7 +47,7 @@ public final class IndirectCallerNode extends Node {
             try { arguments[0] = 0L; result = (coldGeneric ? target.call(this, arguments) : Calls.indirect(callNode, target, arguments)); normalProfile.enter(); }
             catch (TailCall tail) { if (tupleResult != null) throw tail; tailProfile.enter(); result = loop.execute(tail, invocation); }
         }
-        return AstControl.captures(this) ? AstControl.complete(this, result, target, tupleResult) : result;
+        return AstControl.complete(this, result, target, tupleResult);
     }
     public static IndirectCallerNode create(Metrics metrics) { return new IndirectCallerNode(metrics); }
 }

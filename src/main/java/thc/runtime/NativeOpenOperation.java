@@ -93,8 +93,7 @@ public final class NativeOpenOperation implements AutoCloseable, TruffleSafepoin
                 throw new IllegalStateException("Owned open requires matching selected-ABI resources");
             try {
                 String suffix = StdioHostAbi.load().librarySuffix();
-                var file = Files.createTempFile("thc-open-", suffix);
-                file.toFile().deleteOnExit();
+                var file = NativeLibraryFiles.createTempFile("thc-open-", suffix);
                 try (var input = NativeOpenOperation.class.getResourceAsStream("/thc/native/native-open-request" + suffix)) {
                     if (input == null) throw fault("Missing native open request bridge");
                     Files.copy(input, file, StandardCopyOption.REPLACE_EXISTING);

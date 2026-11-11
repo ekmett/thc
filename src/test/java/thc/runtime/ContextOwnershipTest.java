@@ -236,4 +236,58 @@ class ContextOwnershipTest {
         } finally { System.clearProperty(option); reset.invoke(null); }
     }
 
+
+    private static final class RetentionRoot extends com.oracle.truffle.api.nodes.RootNode {
+        private final Object sentinel;
+        volatile boolean compiledEntry;
+        RetentionRoot(Language language, Object sentinel) { super(language); this.sentinel = sentinel; }
+        @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+            if (com.oracle.truffle.api.CompilerDirectives.inCompiledCode()) compiledEntry = true;
+            return sentinel;
+        }
+    }
+    private record RetentionWitness(java.lang.ref.WeakReference<Object> sentinel,
+            java.lang.ref.WeakReference<Object> root, java.lang.ref.WeakReference<Object> target) {}
+    private static RetentionWitness closedConstantRoot(String mode) {
+        boolean compiled = !mode.equals("interpreted");
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000")
+                .option("engine.CompilationFailureAction", "Throw").build();
+             var context = Context.newBuilder("thc").engine(engine).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                Object sentinel = new Object();
+                var root = new RetentionRoot(language, sentinel);
+                var target = (com.oracle.truffle.runtime.OptimizedCallTarget) root.getCallTarget();
+                if (compiled) {
+                    assertTrue(target.compile(true)); assertTrue(target.isValidLastTier());
+                    ((com.oracle.truffle.runtime.OptimizedTruffleRuntime) com.oracle.truffle.api.Truffle.getRuntime())
+                        .bypassedInstalledCode(target);
+                }
+                assertSame(sentinel, target.call());
+                assertEquals(compiled, root.compiledEntry, "first call used the intended tier");
+                if (mode.equals("invalidated")) {
+                    target.invalidate("closed engine collection control");
+                    assertFalse(target.isValid());
+                }
+                return new RetentionWitness(new java.lang.ref.WeakReference<>(sentinel),
+                    new java.lang.ref.WeakReference<>(root), new java.lang.ref.WeakReference<>(target));
+            } finally { context.leave(); }
+        }
+    }
+    private static java.lang.ref.WeakReference<Object> independentDeadObject() {
+        return new java.lang.ref.WeakReference<>(new Object());
+    }
+    @ParameterizedTest @ValueSource(strings = {"interpreted", "compiled", "invalidated"})
+    void closedEngineReleasesCompiledConstantRoot(String mode) {
+        var observed = closedConstantRoot(mode);
+        var dead = independentDeadObject();
+        System.gc();
+        assertTrue(dead.refersTo(null), "independent dead witness establishes collector progress");
+        assertTrue(observed.sentinel.refersTo(null), "closed engine released its constant sentinel");
+        assertTrue(observed.root.refersTo(null), "closed engine released its root");
+        assertTrue(observed.target.refersTo(null), "closed engine released its target");
+    }
 }

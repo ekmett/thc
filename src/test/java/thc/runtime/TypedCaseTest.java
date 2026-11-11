@@ -92,7 +92,9 @@ class TypedCaseTest {
             assertEquals(0L, p.diagnostics().get("blackholes"));
             if (backend.equals("ast")) {
                 var names = new HashSet<String>(); p.entryTarget("select").getRootNode().accept(node -> { names.add(node.getClass().getSimpleName()); return true; });
-                assertEquals(enabled, names.contains("DataCase")); assertEquals(enabled, names.contains("LongCase"));
+                assertEquals(enabled, names.contains("DataCase"));
+                // A proved Long literal family uses ordinary lowering in both policies.
+                assertTrue(names.contains("LongCase"));
             } else assertEquals(enabled, ((BytecodeProgram) p).bytecodeDump().contains("MatchDataValue"));
         });
     }
@@ -223,6 +225,63 @@ class TypedCaseTest {
                     var program = load(language, backend, unknown, null); var sentinel = new Object();
                     assertSame(sentinel, call(program, "select", sentinel), backend); assertEquals(42L, call(program, "select", 42L), backend);
                 }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void longCasesReadWidenedAndSavedPrimitiveActivations() {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var proof = CoreRepresentations.parse(wide);
+                var checks = new ArrayList<org.junit.jupiter.api.function.Executable>();
+                for (int count : new int[]{1, 9}) checks.add(() -> {
+                    var layout = new FrameLayout();
+                    int slot = layout.bind("case binder", FrameSlotKind.Long);
+                    var descriptor = layout.build();
+                    long input = count - 1L;
+                    var saved = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L, input}, descriptor);
+                    saved.setLong(slot, input);
+                    var sibling = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L, input}, descriptor);
+                    FrameAccess.writeObject(sibling, slot, input);
+                    assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(slot));
+                    assertTrue(saved.isLong(slot), "Descriptor widening keeps the old activation's primitive tag");
+                    int[] evaluations = {0};
+                    Expr source = new Expr() {
+                        { setRepresentation(proof); }
+                        @Override public boolean needsCallState() { return false; }
+                        @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                        @Override public long executeLong(VirtualFrame frame) {
+                            evaluations[0]++;
+                            return (Long) frame.getArguments()[1];
+                        }
+                    };
+                    var alternatives = new Alternative[count];
+                    for (int i = 0; i < count; i++) alternatives[i] = new Alternative(
+                        Alternative.LITERAL_ALTERNATIVE, (long) i, new int[0], new Literal(100L + i), new int[0][], false);
+                    var selection = new LongCase(source, slot, alternatives, new Metrics(false), proof, false);
+                    selection.prepareLiteralIndex(proof);
+                    var root = new GuestRoot(language, descriptor) {
+                        @Child private LongCase body = selection;
+                        { configureEntry(new boolean[]{false}, false); }
+                        @Override public long bloom(VirtualFrame frame) { return 0L; }
+                        @Override public Object execute(VirtualFrame frame) {
+                            long result = body.executeRequiredLong(frame);
+                            assertTrue(frame.isObject(slot), "LocalBinding must preserve the widened descriptor");
+                            return result;
+                        }
+                    };
+                    var target = root.getCallTarget();
+                    assertEquals(100L + input, Calls.target(target, new Object[]{0L, input}));
+                    assertEquals(1, evaluations[0]);
+                    assertEquals(100L + input, selection.resume(saved, Unit.INSTANCE));
+                    assertEquals(1, evaluations[0], "Saved selection cannot replay the scrutinee");
+                    assertTrue(saved.isLong(slot));
+                    assertEquals("Non-exhaustive Core case", assertThrows(RuntimeFault.class,
+                        () -> Calls.target(target, new Object[]{0L, 99L})).getMessage());
+                    assertEquals(2, evaluations[0]);
+                });
+                assertAll(checks);
             } finally { context.leave(); }
         }
     }

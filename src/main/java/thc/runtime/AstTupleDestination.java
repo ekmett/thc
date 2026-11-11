@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 public final class AstTupleDestination extends TupleDestination {
@@ -16,11 +17,13 @@ public final class AstTupleDestination extends TupleDestination {
     @Override protected void consumeFrom(VirtualFrame frame, Node node, Object result, TupleShape producer) {
         Object answer;
         try { answer = AstControl.complete(node, result, null, producer, false, caughtIOAction); }
-        catch (AstCapture cut) {
-            throw cut.append(new AstResumeStep() {
-                @Override public Object resume(VirtualFrame frame, Object input) { getShape().consume(frame, input, slots, offset, producer); return null; }
-            });
-        }
+        catch (AstCapture cut) { throw appendCapture(cut, producer); }
         getShape().consume(frame, answer, slots, offset, producer);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture appendCapture(AstCapture cut, TupleShape producer) {
+        return cut.append(new AstResumeStep() {
+            @Override public Object resume(VirtualFrame frame, Object input) { getShape().consume(frame, input, slots, offset, producer); return null; }
+        });
     }
 }

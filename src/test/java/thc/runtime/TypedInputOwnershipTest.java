@@ -8,6 +8,8 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
 import java.util.List;
 import java.util.Objects;
 import org.graalvm.polyglot.Context;
@@ -18,9 +20,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Adversarial lifetime controls for the shared typed input protocol. */
 class TypedInputOwnershipTest {
     @FunctionalInterface private interface Action { void run(Language language) throws ReflectiveOperationException; }
-    private void withLanguage(Action action) throws ReflectiveOperationException {
+    private void withLanguage(Action action) throws ReflectiveOperationException { withLanguage(true, action); }
+    private void withLanguage(boolean inlining, Action action) throws ReflectiveOperationException {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
-                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.Inlining", Boolean.toString(inlining)).build()) {
             context.initialize("thc"); context.enter();
             try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); }
             finally { context.leave(); }
@@ -83,7 +87,12 @@ class TypedInputOwnershipTest {
     }
     private static final class Slots {
         final FrameLayout layout = new FrameLayout();
-        @CompilationFinal(dimensions = 1) final int[] fields = {layout.bind("number"), layout.bind("lazy pointer")};
+        @CompilationFinal(dimensions = 1) final int[] fields;
+        Slots() { this(false); }
+        Slots(boolean strict) {
+            fields = strict ? new int[]{layout.bind("number"), layout.bind("lazy pointer"), layout.bind("strict pointer")}
+                : new int[]{layout.bind("number"), layout.bind("lazy pointer")};
+        }
     }
     private static final class Caller extends RootNode {
         private final Slots slots;
@@ -99,6 +108,117 @@ class TypedInputOwnershipTest {
             TypedInputs.writeInputReference(frame, slots.fields[1], frame.getArguments()[1]);
             return dispatch.execute(frame, function);
         }
+    }
+    private static final class TailCaller extends GuestRoot {
+        private final Slots slots;
+        private final Closure function;
+        @Child private InputDispatch dispatch;
+        @Child private GenericInputCall generic;
+        @Child private TailCallLoop trampoline;
+        TailCaller(Language language, TypedInputLayout input, RootCallTarget target, Metrics metrics) {
+            this(language, input, target, metrics, new Slots(input.getLeaves().length == 3));
+        }
+        TailCaller(Language language, TypedInputLayout input, RootCallTarget target, Metrics metrics, boolean dynamic) {
+            this(language, input, target, metrics);
+            if (dynamic) generic = new GenericInputCall(new AstInputSource(input.getLogical(), slots.fields), input.getLogical().getLogicalArity(), true, metrics, null, 0);
+        }
+        private TailCaller(Language language, TypedInputLayout input, RootCallTarget target, Metrics metrics, Slots slots) {
+            super(language, slots.layout.build()); this.slots = slots;
+            int arity = input.getLogical().getLogicalArity();
+            function = new Closure(null, arity, target);
+            dispatch = new InputDispatch(new AstInputSource(input.getLogical(), slots.fields), arity, true, metrics);
+            trampoline = new TailCallLoop(metrics);
+        }
+        @Override public long bloom(VirtualFrame frame) { return (Long) frame.getArguments()[0]; }
+        @Override public Object execute(VirtualFrame frame) {
+            FrameAccess.writeLong(frame, slots.fields[0], 4097L);
+            TypedInputs.writeInputReference(frame, slots.fields[1], frame.getArguments()[1]);
+            if (slots.fields.length == 3) TypedInputs.writeInputReference(frame, slots.fields[2], frame.getArguments()[1]);
+            try { return generic == null ? dispatch.execute(frame, function)
+                : generic.execute(frame, (Closure) frame.getArguments()[2], null); }
+            catch (TailCall tail) { return trampoline.execute(tail); }
+        }
+    }
+    @Test void strictRawAncestryAndUnknownTypedTargetsRetainTailBounces() throws ReflectiveOperationException {
+        withLanguage(false, language -> {
+            for (var kind : List.of("strict", "raw", "ancestry", "unknown", "dynamic")) {
+                var input = input(language);
+                boolean strict = kind.equals("strict");
+                if (strict) input = new TypedInputLayout(language, Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(
+                    input.getLogical().proof(0), input.getLeaves()[1]))), false);
+                var slots = new Slots(strict); var metrics = new Metrics(true);
+                GuestRoot root;
+                if (kind.equals("unknown")) root = new Receiver(language, input);
+                else if (kind.equals("raw")) {
+                    root = FunctionRoot.application(language, "raw typed tail", new LocalRead(FrameLayout.TAIL_ARGUMENTS, false), metrics, false, false);
+                    root.configureInput(input.getLogical()); root.configureTypedInput(input);
+                } else {
+                    Expr body = new LocalRead(kind.equals("ancestry") ? FrameLayout.BLOOM_FILTER : slots.fields[1], false);
+                    root = new FunctionRoot(language, slots.layout.build(), "typed tail " + kind, null,
+                        new int[0], slots.fields, strict ? new int[]{0, 1, 2} : new int[]{0, 1}, body, metrics, input.getLeaves(), CoreRepresentation.UNKNOWN, null,
+                        strict ? new boolean[]{false, true} : new boolean[]{false}, null, null, new int[0], input.getLogical(), false,
+                        new int[0][], false, FunctionRootRole.FUNCTION, true);
+                    root.configureTypedInput(input);
+                }
+                var target = root.getCallTarget(); var closure = new Closure(null, input.getLogical().getLogicalArity(), target);
+                var caller = (OptimizedCallTarget) new TailCaller(language, input, target, metrics, kind.equals("dynamic")).getCallTarget();
+                var pointer = new Object(); Barrier.action = 0;
+                caller.call(0L, pointer, closure); clear(language);
+                caller.compile(true); caller.waitForCompilation(); assertTrue(caller.isValidLastTier(), kind);
+                long bounces = metrics.getTailBounces();
+                Object result = caller.call(-1L, pointer, closure);
+                if (kind.equals("ancestry")) assertEquals(root.mask, result, "A real bounce resets inherited ancestry");
+                else assertSame(pointer, result, kind);
+                assertEquals(bounces + 1, metrics.getTailBounces(), kind);
+                clear(language);
+            }
+        });
+    }
+    @Test void compiledLeafTailRetainsLazyValueThenInvalidatesUninlinedCallerOnReplacement() throws ReflectiveOperationException {
+        withLanguage(false, language -> {
+            var input = input(language); var slots = new Slots(); var metrics = new Metrics(true);
+            var local = new LocalRead(slots.fields[1], false);
+            var root = new FunctionRoot(language, slots.layout.build(), "typed tail leaf", null,
+                new int[0], slots.fields, new int[]{0, 1}, local, metrics,
+                input.getLeaves(), CoreRepresentation.UNKNOWN, null, new boolean[]{false}, null, null,
+                new int[0], input.getLogical(), false, new int[0][], false, FunctionRootRole.FUNCTION, true);
+            root.configureTypedInput(input);
+            var callee = (OptimizedCallTarget) root.getCallTarget();
+            var caller = (OptimizedCallTarget) new TailCaller(language, input, callee, metrics).getCallTarget();
+            var pointer = new Thunk(new RootNode(language) {
+                @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Lazy capture was forced"); }
+            }.getCallTarget(), null);
+            assertSame(pointer, caller.call(0L, pointer)); clear(language);
+            callee.compile(true); callee.waitForCompilation(); assertTrue(callee.isValidLastTier());
+            caller.compile(true); caller.waitForCompilation(); assertTrue(caller.isValidLastTier());
+            long bounces = metrics.getTailBounces(); long address = caller.getCodeAddress();
+            assertSame(pointer, caller.call(-1L, pointer));
+            assertEquals(bounces, metrics.getTailBounces(), "First compiled leaf call must not bounce on a bloom collision");
+            assertTrue(caller.isValidLastTier()); assertEquals(address, caller.getCodeAddress()); clear(language);
+            var copied = (FunctionRoot) NodeUtil.cloneNode(root);
+            var copiedCaller = (OptimizedCallTarget) new TailCaller(language, input, copied.getCallTarget(), new Metrics(false)).getCallTarget();
+            assertSame(pointer, copiedCaller.call(0L, pointer));
+            copiedCaller.compile(true); copiedCaller.waitForCompilation(); assertTrue(copiedCaller.isValidLastTier());
+            var reentries = new int[1];
+            var nested = new GuestRoot(language, new FrameLayout().build()) {
+                @Override public long bloom(VirtualFrame frame) { return 0L; }
+                @Override public Object execute(VirtualFrame frame) { reentries[0]++; return frame.getArguments()[0]; }
+            }.getCallTarget();
+            Expr reentrant = local.replace(new Expr() {
+                @Override public Object execute(VirtualFrame frame) { return Calls.target(nested, new Object[]{frame.getObject(slots.fields[1])}); }
+            }, null);
+            assertFalse(callee.isValidLastTier()); assertFalse(caller.isValidLastTier());
+            assertTrue(copiedCaller.isValidLastTier(), "A different root copy owns a different proof epoch");
+            assertSame(pointer, caller.call(-1L, pointer)); assertEquals(1, reentries[0]);
+            assertEquals(bounces + 1, metrics.getTailBounces()); clear(language);
+            assertSame(pointer, copiedCaller.call(-1L, pointer)); assertTrue(copiedCaller.isValidLastTier()); clear(language);
+            reentrant.replace(new LocalRead(slots.fields[1], false));
+            callee.compile(true); callee.waitForCompilation(); assertTrue(callee.isValidLastTier());
+            caller.compile(true); caller.waitForCompilation(); assertTrue(caller.isValidLastTier());
+            bounces = metrics.getTailBounces(); address = caller.getCodeAddress();
+            assertSame(pointer, caller.call(-1L, pointer)); assertEquals(bounces, metrics.getTailBounces());
+            assertEquals(1, reentries[0]); assertTrue(caller.isValidLastTier()); assertEquals(address, caller.getCodeAddress()); clear(language);
+        });
     }
     @Test void actualDeoptimizationAfterPartialRestoreClearsFreshReferenceWithoutPoolLoan() throws ReflectiveOperationException {
         withLanguage(language -> {

@@ -83,7 +83,7 @@ public final class CoreCompactRecords {
     private Map<String,Object> vector(CoreCompactCursor cursor) { return map("lanes", cursor.unsigned(), "element", enumeration(cursor, ELEMENTS)); }
     private String primitive(CoreCompactCursor cursor) {
         int tag = cursor.readByte();
-        if (tag == 16) { var vector = vector(cursor); return "VecRep " + vector.get("lanes") + " " + vector.get("element"); }
+        if (tag == 16) return "VecRep " + cursor.unsigned() + " " + enumeration(cursor, ELEMENTS);
         if (tag >= PRIMITIVES.size()) throw error("Invalid compact Core primitive representation: " + tag);
         return PRIMITIVES.get(tag);
     }
@@ -469,7 +469,10 @@ public final class CoreCompactRecords {
     }
     private List<String> texts(CoreCompactCursor cursor) throws Throwable { return list(cursor, () -> text(cursor)); }
     private Map<String,Object> strings(CoreCompactCursor cursor, String... keys) throws Throwable {
-        var result = map(); for (String key : keys) result.put(key, text(cursor)); return result;
+        var result = map(); strings(cursor, result, keys); return result;
+    }
+    private void strings(CoreCompactCursor cursor, Map<String,Object> target, String... keys) throws Throwable {
+        for (String key : keys) target.put(key, text(cursor));
     }
     private String convention(CoreCompactCursor cursor) { return enumeration(cursor, List.of("ccall", "capi", "stdcall", "prim", "javascript")); }
     private String safety(CoreCompactCursor cursor) { return enumeration(cursor, List.of("unsafe", "safe", "interruptible")); }
@@ -494,7 +497,7 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> importProof(CoreCompactCursor cursor) throws Throwable {
         var result = map("schema", cursor.unsigned());
-        result.putAll(strings(cursor, "scope", "execution", "profile", "unit", "module"));
+        strings(cursor, result, "scope", "execution", "profile", "unit", "module");
         String status = enumeration(cursor, List.of("unclassified", "rejected", "verified"));
         result.put("status", status);
         if (!status.equals("verified")) result.put("reason", text(cursor));
@@ -530,7 +533,7 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> exports(CoreCompactCursor cursor) throws Throwable {
         var result = map("schema", cursor.unsigned());
-        result.putAll(strings(cursor, "producer", "scope", "execution", "unit", "module"));
+        strings(cursor, result, "producer", "scope", "execution", "unit", "module");
         result.put("exports", list(cursor, () -> map("binder", qualifiedName(cursor), "symbol", text(cursor),
                 "convention", convention(cursor), "declaredType", foreignType(cursor), "normalizedType", foreignType(cursor),
                 "normalizationRole", text(cursor), "arguments", list(cursor, () -> foreignType(cursor)),
@@ -539,7 +542,7 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> registration(CoreCompactCursor cursor) throws Throwable {
         var result = map("schema", cursor.unsigned());
-        result.putAll(strings(cursor, "scope", "execution", "profile"));
+        strings(cursor, result, "scope", "execution", "profile");
         String status = enumeration(cursor, List.of("unclassified", "rejected", "verified"));
         result.put("status", status);
         if (!status.equals("verified")) result.put("reason", text(cursor));
@@ -555,7 +558,7 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> foreignLink(CoreCompactCursor cursor) throws Throwable {
         var result = map("schema", cursor.unsigned());
-        result.putAll(strings(cursor, "format", "unit", "module", "sourceSha256", "bitcodeSha256"));
+        strings(cursor, result, "format", "unit", "module", "sourceSha256", "bitcodeSha256");
         result.put("bitcodeHex", blob(cursor)); result.put("target", text(cursor)); result.put("symbols", texts(cursor));
         result.put("abi", list(cursor, () -> strings(cursor, "symbol", "kind")));
         field(cursor, result, "headerHashes", () -> list(cursor, () -> strings(cursor, "name", "sha256")));
@@ -563,7 +566,7 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> linkPayload(CoreCompactCursor cursor) throws Throwable {
         var result = map("schema", cursor.unsigned());
-        result.putAll(strings(cursor, "format", "profile", "unit", "target", "componentSha256", "bitcodeSha256"));
+        strings(cursor, result, "format", "profile", "unit", "target", "componentSha256", "bitcodeSha256");
         result.put("bitcodeHex", blob(cursor));
         return result;
     }
@@ -606,7 +609,7 @@ public final class CoreCompactRecords {
             int provider = cursor.readByte();
             if (provider == 0) {
                 seed.put("providerUnit", null); seed.put("providerComponentSha256", null); seed.put("providerSymbol", null);
-            } else if (provider == 1) seed.putAll(strings(cursor, "providerUnit", "providerComponentSha256", "providerSymbol"));
+            } else if (provider == 1) strings(cursor, seed, "providerUnit", "providerComponentSha256", "providerSymbol");
             else throw error("Invalid native call seed provider tag");
             return seed;
         }));
@@ -622,7 +625,7 @@ public final class CoreCompactRecords {
     private Map<String,Object> compileInput(CoreCompactCursor cursor) throws Throwable {
         var result = strings(cursor, "compiler", "clang");
         result.put("arguments", texts(cursor)); field(cursor, result, "language", () -> text(cursor));
-        result.putAll(strings(cursor, "nativeTarget", "target"));
+        strings(cursor, result, "nativeTarget", "target");
         result.put("files", list(cursor, () -> strings(cursor, "path", "sha256")));
         return result;
     }
@@ -633,16 +636,16 @@ public final class CoreCompactRecords {
             return switch (tag) { case 0 -> compileInput(cursor); case 1 -> list(cursor, () -> compileInput(cursor)); default -> throw error("Invalid compact native compile group: " + tag); };
         }));
         result.put("providers", list(cursor, () -> {
-            var entry = strings(cursor, "provider"); entry.put("symbols", texts(cursor)); entry.putAll(strings(cursor, "bitcode", "bitcodeSha256", "target"));
+            var entry = strings(cursor, "provider"); entry.put("symbols", texts(cursor)); strings(cursor, entry, "bitcode", "bitcodeSha256", "target");
             entry.put("inputs", compileInput(cursor)); return entry;
         }));
         field(cursor, result, "dependencies", () -> list(cursor, () -> {
             if (version < 4) return nativeDependency(cursor, false);
             var entry = map("declaredPath", texts(cursor));
-            entry.putAll(strings(cursor, "unit", "componentSha256", "bitcodeSha256")); return entry;
+            strings(cursor, entry, "unit", "componentSha256", "bitcodeSha256"); return entry;
         }));
         result.put("nativeLibraries", list(cursor, () -> {
-            var entry = strings(cursor, "provider"); entry.put("symbols", texts(cursor)); entry.putAll(strings(cursor, "compiler", "compilerSha256"));
+            var entry = strings(cursor, "provider"); entry.put("symbols", texts(cursor)); strings(cursor, entry, "compiler", "compilerSha256");
             entry.put("arguments", texts(cursor));
             if (version >= 3) {
                 field(cursor, entry, "dependencyArguments", () -> texts(cursor));
@@ -682,7 +685,7 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> nativeDependency(CoreCompactCursor cursor, boolean location) throws Throwable {
         var result = strings(cursor, "profile", "unit");
-        result.put("sourceIdentity", sourceIdentity(cursor, location)); result.putAll(strings(cursor, "registration", "registrationSha256"));
+        result.put("sourceIdentity", sourceIdentity(cursor, location)); strings(cursor, result, "registration", "registrationSha256");
         result.put("archives", list(cursor, () -> {
             var entry = strings(cursor, "path", "sha256"); entry.put("members", list(cursor, () -> strings(cursor, "name", "sha256"))); return entry;
         }));
@@ -694,7 +697,7 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> nativeArchive(CoreCompactCursor cursor) throws Throwable {
         var result = map("schema", cursor.unsigned());
-        result.putAll(strings(cursor, "profile", "execution", "unit", "module"));
+        strings(cursor, result, "profile", "execution", "unit", "module");
         result.put("unsupportedImports", list(cursor, () -> emitted(cursor)));
         field(cursor, result, "unclassifiedReason", () -> text(cursor));
         result.put("unresolvedSymbols", texts(cursor)); field(cursor, result, "artifact", () -> nativeLink(cursor));

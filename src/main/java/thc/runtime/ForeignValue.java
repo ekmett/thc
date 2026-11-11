@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import jam.vm.Lifted;
+import thc.vm.Lifted;
 import thc.Language;
 /** The handle owns a managed foreign value, never an address into either heap. */
 public final class ForeignValue implements Lifted {

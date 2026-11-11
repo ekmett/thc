@@ -6,7 +6,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import java.util.ArrayList;
 
-final class Application extends Expr {
+final class Application extends Expr implements AstResumeStep {
     @Child private Evaluate function;
     @Children private Expr[] arguments;
     private final ArgumentLayout inputLayout;
@@ -26,22 +26,25 @@ final class Application extends Expr {
         inputLayout = ArgumentLayout.fromProofs(proofs);
         dispatch = new PreparedDispatch(arguments.length, tail, metrics, evaluated, inputLayout);
     }
+    void prepareForAOT() {
+        if (function.operand() instanceof GlobalRead global)
+            dispatch.prepareForAOT(global.publishedClosure());
+    }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
         Closure fn;
         try { fn = function.executeRequiredClosure(frame); }
         catch (AstCapture cut) {
-            throw cut.append(new AstResumeStep() {
-                @Override public Object resume(VirtualFrame frame, Object input) {
-                    return applyArguments(frame, Applications.requireClosure(input),
-                        new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
-                }
-            });
+            throw cut.append(this);
         } catch (DelimitedCut cut) {
             throw cut.append(frame, (saved, input, ambient, outer) -> applyArguments(saved, Applications.requireClosure(input.get()),
                 new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0));
         }
         Object[] values = new Object[ArgumentLayout.width(inputLayout, arguments.length)];
         return applyArguments(frame, fn, values, 0);
+    }
+    @Override public Object resume(VirtualFrame frame, Object input) {
+        return applyArguments(frame, Applications.requireClosure(input),
+            new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
     }
     @ExplodeLoop private Object applyArguments(VirtualFrame frame, Closure fn, Object[] values, int start) {
         for (int i = start; i < arguments.length; i++) {

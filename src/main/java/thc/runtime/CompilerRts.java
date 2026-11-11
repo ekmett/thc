@@ -18,7 +18,7 @@ public final class CompilerRts {
     private long userFlagOffset;
     private volatile boolean closed;
 
-    public void requireCurrent() {
+    @TruffleBoundary public void requireCurrent() {
         if (closed || Language.currentState(null).getCompilerRts() != this)
             throw RuntimeFault.fault("Compiler RTS cell belongs to another or closed THC context");
     }

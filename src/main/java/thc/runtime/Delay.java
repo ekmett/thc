@@ -19,8 +19,14 @@ final class Delay extends Expr {
         this.programSlot = programSlot;
     }
     RootCallTarget target() { return target; }
+    @com.oracle.truffle.api.nodes.ExplodeLoop @Override public boolean needsCallState() {
+        if (captureLayout == null) return false;
+        if (programSlot == FrameLayout.BLOOM_FILTER) return true;
+        for (int slot : captures) if (slot == FrameLayout.BLOOM_FILTER) return true;
+        return false;
+    }
     @Override public Thunk execute(VirtualFrame frame) {
         return new Thunk(target, captureLayout == null ? null : captureLayout.capture(frame, captures,
-            programSlot < 0 ? null : Program.instance(frame, programSlot)));
+            programSlot < 0 ? null : Program.instance(frame, programSlot), true));
     }
 }

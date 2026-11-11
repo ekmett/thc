@@ -2,15 +2,20 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import static thc.runtime.RuntimeFault.fault;
 
-final class SelfRepeater extends Node implements RepeatingNode {
+final class SelfRepeater extends Node implements RepeatingNode, ReplaceObserver {
     @Child private FunctionBody body;
     private final Metrics metrics;
     SelfRepeater(FunctionBody body, Metrics metrics) { this.body = body; this.metrics = metrics; }
     boolean needsCallState() { return body.needsCallState(); }
+    @Override public boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
+        if (getRootNode() instanceof FunctionRoot root) root.invalidateCallStateProof(reason);
+        return false; // Retain OSR and normal call-target invalidation above this wrapper.
+    }
     private Metrics invocationMetrics(VirtualFrame frame) {
         return metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
     }

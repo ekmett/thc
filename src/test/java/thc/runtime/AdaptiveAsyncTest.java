@@ -5,6 +5,11 @@ package thc.runtime;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RepeatingNode;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -23,6 +28,87 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Synthetic Core protocol controls; no external fixture or replacement execution. */
 @Timeout(60)
 class AdaptiveAsyncTest {
+    private static final class LeafCallerLoop extends Node implements RepeatingNode {
+        @Child private DirectCallNode call;
+        volatile boolean running = true;
+        volatile boolean compiled;
+        volatile long answer;
+
+        LeafCallerLoop(RootCallTarget target) { call = DirectCallNode.create(target); }
+
+        @Override public boolean executeRepeating(VirtualFrame frame) {
+            if (!running) return false;
+            answer = (long) call.call();
+            compiled = CompilerDirectives.inCompiledCode();
+            return true;
+        }
+    }
+
+    @Test void compiledLoopCallingNoninlinedLeafRetainsItsOwnSafepoint() throws Exception {
+        try (var context = Context.newBuilder("thc").allowCreateThread(true).allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("compiler.Inlining", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            final Language.State owner;
+            final OptimizedCallTarget leaf;
+            final OptimizedCallTarget caller;
+            final LeafCallerLoop body;
+            try {
+                owner = Language.currentState();
+                // Boxing inside execute would keep a callee return poll and hide the caller bug.
+                Object leafAnswer = 17L;
+                leaf = (OptimizedCallTarget) new RootNode(language()) {
+                    @Override public Object execute(VirtualFrame frame) { return leafAnswer; }
+                    @Override public String getName() { return "poll-free leaf"; }
+                }.getCallTarget();
+                body = new LeafCallerLoop(leaf);
+                caller = (OptimizedCallTarget) new RootNode(language()) {
+                    @Child private LoopNode loop = Truffle.getRuntime().createLoopNode(body);
+                    @Override public Object execute(VirtualFrame frame) { loop.execute(frame); return body.answer; }
+                    @Override public String getName() { return "noninlined leaf caller loop"; }
+                }.getCallTarget();
+                assertFalse(leaf.wasExecuted()); assertFalse(caller.wasExecuted());
+                leaf.compile(true); leaf.waitForCompilation();
+                caller.compile(true); caller.waitForCompilation();
+                assertTrue(leaf.isValidLastTier()); assertTrue(caller.isValidLastTier());
+                assertFalse(leaf.wasExecuted()); assertFalse(caller.wasExecuted());
+                assertSame(leaf, body.call.getCurrentCallTarget());
+            } finally { context.leave(); }
+
+            var result = new CompletableFuture<Object>();
+            var worker = new Thread(() -> {
+                context.enter();
+                try { result.complete(caller.call()); }
+                catch (Throwable failure) { result.completeExceptionally(failure); }
+                finally { context.leave(); }
+            }, "compiled-leaf-caller");
+            worker.start();
+            try {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (!body.compiled && !result.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
+                assertTrue(body.compiled, "The first caller invocation enters installed loop code");
+                assertFalse(result.isDone());
+                assertTrue(leaf.isValidLastTier()); assertTrue(caller.isValidLastTier());
+                assertSame(leaf, body.call.getCurrentCallTarget());
+                var reached = new AtomicBoolean();
+                var action = owner.getEnv().submitThreadLocal(new Thread[]{worker}, new ThreadLocalAction(true, false) {
+                    @Override protected void perform(Access access) {
+                        reached.set(true);
+                        body.running = false;
+                    }
+                });
+                action.get(10, TimeUnit.SECONDS);
+                assertTrue(reached.get(), "The caller loop services the action while its leaf omits return polling");
+                assertEquals(17L, result.get(10, TimeUnit.SECONDS));
+            } finally {
+                body.running = false;
+                worker.join(TimeUnit.SECONDS.toMillis(10));
+                assertFalse(worker.isAlive(), "The bounded cleanup stops the caller loop");
+            }
+        }
+    }
+
     private static List<Object> list(Object... values) { return Arrays.asList(values); }
     private static Map<String, Object> map(Object... fields) {
         var result = new LinkedHashMap<String, Object>();

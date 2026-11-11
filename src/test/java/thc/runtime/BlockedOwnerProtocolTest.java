@@ -37,9 +37,9 @@ class BlockedOwnerProtocolTest {
             if (!(boolean) frame.getArguments()[1]) return force.execute(frame, thunk);
             // Exercise the precise owning operation with the stale null snapshot produced by an initial state1 observation.
             try {
-                var method = Force.class.getDeclaredMethod("executeOne", Thunk.class, SavedGuestContinuation.class, Object.class, Metrics.class);
+                var method = Force.class.getDeclaredMethod("executeOne", Thunk.class, SavedGuestContinuation.class, Object.class, Metrics.class, boolean.class);
                 method.setAccessible(true);
-                return method.invoke(force, thunk, null, Unit.INSTANCE, new Metrics(false));
+                return method.invoke(force, thunk, null, Unit.INSTANCE, new Metrics(false), false);
             } catch (InvocationTargetException failure) { throw rethrow(failure.getCause()); }
             catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
         }
@@ -50,7 +50,7 @@ class BlockedOwnerProtocolTest {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {
             synchronized (thunk.getMonitor()) { if (thunk.demandWaiters != null) return; }
-            if (result.isDone()) break;
+            if (result.isDone()) { assertDoesNotThrow(() -> { result.get(); }); break; }
             Thread.onSpinWait();
         }
         assertEquals(0, continuations.get(), "Another logical guest stole the original evaluator's continuation");

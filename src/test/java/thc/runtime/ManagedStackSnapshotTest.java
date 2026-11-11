@@ -149,7 +149,13 @@ public class ManagedStackSnapshotTest {
                         }
                     }
                     var runner = new Runner(); var first = runner.invoke(); runner.check(first); retained.add(first); assertEquals(0L, ((Number) program.diagnostics().get("compiledEntries")).longValue()); assertEquals(0, probe.body.compiledEntries);
-                    for (int i = 0; i < 5; i++) runner.check(runner.invoke()); var targets = activeTargets(program.hostEntryTarget(1)); for (var target : targets) compile(target);
+                    for (int i = 0; i < 5; i++) runner.check(runner.invoke()); var targets = activeTargets(program.hostEntryTarget(1));
+                    for (var target : targets) {
+                        if (target.getRootNode() instanceof FunctionRoot root && root.getCoreIdentity() != null)
+                            assertTrue(target.toString().startsWith(root.getCoreIdentity().bindingId()),
+                                "Compiler diagnostics must identify the actual Core binding");
+                        compile(target);
+                    }
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); int probeBefore = probe.body.compiledEntries; var installed = runner.invoke(); runner.check(installed); retained.add(installed);
                     long after = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertTrue(after > before, backend + "/" + inlining + " first installed call: compiledEntries " + before + " -> " + after); assertEquals(probeBefore + 1, probe.body.compiledEntries); for (var target : targets) valid(target); for (var snapshot : retained) rendered.add(snapshot.renderLines()); released(language);
                 } finally { context.leave(); }

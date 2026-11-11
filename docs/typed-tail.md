@@ -34,8 +34,17 @@ Every root has a nonempty mask in a 64-bit bloom filter. A non-tail call starts
 fresh ancestry. A tail call can extend the active chain when
 `(seen & targetMask) != targetMask`; adding the target mask then sets at least one
 previously absent bit. The chain therefore cannot keep growing indefinitely.
-A bloom hit throws a tail transfer carrying the target and its complete argument
-packet. Collisions can cause an early transfer, but cannot hide a repeated root.
+A bloom hit normally throws a tail transfer carrying the target and its complete
+argument packet. Collisions can cause an early transfer, but cannot hide a repeated
+root.
+
+A compiled typed call to a known AST target can skip that transfer when the
+current body cannot enter another guest activation. The packet still carries
+inherited ancestry, and entry polls, continuation capture and loan cleanup remain
+in place. A root-owned assumption invalidates callers when the body changes,
+including callers that did not inline it; root copies have independent assumptions.
+Strict ingress, unknown or dynamic targets, and interpreted calls retain the
+ordinary bloom check.
 
 A root consumes a transfer only when the target has the same body identity.
 Clones retain that identity. Other roots rethrow it. In

@@ -7,6 +7,10 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -25,6 +29,120 @@ class TupleJoinLoweringTest {
     private CoreRepresentation tuple(CoreRepresentation... components) {
         var reps = new ArrayList<String>(); for (var component : components) reps.addAll(Objects.requireNonNull(component.getPrimReps()));
         return new CoreRepresentation(CoreKind.UNKNOWN, true, true, reps, Arrays.asList(components), null, null, null, null);
+    }
+    private static final class PureJoinCleanup extends Expr {
+        private final int formal, dirty;
+        private final LocalJoinTarget target;
+        private final Object marker = new Object();
+        @Child private LocalJoinCall call;
+        PureJoinCleanup(Language language, int formal, int temporary, int dirty, int limit, CoreRepresentation proof) {
+            this.formal = formal; this.dirty = dirty;
+            target = new LocalJoinTarget(new Object(), 1, new int[]{formal}, new CoreRepresentation[]{proof});
+            target.setBodySlots(dirty, limit);
+            call = new LocalJoinCall(language, target, new Expr[]{new Literal(31L)}, new int[]{temporary}, new Metrics(false));
+            setRepresentation(proof);
+        }
+        @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+        @Override public long executeLong(VirtualFrame frame) {
+            frame.setObject(dirty, marker); frame.setLong(dirty, 42L);
+            try { call.execute(frame); throw new AssertionError("Join did not transfer"); }
+            catch (LocalJoinJump jump) { if (jump != target.getJump()) throw jump; }
+            if (frame.getTag(dirty) != FrameSlotKind.Illegal.tag) throw new AssertionError("Join body retained a live slot");
+            return frame.getLong(formal);
+        }
+    }
+    @Test void firstCompiledVirtualizableAndUnknownRootsKeepTheirJoinResultWithoutMaterializing() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (String owner : List.of("virtualizable", "materializable", "unknown")) {
+                    var layout = new FrameLayout(); int formal = layout.bind("join formal", FrameSlotKind.Long);
+                    int temporary = layout.bind("join temporary", FrameSlotKind.Long), dirty = layout.bind("join body", FrameSlotKind.Long);
+                    for (int slot = 0; slot < 23; slot++) layout.bind("other body " + slot);
+                    var descriptor = layout.build();
+                    var body = new PureJoinCleanup(language, formal, temporary, dirty, descriptor.getNumberOfSlots(), longProof);
+                    RootNode root = switch (owner) {
+                        case "virtualizable" -> new FunctionRoot(language, descriptor, "virtualizable join", null,
+                            new int[0], new int[0], new int[0], body, new Metrics(false));
+                        case "materializable" -> new FunctionRoot(language, descriptor, "capturable join", null,
+                            new int[0], new int[0], new int[0], body, new Metrics(false), new CoreRepresentation[0],
+                            longProof, null, new boolean[0], null, null, new int[0], null, true, new int[0][],
+                            false, FunctionRootRole.FUNCTION, false);
+                        default -> new RootNode(language, descriptor) {
+                            @Child private Expr expression = body;
+                            @Override public Object execute(VirtualFrame frame) { return expression.execute(frame); }
+                        };
+                    };
+                    var target = (OptimizedCallTarget) root.getCallTarget(); assertFalse(target.wasExecuted());
+                    target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                    long address = target.getCodeAddress();
+                    assertEquals(31L, Calls.target(target, new Object[]{0L}), owner);
+                    assertTrue(target.isValidLastTier(), owner); assertEquals(address, target.getCodeAddress(), owner);
+                }
+            } finally { context.leave(); }
+        }
+    }
+    private static final class JoinCleanupProbe extends Expr {
+        private final LocalJoinTarget target;
+        private final int limit;
+        @Child private LocalJoinCall call;
+        JoinCleanupProbe(Language language, int limit, CoreRepresentation proof) {
+            this.limit = limit;
+            target = new LocalJoinTarget(new Object(), 1, new int[]{6}, new CoreRepresentation[]{proof});
+            target.setBodySlots(8, limit);
+            call = new LocalJoinCall(language, target, new Expr[]{new Literal(31L)}, new int[]{7}, new Metrics(false));
+        }
+        @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
+            Object marker = frame.getObject(4);
+            frame.setObject(5, marker);
+            frame.setObject(8, marker); frame.setLong(8, Long.MIN_VALUE);
+            frame.setObject(9, marker); frame.setLong(10, Long.MAX_VALUE);
+            // Fresh default-tagged slots must clear; already cleared slots have no payload.
+            for (int slot = 12; slot < limit; slot++) frame.clear(slot);
+            frame.clear(12);
+            try { call.execute(frame); throw new AssertionError("Join did not transfer"); }
+            catch (LocalJoinJump jump) { if (jump != target.getJump()) throw jump; }
+            return frame.materialize();
+        }
+    }
+    @Test void firstCompiledJoinCleanupOnMaterializableFrameRetiresLiveReferencesAndPreservesInvalidReads() throws ReflectiveOperationException {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = new FrameLayout();
+                for (int slot = 0; slot < 24; slot++) layout.bind("join field " + slot,
+                    slot == 2 || slot == 3 ? FrameSlotKind.Long : FrameSlotKind.Illegal);
+                var descriptor = layout.build();
+                var separate = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
+                assertEquals(FrameSlotKind.Object.tag, separate.getTag(11));
+                var body = new JoinCleanupProbe(language, descriptor.getNumberOfSlots(), longProof);
+                var root = new FunctionRoot(language, descriptor, "capturable reference cleanup", null,
+                    new int[0], new int[]{4}, new int[]{0}, body, new Metrics(false), new CoreRepresentation[]{reference},
+                    reference, null, new boolean[]{false}, null, null, new int[0], null, true, new int[0][],
+                    false, FunctionRootRole.FUNCTION, false);
+                var target = (OptimizedCallTarget) root.getCallTarget();
+                assertFalse(target.wasExecuted()); target.compile(true); target.waitForCompilation();
+                assertTrue(target.isValidLastTier()); long address = target.getCodeAddress();
+                var marker = new Object();
+                var frame = assertInstanceOf(MaterializedFrame.class, Calls.target(target, new Object[]{0L, marker}));
+                assertTrue(target.isValidLastTier()); assertEquals(address, target.getCodeAddress());
+                assertSame(marker, frame.getObject(4)); assertSame(marker, frame.getObject(5)); assertEquals(31L, frame.getLong(6));
+                var storage = frame.getClass().getDeclaredField("indexedLocals"); storage.setAccessible(true);
+                var references = (Object[]) storage.get(frame);
+                for (int slot = 7; slot < descriptor.getNumberOfSlots(); slot++) {
+                    assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(slot)); assertNull(references[slot]);
+                    int index = slot;
+                    assertThrows(com.oracle.truffle.api.frame.FrameSlotTypeException.class, () -> frame.getObject(index));
+                    assertThrows(RuntimeFault.class, () -> FrameAccess.read(frame, index));
+                }
+            } finally { context.leave(); }
+        }
     }
     @Test void tupleResultScratchIsClearedAfterCopyingUnlessTheDestinationAliasesIt() {
         try (var context = Context.newBuilder("thc").build()) {

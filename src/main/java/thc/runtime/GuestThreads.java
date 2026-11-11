@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.WeakHashMap;
 import java.util.concurrent.Callable;
 import thc.Language;
-import jam.vm.Candidate;
+import thc.vm.Candidate;
 import java.lang.ref.WeakReference;
 import java.lang.ref.Reference;
 import static thc.runtime.RuntimeFault.fault;

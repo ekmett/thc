@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.compiler.TruffleCompilerListener;
+import com.oracle.truffle.runtime.AbstractCompilationTask;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
+import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
+import com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
@@ -192,6 +198,54 @@ class ReusableLoaderTest {
                 .getMessage().contains("already started"));
         }
         assertEquals(opens[0], CoreFileMappings.shared.statistics().mappingOpens(), "Restore must not reopen CBD");
+    }
+
+    /** The callback observes real code installation; it does not simulate CRIU code survival. */
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void checkpointCompilesBeforeCallbackAndRunsMainOnlyAfterward(String backend) throws Exception {
+        var args = NativeExecutable.launcherArguments(nativeBinding(ioModule()), new String[0]);
+        var request = CoreModules.request(List.of(args[1]), args[2], true, false, backend, false, true, args[3], false, true);
+        var runtime = assertInstanceOf(OptimizedTruffleRuntime.class, Truffle.getRuntime());
+        var compiled = new java.util.concurrent.CopyOnWriteArrayList<OptimizedCallTarget>();
+        var listener = new OptimizedTruffleRuntimeListener() {
+            @Override public void onCompilationSuccess(OptimizedCallTarget target, AbstractCompilationTask task,
+                    TruffleCompilerListener.GraphInfo graph, TruffleCompilerListener.CompilationResultInfo code) {
+                compiled.add(target);
+            }
+        };
+        runtime.addListener(listener);
+        try (var context = Main.withContextProfile(Context.newBuilder("thc"), ContextProfile.SYNCHRONOUS_TEST).build()) {
+            var action = CracExecutable.checkpoint(context, request, () -> {
+                assertFalse(compiled.isEmpty(), "The checkpoint must follow actual Graal compilation, not only lowering");
+                assertTrue(compiled.stream().anyMatch(target -> target.isValidLastTier() && target.getCodeAddress() != 0),
+                    "At least one real installation must be retained at the checkpoint callback");
+                assertEquals(0, CoreFileMappings.shared.statistics().activeLeases());
+                assertEquals(0, CoreFileMappings.shared.statistics().idleMappings());
+            });
+            var before = (Map<?,?>) Json.parse(action.getMember("diagnostics").asString());
+            assertEquals(0L, before.get("compiledEntries"));
+            assertEquals(0L, before.get("thunkEvaluations"));
+            var observation = (Map<?,?>) before.get("checkpointCompilation");
+            var targets = (List<Map<String,Object>>) observation.get("targets");
+            for (String role : List.of("guestEntry", "shutdownEntry")) {
+                var target = targets.stream().filter(value -> role.equals(value.get("role"))).findFirst().orElseThrow();
+                assertEquals("installed", target.get("status"));
+                assertEquals(false, target.get("wasExecuted"), "Guest main and shutdown must remain cold before checkpoint");
+            }
+            assertEquals(true, observation.get("installedCodeSurvived"));
+            assertTrue(action.invokeMember("runIO").asBoolean());
+            var after = (Map<?,?>) Json.parse(action.getMember("diagnostics").asString());
+            assertTrue(((Number) after.get("compiledEntries")).longValue() > 0,
+                "The first main invocation must enter installed code without warmup");
+            var retained = (Map<?,?>) after.get("checkpointCompilation");
+            for (var target : (List<Map<String,Object>>) retained.get("targets"))
+                if (List.of("guestEntry", "shutdownEntry").contains(target.get("role"))) {
+                    assertEquals(true, target.get("validLastTier"));
+                    assertEquals(target.get("codeAddressBefore"), target.get("codeAddressNow"),
+                        "The first invocation must retain the checkpoint installation");
+                    assertEquals(target.get("installationsBefore"), target.get("installationsNow"));
+                }
+        } finally { runtime.removeListener(listener); }
     }
 
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})

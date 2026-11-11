@@ -40,14 +40,12 @@ public final class NativeDirectoryApi {
     private static SymbolLookup library() {
         try {
             String suffix = StdioHostAbi.load().librarySuffix();
-            var file = Files.createTempFile("thc-directory-", suffix);
-            try {
-                try (var input = NativeDirectoryOwner.class.getResourceAsStream("/thc/native/native-directory-api" + suffix)) {
-                    if (input == null) throw new IllegalStateException("Missing native directory bridge");
-                    Files.copy(input, file, StandardCopyOption.REPLACE_EXISTING);
-                }
-                return SymbolLookup.libraryLookup(file, Arena.global());
-            } finally { Files.deleteIfExists(file); }
+            var file = NativeLibraryFiles.createTempFile("thc-directory-", suffix);
+            try (var input = NativeDirectoryOwner.class.getResourceAsStream("/thc/native/native-directory-api" + suffix)) {
+                if (input == null) throw new IllegalStateException("Missing native directory bridge");
+                Files.copy(input, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return SymbolLookup.libraryLookup(file, Arena.global());
         } catch (Throwable failure) { throw propagate(failure); }
     }
     public static int duplicateCommand() {

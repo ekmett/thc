@@ -19,6 +19,10 @@ public final class AstOperands extends Expr {
         setRepresentation(body.getRepresentation());
     }
     @Override public void prepareTuple(int[] slots, int offset) { body.prepareTuple(slots, offset); }
+    @ExplodeLoop @Override public boolean needsCallState() {
+        for (LocalBinding operand : operands) if (operand.needsCallState()) return true;
+        return body.needsCallState();
+    }
     @ExplodeLoop private void prepare(VirtualFrame frame, int start) {
         for (int index = start; index < operands.length; index++) {
             try { operands[index].write(frame); }

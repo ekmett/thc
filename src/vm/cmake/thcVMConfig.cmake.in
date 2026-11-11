@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(jam CONFIG)
+include("${CMAKE_CURRENT_LIST_DIR}/thcVMTargets.cmake")
+check_required_components(thcVM)

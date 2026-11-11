@@ -113,9 +113,15 @@ public abstract class Dispatch extends Node {
     @Specialization(guards = "function.arity == argsSize", replaces = "direct")
     protected Object indirect(VirtualFrame frame, Closure function, Object[] arguments,
             @Cached(value = "createIndirectCaller()", neverDefault = true) IndirectCallerNode caller) {
-        if (function.target.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) return typed(frame, function, arguments);
+        ArgumentLayout formal;
+        if (function.target.getRootNode() instanceof GuestRoot root) {
+            if (root.getTypedInput() != null) return typed(frame, function, arguments);
+            formal = root.getInputLayout();
+        } else {
+            formal = null;
+        }
         boolean hasEnvironment = function.environment != null;
-        ArgumentLayout.validate(function, argumentLayout, 0, Math.min(argsSize, function.arity));
+        ArgumentLayout.validate(formal, function.suppliedCount, argumentLayout, 0, Math.min(argsSize, function.arity));
         Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, function.supplied.length, arguments, ArgumentLayout.width(argumentLayout, argsSize));
         if (hasEnvironment) packet[1] = function.environment;
         return caller.call(frame, function.target, packet, tailCall);

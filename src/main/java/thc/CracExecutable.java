@@ -7,28 +7,50 @@ import java.util.Map;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 
-/** Standalone pre-main checkpoint: reachable executable nodes retain no CBD readers.
- * The owning context survives restore; native startup and the main/shutdown wrapper
- * start afterward. Preparing nodes does not evaluate guest CAFs or compile machine code. */
-final class CracExecutable {
+/** Checkpoint the initialized executable immediately before its guest handler.
+ * Reachable targets are compiled without invoking main; installation is checked
+ * after restore before the one-shot main/shutdown lifecycle starts. */
+public final class CracExecutable {
     private CracExecutable() {}
+    private static final ThreadLocal<java.util.function.Consumer<Main.ProgramArguments>> restoreArguments = new ThreadLocal<>();
+
+    /** CRaC restore entry: supply fresh argv to the suspended launcher, without invoking guest code. */
+    public static void main(String[] arguments) {
+        var receive = restoreArguments.get();
+        if (receive == null) throw new IllegalStateException("No checkpointed THC launcher awaits restore arguments");
+        if (arguments.length == 0) throw new IllegalArgumentException("Expected PROGRAM_NAME [ARG...] on restore");
+        receive.accept(new Main.ProgramArguments(arguments[0], java.util.Arrays.copyOfRange(arguments, 1, arguments.length)));
+    }
 
     // The ordinary Jam JDK has no CRaC module. Keep this optional launcher mode
     // linkable there, but reject it before reading any application input.
     static Runnable checkpointOperation() {
         final java.lang.reflect.Method checkpoint;
+        final Class<?> restoreFailure;
         try {
             checkpoint = Class.forName("jdk.crac.Core").getMethod("checkpointRestore");
+            restoreFailure = Class.forName("jdk.crac.RestoreException");
         } catch (ReflectiveOperationException missing) {
             throw new IllegalStateException("--checkpoint-executable requires a CRaC-capable Jam JDK with jdk.crac available; the ordinary Jam JDK cannot checkpoint", missing);
         }
         return () -> {
+            var option = java.lang.management.ManagementFactory.getPlatformMXBean(
+                com.sun.management.HotSpotDiagnosticMXBean.class).getVMOption("CRaCCheckpointTo").getValue();
+            if (option == null || option.isBlank() || option.contains("%"))
+                throw new IllegalStateException("THC checkpoint native backing requires a literal CRaCCheckpointTo path");
+            final thc.runtime.NativeLibraryFiles.Checkpoint ownership;
+            try { ownership = thc.runtime.NativeLibraryFiles.retainForCheckpoint(java.nio.file.Path.of(option)); }
+            catch (java.io.IOException failure) { throw new IllegalStateException("Cannot retain native backing for checkpoint", failure); }
             try { checkpoint.invoke(null); }
             catch (InvocationTargetException failed) {
+                // A failed restore still leaves the original image reusable.
+                try { ownership.checkpointFailed(restoreFailure.isInstance(failed.getCause())); }
+                catch (java.io.IOException cleanup) { failed.getCause().addSuppressed(cleanup); }
                 throw new IllegalStateException("CRaC checkpoint failed; guest main was not started", failed.getCause());
             } catch (IllegalAccessException inaccessible) {
+                try { ownership.checkpointFailed(false); } catch (java.io.IOException cleanup) { inaccessible.addSuppressed(cleanup); }
                 throw new IllegalStateException("Cannot access jdk.crac.Core.checkpointRestore", inaccessible);
-            }
+            } finally { ownership.finish(); }
         };
     }
 
@@ -38,35 +60,50 @@ final class CracExecutable {
         return CoreModules.selectedModules(input, (String) input.get("entry"));
     }
 
-    static void run(Main.ProgramArguments guest, boolean interfaceHelper, String request, Runnable checkpoint) {
-        var entry = new com.oracle.truffle.api.CallTarget[1];
-        Main.runExecutable(guest, interfaceHelper,
-            context -> entry[0] = prepareAndCheckpoint(context, request, checkpoint),
-            context -> resume(context, entry[0]));
+    static void run(boolean interfaceHelper, String request, Runnable checkpoint) {
+        if (restoreArguments.get() != null) throw new IllegalStateException("Checkpoint launcher already active");
+        var restored = new Main.ProgramArguments[1];
+        var prepared = new Value[1];
+        restoreArguments.set(arguments -> {
+            if (restored[0] != null) throw new IllegalStateException("Restore arguments already supplied");
+            restored[0] = arguments;
+        });
+        try {
+            Main.runExecutable(() -> {
+                if (restored[0] == null) throw new IllegalStateException(
+                    "Restore requires thc.CracExecutable PROGRAM_NAME [ARG...] after -XX:CRaCRestoreFrom");
+                return restored[0];
+            }, interfaceHelper,
+                context -> prepared[0] = checkpoint(context, request, checkpoint),
+                context -> prepared[0]);
+        } finally { restoreArguments.remove(); }
     }
 
     static Value checkpoint(Context context, String request, Runnable checkpoint) {
-        return resume(context, prepareAndCheckpoint(context, request, checkpoint));
-    }
-
-    private static com.oracle.truffle.api.CallTarget prepareAndCheckpoint(Context context, String request, Runnable checkpoint) {
         var core = selectedCore(request);
-        com.oracle.truffle.api.CallTarget entry;
+        EntryValue entry;
         context.initialize("thc"); context.enter();
         try {
             var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
-            entry = language.checkpointRoot(core);
+            entry = language.checkpointEntry(core);
+            report("before", entry.prepareCheckpointCompilation());
         } finally { context.leave(); }
-        CoreFileMappings.shared.prepareCheckpoint();
         // No context entry or lowering lock is held across the real engine call.
         // Failure propagates to the owning context; guest startup is never a fallback.
+        CoreFileMappings.shared.prepareCheckpoint();
         checkpoint.run();
-        return entry;
-    }
-
-    private static Value resume(Context context, com.oracle.truffle.api.CallTarget entry) {
         context.enter();
-        try { return context.asValue(entry.call()); }
+        try {
+            report("after", entry.verifyCheckpointCompilation());
+            return context.asValue(entry);
+        }
         finally { context.leave(); }
     }
+
+    private static void report(String phase, Map<String,Object> compilation) {
+        var summary = new java.util.LinkedHashMap<>(compilation);
+        if (!Boolean.getBoolean("thc.diagnostics")) summary.remove("targets");
+        System.err.println("THC checkpoint compilation " + phase + ": " + Json.stringify(summary));
+    }
+
 }

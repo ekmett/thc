@@ -9,6 +9,8 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import thc.Language;
 import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
@@ -75,6 +77,53 @@ class ReferenceCaptureTest {
             }
             assertThrows(RuntimeException.class, () -> { var wrong = values.clone(); wrong[0] = thunk; captures.captureValues(wrong); });
             assertThrows(IllegalArgumentException.class, () -> new CaptureLayout(language, new boolean[]{true}, new boolean[]{true}, new Class<?>[]{DataValue.class}));
+        });
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"data", "closure"})
+    void firstInstalledAstFactoriesCaptureLazyReferencesWithoutDemandingThem(String kind) throws Exception {
+        var lazy = with(kind.equals("data") ? data : closure, "evaluated", false);
+        var input = map("id", "input", "name", "input", "lifted", true, "coercion", false, "rep", lazy);
+        var demanded = kind.equals("data") ? unbox(variable("input")) : apply(variable("input"), list(integer(0)));
+        var factory = lambda(list(input), lambda(list(parameter("flag")),
+            choose(variable("flag"), integer(7), demanded)), closure);
+        var answer = lambda(list(parameter("ignored")), integer(41));
+        inLanguage(language -> {
+            var module = map("bindings", list(binding("make", factory), binding("answer", answer)), "instrument", true,
+                "constructors", list(map("id", "Box", "name", "Box", "arity", 1, "kind", "boxed",
+                    "fieldReps", list(list("IntRep")), "strictFields", list(false), "fieldLifted", list(false))));
+            ExecutableProgram program = new Program(language, module);
+            Object payload = kind.equals("data") ? program.constructorLayout("Box").create(new Object[]{41L})
+                : program.entryValue("answer");
+            int[] evaluations = {0};
+            var thunk = new Thunk(new RootNode(null) {
+                @Override public Object execute(VirtualFrame frame) { evaluations[0]++; return payload; }
+            }.getCallTarget(), null);
+            var target = program.entryTarget("make");
+            assertEquals(0L, count(program, "compiledEntries"));
+            compile(target);
+            var escaped = assertInstanceOf(Closure.class, Calls.target(target, new Object[]{0L, thunk}));
+            assertEquals(1L, count(program, "compiledEntries"), "ast/" + kind + " first factory call enters installed code");
+            assertSame(thunk, escaped.environment.getObject(0));
+            assertEquals(0, evaluations[0]); assertEquals(0, thunk.getState());
+            assertEquals(7L, call(program, escaped, 0L));
+            assertEquals(0, evaluations[0], "Ignoring the captured reference cannot demand it");
+            assertEquals(41L, call(program, escaped, 1L));
+            assertEquals(41L, call(program, escaped, 1L));
+            assertEquals(1, evaluations[0], "Separate demands share the original thunk update");
+            assertSame(thunk, escaped.environment.getObject(0), "The immutable capture keeps its original reference");
+
+            // Public capture accepts arbitrary source slots, even on this lowered layout.
+            var slots = new FrameLayout(); int slot = slots.bind("generic source", com.oracle.truffle.api.frame.FrameSlotKind.Long);
+            var descriptor = slots.build();
+            var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
+            frame.setLong(slot, Long.MIN_VALUE);
+            var sibling = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
+            FrameAccess.writeObject(sibling, slot, new Object());
+            assertTrue(frame.isLong(slot));
+            var captures = escaped.environment.getLayout();
+            assertEquals(Long.MIN_VALUE, captures.capture(frame, new int[]{slot}).getObject(0));
+            assertEquals(Long.MIN_VALUE, captures.captureValues(new Object[]{Long.MIN_VALUE}).getObject(0));
         });
     }
     private void check(ExecutableProgram p, String backend, Closure fn, long base, long index) { assertEquals(base + base + index + ((index & 1L) == 0L ? 65 : 255), call(p, fn, index), backend); }

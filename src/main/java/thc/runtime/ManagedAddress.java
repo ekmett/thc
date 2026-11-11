@@ -363,7 +363,6 @@ public final class ManagedAddress {
         if (capabilities != null) { readCapabilitiesWord32(0, 4); if (displacement != 0) throw fault("RTS data label cannot be offset"); return this; }
         if (foreign != null) return fromReturnedAddress(foreign.plus(displacement));
         if (numeric != null) return NativeAddresses.current(null).recover(numeric + displacement);
-        requireBytes();
         if (this == NULL) { if (displacement == 0) return this; throw fault("Cannot offset null Addr#"); }
         size();
         return displacement == 0 ? this : new ManagedAddress(literalBytes, mutableBytes, displacedOffset(displacement), owner, null, null, null, nativeOwner, null, null, compiler, null, null);

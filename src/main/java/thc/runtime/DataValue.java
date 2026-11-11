@@ -3,7 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import jam.vm.Lifted;
+import thc.vm.Lifted;
 
 /** Guest heap data with authenticated generated final-field storage, never an AST node. */
 public class DataValue extends ValidatedStorage implements Lifted {

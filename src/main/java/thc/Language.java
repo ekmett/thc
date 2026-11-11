@@ -446,8 +446,8 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         return unitRoot(input, CoreUnitDirectory.detached(input), true);
     }
 
-    /** Retain ordinary context-owned code; native startup and entry construction wait for restore. */
-    CallTarget checkpointRoot(Map<String,Object> input) {
+    /** Construct the real entry without invoking its guest handler. */
+    EntryValue checkpointEntry(Map<String,Object> input) {
         String entry = (String) input.get("entry");
         String shutdown = input.get("shutdownEntry") instanceof String value ? value : null;
         var owner = currentState(null);
@@ -460,12 +460,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
                 new ProgramValue.View(entry, Boolean.TRUE.equals(input.get("ioMain")), shutdown), false);
             program.prepareCheckpointCode();
             owner.coreUnitPrograms.add(program);
-            return new RootNode(this) {
-                @Override public Object execute(VirtualFrame frame) {
-                    return initializeUnit(program, plan, owner, false);
-                }
-                @Override public String getName() { return "THC checkpoint load " + entry; }
-            }.getCallTarget();
+            return (EntryValue) initializeUnit(program, plan, owner, false);
         } catch (Throwable failure) { program.close(); throw failure; }
     }
 

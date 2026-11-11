@@ -37,8 +37,12 @@ class ManagedAddressStorageTest {
                 var bytes = new byte[] {0, 127, (byte) 128, (byte) 255};
                 var mutable = ManagedAddress.fromByteArray(bytes);
                 var literal = ManagedAddress.fromHex("007f80ff");
+                var owner = ManagedAllocation.mutable(bytes.length, 8);
+                var ownedBytes = owner.rawBytesIfPointerFree();
+                System.arraycopy(bytes, 0, ownedBytes, 0, bytes.length);
+                var owning = ManagedAddress.fromAllocation(owner);
                 var target = root.getCallTarget();
-                for (var address : List.of(literal, mutable))
+                for (var address : List.of(literal, mutable, owning))
                     for (int index = 0; index < bytes.length; index++)
                         assertEquals(bytes[index] & 255L, target.call(address, (long) index));
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
@@ -48,14 +52,19 @@ class ManagedAddressStorageTest {
                     .getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
                     .invoke(runtime, target);
                 bytes[2] = (byte) 0xa5;
-                for (var row : List.of(new ExpectedAddress(mutable, 165L), new ExpectedAddress(literal, 128L))) {
+                ownedBytes[2] = (byte) 0xa5;
+                for (var row : List.of(new ExpectedAddress(mutable, 165L), new ExpectedAddress(literal, 128L),
+                        new ExpectedAddress(owning, 165L))) {
                     long before = root.compiledEntries;
                     assertEquals(row.expected(), target.call(row.address(), 2L));
                     assertEquals(before + 1, root.compiledEntries, "first installed byte read");
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 }
+                owner.shrink(2);
+                assertThrows(RuntimeFault.class, () -> target.call(owning, 2L));
                 assertThrows(RuntimeFault.class, () -> target.call(ManagedAddress.nullAddress(), 0L));
                 assertThrows(RuntimeFault.class, () -> target.call(mutable, 4L));
+                assertThrows(RuntimeFault.class, () -> target.call(owning, 4L));
                 assertArrayEquals(new byte[] {0, 127, (byte) 0xa5, (byte) 255}, bytes);
             } finally {
                 context.leave();
@@ -131,14 +140,16 @@ class ManagedAddressStorageTest {
         displacements.addAll(List.of(Long.MIN_VALUE, Long.MIN_VALUE + 1, Long.MAX_VALUE - 1, Long.MAX_VALUE,
             (long) Integer.MIN_VALUE - 1, (long) Integer.MIN_VALUE, (long) Integer.MAX_VALUE,
             (long) Integer.MAX_VALUE + 1, -(1L << 32), (1L << 32) - 1, 1L << 32, (1L << 32) + 1));
+        for (boolean owning : new boolean[] {false, true})
         for (int size = 0; size <= 32; size++)
             for (int base = 0; base <= size; base++)
                 for (long displacement : displacements) {
-                    var bytes = new byte[size];
+                    var owner = owning ? ManagedAllocation.mutable(size, 8) : null;
+                    var bytes = owner == null ? new byte[size] : owner.rawBytesIfPointerFree();
                     for (int i = 0; i < size; i++) bytes[i] = (byte) (i * 73 + size * 17 + 129);
                     var before = bytes.clone();
-                    var address = ManagedAddress.fromByteArray(bytes).plus(base);
-                    var label = "size=" + size + "/base=" + base + "/displacement=" + displacement;
+                    var address = (owner == null ? ManagedAddress.fromByteArray(bytes) : ManagedAddress.fromAllocation(owner)).plus(base);
+                    var label = "owning=" + owning + "/size=" + size + "/base=" + base + "/displacement=" + displacement;
                     var sum = BigInteger.valueOf(base).add(BigInteger.valueOf(displacement));
                     if (sum.compareTo(BigInteger.valueOf(Long.MIN_VALUE)) < 0
                         || sum.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0)
@@ -243,6 +254,9 @@ class ManagedAddressStorageTest {
     }
     @Test
     void outOfRangeSentinelsRetainIdentityButGrantNoMemoryAccess() {
+        var none = ManagedAddress.nullAddress();
+        assertSame(none, none.plus(0));
+        assertThrows(RuntimeFault.class, () -> none.plus(1));
         var base = ManagedAddress.fromByteArray(new byte[] {65, 0});
         var before = base.plus(-1);
         var after = base.plus(3);

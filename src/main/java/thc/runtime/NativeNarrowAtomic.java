@@ -20,14 +20,12 @@ final class NativeNarrowAtomic {
     private static SymbolLookup load() {
         String extension = System.getProperty("os.name").startsWith("Mac") ? ".dylib" : ".so";
         try {
-            var path = Files.createTempFile("thc-atomic-", extension);
-            try {
-                try (var input = NativeNarrowAtomic.class.getResourceAsStream("/thc/native/native-atomic-api" + extension)) {
-                    if (input == null) throw fault("Native narrow atomic provider is unavailable for " + System.getProperty("os.name") + "/" + System.getProperty("os.arch"));
-                    Files.copy(input, path, StandardCopyOption.REPLACE_EXISTING);
-                }
-                return SymbolLookup.libraryLookup(path, Arena.global());
-            } finally { Files.deleteIfExists(path); }
+            var path = NativeLibraryFiles.createTempFile("thc-atomic-", extension);
+            try (var input = NativeNarrowAtomic.class.getResourceAsStream("/thc/native/native-atomic-api" + extension)) {
+                if (input == null) throw fault("Native narrow atomic provider is unavailable for " + System.getProperty("os.name") + "/" + System.getProperty("os.arch"));
+                Files.copy(input, path, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return SymbolLookup.libraryLookup(path, Arena.global());
         } catch (Throwable failure) { throw propagate(failure); }
     }
     @TruffleBoundary static long cas(MemorySegment segment, long width, long expected, long desired) {

@@ -566,11 +566,11 @@ class ManagedWeakTest {
         assertEquals(2, key.getState(), "The ordinary Force update published the indirection");
         return new Registration(weak, new WeakReference<>(key, queue));
     }
-    private record LiftedAlias(jam.vm.Lifted answer) implements jam.vm.Lifted {
-        @Override public jam.vm.Lifted resolve() { return answer; }
-        @Override public jam.vm.Lifted project(int field) { return answer.project(field); }
+    private record LiftedAlias(thc.vm.Lifted answer) implements thc.vm.Lifted {
+        @Override public thc.vm.Lifted resolve() { return answer; }
+        @Override public thc.vm.Lifted project(int field) { return answer.project(field); }
     }
-    private Registration liftedProtocolKey(ManagedWeaks registry, jam.vm.Lifted answer,
+    private Registration liftedProtocolKey(ManagedWeaks registry, thc.vm.Lifted answer,
             ReferenceQueue<Object> queue, Object value) {
         var alias = new LiftedAlias(answer);
         return new Registration(registry.make(alias, value, null, null), new WeakReference<>(alias, queue));
@@ -763,7 +763,7 @@ class ManagedWeakTest {
                 // its Runnable enters. Reflection exposes no new runtime/test API.
                 var tokenField = weak.getClass().getDeclaredField("token"); tokenField.setAccessible(true);
                 long token = tokenField.getLong(weak);
-                var bootstrap = jam.vm.Weak.finalizeNow(token); assertNotNull(bootstrap);
+                var bootstrap = thc.vm.Weak.finalizeNow(token); assertNotNull(bootstrap);
                 var settled = new java.util.concurrent.atomic.AtomicBoolean();
                 try {
                     var entered = new CompletableFuture<Void>();
@@ -787,7 +787,7 @@ class ManagedWeakTest {
                     assertEquals(0L, registry.finalize(weak).getFlag());
                 } finally {
                     try { if (!settled.getAndSet(true)) bootstrap.run(); }
-                    finally { jam.vm.Weak.complete(token); }
+                    finally { thc.vm.Weak.complete(token); }
                 }
                 Reference.reachabilityFence(key); Reference.reachabilityFence(representative);
             } finally { context.leave(); }
@@ -956,7 +956,7 @@ class ManagedWeakTest {
         assertEquals(1L, registry.addCallback(weak, callback));
         var tokenField = weak.getClass().getDeclaredField("token"); tokenField.setAccessible(true);
         long token = tokenField.getLong(weak);
-        var bootstrap = jam.vm.Weak.finalizeNow(token); assertNotNull(bootstrap);
+        var bootstrap = thc.vm.Weak.finalizeNow(token); assertNotNull(bootstrap);
         try {
             // Successor resolution has completed, but its registration allocation failed.
             var keyField = bootstrap.getClass().getDeclaredField("key"); keyField.setAccessible(true);
@@ -970,7 +970,7 @@ class ManagedWeakTest {
                 assertSame(failure, assertThrows(failure.getClass(), () -> registry.dereference(weak)));
                 assertSame(failure, assertThrows(failure.getClass(), () -> registry.addCallback(weak, () -> fail("Failed registration accepted cleanup"))));
             }
-        } finally { jam.vm.Weak.complete(token); }
+        } finally { thc.vm.Weak.complete(token); }
         Reference.reachabilityFence(key);
         return weak;
     }
@@ -1112,7 +1112,7 @@ class ManagedWeakTest {
                         }));
                         var tokenField = weak.getClass().getDeclaredField("token"); tokenField.setAccessible(true);
                         long token = tokenField.getLong(weak);
-                        var claimed = jam.vm.Weak.finalizeNow(token); assertNotNull(claimed);
+                        var claimed = thc.vm.Weak.finalizeNow(token); assertNotNull(claimed);
                         providerField.set(affinity, new NativeCpuAffinity() {
                             @Override public int getCount() { return 1; }
                             @Override public CpuAffinityMode getMode() { return CpuAffinityMode.ADVISORY; }
@@ -1129,7 +1129,7 @@ class ManagedWeakTest {
                             carrier = Thread.ofVirtual().start(() -> {
                                 claimThread.set(Thread.currentThread()); Throwable outcome = null;
                                 try { claimed.run(); } catch (Throwable caught) { outcome = caught; }
-                                finally { jam.vm.Weak.complete(token); }
+                                finally { thc.vm.Weak.complete(token); }
                                 completed.complete(outcome);
                             });
                             if (phase.equals("after-start")) {
@@ -1158,7 +1158,7 @@ class ManagedWeakTest {
                             release.tryPut(Unit.INSTANCE);
                             try {
                                 if (carrier != null) TruffleSafepoint.setBlockedThreadInterruptible(null, Thread::join, carrier);
-                                else jam.vm.Weak.complete(token);
+                                else thc.vm.Weak.complete(token);
                             } finally { providerField.set(affinity, originalProvider); }
                         }
                     } finally { release.tryPut(Unit.INSTANCE); context.leave(); }

@@ -1,0 +1,3 @@
+*.olean
+verification.txt
+__pycache__/

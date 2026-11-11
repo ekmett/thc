@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
@@ -29,18 +30,22 @@ final class InputCallArm extends Node {
     @Child private TupleBounce tupleBounce;
     @Child private InputDispatch remainder;
     InputCallArm(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start, Closure function) {
+        this(source, count, tail, metrics, destination, start, function, false);
+    }
+    InputCallArm(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start,
+                 Closure function, boolean coldPrepared) {
         this.source = source; this.count = count; this.tail = tail; this.metrics = metrics; this.destination = destination; this.start = start;
         target = function.target; arity = function.arity; prefixCount = function.suppliedCount; hasEnvironment = function.environment != null;
         root = (GuestRoot) java.util.Objects.requireNonNull(target.getRootNode(), "null cannot be cast to non-null type thc.runtime.GuestRoot");
         input = root.getTypedInput();
         strictPositions = input == null ? new int[0] : strictInputPositions(root, input);
-        direct = DirectCallNode.create(target); legacy = new DirectCallerNode(target, metrics, new boolean[0], prefixCount);
+        direct = DirectCallNode.create(target); legacy = new DirectCallerNode(target, metrics, new boolean[0], prefixCount, coldPrepared);
         force = new Force(metrics); loop = new TailCallLoop(metrics);
         if (destination != null) tupleBounce = new TupleBounce(destination, metrics);
         if (arity < count) remainder = new InputDispatch(source, count - arity, tail, metrics, destination, start + arity);
         ArgumentLayout.validate(root.getInputLayout(), prefixCount, source.getLayout(), start, Math.min(arity, count));
         if (arity <= count) checkInputResult(root, destination, arity == count);
-        if (metrics.getEnabled()) metrics.incrementDirectCacheMisses();
+        if (!coldPrepared && metrics.getEnabled()) metrics.incrementDirectCacheMisses();
     }
     boolean matches(Closure function) {
         return function.target == target && function.arity == arity && function.suppliedCount == prefixCount &&
@@ -65,6 +70,9 @@ final class InputCallArm extends Node {
     }
     private Object callEntered(VirtualFrame frame, Closure function, Object[] values, Object[] overrides, boolean prepared) {
         boolean isTail = tail && arity == count;
+        // Legacy returns already passed through DirectCallerNode completion.
+        // Typed calls and this arm's trampoline still return unclassified values.
+        boolean needsCompletion = input != null;
         Object result;
         try {
             Object answer;
@@ -90,8 +98,9 @@ final class InputCallArm extends Node {
             } catch (TailCall transfer) {
                 if (isTail || arity == count && tupleBounce != null) throw transfer;
                 answer = loop.execute(transfer);
+                needsCompletion = true;
             }
-            result = AstControl.captures(this) ? AstControl.complete(this, answer, target,
+            result = needsCompletion ? AstControl.complete(this, answer, target,
                 arity == count && destination != null ? root.getTupleResult() : null) : answer;
         } catch (TailCall transfer) {
             if (isTail) throw transfer;
@@ -100,22 +109,29 @@ final class InputCallArm extends Node {
             }
             throw transfer;
         } catch (AstCapture cut) {
-            CompilerDirectives.transferToInterpreter();
-            Object[] savedValues = values == null ? null : values.clone();
-            throw cut.append((saved, value) -> finish(saved, value, savedValues));
+            if (arity == count && destination == null) throw cut;
+            throw captureResult(cut, values);
         } catch (DelimitedCut cut) {
             throw captureCall(frame, cut, values);
         }
         return finish(frame, result, values);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture captureResult(AstCapture cut, Object[] values) {
+        Object[] savedValues = values == null ? null : values.clone();
+        return cut.append((saved, value) -> finish(saved, value, savedValues));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture captureRemainder(AstCapture cut, Object[] values) {
+        Object[] savedValues = values == null ? null : values.clone();
+        return cut.append((saved, value) -> remainder.execute(saved, requireClosure(value), savedValues));
     }
     private Object finish(VirtualFrame frame, Object result, Object[] values) {
         if (arity < count) {
             Closure closure;
             try { closure = requireClosure(AstControl.force(frame, this, force, result)); }
             catch (AstCapture cut) {
-                CompilerDirectives.transferToInterpreter();
-                Object[] savedValues = values == null ? null : values.clone();
-                throw cut.append((saved, value) -> remainder.execute(saved, requireClosure(value), savedValues));
+                throw captureRemainder(cut, values);
             } catch (DelimitedCut cut) {
                 throw captureCall(frame, cut, values);
             }

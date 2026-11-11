@@ -11,7 +11,7 @@
 [![GHC: 9.14.1](https://img.shields.io/static/v1?label=GHC&message=9.14.1&color=5e5086&style=flat&logo=haskell&logoColor=white)](thc.cabal)
 [![Cabal: 3.16](https://img.shields.io/static/v1?label=Cabal&message=3.16&color=5e5086&style=flat&logo=haskell&logoColor=white)](README.md)
 [![Java: 25](https://img.shields.io/static/v1?label=Java&message=25&color=b66a13&style=flat&logo=openjdk&logoColor=white)](README.md)
-[![GraalVM: 25.3.4.1](https://img.shields.io/static/v1?label=GraalVM&message=25.3.4.1&color=b66a13&style=flat&logo=openjdk&logoColor=white)](etc/jam-graalvm.json)
+[![GraalVM: 25.3.4.1](assets/badges/graalvm-version.svg)](src/vm/config/source-pins.json)
 [![Gradle: 9.7.1](https://img.shields.io/static/v1?label=Gradle&message=9.7.1&color=02303A&style=flat&logo=gradle&logoColor=white)](nih/gradle/wrapper/gradle-wrapper.properties)
 
 [![OS: Linux · macOS · Windows](https://img.shields.io/static/v1?label=OS&message=Linux+%C2%B7+macOS+%C2%B7+Windows&color=64748b&style=flat)](README.md)
@@ -36,6 +36,14 @@ GHC already knows quite a lot about compiling Haskell. The intention is to keep
 that information around long enough to use it.
 
 ![Turbo Haskell](assets/turbo-haskell.png)
+
+## VM toolchain
+
+THC owns the Java/native bridge and the GraalVM/SubstrateVM integration in
+[`src/vm`](src/vm/README.md), with `thc::vm` and `thc::vm-static` CMake targets.
+See the [VM build guide](docs/vm/build.md). Its heavyweight build and release
+workflows are manual, separate from commit CI. A new THC-branded provider still
+needs qualification before replacing the existing installation pin below.
 
 ## Build and run
 

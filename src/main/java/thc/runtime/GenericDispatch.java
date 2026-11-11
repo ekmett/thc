@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateInline;
@@ -52,10 +53,8 @@ public abstract class GenericDispatch extends Node {
                 Object result;
                 try { result = caller.call(frame, function.target, packet, false); }
                 catch (AstCapture cut) {
-                    CompilerDirectives.transferToInterpreter();
-                    Object[] savedArguments = arguments.clone();
-                    throw cut.append((saved, input) -> resumeOverapplication(saved, node, input, savedArguments,
-                        logicalCount, layout, tailCall, metrics, next, caller, force, typed, underapplied, exact));
+                    throw captureOverapplication(node, cut, arguments, logicalCount, layout, tailCall, metrics,
+                        next, caller, force, typed, underapplied, exact);
                 } catch (DelimitedCut cut) {
                     throw captureOverapplication(frame, node, cut, arguments, logicalCount, layout, tailCall, metrics,
                         next, caller, force, typed, underapplied, exact);
@@ -63,10 +62,8 @@ public abstract class GenericDispatch extends Node {
                 Object forced;
                 try { forced = AstControl.force(frame, node, force, result); }
                 catch (AstCapture cut) {
-                    CompilerDirectives.transferToInterpreter();
-                    Object[] savedArguments = arguments.clone();
-                    throw cut.append((saved, input) -> apply(saved, node, requireClosure(input), savedArguments,
-                        logicalCount, layout, tailCall, metrics, next, caller, force, typed, underapplied, exact));
+                    throw captureRemainder(node, cut, arguments, logicalCount, layout, tailCall, metrics,
+                        next, caller, force, typed, underapplied, exact);
                 }
                 function = requireClosure(forced); offset = next;
                 continue;
@@ -85,6 +82,22 @@ public abstract class GenericDispatch extends Node {
             offset += count;
             function = requireClosure(force.execute(frame, result));
         }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private static AstCapture captureOverapplication(Node node, AstCapture cut, Object[] arguments,
+            int logicalCount, ArgumentLayout layout, boolean tailCall, Metrics metrics, int next,
+            IndirectCallerNode caller, Force force, GenericInputCall typed, InlinedConditionProfile underapplied, InlinedConditionProfile exact) {
+        Object[] savedArguments = arguments.clone();
+        return cut.append((saved, input) -> resumeOverapplication(saved, node, input, savedArguments,
+            logicalCount, layout, tailCall, metrics, next, caller, force, typed, underapplied, exact));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private static AstCapture captureRemainder(Node node, AstCapture cut, Object[] arguments,
+            int logicalCount, ArgumentLayout layout, boolean tailCall, Metrics metrics, int next,
+            IndirectCallerNode caller, Force force, GenericInputCall typed, InlinedConditionProfile underapplied, InlinedConditionProfile exact) {
+        Object[] savedArguments = arguments.clone();
+        return cut.append((saved, input) -> apply(saved, node, requireClosure(input), savedArguments,
+            logicalCount, layout, tailCall, metrics, next, caller, force, typed, underapplied, exact));
     }
     private static DelimitedCut captureOverapplication(VirtualFrame frame, Node node, DelimitedCut cut, Object[] arguments,
             int logicalCount, ArgumentLayout layout, boolean tailCall, Metrics metrics, int next,

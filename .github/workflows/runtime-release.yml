@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
+
+name: Publish prebuilt runtimes
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Managed runtimes run whose source is merged into main
+        required: true
+        type: string
+      build_flavor:
+        description: Expected flavor of every qualified package
+        required: true
+        type: choice
+        options: [release, fastdebug]
+        default: release
+      tag:
+        description: New release tag (for example vm-2026.10.07-a7ebfc52)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: runtime-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      PRODUCER_RUN: ${{ inputs.run_id }}
+      BUILD_FLAVOR: ${{ inputs.build_flavor }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Test release metadata and qualification gates
+        run: python3 src/vm/t/release-runtime-test.py
+      - name: Prepare exact qualified archives and manifest
+        run: >-
+          python3 src/vm/tools/ci/release_runtime.py
+          --run "$PRODUCER_RUN" --tag "$RELEASE_TAG" --build-flavor "$BUILD_FLAVOR"
+          --cache "$RUNNER_TEMP/downloads" --output "$RUNNER_TEMP/release"
+      - name: Publish new prerelease without replacing existing assets
+        run: |
+          cd "$RUNNER_TEMP/release"
+          source_commit=$(python3 -c 'import json; print(json.load(open("manifest.json"))["source_commit"])')
+          gh release create "$RELEASE_TAG" --target "$source_commit" --draft --prerelease \
+            --title "THC runtimes $RELEASE_TAG" --notes-file release-notes.md \
+            ./*.tar.gz ./*.json SHA256SUMS
+          gh release edit "$RELEASE_TAG" --draft=false --latest=false

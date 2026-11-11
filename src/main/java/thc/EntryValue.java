@@ -13,6 +13,9 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
+import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
+import com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import thc.runtime.*;
@@ -33,6 +36,166 @@ public final class EntryValue implements TruffleObject {
     private final AtomicBoolean lifecycleStarted;
     private record Compilation(RootCallTarget original, List<CallTarget> targets) {}
     private volatile Compilation installedCompilation;
+    private record CheckpointTarget(RootCallTarget target, boolean aotPrepared, String status,
+            String failure, long codeAddress, int installations) {}
+    private volatile List<CheckpointTarget> checkpointCompilation;
+    private volatile boolean checkpointInvocationStarted;
+
+    private void requireCheckpointOwner() {
+        if (Language.currentState() != owner) throw new IllegalArgumentException("Checkpoint entry belongs to another context");
+    }
+
+    private List<RootCallTarget> checkpointTargets() {
+        var targets = new ArrayList<RootCallTarget>();
+        var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
+        for (var target : program.compilationTargets()) if (seen.add(target)) targets.add(target);
+        for (var target : Arrays.asList(guestTarget, ioTarget, shutdownTarget,
+                valueTarget(guestEntry), valueTarget(shutdownValue)))
+            if (target != null && seen.add(target)) targets.add(target);
+        for (int index = 0; index < targets.size(); index++)
+            for (var call : NodeUtil.findAllNodeInstances(targets.get(index).getRootNode(), DirectCallNode.class))
+                if (call.getCurrentCallTarget() instanceof RootCallTarget target && seen.add(target)) targets.add(target);
+        return List.copyOf(targets);
+    }
+
+    private static RootCallTarget valueTarget(Object value) {
+        if (value instanceof Closure closure) return closure.target;
+        return value instanceof Thunk thunk ? thunk.getTarget() : null;
+    }
+
+    /** Attempt every retained executable target once without executing guest code.
+     * Failed or rejected targets are reported as partial coverage, never as installed code. */
+    @TruffleBoundary public synchronized Map<String,Object> prepareCheckpointCompilation() {
+        requireCheckpointOwner();
+        if (checkpointInvocationStarted || lifecycleStarted != null && lifecycleStarted.get())
+            throw new IllegalStateException("Checkpoint compilation requires an unstarted guest entry");
+        if (checkpointCompilation != null) return checkpointCompilationObservation(false);
+        var failures = new java.util.concurrent.ConcurrentHashMap<OptimizedCallTarget,String>();
+        OptimizedTruffleRuntime runtime = Truffle.getRuntime() instanceof OptimizedTruffleRuntime found ? found : null;
+        var listener = new OptimizedTruffleRuntimeListener() {
+            @Override public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout,
+                    boolean permanent, int tier, java.util.function.Supplier<String> stack) {
+                failures.put(target, Objects.toString(reason, "Compilation failed"));
+            }
+        };
+        if (runtime != null) runtime.addListener(listener);
+        var observations = new ArrayList<CheckpointTarget>();
+        try {
+            var inventory = checkpointTargets();
+            var aotPrepared = new IdentityHashMap<RootCallTarget, Boolean>();
+            var preparationFailures = new IdentityHashMap<RootCallTarget, String>();
+            // Prepare all profiles first: preparing a later callee must not invalidate
+            // machine code already installed in an earlier caller.
+            for (var value : inventory) {
+                boolean aot = false;
+                if (value instanceof OptimizedCallTarget target && !target.wasExecuted()) {
+                    try { aot = target.prepareForAOT(); }
+                    catch (RuntimeException unavailable) { preparationFailures.put(target, "AOT preparation: " + unavailable); }
+                }
+                aotPrepared.put(value, aot);
+            }
+            for (var value : inventory) {
+                String failure = "", status = "unsupported-runtime";
+                long address = 0; int installations = 0;
+                if (value instanceof OptimizedCallTarget target) {
+                    try {
+                        target.compile(true);
+                        // This also waits when the ordinary engine permits background compilation.
+                        target.waitForCompilation();
+                        address = target.getCodeAddress();
+                        installations = target.getSuccessfulCompilationCount();
+                        failure = failures.getOrDefault(target, preparationFailures.getOrDefault(target, ""));
+                        status = target.isValidLastTier() && address != 0 ? "installed" :
+                            failures.containsKey(target) ? checkpointFailureStatus(failure) : "rejected";
+                    } catch (RuntimeException rejected) {
+                        failure = failures.getOrDefault(target, rejected.toString());
+                        status = failures.containsKey(target) ? checkpointFailureStatus(failure) : "rejected";
+                    }
+                }
+                observations.add(new CheckpointTarget(value, aotPrepared.get(value), status, failure, address, installations));
+            }
+            // Installation during an earlier attempt is insufficient if a later
+            // compilation invalidated it. Keep that outcome explicit, with no retry.
+            for (int index = 0; index < observations.size(); index++) {
+                var observation = observations.get(index);
+                if (observation.status().equals("installed")) {
+                    var target = (OptimizedCallTarget) observation.target();
+                    boolean valid = target.isValidLastTier() && target.getCodeAddress() != 0;
+                    observations.set(index, new CheckpointTarget(target, observation.aotPrepared(),
+                        valid ? "installed" : "invalidated", valid ? observation.failure() :
+                            "Installation invalidated during checkpoint compilation", target.getCodeAddress(),
+                        target.getSuccessfulCompilationCount()));
+                }
+            }
+        } finally { if (runtime != null) runtime.removeListener(listener); }
+        checkpointCompilation = List.copyOf(observations);
+        return checkpointCompilationObservation(false);
+    }
+
+    private static String checkpointFailureStatus(String reason) {
+        return reason.startsWith("jdk.graal.compiler.core.common.CancellationBailoutException:") ? "cancelled" : "failed";
+    }
+
+    /** Verify retained installations after the checkpoint; this never compiles or repairs code. */
+    @TruffleBoundary public synchronized Map<String,Object> verifyCheckpointCompilation() {
+        requireCheckpointOwner();
+        if (checkpointCompilation == null) throw new IllegalStateException("Checkpoint code was not compiled");
+        return checkpointCompilationObservation(true);
+    }
+
+    private String checkpointRole(RootCallTarget target) {
+        if (target == ioTarget) return "ioBridge";
+        if (target == shutdownTarget) return "shutdownBridge";
+        if (target == valueTarget(guestEntry)) return "guestEntry";
+        if (target == valueTarget(shutdownValue)) return "shutdownEntry";
+        return target == guestTarget ? "hostBridge" : "program";
+    }
+
+    private Map<String,Object> checkpointCompilationObservation(boolean requireSurvival) {
+        var retained = checkpointCompilation;
+        var current = checkpointTargets();
+        var currentIdentities = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
+        currentIdentities.addAll(current);
+        boolean same = retained.size() == current.size(), survived = true;
+        int installed = 0, failed = 0, rejected = 0, invalidated = 0, cancelled = 0, unsupported = 0;
+        var observations = new ArrayList<Map<String,Object>>();
+        for (int index = 0; index < retained.size(); index++) {
+            var observation = retained.get(index); var target = observation.target();
+            same &= currentIdentities.contains(target);
+            boolean valid = target instanceof OptimizedCallTarget optimized && optimized.isValidLastTier();
+            long address = target instanceof OptimizedCallTarget optimized ? optimized.getCodeAddress() : 0;
+            int installations = target instanceof OptimizedCallTarget optimized ? optimized.getSuccessfulCompilationCount() : 0;
+            switch (observation.status()) {
+                case "installed" -> {
+                    installed++;
+                    survived &= valid && address == observation.codeAddress() && installations == observation.installations();
+                }
+                case "failed" -> failed++;
+                case "rejected" -> rejected++;
+                case "invalidated" -> invalidated++;
+                case "cancelled" -> cancelled++;
+                default -> unsupported++;
+            }
+            var detail = new LinkedHashMap<String,Object>();
+            detail.put("index", index); detail.put("name", target.getRootNode().getName());
+            detail.put("kind", target.getRootNode().getClass().getName()); detail.put("role", checkpointRole(target));
+            detail.put("aotPrepared", observation.aotPrepared()); detail.put("status", observation.status());
+            detail.put("failure", observation.failure()); detail.put("codeAddressBefore", observation.codeAddress());
+            detail.put("codeAddressNow", address); detail.put("validLastTier", valid);
+            detail.put("installationsBefore", observation.installations()); detail.put("installationsNow", installations);
+            detail.put("wasExecuted", target instanceof OptimizedCallTarget optimized && optimized.wasExecuted());
+            observations.add(Collections.unmodifiableMap(detail));
+        }
+        var report = new LinkedHashMap<String,Object>();
+        report.put("targetCount", retained.size()); report.put("installed", installed); report.put("failed", failed);
+        report.put("rejected", rejected); report.put("unsupportedRuntime", unsupported); report.put("sameTargets", same);
+        report.put("invalidated", invalidated);
+        report.put("cancelled", cancelled);
+        report.put("installedCodeSurvived", survived); report.put("targets", List.copyOf(observations));
+        if (requireSurvival && (!same || !survived))
+            throw new IllegalStateException("Checkpoint installations changed before guest entry: " + Json.stringify(report));
+        return Collections.unmodifiableMap(report);
+    }
 
     public EntryValue(ExecutableProgram program, String entry, int argumentCount) {
         this(program, entry, argumentCount, null, null, null, null, null, false, null, null);
@@ -98,6 +261,7 @@ public final class EntryValue implements TruffleObject {
             throw new IllegalArgumentException("Host kernel " + entry + " expects " + argumentCount + " arguments");
         }
         owner.admitGuestOrigin();
+        checkpointInvocationStarted = true;
         var threads = owner.getThreads();
         if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(arguments, dispatch));
         Closure closure = guestEntry instanceof Closure value ? value : null;
@@ -164,9 +328,9 @@ public final class EntryValue implements TruffleObject {
     @ExportMessage @TruffleBoundary public Object readMember(String member) throws UnknownIdentifierException {
         if ("diagnostics".equals(member)) {
             var installed = installedCompilation;
-            if (installed == null) return Json.stringify(program.diagnostics());
             var observed = new LinkedHashMap<String, Object>(program.diagnostics());
-            observed.put("explicitCompilation", compilationObservation(installed));
+            if (installed != null) observed.put("explicitCompilation", compilationObservation(installed));
+            if (checkpointCompilation != null) observed.put("checkpointCompilation", checkpointCompilationObservation(false));
             return Json.stringify(observed);
         }
         if ("bytecode".equals(member) && program.getHasBytecode()) return program.bytecodeDump();
@@ -206,6 +370,7 @@ public final class EntryValue implements TruffleObject {
             requireOwner(dispatch);
             if (arguments.length != 0) throw new IllegalArgumentException("runIO takes no arguments");
             if (lifecycleStarted != null && lifecycleStarted.get()) throw new RuntimeFault("Executable IO lifecycle already started");
+            checkpointInvocationStarted = true;
             owner.admitGuestOrigin();
             var threads = owner.getThreads();
             if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> invokeMember(member, arguments, dispatch));

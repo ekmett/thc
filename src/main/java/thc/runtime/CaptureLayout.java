@@ -23,19 +23,19 @@ public final class CaptureLayout {
     private final Object allocationKey = new Object();
     private final StaticShape<CapturedFrameFactory> shape;
     public CaptureLayout(TruffleLanguage<?> language, boolean[] eligible) {
-        this(language, eligible, new boolean[eligible.length], new Class<?>[eligible.length], new boolean[eligible.length], new boolean[eligible.length], new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length]);
+        this(language, eligible, new boolean[eligible.length], new Class<?>[eligible.length], new boolean[eligible.length], new boolean[eligible.length], new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length], new boolean[eligible.length]);
     }
     public CaptureLayout(TruffleLanguage<?> language, boolean[] eligible, boolean[] exactLong) {
-        this(language, eligible, exactLong, new Class<?>[eligible.length], new boolean[eligible.length], new boolean[eligible.length], new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length]);
+        this(language, eligible, exactLong, new Class<?>[eligible.length], new boolean[eligible.length], new boolean[eligible.length], new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length], new boolean[eligible.length]);
     }
     public CaptureLayout(TruffleLanguage<?> language, boolean[] eligible, boolean[] exactLong, Class<?>[] exactReference) {
-        this(language, eligible, exactLong, exactReference, new boolean[eligible.length], new boolean[eligible.length], new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length]);
+        this(language, eligible, exactLong, exactReference, new boolean[eligible.length], new boolean[eligible.length], new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length], new boolean[eligible.length]);
     }
     public CaptureLayout(TruffleLanguage<?> language, boolean[] eligible, boolean[] exactLong, Class<?>[] exactReference, boolean[] exactFloat) {
-        this(language, eligible, exactLong, exactReference, exactFloat, new boolean[eligible.length], new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length]);
+        this(language, eligible, exactLong, exactReference, exactFloat, new boolean[eligible.length], new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length], new boolean[eligible.length]);
     }
     public CaptureLayout(TruffleLanguage<?> language, boolean[] eligible, boolean[] exactLong, Class<?>[] exactReference, boolean[] exactFloat, boolean[] exactDouble) {
-        this(language, eligible, exactLong, exactReference, exactFloat, exactDouble, new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length]);
+        this(language, eligible, exactLong, exactReference, exactFloat, exactDouble, new CoreRepresentation[eligible.length], new NarrowInteger[eligible.length], new boolean[eligible.length]);
     }
     public static CaptureLayout withVectors(TruffleLanguage<?> language, CoreRepresentation[] vectors, boolean[] eligible) {
         return withVectors(language, vectors, eligible, new boolean[eligible.length], new Class<?>[eligible.length], new boolean[eligible.length], new boolean[eligible.length], new NarrowInteger[eligible.length]);
@@ -54,13 +54,20 @@ public final class CaptureLayout {
     }
     public static CaptureLayout withVectors(TruffleLanguage<?> language, CoreRepresentation[] vectors, boolean[] eligible,
             boolean[] exactLong, Class<?>[] exactReference, boolean[] exactFloat, boolean[] exactDouble, NarrowInteger[] exactInt) {
-        return new CaptureLayout(language, eligible, exactLong, exactReference, exactFloat, exactDouble, vectors, exactInt);
+        return new CaptureLayout(language, eligible, exactLong, exactReference, exactFloat, exactDouble, vectors, exactInt, new boolean[eligible.length]);
+    }
+    /** The lowering producer retains source storage independently of durable field storage. */
+    static CaptureLayout withVectors(TruffleLanguage<?> language, CoreRepresentation[] vectors, boolean[] eligible,
+            boolean[] exactLong, Class<?>[] exactReference, boolean[] exactFloat, boolean[] exactDouble,
+            NarrowInteger[] exactInt, boolean[] sourceReferences) {
+        return new CaptureLayout(language, eligible, exactLong, exactReference, exactFloat, exactDouble, vectors, exactInt, sourceReferences);
     }
     private CaptureLayout(TruffleLanguage<?> language, boolean[] eligible, boolean[] exactLong,
-            Class<?>[] exactReference, boolean[] exactFloat, boolean[] exactDouble, CoreRepresentation[] vectors, NarrowInteger[] exactInt) {
+            Class<?>[] exactReference, boolean[] exactFloat, boolean[] exactDouble, CoreRepresentation[] vectors,
+            NarrowInteger[] exactInt, boolean[] sourceReferences) {
         int count = eligible.length;
         if (exactLong.length != count || exactReference.length != count || exactFloat.length != count ||
-            exactDouble.length != count || vectors.length != count || exactInt.length != count)
+            exactDouble.length != count || vectors.length != count || exactInt.length != count || sourceReferences.length != count)
             throw new IllegalArgumentException("Failed requirement.");
         for (int i = 0; i < count; i++) {
             if (exactLong[i] && (!eligible[i] || exactReference[i] != null) ||
@@ -70,13 +77,15 @@ public final class CaptureLayout {
                 (exactReference[i] != null ? 1 : 0) + (exactInt[i] != null ? 1 : 0);
             if (claims > 1 || vectors[i] != null && (eligible[i] || claims != 0))
                 throw new IllegalArgumentException("Failed requirement.");
+            if (sourceReferences[i] && (vectors[i] != null || exactLong[i] || exactFloat[i] || exactDouble[i] || exactInt[i] != null))
+                throw new IllegalArgumentException("Failed requirement.");
         }
         fields = new CaptureField[count];
         offsets = new int[count + 1];
         for (int i = 0; i < count; i++) {
             fields[i] = new CaptureField(i, eligible[i] && exactReference[i] == null && !exactFloat[i] &&
                 !exactDouble[i] && exactInt[i] == null, exactLong[i], exactReference[i], exactFloat[i],
-                exactDouble[i], vectors[i], exactInt[i]);
+                exactDouble[i], vectors[i], exactInt[i], sourceReferences[i]);
             offsets[i + 1] = offsets[i] + 1;
         }
         StaticShape.Builder builder = StaticShape.newBuilder(language);
@@ -106,6 +115,10 @@ public final class CaptureLayout {
         return capture(frame, sourceSlots, null);
     }
     @ExplodeLoop public CapturedFrame capture(VirtualFrame frame, int[] sourceSlots, ExecutableProgram program) {
+        return capture(frame, sourceSlots, program, false);
+    }
+    /** Only package-owned lowering producers supply their matched source slots. */
+    @ExplodeLoop CapturedFrame capture(VirtualFrame frame, int[] sourceSlots, ExecutableProgram program, boolean loweredSources) {
         if (sourceSlots.length != getStorageSize()) throw new IllegalStateException("Check failed.");
         CapturedFrame environment = shape.getFactory().create(this, allocationKey, program);
         for (int i = 0; i < fields.length; i++) {
@@ -140,7 +153,7 @@ public final class CaptureLayout {
                 else throw fault("Expected primitive Double capture");
                 field.initializeDouble(environment, value);
             }
-            else field.initialize(environment, FrameAccess.read(frame, slot));
+            else field.initialize(environment, loweredSources && field.sourceReference ? frame.getObject(slot) : FrameAccess.read(frame, slot));
         }
         return environment;
     }
@@ -211,15 +224,16 @@ public final class CaptureLayout {
     public Object readObject(CapturedFrame environment, int index) { return checkedField(environment, index).readObject(environment); }
     private static final class CaptureField {
         private final int index;
-        private final boolean primitiveEligible, exactLong, exactFloat, exactDouble;
+        private final boolean primitiveEligible, exactLong, exactFloat, exactDouble, sourceReference;
         private final Class<?> exactReference;
         private final NarrowInteger exactInt;
         private final OwnedVectorFields vector;
         private final DefaultStaticProperty objectValue, primitiveValue, hasPrimitive;
         CaptureField(int index, boolean primitiveEligible, boolean exactLong, Class<?> exactReference,
-                boolean exactFloat, boolean exactDouble, CoreRepresentation vectorProof, NarrowInteger exactInt) {
+                boolean exactFloat, boolean exactDouble, CoreRepresentation vectorProof, NarrowInteger exactInt, boolean sourceReference) {
             this.index = index; this.primitiveEligible = primitiveEligible; this.exactLong = exactLong;
             this.exactReference = exactReference; this.exactFloat = exactFloat; this.exactDouble = exactDouble; this.exactInt = exactInt;
+            this.sourceReference = sourceReference;
             vector = vectorProof == null ? null : new OwnedVectorFields(vectorProof, "capture_" + index);
             objectValue = new DefaultStaticProperty("capture_" + index + "_object");
             primitiveValue = new DefaultStaticProperty("capture_" + index + "_primitive");
