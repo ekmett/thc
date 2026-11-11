@@ -137,7 +137,7 @@ public final class CoreUnitDirectory {
         private final Map<ModuleRecord,CoreCompactModule> compactReaders = new HashMap<>();
         private final List<CoreCompactFile> consumerReaders = new ArrayList<>();
         private final Set<ModuleRecord> verified = new HashSet<>();
-        private final Map<String,String> blobs = new HashMap<>();
+        private final CoreCompactRecords.SharedPayloads payloads = new CoreCompactRecords.SharedPayloads();
         public Sources(CoreUnitDirectory directory, boolean verifyArtifacts, Consumer<CoreCompactFile.Counters> compactAdmitted) {
             this.directory = directory; this.verifyArtifacts = verifyArtifacts;
             targetLayout = directory.targetLayout;
@@ -154,7 +154,7 @@ public final class CoreUnitDirectory {
                         interfaceConversions++;
                     } catch (Throwable failure) { return rethrow(failure); }
                 }
-                var reader = new CoreCompactModule(module, directory.targetLayout, verifyArtifacts, blobs, artifact);
+                var reader = new CoreCompactModule(module, directory.targetLayout, verifyArtifacts, payloads, artifact);
                 compactAdmitted.accept(reader.getCounters());
                 return reader;
             });
@@ -166,7 +166,7 @@ public final class CoreUnitDirectory {
             consumerReaders.add(file);
             compactAdmitted.accept(file.getCounters());
             try {
-                var records = new CoreCompactRecords(file, sha256.isEmpty() ? path.toString() : sha256, blobs);
+                var records = new CoreCompactRecords(file, sha256.isEmpty() ? path.toString() : sha256, payloads);
                 var result = new LinkedHashMap<>(records.header());
                 if (result.get("targetLayout") != null) {
                     var candidate = TargetLayout.fromDocument(result.get("targetLayout"));
@@ -221,7 +221,7 @@ public final class CoreUnitDirectory {
                 try { for (var reader : consumerReaders) reader.close(); }
                 catch (Exception failure) { rethrow(failure); }
                 finally {
-                    consumerReaders.clear(); blobs.clear();
+                    consumerReaders.clear(); payloads.clear();
                     if (interfaceDirectory != null) CoreInterfaceSource.removeTemporary(interfaceDirectory);
                 }
             }

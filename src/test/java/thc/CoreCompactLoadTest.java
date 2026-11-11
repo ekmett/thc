@@ -28,6 +28,7 @@ class CoreCompactLoadTest {
         final Bytes data = new Bytes();
         final List<Key> keys = new ArrayList<>();
         Map<String,Object> backendPolicy;
+        String nativeSource;
         record Key(String id, long offset) {}
         Model(String name) { this.name = name; }
         final class Bytes extends ByteArrayOutputStream {
@@ -64,7 +65,21 @@ class CoreCompactLoadTest {
             var facts = new Bytes();
             facts.u(1); facts.text("9.14.1"); facts.text("unit"); facts.text(headerName); facts.text(boundary);
             facts.writeBytes(new byte[6]); // provided/layout/constructors/foreign/bridge/bridgeUnit.
-            facts.writeBytes(badProvenance ? new byte[]{2} : new byte[8]);
+            facts.writeBytes(badProvenance ? new byte[]{2} : new byte[6]);
+            if (!badProvenance) {
+                if (nativeSource == null) facts.write(0);
+                else {
+                    facts.writeBytes(new byte[]{2, 1}); // Present native link, schema 1.
+                    for (String value : List.of("llvm-bitcode", "thc-package-c-ffi-v1", "unit", "target", "a".repeat(64), "b".repeat(64)))
+                        facts.text(value);
+                    facts.writeBytes(new byte[]{1, 42, 0, 2, 1, 0}); // Blob, empty ABI, build inputs, one compile input.
+                    facts.text("clang"); facts.text("clang"); facts.writeBytes(new byte[]{0, 0});
+                    facts.text("target"); facts.text("target"); facts.write(1);
+                    facts.text(nativeSource); facts.text("c".repeat(64));
+                    facts.writeBytes(new byte[6]); // Remaining build inputs and native extras.
+                }
+                facts.write(0); // Native archive.
+            }
             if (backendPolicy != null) {
                 facts.write(2);
                 facts.write(backendPolicy.get("default") == null ? 0 : backendPolicy.get("default").equals("ast") ? 1 : 2);
@@ -78,12 +93,12 @@ class CoreCompactLoadTest {
             rows.sort((a, b) -> Arrays.compareUnsigned(a, 0, 16, b, 0, 16));
             var symbols = ByteBuffer.allocate(rows.size() * 24);
             for (var row : rows) symbols.put(row);
-            var bytes = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts.toByteArray(), strings.toByteArray(), rows.size(), 0, 7),
+            var bytes = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts.toByteArray(), strings.toByteArray(), rows.size(), nativeSource == null ? 0 : 8, 7),
                 List.of(data.toByteArray(), strings.toByteArray(), new byte[]{-1}, new byte[]{-1}, new byte[]{-1}, symbols.array()), Set.of(), false);
             var path = directory.resolve(name + ".cbd"); Files.write(path, bytes);
             return map("name", name, "boundary", boundary, "sha256", "a".repeat(64),
                 "compact", map("path", path.toString(), "sha256", hash(bytes), "format", CoreCompactFormat.NAME),
-                "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", false);
+                "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", nativeSource != null);
         }
     }
     private Path fixture() throws Exception { return fixture(false, false, false, false); }
@@ -121,6 +136,43 @@ class CoreCompactLoadTest {
         return CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", backend, false, false, verify);
     }
     private long count(Value entry, String key) { return ((Number) document(entry.getMember("diagnostics").asString()).get(key)).longValue(); }
+    @Test void equalNativeLinkRecordsShareOnlyWithinTheirSources() throws Exception {
+        var modules = new ArrayList<Map<String,Object>>();
+        for (String name : List.of("A", "LongerModuleName", "Changed")) {
+            var model = new Model(name);
+            model.nativeSource = name.equals("Changed") ? "changed.c" : "original.c";
+            modules.add(model.write(name, false));
+        }
+        var unit = CoreUnitDirectory.read(map("format", "thc-core-packages", "schema", 1L,
+            "ghc", "9.14.1", "units", list(map("id", "unit", "depends", list(), "modules", modules))));
+        var records = unit.getModules();
+        Map<?,?> original;
+        try (var sources = unit.open(false)) {
+            original = (Map<?,?>) sources.metadata(records.get(0)).get("packageNativeLink");
+            var repeated = (Map<?,?>) sources.metadata(records.get(1)).get("packageNativeLink");
+            var changed = (Map<?,?>) sources.metadata(records.get(2)).get("packageNativeLink");
+            assertEquals(original, repeated);
+            assertSame(original, repeated);
+            var artifact = records.get(1).artifact();
+            assertSame(original, sources.consumer(artifact.path(), artifact.sha256()).get("packageNativeLink"));
+            assertEquals(original.get("componentSha256"), changed.get("componentSha256"));
+            assertSame(original.get("bitcodeHex"), changed.get("bitcodeHex"));
+            assertNotEquals(original.get("buildInputs"), changed.get("buildInputs"));
+            var inputs = (Map<?,?>) original.get("buildInputs");
+            var translations = (List<?>) inputs.get("translationUnits");
+            var files = (List<?>) ((Map<?,?>) translations.getFirst()).get("files");
+            var source = (Map<?,?>) files.getFirst();
+            assertEquals("original.c", source.get("path"));
+            assertThrows(UnsupportedOperationException.class, source::clear);
+            assertThrows(UnsupportedOperationException.class, translations::clear);
+            assertThrows(UnsupportedOperationException.class, original::clear);
+        }
+        try (var sources = unit.open(false)) {
+            var reopened = sources.metadata(records.getFirst()).get("packageNativeLink");
+            assertEquals(original, reopened);
+            assertNotSame(original, reopened);
+        }
+    }
     @Test void intrinsicCaseResultSurvivesCompactLoadingAndSelection() throws Exception {
         for (boolean conflicting : List.of(false, true)) {
             var model = new Model(conflicting ? "Conflict" : "Intrinsic");
