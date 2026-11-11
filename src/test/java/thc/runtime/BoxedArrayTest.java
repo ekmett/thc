@@ -11,7 +11,6 @@ import thc.runtime.Unit;
 import thc.*;
 import java.nio.file.*;
 import java.math.BigInteger;
-import java.security.MessageDigest;
 import java.util.*;
 import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,16 +19,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class BoxedArrayTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final List<String> names = List.of("boxedSTRecursive", "boxedZero", "boxedSnapshot", "boxedClosure");
-    private Map<String, Object> manifest() throws Exception {
-        return json("build/boxed-arrays/manifest.json");
-    }
-    private Map<String, Object> json(String path) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(root.resolve(path)));
-    }
-    private Map<String, Object> merged(List<String> paths) throws Exception {
-        var modules = new ArrayList<Map<String, Object>>();
-        for (String path : paths) modules.add(CoreCbdFixtures.read(root.resolve(path)));
-        return CoreModules.merge(modules);
+    private final List<Long> inputs = List.of(Long.MIN_VALUE, Long.MIN_VALUE + 1, -(1L << 32), -1L,
+        0L, 1L, 1L << 32, Long.MAX_VALUE - 1, Long.MAX_VALUE);
+
+    private Map<String, Object> merged(String stage) throws Exception {
+        var directory = root.resolve("build/boxed-arrays/" + stage + "/core");
+        var audit = CoreCbdFixtures.read(directory.resolve("BoxedArrayAudit.cbd"));
+        var boundary = stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep";
+        assertEquals(boundary, audit.get("boundary"), stage);
+        return CoreModules.merge(List.of(audit, CoreCbdFixtures.read(directory.resolve("THC.InterfaceClosure.cbd"))));
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
@@ -57,7 +55,8 @@ class BoxedArrayTest {
             case "boxedSTRecursive" -> x.multiply(BigInteger.valueOf(44)).add(BigInteger.valueOf(350));
             case "boxedSnapshot" -> x.multiply(BigInteger.valueOf(15)).add(BigInteger.valueOf(207));
             case "boxedClosure" -> x.multiply(BigInteger.TWO).add(BigInteger.ONE);
-            default -> x;
+            case "boxedZero" -> x;
+            default -> throw new AssertionError("Unknown boxed-array observer: " + name);
         }).longValue();
     }
     private Map<String, Object> changed(Map<String, Object> source, String key, Object value) {
@@ -66,6 +65,24 @@ class BoxedArrayTest {
         return copy;
     }
     private record Row(long input, long expected) {}
+    private Map<String, List<Row>> nativeRows() throws Exception {
+        var rows = new LinkedHashMap<String, List<Row>>();
+        for (var line : Files.readAllLines(root.resolve("build/boxed-arrays/oracle.tsv"))) {
+            var fields = line.split("\t", -1);
+            assertEquals(3, fields.length, line);
+            var name = fields[0];
+            assertTrue(names.contains(name), line);
+            long input = Long.parseLong(fields[1]);
+            long result = Long.parseLong(fields[2]);
+            assertEquals(model(name, input), result, "native/model " + line);
+            rows.computeIfAbsent(name, ignored -> new ArrayList<>()).add(new Row(input, result));
+        }
+        assertEquals(new HashSet<>(names), rows.keySet());
+        for (var name : names)
+            assertEquals(inputs, rows.get(name).stream().map(Row::input).toList(), name);
+        return rows;
+    }
+
     @Test
     void publicSTArrayAndLazyElementsWithInlining() throws Exception {
         nativeChecks(true);
@@ -75,39 +92,17 @@ class BoxedArrayTest {
         nativeChecks(false);
     }
     private void nativeChecks(boolean inlining) throws Exception {
-        var manifest = manifest();
-        for (String key : List.of("inputHashes", "artifactHashes"))
-            for (var entry : ((Map<String, String>) manifest.get(key)).entrySet()) {
-                String hash = HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(entry.getKey()))));
-                assertEquals(entry.getValue(), hash, "Stale boxed-array fixture " + entry.getKey());
-            }
-        var rows = new LinkedHashMap<String, List<String[]>>();
-        for (String line : Files.readAllLines(root.resolve("build/boxed-arrays/oracle.tsv"))) {
-            var fields = line.split("\t", -1);
-            if (names.contains(fields[0]))
-                rows.computeIfAbsent(fields[0], ignored -> new ArrayList<>()).add(fields);
-        }
-        assertEquals(new HashSet<>(names), rows.keySet());
-        assertEquals(((Number) manifest.get("supportedNativeRows")).intValue(),
-            rows.values().stream().mapToInt(List::size).sum());
-        for (var stagePaths : ((Map<String, List<String>>) manifest.get("stages")).entrySet())
-            for (String name : names) {
-                String stage = stagePaths.getKey();
-                var paths = stagePaths.getValue();
-                var cases = rows.get(name)
-                                .stream()
-                                .map(row -> new Row(Long.parseLong(row[1]), Long.parseLong(row[3])))
-                                .toList();
-                for (var row : cases)
-                    assertEquals(model(name, row.input), row.expected, "native/model " + name + "(" + row.input + ")");
+        var rows = nativeRows();
+        for (var stage : List.of("pre", "post"))
+            for (var name : names) {
+                var cases = rows.get(name);
                 for (String backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
                         context.initialize("thc");
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var guest = program(language,
-                                changed(CoreModules.reachable(merged(paths), "main:BoxedArrayAudit." + name), "instrument", true), backend);
+                                changed(CoreModules.reachable(merged(stage), "main:BoxedArrayAudit." + name), "instrument", true), backend);
                             var function = context.asValue(new EntryValue(guest, "main:BoxedArrayAudit." + name, 1));
                             var host = guest.hostEntryTarget(1);
                             String label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;

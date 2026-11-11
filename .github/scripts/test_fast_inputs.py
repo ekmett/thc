@@ -1680,6 +1680,29 @@ class FastInputTests(unittest.TestCase):
                      "build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd", "build/empty-join-input/provenance.json"):
             self.assertFalse(cache.allowed_payload(name), name)
 
+    def test_boxed_array_products_exclude_receipts_and_unrelated_outputs(self):
+        import fast_fixtures
+        manifest, _ = fast_fixtures._manifest(Path(__file__).resolve().parents[2])
+        group = manifest["groups"]["boxed-arrays"]
+        binary = "build/boxed-arrays/native/boxed-array-oracle"
+        products = {
+            *(f"build/boxed-arrays/{stage}/core/{module}.cbd" for stage in ("pre", "post")
+              for module in ("BoxedArrayAudit", "THC.InterfaceClosure")),
+            *(f"build/boxed-arrays/{stage}/ghc/BoxedArrayAudit.{suffix}" for stage in ("pre", "post")
+              for suffix in ("hi", "o")),
+            *(f"build/boxed-arrays/native/{module}.{suffix}" for module in ("Main", "BoxedArrayAudit")
+              for suffix in ("hi", "o")),
+            binary, "build/boxed-arrays/oracle.tsv",
+        }
+        self.assertEqual(products, set(group["outputs"]))
+        for name in products:
+            self.assertTrue(cache.allowed_payload(name), name)
+            self.assertIn(name, DECLARED_REQUIRED)
+        self.assertEqual(0o755, cache.safe_mode(0o755, binary))
+        for name in ("manifest.json", "expected.tsv", "NativeBoxedArray.hs", "pre/boxedSTRecursive.audit.json",
+                     "pre/core/Extra.cbd", "post/core/Extra.json", "native/Other.o", "oracle.tsv.tmp"):
+            self.assertFalse(cache.allowed_payload("build/boxed-arrays/" + name), name)
+
     def test_floating_tuple_products_exclude_receipts_and_unrelated_compiler_outputs(self):
         import fast_fixtures
         manifest, _ = fast_fixtures._manifest(Path(__file__).resolve().parents[2])

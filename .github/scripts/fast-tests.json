@@ -1745,7 +1745,7 @@
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
       "python": []
     },
-    "bin/prepare-boxed-arrays.py": {
+    "t/fixtures/compiler/BoxedArrayAuditNative.hs": {
       "junit": ["thc.runtime.BoxedArrayTest"],
       "python": []
     },

@@ -964,12 +964,36 @@
       ]
     },
     "boxed-arrays": {
-      "ciPlatforms": ["Linux", "Darwin"],
       "cmakeTarget": "fixture-boxed-arrays",
+      "ciPlatforms": ["Linux", "Darwin"],
       "junit": ["thc.runtime.BoxedArrayTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-boxed-arrays.py"]}],
-      "outputs": ["build/boxed-arrays"],
-      "sources": ["bin/prepare-boxed-arrays.py", "t/fixtures/compiler/BoxedArrayAudit.hs"]
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-boxed-arrays"]}],
+      "outputs": [
+        "build/boxed-arrays/pre/core/BoxedArrayAudit.cbd",
+        "build/boxed-arrays/pre/core/THC.InterfaceClosure.cbd",
+        "build/boxed-arrays/post/core/BoxedArrayAudit.cbd",
+        "build/boxed-arrays/post/core/THC.InterfaceClosure.cbd",
+        "build/boxed-arrays/pre/ghc/BoxedArrayAudit.hi",
+        "build/boxed-arrays/pre/ghc/BoxedArrayAudit.o",
+        "build/boxed-arrays/post/ghc/BoxedArrayAudit.hi",
+        "build/boxed-arrays/post/ghc/BoxedArrayAudit.o",
+        "build/boxed-arrays/native/boxed-array-oracle",
+        "build/boxed-arrays/native/Main.hi",
+        "build/boxed-arrays/native/Main.o",
+        "build/boxed-arrays/native/BoxedArrayAudit.hi",
+        "build/boxed-arrays/native/BoxedArrayAudit.o",
+        "build/boxed-arrays/oracle.tsv"
+      ],
+      "sources": [
+        "cmake/CoreFixtures.cmake",
+        "cmake/CaptureOutput.cmake",
+        "cmake/NativeGhc.cmake",
+        "t/fixtures/compiler/BoxedArrayAudit.hs",
+        "t/fixtures/compiler/BoxedArrayAuditNative.hs",
+        "bin/export-core.sh",
+        "bin/toolchain.sh",
+        "bin/plugin.py"
+      ]
     },
     "compiled-thunk-retention": {
       "requires": ["compact-model"],

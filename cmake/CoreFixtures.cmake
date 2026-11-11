@@ -191,6 +191,54 @@ add_custom_command(OUTPUT "${floating_tuple_out}/bits.tsv"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
 add_custom_target(fixture-floating-tuples DEPENDS ${floating_tuple_outputs} "${floating_tuple_out}/oracle.tsv" "${floating_tuple_out}/bits.tsv")
 
+# 097: actual public STArray lazy elements, snapshots and captured closures.
+# Four consumed closure roots retain lazy initialization and capture. Each export
+# writes only the Audit/InterfaceClosure CBD pair and Audit .hi/.o; the tracked
+# native driver emits its own bounded requests, without reports or generated input.
+set(boxed_array_out "${PROJECT_SOURCE_DIR}/build/boxed-arrays")
+set(boxed_array_source "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/BoxedArrayAudit.hs")
+set(boxed_array_roots boxedSTRecursive boxedZero boxedSnapshot boxedClosure)
+set(boxed_array_closure_options)
+foreach(root IN LISTS boxed_array_roots)
+  list(APPEND boxed_array_closure_options "-fplugin-opt=THC.Plugin:closure=${root}")
+endforeach()
+set(boxed_array_outputs)
+foreach(stage pre post)
+  set(stage_outputs "${boxed_array_out}/${stage}/core/BoxedArrayAudit.cbd"
+    "${boxed_array_out}/${stage}/core/THC.InterfaceClosure.cbd")
+  set(stage_options)
+  if(stage STREQUAL "post")
+    list(APPEND stage_options -fplugin-opt=THC.Plugin:post-tidy)
+  endif()
+  add_custom_command(OUTPUT ${stage_outputs}
+    BYPRODUCTS "${boxed_array_out}/${stage}/ghc/BoxedArrayAudit.hi" "${boxed_array_out}/${stage}/ghc/BoxedArrayAudit.o"
+    COMMAND ${fixture_env} "THC_CORE_OUT=${boxed_array_out}/${stage}/core" "THC_GHC_OUT=${boxed_array_out}/${stage}/ghc"
+      "${PROJECT_SOURCE_DIR}/bin/export-core.sh" --plugin-manifest "${plugin_manifest}"
+      ${stage_options} ${boxed_array_closure_options} "${boxed_array_source}"
+    DEPENDS "${boxed_array_source}"
+      ${plugin_outputs} ${toolchain_inputs} "${PROJECT_SOURCE_DIR}/bin/export-core.sh"
+      "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+  list(APPEND boxed_array_outputs ${stage_outputs})
+endforeach()
+set(boxed_array_native "${boxed_array_out}/native")
+add_custom_command(OUTPUT "${boxed_array_native}/boxed-array-oracle"
+  BYPRODUCTS "${boxed_array_native}/Main.hi" "${boxed_array_native}/Main.o"
+    "${boxed_array_native}/BoxedArrayAudit.hi" "${boxed_array_native}/BoxedArrayAudit.o"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${boxed_array_native}"
+  COMMAND ${fixture_env} ${native_ghc} --make -O2 -fforce-recomp -dcore-lint -dstg-lint
+    "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler" -odir "${boxed_array_native}" -hidir "${boxed_array_native}"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/BoxedArrayAuditNative.hs" -o "${boxed_array_native}/boxed-array-oracle"
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/BoxedArrayAuditNative.hs"
+    "${boxed_array_source}" ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_command(OUTPUT "${boxed_array_out}/oracle.tsv"
+  COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=${boxed_array_native}/boxed-array-oracle" "-DOUTPUT=${boxed_array_out}/oracle.tsv"
+    -P "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  DEPENDS "${boxed_array_native}/boxed-array-oracle" "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_target(fixture-boxed-arrays DEPENDS ${boxed_array_outputs} "${boxed_array_out}/oracle.tsv")
+
 set(native_dir "${PROJECT_SOURCE_DIR}/build/native")
 set(native "${native_dir}/native-oracle")
 set(native_inputs "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/THC/Prim/Test.hs")

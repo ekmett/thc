@@ -2997,25 +2997,20 @@ Generic sharing/lifetime checks belong to ThunkRetentionTest; no compiler-count,
 DirectCallNode inventory or valid-package rejection requirement is retained.
 Boxed build status: ADMITTED as fixture-boxed-arrays. Floating remains QUARANTINED.
 
-A. bin/prepare-boxed-arrays.py; consumer thc.runtime.BoxedArrayTest:
-  IN t/fixtures/compiler/BoxedArrayAudit.hs, producer model/template, auditor modules,
-    capability/signature tables, explicit compiler/plugin.json publication/library,
-    exporter, pinned GHC 9.14.1 and array 0.5.8.0 interfaces/native libraries.
-  CMake owns these named products under build/boxed-arrays in one command:
-    <pre|post>/core/{BoxedArrayAudit,THC.InterfaceClosure}.cbd: source/four closure
-      roots/exporter/plugin. Only this declared pair enters each stage receipt.
-    <pre|post>/{boxedSTRecursive,boxedZero,boxedSnapshot,boxedClosure}.audit.json:
-      declared stage pair/auditor; strict positive admission.
-    NativeBoxedArray.hs: existing producer driver template.
-    native/boxed-array-oracle: generated driver/source/GHC; .hi/.o are byproducts.
-    oracle.tsv, expected.tsv: native values/independent wrapping arithmetic model.
-    manifest.json: named inputs/products/hashes/toolchain facts; atomically replaced
-      only after success. Unrelated CBDs are neither consumed nor removed.
-  Native/model rows cover the four existing roots at the existing 41 inputs.
-  Java tests preserve installed validity before first compiled call, compiled entry
-    execution, native/model values and zero outstanding argument/result loans in
-    both backends, inlining choices and handoff modes. Invalid raw domains/state
-    are semantic Java controls; undefined primitive inputs are not native requests.
+A. CMake fixture-boxed-arrays; consumer thc.runtime.BoxedArrayTest.
+  IN BoxedArrayAudit.hs, BoxedArrayAuditNative.hs, exporter, plugin publication
+    and pinned GHC/array interfaces and native libraries.
+  Under build/boxed-arrays/:
+    <pre|post>/core/{BoxedArrayAudit,THC.InterfaceClosure}.cbd: four closure roots.
+    <pre|post>/ghc/BoxedArrayAudit.{hi,o}: export intermediates.
+    native/boxed-array-oracle, native/{Main,BoxedArrayAudit}.{hi,o}: native driver
+      and audit source built with the selected GHC and native toolchain.
+    oracle.tsv: observations at nine signed boundary inputs per root.
+  Java compares native and guest results against an independent wrapping
+    arithmetic model. Both backends and inlining choices check installed
+    validity before the first compiled call, compiled entry execution, and
+    zero outstanding argument and result loans. Invalid state and bounds
+    are exercised in the Java controls.
 B. bin/prepare-floating-audit.py; consumers CompiledThunkRetentionTest, FloatingPrimitiveTest:
   IN t/fixtures/compiler/FloatingAudit.hs, FloatingAuditNative.hs, producer model,
     shared tools/data/native toolchain.

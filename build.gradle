@@ -545,11 +545,9 @@ tasks.withType(Test).configureEach {
             "resize-bytearrays/**/*.json", "resize-bytearrays/*.tsv", "resize-bytearrays/native/**",
             "mutable-bytearrays/**/*.json", "mutable-bytearrays/*.tsv", "mutable-bytearrays/NativeMutableByteArrays.hs", "mutable-bytearrays/native/**",
             "array-slices/**/*.json", "array-slices/**/*.cbd", "array-slices/*.tsv", "array-slices/NativeArraySlices.hs", "array-slices/native/**",
-            "boxed-arrays/manifest.json", "boxed-arrays/oracle.tsv", "boxed-arrays/expected.tsv", "boxed-arrays/NativeBoxedArray.hs", "boxed-arrays/native/boxed-array-oracle",
+            "boxed-arrays/oracle.tsv",
             "boxed-arrays/pre/core/BoxedArrayAudit.cbd", "boxed-arrays/pre/core/THC.InterfaceClosure.cbd",
             "boxed-arrays/post/core/BoxedArrayAudit.cbd", "boxed-arrays/post/core/THC.InterfaceClosure.cbd",
-            "boxed-arrays/pre/boxedSTRecursive.audit.json", "boxed-arrays/pre/boxedZero.audit.json", "boxed-arrays/pre/boxedSnapshot.audit.json", "boxed-arrays/pre/boxedClosure.audit.json",
-            "boxed-arrays/post/boxedSTRecursive.audit.json", "boxed-arrays/post/boxedZero.audit.json", "boxed-arrays/post/boxedSnapshot.audit.json", "boxed-arrays/post/boxedClosure.audit.json",
             "small-arrays/**/*.json", "small-arrays/*.tsv", "small-arrays/native/**",
             "boxed-array-extensions/manifest.json", "boxed-array-extensions/run-*/**",
             "boxed-cas/manifest.json", "boxed-cas/run-*/**",
@@ -619,7 +617,7 @@ tasks.withType(Test).configureEach {
     inputs.files(fileTree("bin") {
         include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py",
             "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
-        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-tag-to-enum-audit.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py",
+        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-tag-to-enum-audit.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-array-slices.py", "test-array-slice-model.py",
             "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
             "prepare-io-main-pap.py", "test-tuple-inputs.py", "test-empty-join-inputs.py", "core_*.py",
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
