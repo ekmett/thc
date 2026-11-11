@@ -11,7 +11,7 @@
 -- Portability : Native GHC; HUnit and driver test dependencies
 --
 -- Tests for package native.
-module PackageNativeTests (tests) where
+module PackageNativeTests (tests, installedNativeIdentityTest) where
 
 import Control.Monad (forM_)
 import Control.Exception (bracket)
@@ -41,13 +41,80 @@ import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness,
 import THC.Driver.NativeDependencies (NativePieceSelection(..), selectNativePiecesAvailable, selectNativePieces, nativeSymbolArchives)
 import THC.Driver.Installed (installedContext, InstalledContext(..))
 import THC.Driver.Project (selectedPackageTool)
-import THC.Compact.Module (readModuleValue)
+import THC.Compact.Module (encodeModuleValue, readModuleValue)
 import THC.Compact.Inspect (unpackContainer)
 import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
+installedNativeIdentityTest :: Test
+installedNativeIdentityTest = TestLabel "installed native identity survives private staging" $ TestCase $
+  if Host.os /= "linux" then pure () else withScratch $ \root -> do
+    compiler <- tool "GHC" "ghc"
+    packageTool <- tool "GHC_PKG" "ghc-pkg"
+    clang <- tool "THC_CLANG" "clang"
+    ar <- tool "THC_AR" "ar"
+    libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
+      [selectedLibdir] -> pure selectedLibdir
+      _ -> assertFailure "selected GHC must report one library directory"
+    let owner = "identity-fixture" :: String
+        rep kind carriers = object ["kind" .= (kind :: String), "primReps" .= (carriers :: [String]), "evaluated" .= True]
+        state = rep "void" []
+        result = object ["kind" .= ("unknown" :: String), "aggregate" .= ("unboxed-tuple" :: String),
+          "components" .= [state, rep "long" ["Int32Rep"]]]
+        call = object ["schema" .= (1 :: Int), "convention" .= ("ccall" :: String), "safety" .= ("unsafe" :: String),
+          "arity" .= (1 :: Int), "suppliedArity" .= (1 :: Int), "argumentReps" .= [state], "resultRep" .= result,
+          "target" .= object ["kind" .= ("static" :: String), "symbol" .= ("thc_identity_fixture" :: String),
+            "unit" .= owner, "isFunction" .= True]]
+        binding = object ["id" .= (owner ++ ":Fixture.call"), "arity" .= (0 :: Int),
+          "expr" .= [String "void", object ["foreignCall" .= call]]]
+        moduleValue = object ["schema" .= (1 :: Int), "unit" .= owner, "module" .= ("Fixture" :: String),
+          "ghc" .= ("9.14.1" :: String), "boundary" .= ("optimized-Core-after-Tidy-before-CorePrep" :: String),
+          "constructors" .= ([] :: [Value]), "bindings" .= [binding]]
+        source = root </> "provider.c"
+        provider = root </> "provider.o"
+        archive = root </> "provider.a"
+        produce answer = do
+          writeFile source ("int thc_identity_fixture(void) { return " ++ answer ++ "; }\n")
+          (status,_,diagnostic) <- readProcessWithExitCode clang ["-c", "-fPIC", source, "-o", provider] ""
+          assertEqual diagnostic ExitSuccess status
+          (archived,_,archiveErrors) <- readProcessWithExitCode ar ["rcs", archive, provider] ""
+          assertEqual archiveErrors ExitSuccess archived
+          BS.readFile archive
+        link body name contents = do
+          let stage = root </> name
+              stagedArchive = stage </> "provider.a"
+              cbd = stage </> "Fixture.cbd"
+          createDirectory stage
+          BS.writeFile stagedArchive contents
+          BS.writeFile cbd body
+          _ <- linkInstalledNative compiler packageTool libdir ["-optl" ++ stagedArchive] stage owner [("Fixture",cbd)]
+          acquired <- either assertFailure pure . readModuleValue =<< BS.readFile cbd
+          proof <- maybe (assertFailure "missing installed package-native proof") pure (lookupField "packageNativeLink" acquired)
+          let recordsArchive library = case lookupField "arguments" library of
+                Just (Array arguments) -> toJSON stagedArchive `elem` arguments
+                _ -> False
+          case lookupField "buildInputs" proof >>= lookupField "nativeLibraries" of
+            Just (Array libraries) -> assertBool "native receipt retains the actual archive path" (any recordsArchive libraries)
+            _ -> assertFailure "missing native linker receipt"
+          pure proof
+    body <- encodeModuleValue moduleValue
+    original <- produce "41"
+    changed <- produce "42"
+    first <- link body "first" original
+    repeated <- link body "second" original
+    different <- link body "changed" changed
+    assertBool "the changed provider has different archive bytes" (original /= changed)
+    assertEqual "relocated owned archive retains component namespace"
+      (lookupField "componentSha256" first) (lookupField "componentSha256" repeated)
+    assertEqual "relocated generated adapters retain ABI and native payload"
+      (map (`lookupField` first) ["abi", "bitcodeSha256", "nativeLibrary"])
+      (map (`lookupField` repeated) ["abi", "bitcodeSha256", "nativeLibrary"])
+    assertBool "changed archive contents change component namespace"
+      (lookupField "componentSha256" first /= lookupField "componentSha256" different)
+
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestLabel "captured GHC calls publish verified seeds after Cabal source removal" $ TestCase $ withScratch $ \root -> do
+  [ installedNativeIdentityTest
+  , TestLabel "captured GHC calls publish verified seeds after Cabal source removal" $ TestCase $ withScratch $ \root -> do
       repository <- lookupEnv "THC_TEST_ROOT" >>= maybe getCurrentDirectory pure
       compiler <- tool "GHC" "ghc"
       packageTool <- tool "GHC_PKG" "ghc-pkg"
