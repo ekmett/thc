@@ -30,19 +30,22 @@ public final class CoreRepresentations {
     }
     public static void validateAggregates(List<Map<String, Object>> bindings) { validateAggregates(bindings, Map.of()); }
     public static void validateAggregates(List<Map<String, Object>> bindings, Map<String, Map<String, Object>> constructors) {
-        visitAggregates(bindings, List.of(), Set.of(), constructors);
+        visitAggregates(bindings, new ArrayList<>(), Set.of(), constructors);
     }
-    private static void visitAggregates(Object value, List<Object> path, Set<List<Object>> exemptions,
+    private static void visitAggregates(Object value, ArrayList<Object> path, Set<List<Object>> exemptions,
             Map<String, Map<String, Object>> constructors) {
         if (value instanceof Map<?, ?> map) {
             for (var entry : map.entrySet()) {
                 Object key = entry.getKey(), child = entry.getValue();
-                var next = new ArrayList<>(path); next.add(key == null ? "<null>" : key);
-                if (("rep".equals(key) || "resultRep".equals(key) || "joinResultRep".equals(key)) &&
-                        child instanceof Map<?, ?> && !exemptions.contains(next)) parse(child);
-                visitAggregates(child, next, exemptions, constructors);
+                path.add(key == null ? "<null>" : key);
+                try {
+                    if (("rep".equals(key) || "resultRep".equals(key) || "joinResultRep".equals(key)) &&
+                            child instanceof Map<?, ?> && !exemptions.contains(path)) parse(child);
+                    visitAggregates(child, path, exemptions, constructors);
+                } finally { path.removeLast(); }
             }
         } else if (value instanceof List<?> list) {
+            // Only retained exemption keys copy the private traversal path.
             // Exempt structural sites, not equal/shared metadata maps elsewhere.
             var local = exemptions;
             if (CoreVectorMemory.readCase((List<Object>) list, constructors) != null) {
@@ -51,8 +54,9 @@ public final class CoreRepresentations {
                 var binderPath = new ArrayList<>(path); binderPath.addAll(List.of(4, "binder", "rep")); local.add(binderPath);
             }
             for (int i = 0; i < list.size(); i++) {
-                var next = new ArrayList<>(path); next.add(i);
-                visitAggregates(list.get(i), next, local, constructors);
+                path.add(i);
+                try { visitAggregates(list.get(i), path, local, constructors); }
+                finally { path.removeLast(); }
             }
         }
     }
