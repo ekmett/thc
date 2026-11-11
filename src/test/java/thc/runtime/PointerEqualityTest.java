@@ -19,6 +19,33 @@ import static thc.runtime.CoreCallDemands.CALL_DEMANDS_PROPERTY;
 
 /** Raw object identity is intentionally tested separately from the native value oracle. */
 class PointerEqualityTest {
+    @Test void scalarLeafInstructionTracerRetainsStackAccounting() throws Exception {
+        eachBackend(pointer(variable("left"), variable("right")), (backend, program, language) -> {
+            if (!backend.equals("bytecode")) return;
+            var root = (BytecodeRoot) program.entryTarget("entry").getRootNode();
+            var scope = AstStacks.astStackScope(root);
+            int before = scope.getDepth(); boolean driving = scope.getDriving();
+            var callbacks = new java.util.concurrent.atomic.AtomicInteger();
+            com.oracle.truffle.api.bytecode.InstructionTracer tracer = (access, bytecode, bci, frame) -> {
+                callbacks.incrementAndGet();
+                assertEquals(before + 1, scope.getDepth(), "An instrumented activation must own its physical depth");
+                assertTrue(scope.getDriving(), "Instrumentation may enter another guest activation");
+            };
+            var token = new Object();
+            root.getRootNodes().addInstructionTracer(tracer);
+            try {
+                assertEquals(1L, Calls.target(root.getCallTarget(), new Object[]{0L, token, token}));
+                assertTrue(callbacks.get() > 0);
+            } finally {
+                root.getRootNodes().removeInstructionTracer(tracer);
+                assertEquals(before, scope.getDepth()); assertEquals(driving, scope.getDriving());
+            }
+            int observed = callbacks.get();
+            assertEquals(0L, Calls.target(root.getCallTarget(), new Object[]{0L, token, new Object()}));
+            assertEquals(observed, callbacks.get(), "Detached instrumentation must not run again");
+            assertEquals(before, scope.getDepth()); assertEquals(driving, scope.getDriving());
+        });
+    }
     private final Map<String, Object> longRep =
         Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
     private final Map<String, Object> reference =
