@@ -21,7 +21,20 @@ public final class BytecodeColdBranchPreparation {
                 int[] branchProfiles = ACCESS.uncheckedCast(this.branchProfiles_, int[].class);
                 if (ACCESS.readInt(branchProfiles, profileIndex * 2) == 0 &&
                         ACCESS.readInt(branchProfiles, profileIndex * 2 + 1) == 0) {
-                    boolean condition = (boolean) FRAMES.getValue(frame, sp - 1);
+                    int conditionSlot = (int) (sp - 1);
+                    byte tag = FRAMES.getTag(frame, conditionSlot);
+                    boolean condition;
+                    if (tag == FrameTags.BOOLEAN) {
+                        condition = frame.getBoolean(conditionSlot);
+                    } else {
+                        Object value = tag == FrameTags.OBJECT ? frame.getObject(conditionSlot) : null;
+                        if (value instanceof Boolean booleanValue) {
+                            condition = booleanValue;
+                        } else {
+                            CompilerDirectives.transferToInterpreterAndInvalidate();
+                            condition = (boolean) FRAMES.getValue(frame, sp - 1);
+                        }
+                    }
                     FRAMES.clear(frame, sp - 1);
                     return condition ? bci + 12 : BYTES.getIntUnaligned(bc, bci + 2 /* imm branch_target */);
                 }
@@ -80,7 +93,13 @@ public final class BytecodeColdBranchPreparation {
         require(transform(lf.replace("\n", "\r\n"), VERSION).equals(lf.replace("\n", "\r\n")), "Cold branch CRLF mismatch");
         reject(result, "next-version");
         for (String bad : List.of(result.replace("&& t == 0 && f == 0", "&& t == 0"),
-                result.replace("boolean condition = (boolean) FRAMES.getValue", "boolean condition = (boolean) FRAMES.expectObject"),
+                result.replace("condition = (boolean) FRAMES.getValue", "condition = (boolean) FRAMES.expectObject"),
+                result.replace("tag == FrameTags.BOOLEAN", "tag == FrameTags.OBJECT"),
+                result.replace("condition = frame.getBoolean(conditionSlot)", "condition = false"),
+                result.replace("tag == FrameTags.OBJECT ? frame.getObject(conditionSlot) : null", "frame.getObject(conditionSlot)"),
+                result.replace("value instanceof Boolean booleanValue", "value != null"),
+                result.replace("condition = booleanValue", "condition = true"),
+                result.replace("CompilerDirectives.transferToInterpreterAndInvalidate();\n                            condition", "condition"),
                 result.replace("FRAMES.clear(frame, sp - 1);\n                    return condition", "return condition"),
                 result.replace("return condition ? bci + 12", "return condition ? bci + 10"),
                 result.replace("/* imm branch_target */", "/* changed target */"),
