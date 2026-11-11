@@ -1055,7 +1055,7 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
           "--builddir=" ++ componentDist, "lib:runtime"] root (Just environment)
       let present = [identifier | record <- described, Just identifier <- [jsonField record "id" :: Maybe String]]
           missing = [unit | unit <- ordered, unitId unit /= unitId runtime, unitId unit `notElem` present]
-      dependencies <- do
+      dependencies <- if null missing then pure [] else do
           original <- prepareInterfaceHelper context root
           registrations <- mapM (discoverInstalled original . unitId) missing
           helper <- if installedPolicy == "pinned" then
