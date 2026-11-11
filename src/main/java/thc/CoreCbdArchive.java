@@ -6,6 +6,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -153,6 +154,9 @@ public final class CoreCbdArchive implements AutoCloseable {
     }
     private record Extent(long start, long end) {}
     private static final class Directory {
+        private static final ValueLayout.OfShort SHORT_LE = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        private static final ValueLayout.OfInt INT_LE = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        private static final ValueLayout.OfLong LONG_LE = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         private final MemorySegment bytes;
         private final long size;
         long reads;
@@ -162,17 +166,20 @@ public final class CoreCbdArchive implements AutoCloseable {
             require(at >= 0 && length >= 0 && at <= end && length <= end - at, "Invalid CBD ZIP extent");
             return at + length;
         }
-        private long number(long at, int width) {
-            extent(at, width);
-            reads += width;
-            long value = 0;
-            for (int i = 0; i < width; i++) value |= (bytes.get(ValueLayout.JAVA_BYTE, at + i) & 255L) << (8 * i);
-            return value;
+        private int u16(long at) {
+            extent(at, 2);
+            reads += 2;
+            return bytes.get(SHORT_LE, at) & 65535;
         }
-        private int u16(long at) { return (int) number(at, 2); }
-        private long u32(long at) { return number(at, 4); }
+        private long u32(long at) {
+            extent(at, 4);
+            reads += 4;
+            return bytes.get(INT_LE, at) & 0xffffffffL;
+        }
         private long u64(long at) {
-            long value = number(at, 8);
+            extent(at, 8);
+            reads += 8;
+            long value = bytes.get(LONG_LE, at);
             require(value >= 0, "CBD ZIP64 value exceeds supported address range");
             return value;
         }
