@@ -48,6 +48,43 @@ class BytecodeColdBranchTest {
             b.beginReturn(); b.emitLoadConstant(22L); b.endReturn(); b.endIfThenElse(); b.endRoot();
         }).getNode(0);
     }
+    @Test void untouchedBoxedBooleansKeepBothSensesInstalled() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean first : new boolean[]{false, true}) {
+                    var metrics = new Metrics(true); var root = choice(language, metrics, b -> b.emitLoadArgument(0));
+                    var target = root.getCallTarget(); compile(target); var code = instructions(root);
+                    assertEquals(0L, metrics.getCompiledEntries());
+                    for (boolean sense : new boolean[]{first, !first}) {
+                        assertEquals(sense ? 11L : 22L, Calls.target(target, new Object[]{sense}));
+                        valid(target, true); assertArrayEquals(new int[]{0, 0}, profiles(root));
+                        assertEquals(code, instructions(root));
+                    }
+                    assertEquals(2L, metrics.getCompiledEntries());
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void untouchedInvalidConditionsDeoptimizeWithoutReplayingTheirPrefix() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (Object invalid : new Object[]{"not Boolean", 42L, null}) {
+                    var metrics = new Metrics(true);
+                    var root = choice(language, metrics, b -> { b.beginBlock(); b.emitJoinTransfer(metrics); b.emitLoadArgument(0); b.endBlock(); });
+                    var target = root.getCallTarget(); compile(target);
+                    assertEquals(0L, metrics.getCompiledEntries()); assertEquals(0L, metrics.getLocalJoinTransfers());
+                    if (invalid == null) assertThrows(NullPointerException.class, () -> Calls.target(target, new Object[]{null}));
+                    else assertThrows(ClassCastException.class, () -> Calls.target(target, new Object[]{invalid}));
+                    assertEquals(1L, metrics.getCompiledEntries()); assertEquals(1L, metrics.getLocalJoinTransfers());
+                    valid(target, false); assertArrayEquals(new int[]{0, 0}, profiles(root));
+                }
+            } finally { context.leave(); }
+        }
+    }
     @Test void untouchedStackGuardTakesBothRealSensesWithoutLearningOrQuickening() throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
