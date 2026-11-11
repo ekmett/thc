@@ -130,7 +130,50 @@ public final class GenerationCapacitySmoke {
         Reference.reachabilityFence(old);
         return young;
     }
+    static void positiveYieldFallback() {
+        check(GenerationSmoke.U.arrayIndexScale(Object[].class) == 4, "compressed references");
+        Object[] observer = new Object[1];
+        System.gc();
+        byte[][] old = graph(20);
+        THCWeak.minor(true);
+        byte[][] retained = new byte[(int) (Runtime.getRuntime().totalMemory() / 1024)][];
+        byte[][] refills = new byte[2048][];
+        Node owner = fillNursery(retained, observer);
+        // Leave positive nursery yield without making its live graph fit in old.
+        for (int i = 0; i < 1024; ++i) {
+            check(retained[i] != null, "bounded nursery fill reached released payloads");
+            retained[i] = null;
+        }
+        long promotions = THCWeak.collections(1);
+        THCWeak.minor(true);
+        check(THCWeak.collections(1) == promotions, "positive-yield nursery could not promote");
+        check(young(observer, owner.child), "failed promotion retained the young child");
+        long minors = THCWeak.collections(0), majors = THCWeak.collections(2);
+        boolean reachedOld = false;
+        for (int i = 0; i < refills.length; ++i) {
+            byte[] payload = new byte[1024];
+            payload[0] = (byte) i;
+            refills[i] = payload;
+            reachedOld |= !young(observer, payload);
+            check(THCWeak.collections(2) == majors, "positive-yield refill used old headroom before major");
+            if (THCWeak.collections(0) != minors)
+                throw new AssertionError("failed promotion avoided repeated minor after positive nursery yield; refill=" + i);
+        }
+        check(reachedOld, "bounded refill exhausted positive nursery yield and reached old");
+        check(owner.child.id == 73, "old initializing reference survived failed promotion");
+        for (int i = 0; i < refills.length; ++i) check(refills[i][0] == (byte) i, "refill payload survived");
+        verify(old, 20);
+        Reference.reachabilityFence(owner);
+        Reference.reachabilityFence(refills);
+        Reference.reachabilityFence(retained);
+        Reference.reachabilityFence(old);
+        System.out.println("GenerationCapacitySmoke positive-yield fallback passed");
+    }
     public static void main(String[] args) {
+        positiveYieldFallback();
+        if (args.length == 1 && args[0].equals("positive-yield")) {
+            return;
+        }
         allocationFallback();
         System.gc();
         oversizedFailure();

@@ -65,6 +65,12 @@ this policy defers possible young reclamation until old allocation also fails,
 then retains the collection-and-retry path. A concurrent collection can refresh
 the snapshot before the old attempt, so the comparison is a scheduling hint;
 the allocator always checks the selected generation's actual capacity.
+A failed promotion also records that the live nursery did not fit in old space.
+Until a successful promotion or major collection clears that state, a failed
+young allocation tries old capacity without repeating a retaining minor. If old
+also fails, a major collection retries both generations, including old TLABs.
+This avoids repeatedly collecting a nearly full nursery whose small positive
+free extent still admits the next TLAB request.
 
 The snapshot starts unset so first pressure still requests collection, and every
 minor, promotion or major replaces it after publishing the generation tops.
@@ -128,14 +134,21 @@ chunks do not. The VM's GC-mode state separately controls slow thaw and
 restoration of derived pointers.
 
 The root walk covers threads and handles, strong `OopStorage`s, class-loader
-data and compiled code. Class unloading is disabled, so class-loader data and
-code constants remain conservatively strong. Weak `OopStorage`s are cleared
+data and compiled code. Class unloading remains disabled, so class-loader data
+stays strong. Minor collections retain all code constants. Major collections
+mark code reached from thread stacks and live frozen stack chunks; the chunk
+visitor traces nmethod constants through the active marking visitor and records
+code liveness without relocating those constants. Weak `OopStorage`s are cleared
 against liveness and their surviving targets are forwarded.
 
-The code-cache pass owns nmethod roots. Adjustment repeats the actual walk with
+After major reference processing, the code-cache unloading scope unlinks and
+purges nmethods whose constants are dead or whose code is no longer live.
+Adjustment walks every surviving nmethod with
 `NMethodToOopClosure::FixRelocations`; overwriting a saved list of slot addresses
-would miss the relocation work. Derived-pointer recording brackets marking,
-stops before adjustment, and repairs derived pointers after their base roots.
+would miss the relocation work. The code-cache marking epoch covers frozen-frame
+tracing and reference processing, and entry barriers are armed after collection.
+Derived-pointer recording brackets marking, stops before adjustment, and repairs
+derived pointers after their base roots.
 
 Mark words move unchanged. That preserves identity hashes and locking state,
 while the normal VM synchronizer protocol still controls when moving is legal.

@@ -915,7 +915,7 @@
 +};
 --- a/src/hotspot/share/gc/jam/jamHeap.cpp
 +++ b/src/hotspot/share/gc/jam/jamHeap.cpp
-@@ -0,0 +1,813 @@
+@@ -0,0 +1,883 @@
 +/*
 + * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
 + * Copyright (c) 2017, 2022, Red Hat, Inc. All rights reserved.
@@ -949,6 +949,7 @@
 +#include "code/codeCache.hpp"
 +#include "compiler/oopMap.hpp"
 +#include "gc/shared/continuationGCSupport.inline.hpp"
++#include "gc/shared/classUnloadingContext.hpp"
 +#include "gc/shared/gcArguments.hpp"
 +#include "gc/shared/gcId.hpp"
 +#include "gc/shared/gcLocker.inline.hpp"
@@ -971,6 +972,10 @@
 +#include "memory/universe.hpp"
 +#include "oops/compressedOops.inline.hpp"
 +#include "oops/oop.inline.hpp"
++#include "oops/method.hpp"
++#if INCLUDE_JVMCI
++#include "jvmci/jvmci.hpp"
++#endif
 +#include "runtime/atomic.hpp"
 +#include "runtime/globals.hpp"
 +#include "runtime/init.hpp"
@@ -1331,6 +1336,23 @@
 +    : heap(h), minor(m), wide_slots(64, mtGC), old_slots(256, mtGC) {}
 +};
 +
++// Nmethod constants are outside the heap; trace their targets without recording
++// them as movable in-heap slots. The surviving code cache is adjusted separately.
++class JamCodeTargets : public BasicOopIterateClosure {
++  thc_vm_visit* _visit;
++  template<class T> void apply(T* p) {
++    T value = RawAccess<>::oop_load(p);
++    if (!CompressedOops::is_null(value)) {
++      uint32_t target = CompressedOops::narrow_oop_value(value);
++      thc_vm_targets(_visit, &target, 1);
++    }
++  }
++public:
++  explicit JamCodeTargets(thc_vm_visit* visit) : _visit(visit) {}
++  void do_oop(oop* p) override { apply(p); }
++  void do_oop(narrowOop* p) override { apply(p); }
++};
++
 +class JamFields : public BasicOopIterateClosure {
 +  JamScanState* _state;
 +  thc_vm_visit* _visit;
@@ -1372,6 +1394,16 @@
 +        thc_vm_targets(_visit, &target, 1);
 +      }
 +    }
++  }
++  // All CLDs remain strong, but reachable frozen frames must keep their code
++  // alive when a major collection stops treating the whole cache as roots.
++  bool do_metadata() override { return _follow && !_state->minor; }
++  void do_klass(Klass* k) override {}
++  void do_cld(ClassLoaderData* cld) override {}
++  void do_method(Method* m) override { m->record_gc_epoch(); }
++  void do_nmethod(nmethod* nm) override {
++    JamCodeTargets targets(_visit);
++    nm->follow_nmethod(&targets);
 +  }
 +  ReferenceIterationMode reference_iteration_mode() override {
 +    return _follow ? DO_DISCOVERY : DO_FIELDS;
@@ -1528,15 +1560,17 @@
 +  void do_oop(narrowOop* p) override { apply(p); }
 +};
 +
-+static void jam_roots(OopClosure* closure, bool adjust) {
++static void jam_roots(OopClosure* closure, bool adjust, bool minor) {
 +  StrongRootsScope scope(0);
 +  CLDToOopClosure clds(closure, ClassLoaderData::_claim_none);
 +  NMethodToOopClosure code(closure, adjust);
 +  ClassLoaderDataGraph::cld_do(&clds);
-+  // The full code-cache traversal below owns all nmethod slots.
-+  Threads::oops_do(closure, nullptr);
++  MarkingNMethodClosure live_code(closure, !NMethodToOopClosure::FixRelocations, true);
++  // Minor collections and relocation still visit every surviving code slot.
++  // Full marking keeps only code reached from live thread/frozen frames alive.
++  Threads::oops_do(closure, (minor || adjust) ? nullptr : &live_code);
 +  OopStorageSet::strong_oops_do(closure);
-+  CodeCache::nmethods_do(&code);
++  if (minor || adjust) CodeCache::nmethods_do(&code);
 +}
 +
 +class VM_JamCollect : public VM_GC_Operation {
@@ -1582,12 +1616,15 @@
 +  HeapWord* result = allocate_work(size, young, verbose);
 +  if (result == nullptr && is_init_completed()) {
 +    bool try_old = false;
++    bool promotion_failed = false;
 +    if (young) {
 +      MutexLocker ml(Heap_lock);
-+      try_old = size > _young_free_after_gc;
++      promotion_failed = _young_promotion_failed;
++      try_old = promotion_failed || size > _young_free_after_gc;
 +    }
 +    if (try_old) result = allocate_work(size, false, verbose);
-+    if (result == nullptr && young) {
++    // A non-fitting promotion cannot recover old headroom with another minor.
++    if (result == nullptr && young && !promotion_failed) {
 +      bool promote;
 +      {
 +        MutexLocker ml(Heap_lock);
@@ -1601,6 +1638,7 @@
 +    if (result == nullptr) {
 +      collect_generation(false, false, GCCause::_allocation_failure);
 +      result = allocate_work(size, young, verbose);
++      if (result == nullptr && young) result = allocate_work(size, false, verbose);
 +    }
 +  }
 +  if (result == nullptr && young && !tlab) result = allocate_work(size, false, verbose);
@@ -1640,6 +1678,24 @@
 +  return kind == 0 ? _minor_collections : kind == 1 ? _promotions : _major_collections;
 +}
 +
++class JamCodeCacheScope : public StackObj {
++  ClassUnloadingContext* _context;
++public:
++  explicit JamCodeCacheScope(bool minor) : _context(nullptr) {
++    if (!minor) {
++      CodeCache::on_gc_marking_cycle_start();
++      _context = new ClassUnloadingContext(1, true, false);
++    }
++  }
++  ~JamCodeCacheScope() {
++    if (_context != nullptr) {
++      CodeCache::on_gc_marking_cycle_finish();
++      CodeCache::arm_all_nmethods();
++      delete _context;
++    }
++  }
++};
++
 +void JamHeap::do_collection(bool minor, bool promote, bool clear_all_soft_refs) {
 +  assert(SafepointSynchronize::is_at_safepoint(), "Must stop mutators");
 +  assert(Heap_lock->is_locked(), "Must serialize heap operations");
@@ -1661,6 +1717,7 @@
 +  ensure_parsability(true);
 +  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::clear());
 +
++  JamCodeCacheScope code_cache_scope(minor);
 +  JamScanState state(this, minor);
 +  _jam_scan_state = &state;
 +  thc_vm_begin(_jam, minor);
@@ -1668,7 +1725,7 @@
 +  if (minor) trace_remembered_slots();
 +  thc_vm_weak_roots(_jam, jam_scan, &state);
 +  JamRoots roots;
-+  jam_roots(&roots, false);
++  jam_roots(&roots, false, minor);
 +  roots.trace(this);
 +  thc_vm_weak_close(_jam, jam_scan, &state);
 +
@@ -1680,6 +1737,17 @@
 +  DoNothingClosure noop;
 +  WeakProcessor::weak_oops_do(&jam_is_alive, &noop);
 +
++  if (!minor) {
++    // No class unloading: retain all CLDs, but unlink nmethods with dead oops
++    // before adjusting their constants or reclaiming the referenced objects.
++    {
++      CodeCache::UnlinkingScope scope(&jam_is_alive);
++      CodeCache::do_unloading(false);
++    }
++    ClassUnloadingContext::context()->purge_and_free_nmethods();
++    JVMCI_ONLY(JVMCI::do_unloading(false));
++  }
++
 +  bool promoted = minor && promote;
 +  if (!thc_vm_prepare(_jam, promoted)) {
 +    guarantee(promoted, "Only insufficient promotion space can fail preparation");
@@ -1688,7 +1756,7 @@
 +  }
 +  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::set_active(false));
 +  JamAdjust adjust(minor);
-+  jam_roots(&adjust, true);
++  jam_roots(&adjust, true, minor);
 +  WeakProcessor::oops_do(&adjust);
 +  _ref_processor->weak_oops_do(&adjust);
 +  for (int i = 0; i < state.wide_slots.length(); ++i) {
@@ -1702,6 +1770,8 @@
 +  _young_space->set_top((HeapWord*)(CompressedOops::base() + jam_young_displacement +
 +                                   thc_vm_used(_jam, true) * HeapWordSize));
 +  _young_free_after_gc = _young_space->free() / HeapWordSize;
++  if (!minor || promoted) _young_promotion_failed = false;
++  else if (promote) _young_promotion_failed = true;
 +  // Promoted bases must be inside the published old space before validation.
 +  COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::update_pointers());
 +  if (minor) ++_minor_collections; else ++_major_collections;
@@ -1731,7 +1801,7 @@
 +}
 --- a/src/hotspot/share/gc/jam/jamHeap.hpp
 +++ b/src/hotspot/share/gc/jam/jamHeap.hpp
-@@ -0,0 +1,177 @@
+@@ -0,0 +1,179 @@
 +/*
 + * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
 + * Copyright (c) 2017, 2022, Red Hat, Inc. All rights reserved.
@@ -1781,6 +1851,7 @@
 +  ContiguousSpace* _space;
 +  ContiguousSpace* _young_space;
 +  size_t _young_free_after_gc; // Words, protected by Heap_lock; a scheduling hint.
++  bool _young_promotion_failed; // Heap_lock; consume old headroom until whole-heap progress.
 +  size_t _minor_collections;
 +  size_t _promotions;
 +  size_t _major_collections;
@@ -1803,6 +1874,7 @@
 +          _space(nullptr),
 +          _young_space(nullptr),
 +          _young_free_after_gc(SIZE_MAX),
++          _young_promotion_failed(false),
 +          _minor_collections(0),
 +          _promotions(0),
 +          _major_collections(0),
