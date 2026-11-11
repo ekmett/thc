@@ -15,11 +15,40 @@ public final class CoreCompactRecords {
         public String getContainer() { return container; } public long getDataOffset() { return dataOffset; }
         public long getBindingOffset() { return bindingOffset; } public CoreCompactDebug getDebug() { return debug; }
     }
+    /** Owned by a Core source request. Compare the full decoded value because
+     * a component digest alone does not identify its ABI or build receipts. */
+    static final class SharedPayloads {
+        private final Map<String,String> blobs = new HashMap<>();
+        private Map<Map<String,Object>,Map<String,Object>> nativeLinks;
+
+        Map<String,Object> internNativeLink(Map<String,Object> decoded) {
+            if (nativeLinks == null) nativeLinks = new HashMap<>();
+            var retained = nativeLinks.get(decoded);
+            if (retained != null) return retained;
+            var frozen = immutableMap(decoded);
+            nativeLinks.put(frozen, frozen);
+            return frozen;
+        }
+
+        private static <K> Map<K,Object> immutableMap(Map<K,?> decoded) {
+            var copy = new LinkedHashMap<K,Object>();
+            decoded.forEach((key, value) -> copy.put(key, immutable(value)));
+            return Collections.unmodifiableMap(copy);
+        }
+
+        private static Object immutable(Object value) {
+            if (value instanceof Map<?,?> map) return immutableMap(map);
+            if (value instanceof List<?> list) return list.stream().map(SharedPayloads::immutable).toList();
+            return value;
+        }
+
+        void clear() { nativeLinks = null; blobs.clear(); }
+    }
     private final CoreCompactFile file;
     private final String identity;
     private final CoreCompactDebug debug;
     private final boolean metadata;
-    private final Map<String,String> blobs;
+    private final SharedPayloads payloads;
     private long bindingOffset;
     private static final Object MISSING = new Object();
     private record Shape(Map<String,Object> fields) {}
@@ -27,10 +56,10 @@ public final class CoreCompactRecords {
     private final Map<Long,Shape> shapes = new HashMap<>();
     private final Set<Long> readingShapes = new HashSet<>();
     private final Map<StringSpan,String> strings = new HashMap<>();
-    public CoreCompactRecords(CoreCompactFile file, String identity) { this(file, identity, new HashMap<>()); }
-    CoreCompactRecords(CoreCompactFile file, String identity, Map<String,String> blobs) { this(file, identity, false, blobs); }
-    private CoreCompactRecords(CoreCompactFile file, String identity, boolean metadata, Map<String,String> blobs) {
-        this.file = file; this.identity = identity; this.metadata = metadata; this.blobs = blobs; debug = new CoreCompactDebug(file);
+    public CoreCompactRecords(CoreCompactFile file, String identity) { this(file, identity, new SharedPayloads()); }
+    CoreCompactRecords(CoreCompactFile file, String identity, SharedPayloads payloads) { this(file, identity, false, payloads); }
+    private CoreCompactRecords(CoreCompactFile file, String identity, boolean metadata, SharedPayloads payloads) {
+        this.file = file; this.identity = identity; this.metadata = metadata; this.payloads = payloads; debug = new CoreCompactDebug(file);
     }
     private Origin origin(long offset) { return new Origin(identity, offset, bindingOffset, debug); }
     private String text(CoreCompactCursor cursor) throws Throwable {
@@ -381,7 +410,7 @@ public final class CoreCompactRecords {
     }
     /** Header shapes are inline: metadata admission never reads an executable body. */
     public Map<String,Object> header() {
-        return new CoreCompactRecords(file, identity, true, blobs).readHeader();
+        return new CoreCompactRecords(file, identity, true, payloads).readHeader();
     }
     private Map<String,Object> readHeader() {
         try {
@@ -554,7 +583,7 @@ public final class CoreCompactRecords {
     }
     private String blob(CoreCompactCursor cursor) {
         String encoded = HexFormat.of().formatHex(cursor.bytes(cursor.count()));
-        return blobs.computeIfAbsent(encoded, value -> value);
+        return payloads.blobs.computeIfAbsent(encoded, value -> value);
     }
     private Map<String,Object> foreignLink(CoreCompactCursor cursor) throws Throwable {
         var result = map("schema", cursor.unsigned());
@@ -613,7 +642,7 @@ public final class CoreCompactRecords {
             else throw error("Invalid native call seed provider tag");
             return seed;
         }));
-        return result;
+        return payloads.internNativeLink(result);
     }
     private Map<String,Object> nativeComponent(CoreCompactCursor cursor) throws Throwable {
         var result = linkPayload(cursor);

@@ -19,17 +19,14 @@ public final class CoreCompactModule implements AutoCloseable {
     private final Map<Long,Map<String,Object>> selected = new HashMap<>();
     private boolean verified;
     public CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts) {
-        this(module, targetLayout, verifyArtifacts, new HashMap<>());
-    }
-    CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts, Map<String,String> blobs) {
-        this(module, targetLayout, verifyArtifacts, blobs, module.artifact());
+        this(module, targetLayout, verifyArtifacts, new CoreCompactRecords.SharedPayloads(), module.artifact());
     }
     CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts,
-            Map<String,String> blobs, CoreUnitDirectory.Artifact artifact) {
+            CoreCompactRecords.SharedPayloads payloads, CoreUnitDirectory.Artifact artifact) {
         this.module = module; this.targetLayout = targetLayout; this.verifyArtifacts = verifyArtifacts;
         this.artifact = artifact;
         file = new CoreCompactFile(artifact.path(), artifact.sha256(), verifyArtifacts);
-        records = new CoreCompactRecords(file, artifact.sha256(), blobs);
+        records = new CoreCompactRecords(file, artifact.sha256(), payloads);
     }
     public CoreCompactFile.Counters getCounters() { return file.getCounters(); }
     public Map<String,Object> metadata() {
