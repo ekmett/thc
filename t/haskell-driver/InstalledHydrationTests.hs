@@ -22,7 +22,7 @@ import Control.Exception (AsyncException(ThreadKilled), fromException)
 import qualified System.Semaphore as Sem
 import System.IO.Error (isDoesNotExistError)
 #endif
-import Control.Monad (forM_, unless)
+import Control.Monad (forM_, unless, when)
 import Data.Aeson (Value(Null), eitherDecodeStrict', encode, object, (.=))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -56,6 +56,23 @@ helperMode arguments = case arguments of
     BS.hPut stderr pipePayload
     BS.hGetContents stdin >>= BS.hPut stdout
   "--global" : _ -> Just $ readFile (option "--package-db" </> "registration") >>= putStr
+  "--libdir" : _ | "--probe-inventory" `elem` arguments -> Just $ do
+    mapM_ (`hSetBinaryMode` True) [stdin, stdout]
+    let directory = option "--libdir"
+        path = directory </> "A.dyn_hi"
+        entry = object ["unit" .= identifier, "module" .= ("A" :: String), "interface" .= path]
+    request <- either fail pure . eitherDecodeStrict' =<< BS.hGetContents stdin
+    unless (request == object ["units" .= [rtsIdentifier, identifier], "interfaces" .= [entry]])
+      (fail "unexpected probe inventory request")
+    appendFile (directory </> "probe-calls") "probe\n"
+    mode <- readFile (directory </> "A.mode")
+    when (mode == "mutate-db") $ appendFile (directory </> "package.cache") "changed in helper"
+    let row = object ["unit" .= identifier, "module" .= ("A" :: String), "interface" .= path,
+          "owner" .= identifier, "fingerprint" .= replicate 32 '0', "completeCore" .= True]
+        reported = if mode == "wrong-rts-proof" then [directory] else rtsIncludeDirectories directory
+    BL.putStrLn $ encode $ object (["schema" .= (1 :: Int), "way" .= ("dynamic" :: String),
+      "status" .= ("probed" :: String), "interfaces" .= [row]] ++
+      ["rtsIncludeDirs" .= reported | mode /= "omit-rts-proof"])
   "--libdir" : _ -> Just $ do
     hSetBinaryMode stdout True
     let directory = option "--libdir"
@@ -97,6 +114,12 @@ helperMode arguments = case arguments of
 
 identifier :: String
 identifier = "thc-hydration-fixture-0.1"
+
+rtsIdentifier :: String
+rtsIdentifier = "rts-1.0.3"
+
+rtsIncludeDirectories :: FilePath -> [FilePath]
+rtsIncludeDirectories directory = [directory </> "rts-overlay", directory </> "rts-original"]
 
 pipePayload :: BS.ByteString
 pipePayload = BS.replicate (1024 * 1024) 120
@@ -304,6 +327,60 @@ tests = TestLabel "bounded installed-interface hydration" $ TestList
       removeFile (directory </> "A.dyn_hi")
       missing <- try (discoverInstalled context identifier) :: IO (Either IOException InstalledUnit)
       assertBool "dynamic discovery never falls back to vanilla" (case missing of Left _ -> True; _ -> False)
+  , TestCase $ fixture ["A"] $ \directory context _ -> do
+      let settings = directory </> "settings"
+          explicitDb = directory </> "package.cache"
+          globalDb = installedLibdirGlobalDb context </> "package.cache"
+          mode = directory </> "A.mode"
+          includeDirs = rtsIncludeDirectories directory
+          constants = directory </> "rts-original" </> "DerivedConstants.h"
+          writeSettings db = writeFile settings (show [("Relative Global Package DB" :: String, db :: String)])
+          calls = length . lines <$> readFile (directory </> "probe-calls")
+      createDirectory (installedLibdirGlobalDb context)
+      mapM_ createDirectory includeDirs
+      writeFile constants "constants bytes"
+      appendFile (directory </> "registration") $ unlines
+        ["depends: " ++ rtsIdentifier, "---", "name: rts", "version: 1.0.3",
+         "id: " ++ rtsIdentifier, "key: " ++ rtsIdentifier, "exposed: True",
+         "include-dirs: " ++ unwords (map show includeDirs)]
+      discover <- registrationSnapshot context
+      unit <- discover identifier
+      writeSettings "global"
+      mapM_ (\path -> writeFile path "database bytes") [globalDb, explicitDb]
+      probe <- prepareInstalledProbe context unit
+      original <- probe
+      assertEqual "identical complete snapshots reuse the response" original =<< probe
+      assertEqual "one helper for two unchanged observations" 1 =<< calls
+      forM_ (zip [2..] [settings, globalDb, explicitDb, directory </> "A.dyn_hi", constants]) $ \(expected, path) -> do
+        appendFile path " "
+        assertEqual "changed inputs can produce the same semantic response" original =<< probe
+        assertEqual "changed input requires a new helper" expected =<< calls
+      writeFile (directory </> "rts-overlay" </> "DerivedConstants.h") "new earlier header"
+      assertEqual "adding an earlier constants header reprobes" original =<< probe
+      appendFile constants "ignored later header change"
+      assertEqual "shadowed constants header can change" original =<< probe
+      assertEqual "only the effective constants change requires a helper" 7 =<< calls
+      writeSettings "redirected"
+      assertEqual "changed implicit DB leaves semantic probing available" original =<< probe
+      assertEqual "unknown implicit DB cannot reuse the response" original =<< probe
+      assertEqual "redirected settings use a fresh helper each time" 9 =<< calls
+      writeSettings "global"
+      removeFile explicitDb
+      assertEqual "unsnapshotable explicit DB still probes" original =<< probe
+      assertEqual "unsnapshotable explicit DB cannot reuse" original =<< probe
+      assertEqual "unsnapshotable explicit DB uses a fresh helper each time" 11 =<< calls
+      writeFile explicitDb "database bytes"
+      writeFile mode "omit-rts-proof"
+      assertEqual "old helper response is still accepted" original =<< probe
+      writeFile mode "wrong-rts-proof"
+      assertEqual "unexpected wired RTS proof is usable only for this fresh call" original =<< probe
+      assertEqual "missing or mismatched RTS proof cannot establish a reusable response" 13 =<< calls
+      writeFile mode "mutate-db"
+      changed <- try probe :: IO (Either IOException (BS.ByteString, Value))
+      case changed of
+        Left problem -> assertBool "report mutation during the actual helper"
+          ("installed compiler package state changed" `isInfixOf` show problem)
+        Right _ -> assertFailure "compiler package state mutation was accepted"
   , TestCase $ fixture [] $ \directory context _ -> do
       before <- getCurrentDirectory
       (status, output, _) <- boundedInterfaceProcessIn directory (installedHelper context) ["--child-directory-fixture"]

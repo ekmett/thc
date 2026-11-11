@@ -33,23 +33,25 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Crypto.Hash.SHA256 as SHA
-import Data.Char (isAlphaNum, isHexDigit)
+import Data.Char (isAlphaNum, isAscii, isHexDigit)
 import Data.List (nub, sort)
 import Numeric (showHex)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (isNothing)
+import Data.Maybe (fromMaybe, isNothing)
 import qualified Data.Set as Set
 import Distribution.Backpack (OpenModule(..), OpenUnitId(..))
 import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
+import Distribution.Package (pkgName)
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.ExposedModule (ExposedModule(..))
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist, findExecutable, makeAbsolute)
 import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), pathSeparator, takeFileName)
+import System.FilePath ((</>), joinPath, pathSeparator, takeFileName)
 import System.IO (IOMode(ReadMode), hClose, hSetBinaryMode, withBinaryFile)
+import System.IO.Error (tryIOError)
 import qualified System.Info as Host
 import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
                        terminateProcess, withCreateProcess)
@@ -330,7 +332,7 @@ prepareInstalledDemandWithAdmission admission context requested = do
         let digest = concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value) (BS.unpack bytes)
         pure (object ["path" .= absolute, "sha256" .= digest])
   before <- observe
-  probe <- probeInstalledInventory admission context (map registeredId requested) units
+  (probe, _) <- probeInstalledInventory admission context (map registeredId requested) units
   rows <- required probe "interfaces" :: IO [Value]
   after <- observe
   unless (before == after) (fail "installed inputs changed during demand inventory")
@@ -370,15 +372,15 @@ prepareInstalledDemandWithAdmission admission context requested = do
 probeInstalled :: InstalledContext -> InstalledUnit -> IO Value
 probeInstalled context requested = do
   units <- probeClosure context requested
-  value <- probeInstalledUnits localAdmission context requested units
+  (value, _) <- probeInstalledUnits localAdmission context requested units
   checkProbeRegistrations context units
   pure value
 
--- A single bundle transaction probes the same exact inventory before and after
+-- A single transaction probes the same exact inventory before and after
 -- validation/acquisition. Reuse only a successful result with byte-identical
--- raw interfaces and helper, and freshly discovered registrations. Do not
--- share rows across inventories: the helper checks retained-Core providers
--- against the complete request, not just each row's module/ordinary hash.
+-- raw interfaces, helper and compiler package state, and freshly discovered
+-- registrations. The helper checks retained-Core providers against the
+-- complete request, so share only results for the entire inventory.
 -- Return the helper digest from that same checked snapshot so cache identity
 -- cannot use helper bytes observed independently of its validated inventory.
 -- This state is invocation-local, not a persistent or process-global cache.
@@ -395,30 +397,80 @@ prepareInstalledProbeWithAdmission admission context requested = do
     traceAdmission "installed-probe-closure-end" Nothing
     traceAdmission "installed-probe-snapshot-before-start" Nothing
     before@(helperHash : _) <- probeSnapshot context units
+    packageBefore <- probePackageState context units
     traceAdmission "installed-probe-snapshot-before-end" Nothing
     cached <- readIORef previous
     case cached of
-      Just (oldUnits, oldSnapshot, value) | units == oldUnits && before == oldSnapshot -> do
-        checkProbeRegistrations context units
-        pure (helperHash, value)
+      Just (oldUnits, oldSnapshot, oldPackageState, value)
+        | units == oldUnits && before == oldSnapshot && packageBefore == Just oldPackageState -> do
+            checkProbeRegistrations context units
+            current <- probePackageState context units
+            unless (current == packageBefore) (fail "installed compiler package state changed during interface probe")
+            pure (helperHash, value)
       _ -> do
-        value <- probeInstalledUnits admission context requested units
+        (value, rtsIncludeDirs) <- probeInstalledUnits admission context requested units
         traceAdmission "installed-probe-snapshot-after-start" Nothing
         after <- probeSnapshot context units
+        packageAfter <- probePackageState context units
         traceAdmission "installed-probe-snapshot-after-end" Nothing
         unless (before == after) (fail "installed probe inputs changed during interface probe")
         checkProbeRegistrations context units
-        writeIORef previous (Just (units, after, value))
+        case packageBefore of
+          Just state@(expectedDirs, _, _) | rtsIncludeDirs == Just expectedDirs -> do
+            unless (packageAfter == Just state) (fail "installed compiler package state changed during interface probe")
+            writeIORef previous (Just (units, after, state, value))
+          _ -> writeIORef previous Nothing
         pure (helperHash, value)
 
 -- Stream raw contents: ordinary interface hashes omit retained Core, foreign
 -- payloads and annotations. Size/mtime alone cannot establish reusable evidence.
 probeSnapshot :: InstalledContext -> [InstalledUnit] -> IO [BS.ByteString]
-probeSnapshot context units = forM paths $ \path -> withBinaryFile path ReadMode $ \handle -> do
-  bytes <- BL.hGetContents handle
-  evaluate (SHA.hashlazy bytes)
+probeSnapshot context units = mapM hashProbeInput paths
   where
     paths = installedHelper context : concatMap (map snd . installedInterfaces) units
+
+hashProbeInput :: FilePath -> IO BS.ByteString
+hashProbeInput path = withBinaryFile path ReadMode $ \handle ->
+  evaluate . SHA.hashlazy =<< BL.hGetContents handle
+
+-- GHC reads its implicit global DB path from settings at session start. A
+-- recorded context alone cannot establish which DB a new session consumes.
+-- The ordinary directory DB has a binary package.cache. Empty and legacy DBs
+-- can still be read by GHC, so leave those to a fresh semantic probe.
+probePackageState :: InstalledContext -> [InstalledUnit] -> IO (Maybe ([FilePath], [Maybe BS.ByteString], [Bool]))
+probePackageState context units = case rtsDirectories of
+  [directories] -> either (const Nothing) id <$> tryIOError (observe directories)
+  _ -> pure Nothing
+  where
+    libdir = installedLibdir context
+    -- The helper confirms these are the include paths of its wired RTS.
+    rtsDirectories = [Package.includeDirs info | unit <- units,
+      Right (_, info) <- [parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack (registration unit)))],
+      prettyShow (pkgName (Package.sourcePackageId info)) == "rts"]
+    observe directories = do
+      bytes <- BS.readFile (libdir </> "settings")
+      let settings = either (const []) (fromMaybe [] . readMaybe . Text.unpack)
+            (Text.decodeUtf8' bytes) :: [(String, FilePath)]
+      case [path | ("Relative Global Package DB", path) <- settings] of
+        [path] | all isAscii path && '$' `notElem` path -> do
+          let global = libdir </> path
+          canonical <- canonicalizePath global
+          if canonical /= installedLibdirGlobalDb context then pure Nothing else do
+            dbs <- mapM (\db -> hashProbeInput (db </> "package.cache")) (global : helperDatabases context)
+            -- On Windows GHC may look for a bundled MinGW before reading any
+            -- interfaces. Observe the same candidate directories.
+            let mingw = [libdir </> joinPath (replicate depth "..") </> "mingw" | depth <- [1..3]]
+            toolDirs <- if Host.os == "mingw32" then mapM doesDirectoryExist mingw else pure []
+            constants <- observeConstants directories
+            pure (Just (directories, map Just (SHA.hash bytes : dbs) ++ constants, toolDirs))
+        _ -> pure Nothing
+    -- GHC reads the first DerivedConstants.h found in the include search.
+    observeConstants [] = pure []
+    observeConstants (directory:remaining) = do
+      let path = directory </> "DerivedConstants.h"
+      exists <- doesFileExist path
+      if exists then (:[]) . Just <$> hashProbeInput path
+        else (Nothing :) <$> observeConstants remaining
 
 -- | Snapshot the actual helper/settings/interface bytes consumed by an already
 -- selected dependency-closed registration scopes. Observe each consumed path
@@ -492,10 +544,10 @@ checkProbeRegistrations context units = do
 
 -- The caller rechecks registrations after consuming the response and any
 -- additional raw-input snapshots, immediately before returning the evidence.
-probeInstalledUnits :: Admission -> InstalledContext -> InstalledUnit -> [InstalledUnit] -> IO Value
+probeInstalledUnits :: Admission -> InstalledContext -> InstalledUnit -> [InstalledUnit] -> IO (Value, Maybe [FilePath])
 probeInstalledUnits admission context requested = probeInstalledInventory admission context [registeredId requested]
 
-probeInstalledInventory :: Admission -> InstalledContext -> [String] -> [InstalledUnit] -> IO Value
+probeInstalledInventory :: Admission -> InstalledContext -> [String] -> [InstalledUnit] -> IO (Value, Maybe [FilePath])
 probeInstalledInventory _ _ [] _ = fail "installed probe requires a requested unit"
 probeInstalledInventory admission context requested@(requestedUnit : _) units = do
   let entries = [(registeredId unit, name, path) | unit <- units,
@@ -529,7 +581,8 @@ probeInstalledInventory admission context requested@(requestedUnit : _) units = 
             valueAt row "interface" == Just path && not (null owner) &&
             length digest == 32 && all isHexDigit digest)
       (fail "inconsistent interface probe identity/payload")
-  pure (object ["registrations" .= map (installedProvenance context) units, "interfaces" .= rows])
+  pure (object ["registrations" .= map (installedProvenance context) units, "interfaces" .= rows],
+    valueAt response "rtsIncludeDirs")
 
 -- | Hydrate genuine complete Core for a discovered unit. Missing payloads are
 -- returned separately from corrupt or inconsistent evidence, which fails in IO.

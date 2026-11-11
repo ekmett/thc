@@ -894,6 +894,7 @@ executable thc-interface
     base >= 4.22 && < 4.23,
     thc,
     ghc == 9.14.1,
+    ghc-boot == 9.14.1,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,
