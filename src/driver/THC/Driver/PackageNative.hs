@@ -41,6 +41,7 @@ import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives, nativeSymbolArchivesWithProduct, nativeWindowsRtsInputs)
+import THC.Driver.NativeLibrarySources (nativeLinkOptions)
 import THC.Driver.Installed (boundedInterfaceProcess)
 import THC.Driver.NativeCache (nativeObjcopySelection, nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
@@ -636,7 +637,7 @@ captureConfiguredNativeObject pieces sourceRoot compiler arguments = do
       nativeHash <- sha <$> BS.readFile native
       let directory = pieces </> sha (T.encodeUtf8 (T.pack native))
       createDirectoryIfMissing True directory
-      (bitcode,target,inputs) <- compileC compiler root arguments directory Nothing
+      (bitcode,target,inputs) <- compileC compiler root arguments directory
       let piece = object ["root" .= root,"object" .= native,"objectSha256" .= nativeHash,
             "bitcode" .= bitcode,"target" .= target,"inputs" .= inputs]
       writeJson (directory </> "piece.json") piece
@@ -734,12 +735,40 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
     else pure []
   dataInputs <- forM dataLibraries $ \path -> do
     digest <- sha <$> BS.readFile path
-    pure (object ["path" .= path,"sha256" .= digest])
-  let inputIdentity = object $ ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,"installed" .= installed,
-        "sources" .= sources,"providers" .= ([]::[Value]),"addresses" .= addresses,"dataLibraries" .= dataInputs,
+    pure (path,digest)
+  -- An explicitly linked archive created under the installed staging owner
+  -- contributes its role and bytes to the component namespace. The original
+  -- path still belongs to linker argv and to the actual input observations.
+  ownedArchives <- if not installed then pure [] else fmap concat $ forM (nub (nativeLinkOptions arguments)) $ \option -> do
+    let candidate = if isAbsolute option then option else root </> option
+    if takeExtension option /= ".a" || not (within root candidate) then pure [] else do
+      exists <- doesFileExist candidate
+      if not exists then pure [] else do
+        path <- canonicalizePath candidate
+        if not (within root path) then pure [] else do
+          digest <- maybe (sha <$> BS.readFile path) pure (lookup path dataInputs)
+          pure [(option,path,object ["ownedArchive" .= makeRelative root path,"sha256" .= digest])]
+  let archiveInput (path,digest) = object ["path" .= path,"sha256" .= digest]
+      archiveRoles = [(path,role) | (_,path,role) <- ownedArchives]
+      linkRoles = [(option,role) | (option,_,role) <- ownedArchives]
+      archiveOption prefix option = case lookup option linkRoles of
+        Nothing -> toJSON (prefix ++ option)
+        Just role -> object ["prefix" .= prefix,"archive" .= role]
+      componentArguments ("-optl":option:rest) = toJSON ("-optl" :: String) : archiveOption "" option : componentArguments rest
+      componentArguments (argument:rest)
+        | "-optl" `isPrefixOf` argument, [option] <- nativeLinkOptions [argument] =
+            archiveOption (take (length argument - length option) argument) option : componentArguments rest
+        | otherwise = toJSON argument : componentArguments rest
+      componentArguments [] = []
+      inputIdentity = object $ ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,"installed" .= installed,
+        "sources" .= sources,"providers" .= ([]::[Value]),"addresses" .= addresses,"dataLibraries" .= map archiveInput dataInputs,
         "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers] ++
         ["adapterArguments" .= adapterArguments | not (null adapterArguments)]
-      provisional = sha (BL.toStrict (encode inputIdentity))
+      componentIdentity
+        | null ownedArchives = inputIdentity
+        | otherwise = setMember "arguments" (toJSON (componentArguments arguments)) $
+            setMember "dataLibraries" (toJSON [maybe (archiveInput input) id (lookup path archiveRoles) | input@(path,_) <- dataInputs]) inputIdentity
+      provisional = sha (BL.toStrict (encode componentIdentity))
       inventory = sort ([(signature,False) | signature <- signatures] ++
         [((symbol,"ccall","unsafe",[],"AddrRep"),True) | (symbol,_) <- addresses])
       makeEntries component = [(signature,address,"thc_native_" ++ component ++ "_" ++ show index) |
@@ -755,6 +784,14 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
         | any (\(other@(name,_,_,_,_),_) -> symbol == name && nativeCAbi id signature /= nativeCAbi id other) group =
             group : insertEntry entry groups
         | otherwise = (entry:group):groups
+      compileWrapper output contents = do
+        let source = output </> "wrappers.c"
+            sourceArgument = if installed then makeRelative root source else source
+        writeFile source contents
+        (bitcode,target,inputs) <- compileC compiler root
+          (configured ++ adapterArguments ++ ["-c",sourceArgument]) output
+        headers <- headerInputs source inputs
+        pure (bitcode,target,inputs,headers)
       -- GHC compiles each module's CAPI stubs as its own translation unit.
       -- Direct ccall adapters must not enter that CAPI header namespace:
       -- GHC emits those calls independently, and a header may name struct
@@ -781,24 +818,19 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
             -- conflict with valid opaque Addr# callers. CAPI keeps its actual
             -- GHC stub headers; adapters need only standard scalar types.
             let preamble = ["#include <Rts.h>\n" | convention == "capi"] ++ ["#include <stdint.h>\n"]
-            (bitcode,target,inputs) <- compileC compiler root (configured ++ adapterArguments) output
-              (Just (concat preamble ++ source ++ wrappers))
-            headers <- headerInputs (output </> "wrappers.c") inputs
-            pure (bitcode,target,inputs,headers)
+            compileWrapper output (concat preamble ++ source ++ wrappers)
       compileUnits component = do
         called <- compileCalls component
         addressUnits <- if null addresses then pure [] else do
           let output = nativeDirectory </> "addresses"
           createDirectoryIfMissing True output
           source <- either fail pure (nativeAddressSource (addressEntries component))
-          (bitcode,target,inputs) <- compileC compiler root (configured ++ adapterArguments) output (Just source)
-          headers <- headerInputs (output </> "wrappers.c") inputs
-          pure [(bitcode,target,inputs,headers)]
+          (:[]) <$> compileWrapper output source
         pure (called ++ addressUnits)
   createDirectoryIfMissing True nativeDirectory
   discovered <- compileUnits provisional
   let dependencies = [headers | (_,_,_,headers) <- discovered]
-  let component = sha (BL.toStrict (encode (inputIdentity, dependencies)))
+  let component = sha (BL.toStrict (encode (componentIdentity, dependencies)))
       entries = makeEntries component
   compiled <- compileUnits component
   let currentDependencies = [headers | (_,_,_,headers) <- compiled]
@@ -1060,7 +1092,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
           all ((== Just "ccall") . (`member` "convention")) abi &&
           all empty ["dataSymbols","finalizers","providers"]
     if not eligible then materializeStrict archived record native else do
-      identity <- get record "sourceIdentity" :: IO Value
+      identity <- get record (if member record "installed" == Just (Bool True) then "componentSha256" else "sourceIdentity") :: IO Value
       bitcodes <- mapM (`get` "bitcode") native
       inputs <- mapM (fmap sha . BS.readFile) bitcodes
       let component = sha (BL.toStrict (encode (unit,target,identity,inputs)))
@@ -1317,9 +1349,11 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
               else if darwin then "llvm-embedded-mach-o" else "llvm-embedded-elf"
             -- Current Apple ld ignores -fembed-bitcode's legacy bundle flag.
             -- Sulong accepts raw bitcode in the Mach-O __LLVM,__bundle section.
+            -- Installed ELF retains the actual argv in its receipt. Embed the
+            -- bitcode alone so private output paths do not enter the container.
             embedding = if darwin
               then concatMap (\argument -> ["-Xlinker",argument]) ["-sectcreate","__LLVM","__bundle",final]
-              else ["-fembed-bitcode"]
+              else [if member record "installed" == Just (Bool True) then "-fembed-bitcode=bitcode" else "-fembed-bitcode"]
             deferredArguments = nativeDeferredLinkArguments target deferredExternals
             exclusions = maybe [] id deferredArguments
             -- PE components stay raw LLVM; record no container argv for the
@@ -1454,20 +1488,14 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
           pure (name, bytes')
         _ -> fail "package native Core module is not an object"
 
-compileC :: FilePath -> FilePath -> [String] -> FilePath -> Maybe String -> IO (FilePath,String,Value)
-compileC compiler root original directory generated = do
+compileC :: FilePath -> FilePath -> [String] -> FilePath -> IO (FilePath,String,Value)
+compileC compiler root arguments directory = do
   clang <- tool "THC_CLANG" "clang"
   sdkFlags <- nativeCompilerFlags
   opt <- tool "THC_LLVM_OPT" "opt"
-  let source = directory </> "wrappers.c"
-      bitcode = directory </> "original.bc"
+  let bitcode = directory </> "original.bc"
       dependency = directory </> "inputs.d"
       assembly = directory </> "original.ll"
-  arguments <- case generated of
-    Nothing -> pure original
-    Just contents -> do
-      writeFile source contents
-      pure (original ++ ["-c",source])
   -- GHC has separate C and C++ compiler phases and option namespaces. Keep
   -- Cabal's complete successful invocation, including -optcxx configuration;
   -- replace only the selected compiler and output for its LLVM replay.

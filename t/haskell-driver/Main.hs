@@ -105,6 +105,7 @@ runTests arguments = do
     ["--inplace-store-only"] -> pure [StoreProjectTests.inplaceTests env]
     ["--concurrent-store-only"] -> pure [StoreProjectTests.concurrentTests env]
     ["--package-native-only"] -> pure [PackageNativeTests.tests]
+    ["--installed-native-identity-only"] -> pure [PackageNativeTests.installedNativeIdentityTest]
     ["--native-image-only"] -> pure [NativeImageTests.tests, BundleSelectionTests.tests env, RunOptionsTests.tests env]
     ["--native-cache-only"] -> pure [NativeCacheTests.tests]
     ["--cache-directory-only"] -> pure [NativeCacheTests.cacheDirectoryTest]
@@ -123,6 +124,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--unit-only|--test-support-only|--pinned-flags-only|--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--build-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--public-packages-only|--cstring-project-only|--store-inventory-only|--store-project-only|--native-variants-only|--store-projects-only|--custom-store-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-view-only|--installed-foreign-source-only|--package-native-only|--native-image-only|--native-cache-only|--cache-directory-only|--native-recipe-only|--scalar-bitcode-only]"
+    _ -> die "Usage: driver-tests [--unit-only|--test-support-only|--pinned-flags-only|--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--build-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--public-packages-only|--cstring-project-only|--store-inventory-only|--store-project-only|--native-variants-only|--store-projects-only|--custom-store-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-view-only|--installed-foreign-source-only|--package-native-only|--installed-native-identity-only|--native-image-only|--native-cache-only|--cache-directory-only|--native-recipe-only|--scalar-bitcode-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure
