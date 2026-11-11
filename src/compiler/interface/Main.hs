@@ -27,16 +27,18 @@ import GHC (getSessionDynFlags, getSession, parseDynamicFlags, setSessionDynFlag
 import GHC.Plugins (HscEnv, Module, Unit, hsc_logger, mkModule, mkModuleName, moduleUnit,
                     unitString, stringToUnit, stringToUnitId, liftIO, moduleNameString, unLoc)
 import GHC.Data.Graph.Directed (SCC(..))
+import qualified GHC.Data.ShortText as ShortText
 import GHC.Driver.Env (hsc_units)
 import GHC.Driver.Make (topSortModuleGraph)
 import GHC.Driver.DynFlags (DynFlags(ghcMode), GhcMode(OneShot))
 import GHC.Types.SourceFile (HscSource(HsBootFile))
 import GHC.Types.Unique.Map (lookupUniqMap)
-import GHC.Unit.Info (mkUnit)
+import GHC.Unit.Info (mkUnit, unitIncludeDirs)
 import GHC.Unit.Module.Graph (ModuleGraphNode(..), ModuleNodeInfo(..))
 import GHC.Unit.Module.ModSummary (ms_mod_name, ms_hsc_src, ms_location)
 import GHC.Unit.Module.Location (ml_hs_file)
 import GHC.Unit.State (wireMap, lookupUnitId, unwireUnit)
+import GHC.Unit.Types (rtsUnitId)
 import GHC.Utils.Outputable (ppr)
 import GHC.Driver.Ppr (showSDoc)
 import System.Environment (getArgs)
@@ -247,8 +249,10 @@ probeSelected options = do
     -- Aeson already emits UTF-8. Char8.unpack followed by putStrLn would
     -- encode those bytes a second time, corrupting non-ASCII interface paths
     -- and making the driver's exact inventory check reject every cache hit.
-    let output = BS.snoc (BL.toStrict (encode (object ["schema" .= (1 :: Int),
-          "status" .= ("probed" :: String), "way" .= way options, "interfaces" .= rows]))) 10
+    let rtsIncludeDirs = map ShortText.unpack . unitIncludeDirs <$> lookupUnitId (hsc_units environment) rtsUnitId
+        output = BS.snoc (BL.toStrict (encode (object ["schema" .= (1 :: Int),
+          "status" .= ("probed" :: String), "way" .= way options, "interfaces" .= rows,
+          "rtsIncludeDirs" .= rtsIncludeDirs]))) 10
     Exception.evaluate output
 
 withSelected :: Options -> (HscEnv -> IO a) -> IO a

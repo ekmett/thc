@@ -150,7 +150,8 @@ prepareForeignInterfaces producer cache source context registrations = do
       createDirectoryIfMissing True requestedCache
       cacheRoot <- canonicalizePath requestedCache
       withLock (cacheRoot </> ".lock") $ do
-        before <- inputs selected config unit
+        probeCurrent <- prepareInstalledProbe selected unit
+        before <- inputs selected config unit probeCurrent
         currentOriginals <- fileInventory (map fst originalFiles)
         check (currentOriginals == originalFiles) "installed foreign proof changed before regeneration"
         let key = sha (BL.toStrict (encode before))
@@ -176,16 +177,16 @@ prepareForeignInterfaces producer cache source context registrations = do
             view <- createView selected unit destination (map fst needed)
             let viewCompiler = viewContext selected view
             validateView viewCompiler unit needed
-            after <- inputs selected config unit
+            after <- inputs selected config unit probeCurrent
             check (after == before) "GHC source/configuration/interfaces changed during annotation compilation"
             (files, links) <- outputInventory destination
             let receipt = object ["inputs" .= before, "view" .= view, "files" .= files, "links" .= links]
             atomicJson index receipt
             pure viewCompiler
-        after <- inputs selected config unit
+        after <- inputs selected config unit probeCurrent
         check (after == before) "GHC source/configuration/interfaces changed during annotation acquisition"
         pure acquired
-    inputs selected config unit = do
+    inputs selected config unit probeCurrent = do
       _ <- verifyUsageFiles (recipeRoot config) (recipeSourceFiles config)
       forM_ (recipeUsageFiles config) $ \(_, original) -> do
         _ <- verifyUsageFiles (recipeRoot config) original
@@ -201,7 +202,7 @@ prepareForeignInterfaces producer cache source context registrations = do
             ("selected GHC and source interfaces changed: " ++ name)
       -- Includes each complete retained payload in the selected registered
       -- dependency closure, not ABI/mtime summaries or a GHC binary hash.
-      probe <- probeInstalled selected unit
+      (_, probe) <- probeCurrent
       dependencyInterfaces <- observeProbeInterfaces probe
       global <- command (installedPackageTool selected)
         (packageGlobalArguments selected ++ ["dump"]) Nothing
@@ -704,7 +705,7 @@ registrationClosure records root = visit Map.empty [root]
           [record] -> visit (Map.insert identifier record found) (map prettyShow (Package.depends record) ++ rest)
           _ -> fail ("missing or ambiguous producer dependency registration: " ++ identifier)
 
--- probeInstalled discovers the complete registered dependency closure. Its
+-- The inventory covers the complete registered dependency closure. Its
 -- native helper probes dynamic payloads, while -dynamic-too also consumes
 -- vanilla dependencies. Resolve each way through the original registration:
 -- a canonical .dyn_hi symlink target need not have its .hi sibling beside it.
