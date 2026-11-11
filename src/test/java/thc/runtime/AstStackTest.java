@@ -14,6 +14,52 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class AstStackTest {
+    @Test void firstInstalledEntrySpillMaterializesWithoutLeavingCompiledCodeUnlessCopying() throws Exception {
+        for (boolean copy : new boolean[]{false, true})
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                class Body extends Expr {
+                    int entries;
+                    @Override public Object execute(VirtualFrame frame) { entries++; return 17L; }
+                }
+                var body = new Body(); var metrics = new Metrics(true);
+                var root = new FunctionRoot(language, new FrameLayout().build(), "first entry capture", null,
+                    new int[0], new int[0], new int[0], body, metrics, new CoreRepresentation[0],
+                    body.getRepresentation(), body.getCoreSourceLocation(), new boolean[0], null, null,
+                    new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true);
+                root.configureInitialFrameCopy(copy);
+                var target = (com.oracle.truffle.runtime.OptimizedCallTarget) root.getCallTarget();
+                target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                var runtime = (com.oracle.truffle.runtime.OptimizedTruffleRuntime) Truffle.getRuntime();
+                var deoptimizations = new java.util.concurrent.atomic.AtomicInteger();
+                var listener = new com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener() {
+                    @Override public void onCompilationDeoptimized(com.oracle.truffle.runtime.OptimizedCallTarget actual,
+                            com.oracle.truffle.api.frame.Frame frame, String reason) {
+                        if (actual == target) deoptimizations.incrementAndGet();
+                    }
+                };
+                var stack = AstStacks.astStackScope(root);
+                runtime.addListener(listener);
+                final SavedGuestContinuation saved;
+                try {
+                    stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
+                    saved = SavedGuestContinuations.savedGuestContinuation(Calls.target(target, new Object[]{0L}));
+                } finally {
+                    stack.setDepth(0); stack.setDriving(false); runtime.removeListener(listener);
+                }
+                assertNotNull(saved); assertTrue(saved.stackSpill()); assertEquals(0, body.entries);
+                assertEquals(1, metrics.getCompiledEntries()); assertTrue(target.isValidLastTier());
+                assertEquals(copy ? 1 : 0, deoptimizations.get(), "Only a separate frame copy needs interpreter execution");
+                assertEquals(17L, saved.continueWith(Unit.INSTANCE)); assertEquals(1, body.entries);
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+            } finally { context.leave(); }
+        }
+    }
     @Test void synchronousCaptureCapabilityDrainsSpillsWithoutEnablingDeliveryOrReplayingPrefixes() {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
             context.initialize("thc"); context.enter();

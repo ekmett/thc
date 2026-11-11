@@ -656,9 +656,10 @@ public final class FunctionRoot extends GuestRoot {
         frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(inherited));
     }
     private MaterializedFrame initialCaptureFrame(VirtualFrame frame, boolean deferredBloom) {
-        // Snapshot copying belongs to the cold capture path, outside partial evaluation.
+        // Only copying a snapshot needs the cold path. Materializing the owning
+        // frame can retain compiled execution when no separate snapshot is needed.
         // The saved body can be replaced before resumption and then need ancestry.
-        CompilerDirectives.transferToInterpreter();
+        if (copyInitialFrame) CompilerDirectives.transferToInterpreter();
         if (deferredBloom) initializeBloom(frame);
         MaterializedFrame saved = frame.materialize();
         return copyInitialFrame ? DelimitedContinuations.copyContinuationFrame(saved) : saved;
