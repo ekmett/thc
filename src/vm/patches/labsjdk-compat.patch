@@ -1,0 +1,32 @@
+--- a/src/hotspot/share/code/nmethod.hpp
++++ b/src/hotspot/share/code/nmethod.hpp
+@@ -501,6 +501,8 @@
+ 
+   static const char* invalidation_reason_to_string(InvalidationReason invalidation_reason) {
+     switch (invalidation_reason) {
++      case InvalidationReason::NOT_INVALIDATED:
++        return "not invalidated";
+       case InvalidationReason::C1_CODEPATCH:
+         return "C1 code patch";
+       case InvalidationReason::C1_DEOPTIMIZE:
+@@ -511,6 +513,10 @@
+         return "C1 predicate failed trap";
+       case InvalidationReason::CI_REPLAY:
+         return "CI replay";
++      case InvalidationReason::UNLOADING:
++        return "unloading";
++      case InvalidationReason::UNLOADING_COLD:
++        return "unloading cold code";
+       case InvalidationReason::JVMCI_INVALIDATE:
+         return "JVMCI invalidate";
+       case InvalidationReason::JVMCI_MATERIALIZE_VIRTUAL_OBJECT:
+--- a/src/hotspot/share/jvmci/jvmciCompilerToVM.cpp
++++ b/src/hotspot/share/jvmci/jvmciCompilerToVM.cpp
+@@ -1233,7 +1233,6 @@
+ 
+ C2V_VMENTRY_0(jobject, getInvalidationReasonDescription, (JNIEnv *env, jobject, jint invalidation_reason))
+   HandleMark hm(THREAD);
+-  JNIHandleMark jni_hm(thread);
+   nmethod::InvalidationReason reason = static_cast<nmethod::InvalidationReason>(invalidation_reason);
+   JVMCIObject desc = JVMCIENV->create_string(nmethod::invalidation_reason_to_string(reason), JVMCI_CHECK_NULL);
+   return JVMCIENV->get_jobject(desc);

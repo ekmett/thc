@@ -16,24 +16,22 @@ THC uses that API directly. See
 
 ## Toolchain ownership
 
-The [pre-main CRaC workflow](crac.md) prepares reader-free reachable Core on
-Quartus. Actual checkpoint/restore needs a compatible supplier build tracked in
-[jam#54](https://github.com/ekmett/jam/issues/54); the current pinned JDK has no CRaC support.
+The [pre-main CRaC workflow](crac.md) prepares reader-free reachable Core.
+Actual checkpoint/restore needs a compatible supplier build tracked in
+[jam#54](https://github.com/ekmett/jam/issues/54). The current pinned JDK has no CRaC support.
 
 The VM, Graal compiler, SubstrateVM, `jam.vm.Weak` API and native collector
 libraries form one versioned dependency. `etc/jam-graalvm.json` records the
 producer revision, upstream source pins, transport digest and unpacked package
 identities for each platform. A release/version string alone does not establish compatibility.
 
-The upstream owner is now [ekmett/jam](https://github.com/ekmett/jam), including
-its managed-runtime sources under `vm/`. Linux consumes the complete release-flavor
-JVM and Native Image toolchain from `vm-2026.10.09-9392bca-static`; Windows
-uses `vm-2026.10.08-3cb04509`. macOS consumes
-the release-flavor preview `vm-2026.10.08-50b08881-macos15`, qualified locally
-on macOS 15.5. Source, archive and
-installation identities move together within each platform. Native adapter filenames use `jam-vm`; runtime library manifests
-determine deployment membership. The release assets preserve the qualified
-producer bytes beyond temporary CI artifact retention.
+THC owns the HotSpot, Graal and SubstrateVM producer integration in `src/vm`.
+The consumer uses release-flavor `jam.vm` packages from the
+[Jam `vm-2026.10.09-0e36293` release](https://github.com/ekmett/jam/releases/tag/vm-2026.10.09-0e36293)
+on Linux x86-64, macOS arm64 and Windows x86-64. Each platform entry in
+`etc/jam-graalvm.json` defines its package identity and records its partial
+qualification scope. The native adapters use `jam-vm` filenames, and runtime
+library manifests determine deployment membership.
 Ordinary builds consume a prebuilt package through `JAVA_HOME`; they do not
 build a JDK or compiler. Toolchain caching depends on platform and package
 identity, independently of THC sources and Cabal's project file.
@@ -54,12 +52,14 @@ and maximum heap capacities. Existing THC Truffle API/runtime/Sulong patches
 remain part of the shared-host contract. The API loads from the host classloader,
 with the matching native directory selected from the running package.
 
-The pinned Linux package requires glibc 2.35. Matching macOS and Windows
-packages have separate recorded identities. Windows has the bounded JVM
-weak-bootstrap evidence below. The macOS arm64 package requires macOS 15.5;
-its selected JVM checks pass on that version. THC Native Image execution on
-macOS remains unqualified.
-Consumer CI uses the retained release assets and the matching platform floors.
+The pinned Linux package requires glibc 2.35, and the macOS arm64 package
+requires macOS 15.5. THC compilation and focused ownership checks pass on
+both. macOS also has interpreted blocked-owner application checks. The recorded
+scope does not qualify the Linux blocked-owner application or the full compiled
+macOS application. The Windows pin
+records supplier checks, and THC execution with that package remains
+unqualified. Consumer CI uses the release assets and the recorded platform
+requirements.
 
 Native Image builds select `--gc=jam`. Both image recipes also reuse the
 [two-class builder correction](../research/native-image-preparation/runtime-simulated-folds/README.md)
@@ -88,13 +88,10 @@ supported and require their declared runtime libraries beside the executable.
 Windows retains the Microsoft dynamic
 CRT, and THC image production still admits only Linux x86-64.
 
-The ordinary `thc build thc-examples:exe:weak-threads --native-image` workflow
-passes with this package, including Cabal acquisition, GHC's generated Main
-wrapper, artifact verification and atomic publication. After relocation with
-only the executable, it matches all six native-GHC output lines with empty
-stderr. Its ELF imports are the system loader, libc, libm and libz; no Jam, C++
-or unwind shared libraries remain. This does not make arbitrary package-native
-dependencies static.
+THC Native Image application execution remains unqualified with the current
+pins. Supplier Native Image checks cover the provider itself. THC qualification
+requires building the application with the pinned package and checking the
+relocated executable against its native-GHC oracle.
 
 ## Reachability and identity
 
@@ -190,7 +187,10 @@ handler, suspension and shutdown before entry. Native GHC supplies independent
 Haskell expectations. Preserve both backends, both handoff modes and the first
 compiled call where relevant.
 
-On Linux, 22 selected JVM checks pass on the retained ordinary Jam package,
+The results below describe earlier Jam packages. For the current release, see
+the per-platform `qualificationScope` in `etc/jam-graalvm.json`.
+
+On Linux, 22 selected JVM checks passed on an earlier Jam package,
 with no failures or skips. They cover both handoff modes, both backends where
 relevant, first compiled calls, the original GHC automatic-finalizer law,
 completed-thunk aliases, cooperative pending handoff, capture release, callback
@@ -210,7 +210,7 @@ handoff mode: 10 actual cases, zero failures, errors or skips. They cover comple
 aliases and cooperative pending handoff on AST/bytecode, explicit finalization
 without forcing opaque states, obsolete capture release before a real finalizer
 blocks on platform/Loom hosting, and actual context-close invalidation. The
-ordinary pinned release package from producer `3cb04509` passes complete
+earlier release package from producer `3cb04509` passed complete
 `verifyJamToolchain` verification and reports `jdk.debug=release`.
 These Java models do not qualify compiled execution, native GHC fixtures,
 registration metadata reclamation or Windows Native Image execution.
@@ -224,7 +224,7 @@ it has no source, CBD, GHC or JDK dependency at execution time. The original GHC
 finalizer runner is included by the shared Core dependency selector. This check
 does not extend the JVM first-compiled-call evidence to Native Image.
 
-The pinned Linux release includes the supplier's root repair, pinning, reusable
+An earlier Linux release included the supplier's root repair, pinning, reusable
 weak-registration metadata and SubstrateVM operation-queue lifetime repair.
 Twenty-three focused weak/finalizer and Loom lifecycle checks pass across both
 handoff modes on this package. Terminal MVar requests release their cell while
@@ -232,9 +232,9 @@ preserving repeatable committed results; completed finalizer work releases its
 captures after the carrier has joined. Pending operations and failed setup
 retain the state they still own.
 
-The `WeakThreads` program matches its complete six-line native-GHC oracle on
-both JVM backends in both handoff modes and in the relocated static-Jam Native
-Image built by the ordinary CLI. It checks that a running worker and a retained
+With an earlier Linux package, `WeakThreads` matched its complete six-line
+native-GHC oracle on both JVM backends in both handoff modes and in the
+relocated static-Jam Native Image built by the ordinary CLI. It checks that a running worker and a retained
 ThreadId remain observable, then that dropping the ThreadId allows collection.
 A finalizer resurrects its cell without reviving the old weak handle; a fresh
 weak handle permits another lifetime, with each finalizer running once.
@@ -242,21 +242,17 @@ The driver uses the declared Cabal component and its complete acquired closure,
 including the original GHC Main wrapper and exception bridge. The resource-copy
 image profile is the default and the one used for this static qualification.
 
-On macOS 15.5 arm64, 36 selected JVM checks pass: 18 per handoff mode, with
-no failures or skips. They cover weak handoff and threaded thunk behavior,
+On an earlier macOS 15.5 arm64 package, 36 selected JVM checks passed, 18 per
+handoff mode, with no failures or skips. They cover weak handoff and threaded thunk behavior,
 including first compiled calls on both backends. Toolchain verification and the
 installed launcher use the exact published package. This reuses the package's
 local qualification; it is not a macOS CI or THC Native Image result.
 
-Recovery from actual heap exhaustion, macOS THC Native Image execution and
-remaining Windows coverage are still open. The older combined Native Image component candidate
-passed the unchanged `NativeWeak` executable; its evidence and the newer
-`WeakThreads` application pass do not establish all-platform qualification.
-Supplier release qualification is
-tracked in [Jam #10](https://github.com/ekmett/jam/issues/10).
+Recovery from actual heap exhaustion remains open. Supplier release
+qualification is tracked in [Jam #10](https://github.com/ekmett/jam/issues/10).
 
-The ordinary static build includes `--verify-artifacts` and succeeds with its
-declared producer inputs and loader admission checks. An earlier separate full-module
+The earlier `WeakThreads` static build included `--verify-artifacts` and
+passed with its declared producer inputs and loader admission checks. An earlier separate full-module
 verification of `NativeWeak` exceeded its time bound before guest entry; that
 different workload has not been requalified by the WeakThreads result.
 
