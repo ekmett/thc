@@ -121,9 +121,10 @@ the corresponding nested region in the copied owning function, even when that
 function's enclosing target was successfully installed. Recovery-created entries
 and side edges veto inlining so a small trace cannot rebuild the failed parent
 graph. Deferred default sides are also prepared independently for the replacement.
-If no smaller region remains, fresh AST entry uses a cold trampoline over a new
-frame with the original arguments; it consumes ingress once and never publishes
-an unchanged retryable clone. Existing body executions and parked continuations
+If no smaller region remains, interpreted AST entry consumes ingress once in
+the incoming root frame. A compiled arrival takes an arguments-only boundary
+and initializes its cold frame there. Recovery publishes a replacement only
+when it can reduce the body. Existing body executions and parked continuations
 keep their frame, program counter and lexical cleanup. See the
 [stock-runtime workflow](contributing.md) for eligibility and limitations.
 
