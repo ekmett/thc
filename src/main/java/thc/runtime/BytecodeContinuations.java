@@ -84,10 +84,23 @@ final class BytecodeContinuations {
      * dependency path before inspecting logical wait ownership, without changing
      * PendingWait's publication/introspection protocol or claiming any token. */
     @TruffleBoundary static void preflightWait(Object value) {
-        var seen = new java.util.IdentityHashMap<Object, Boolean>();
+        ContinuationVisited seen = null;
+        Object first = null, second = null, third = null;
         for (;;) {
-            if (value != null && seen.put(value, Boolean.TRUE) != null)
-                throw fault("Suspended guest dependency cycle");
+            if (value != null) {
+                if (seen == null) {
+                    if (value == first || value == second || value == third)
+                        throw fault("Suspended guest dependency cycle");
+                    if (first == null) first = value;
+                    else if (second == null) second = value;
+                    else if (third == null) third = value;
+                    else {
+                        seen = new ContinuationVisited();
+                        seen.add(first); seen.add(second); seen.add(third); seen.add(value);
+                        first = null; second = null; third = null;
+                    }
+                } else if (!seen.add(value)) throw fault("Suspended guest dependency cycle");
+            }
             if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
             else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
             else if (value instanceof Force.DriverWait driver) value = driver.segment;

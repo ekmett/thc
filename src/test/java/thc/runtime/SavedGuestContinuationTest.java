@@ -751,13 +751,23 @@ class SavedGuestContinuationTest {
         }
     }
 
-    @Test void dependencyInspectionPreservesCollidingIdentitiesAcrossGrowth() {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void dependencyInspectionPreservesCollidingIdentitiesAcrossGrowth(boolean preflight) {
+        java.util.function.Consumer<Object> inspect = preflight ? BytecodeContinuations::preflightWait
+            : value -> assertNull(PendingWait.of(value));
         class Edge implements SavedGuestContinuation {
             Object next;
             int reads;
+            Runnable nested;
+            RuntimeFault failure;
             @Override public Object getSourceRoot() { return this; }
             @Override public Object getIdentity() { return this; }
-            @Override public Object getYielded() { reads++; return next; }
+            @Override public Object getYielded() {
+                reads++;
+                if (nested != null) nested.run();
+                if (failure != null) throw failure;
+                return next;
+            }
             @Override public Object continueWith(Object input) { return fail("Inspection resumed a saved body"); }
             @Override public boolean equals(Object other) { throw new AssertionError("Inspection called guest equality"); }
             @Override public int hashCode() { throw new AssertionError("Inspection called guest hashing"); }
@@ -779,14 +789,14 @@ class SavedGuestContinuationTest {
         for (var edge : edges) if (edge != first && edge != second) order.add(edge);
         for (int i = 1; i < order.size(); i++) order.get(i - 1).next = order.get(i);
         var start = first;
-        assertNull(PendingWait.of(start));
+        inspect.accept(start);
         for (var edge : edges) assertEquals(1, edge.reads);
         order.getLast().next = first;
-        var failure = assertThrows(RuntimeFault.class, () -> PendingWait.of(start));
+        var failure = assertThrows(RuntimeFault.class, () -> inspect.accept(start));
         assertEquals("Suspended guest dependency cycle", failure.getMessage());
         for (var edge : edges) assertEquals(2, edge.reads, "The repeated identity must reject before another successor read");
         order.getLast().next = null;
-        assertNull(PendingWait.of(start));
+        inspect.accept(start);
         for (var edge : edges) assertEquals(3, edge.reads, "Every inspection must start with fresh membership");
 
         for (int length = 1; length <= 4; length++) for (int repeated = 0; repeated < length; repeated++) {
@@ -795,17 +805,31 @@ class SavedGuestContinuationTest {
             last.next = order.get(repeated);
             var before = new int[order.size()];
             for (int i = 0; i < before.length; i++) before[i] = order.get(i).reads;
-            var shortCycle = assertThrows(RuntimeFault.class, () -> PendingWait.of(start));
+            var shortCycle = assertThrows(RuntimeFault.class, () -> inspect.accept(start));
             assertEquals("Suspended guest dependency cycle", shortCycle.getMessage());
             for (int i = 0; i < before.length; i++)
                 assertEquals(before[i] + (i < length ? 1 : 0), order.get(i).reads,
                     "Reject a short cycle before rereading its successor");
             last.next = null;
-            assertNull(PendingWait.of(start));
+            inspect.accept(start);
             for (int i = 0; i < before.length; i++)
                 assertEquals(before[i] + (i < length ? 2 : 0), order.get(i).reads,
                     "A mutated short chain must have fresh membership");
         }
+        // A callback can inspect the same identities in an independent traversal.
+        var before = order.stream().mapToInt(edge -> edge.reads).toArray();
+        start.nested = () -> { start.nested = null; inspect.accept(start); };
+        inspect.accept(start);
+        for (int i = 0; i < order.size(); i++)
+            assertEquals(before[i] + (i < 4 ? 2 : 0), order.get(i).reads);
+        var last = order.get(3);
+        last.failure = new RuntimeFault("successor inspection failed");
+        assertSame(last.failure, assertThrows(RuntimeFault.class, () -> inspect.accept(start)));
+        last.failure = null;
+        inspect.accept(start);
+        for (int i = 0; i < order.size(); i++)
+            assertEquals(before[i] + (i < 4 ? 4 : 0), order.get(i).reads,
+                "A failed inspection must not retain membership for a later call");
     }
     @Test void dependencyCycleRejectsBeforeAnyBoundaryChangesOwnership() {
         try (var context = Main.executionContext()) {
