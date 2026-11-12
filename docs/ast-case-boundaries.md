@@ -131,9 +131,19 @@ keep their frame, program counter and lexical cleanup. See the
 Recovery can also separate a case demand or scalar local-join operation into an
 opaque side using the same activation frame. A fresh join extraction also
 separates its first eligible demand, if that is the first operation within its
-region. This bounded setup stops at existing regions and constructs both sides
-before publishing the recovery clone. These operation sides own their
-physical failure receipts: failure retires the side without invalidating or
+region. When that demand belongs to a case, its immediate scalar alternatives
+containing local-join calls also acquire operation sides. The original bodies,
+including installed probe wrappers, remain adopted in the original function.
+A branch transfers the same cached local-join jump to the original repeater;
+argument staging, formal writes, frame clearing and group matching stay at their
+existing owners. Branch calls use the location-aware target entry with generic
+AOT preparation so the first jump does not train an indirect-call exception
+profile. Other same-frame calls retain their existing entry.
+
+This bounded setup does not recursively split branch descendants. It stops at
+existing regions and constructs the selected sides before publishing the recovery
+clone. It does not guarantee that every resulting join or branch fits the graph
+budget. These operation sides own their physical failure receipts: failure retires the side without invalidating or
 replacing the independently compilable parent. The retired operation continues
 interpreted; its failure initiates no child recovery or retry of that physical
 target. Ordinary case-arm failures

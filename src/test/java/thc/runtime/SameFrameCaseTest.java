@@ -147,12 +147,17 @@ class SameFrameCaseTest {
     private static final class Body extends Expr {
         private final State state;
         private final boolean fail;
-        Body(State state, boolean fail) { this.state = state; this.fail = fail; }
+        private final LocalJoinJump jump;
+        Body(State state, boolean fail) { this(state, fail, null); }
+        Body(State state, boolean fail, LocalJoinJump jump) { this.state = state; this.fail = fail; this.jump = jump; }
         private void enter(VirtualFrame frame) {
             if (!(getRootNode() instanceof Caller) || frame.getObject(4) != frame)
                 throw new AssertionError("body lost original root or exact frame");
-            state.effects++;
-            if (CompilerDirectives.inCompiledCode()) state.compiled++;
+            if (jump != null) recordBranch(state, CompilerDirectives.inCompiledCode());
+            else {
+                state.effects++;
+                if (CompilerDirectives.inCompiledCode()) state.compiled++;
+            }
             frame.setLong(0, frame.getLong(0) + 3);
         }
         @Override public Object execute(VirtualFrame frame) { enter(frame); return state.marker; }
@@ -161,7 +166,11 @@ class SameFrameCaseTest {
             if (fail && (Boolean) frame.getArguments()[0]) throw state.unexpected;
             return Integer.MIN_VALUE;
         }
-        @Override public long executeLong(VirtualFrame frame) { enter(frame); return Long.MIN_VALUE; }
+        @Override public long executeLong(VirtualFrame frame) {
+            enter(frame);
+            if (jump != null && (Boolean) frame.getArguments()[0]) throw jump;
+            return Long.MIN_VALUE;
+        }
         @Override public float executeFloat(VirtualFrame frame) { enter(frame); return Float.intBitsToFloat(0x80000000); }
         @Override public double executeDouble(VirtualFrame frame) { enter(frame); return Double.longBitsToDouble(0xfff8000000001234L); }
         @Override public Closure executeClosure(VirtualFrame frame) { enter(frame); return (Closure) state.marker; }
@@ -208,6 +217,7 @@ class SameFrameCaseTest {
                     default -> arm.execute(frame);
                 };
             } catch (UnexpectedResultException failure) { result = failure; }
+            catch (LocalJoinJump jump) { result = jump; }
             if (frame.getLong(0) != 10L || frame.getLong(5) != 99L) throw new AssertionError("lost write or wrong tuple offset");
             if (mode == 8 && (frame.getInt(1) != Integer.MIN_VALUE ||
                     Float.floatToRawIntBits(frame.getFloat(2)) != 0x80000000 || frame.getObject(3) != result))
@@ -244,6 +254,47 @@ class SameFrameCaseTest {
                 }
                 assertEquals(1, state.effects); assertEquals(1, state.compiled);
                 assertSame(target, root.getCallTarget()); assertTrue(target.isValidLastTier()); assertTrue(side.isValidLastTier());
+            } finally { context.leave(); }
+        }
+    }
+
+    /** Isolated side-call ABI evidence; the full Program repeater has its own budget control. */
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void firstCompiledBranchJumpRetainsExactFrameAndInstalledCaller(boolean transfer) throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000")
+                .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.DiagnoseFailure", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var state = new State();
+                var destination = new LocalJoinTarget(new Object(), 1, new int[0], new CoreRepresentation[0]);
+                var jump = destination.getJump();
+                var body = new Body(state, false, jump);
+                var root = new Caller(language, body, 2);
+                // Select the private operation role without adding a production test API.
+                Class<?> role = Class.forName(AstSameFrameArm.class.getName() + "$Role");
+                Object branch = java.util.Arrays.stream(role.getEnumConstants())
+                        .filter(value -> value.toString().equals("BRANCH")).findFirst().orElseThrow();
+                var constructor = AstSameFrameArm.class.getDeclaredConstructor(Expr.class, role);
+                constructor.setAccessible(true);
+                root.arm = constructor.newInstance(body, branch);
+                var target = (OptimizedCallTarget) root.getCallTarget();
+                assertTrue(AstSameFrameArm.extract(root));
+                var side = (OptimizedCallTarget) targets(root.arm)[2];
+                assertFalse(target.wasExecuted()); assertFalse(side.wasExecuted());
+                compile(side); compile(target);
+                assertEquals(0, state.effects);
+                try (var invalidations = new Invalidations(target, side)) {
+                    Object result = Calls.target(target, new Object[]{transfer});
+                    if (transfer) assertSame(jump, result); else assertEquals(Long.MIN_VALUE, result);
+                    assertEquals(1, state.effects); assertEquals(1, state.compiled);
+                    assertTrue(side.isValidLastTier(), invalidations.toString());
+                    assertTrue(target.isValidLastTier(), invalidations.toString());
+                }
             } finally { context.leave(); }
         }
     }
@@ -404,6 +455,11 @@ class SameFrameCaseTest {
 
             } finally { context.leave(); }
         }
+    }
+
+    @TruffleBoundary private static void recordBranch(State state, boolean compiled) {
+        state.effects++;
+        if (compiled) state.compiled++;
     }
 
     @ParameterizedTest @ValueSource(booleans = {false, true})

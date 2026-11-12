@@ -16,7 +16,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 
-/** Initially inline, then a finite graph-budget boundary around a returning case arm.
+/** Initially inline, then a finite graph-budget boundary around an owned region.
  * The body remains adopted by its original function: capture, Bloom, joins and
  * instance lookup keep the same owner and the exact same activation frame. */
 final class AstSameFrameArm extends Expr implements ReplaceObserver {
@@ -27,17 +27,18 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     @CompilationFinal(dimensions = 1) private volatile RootCallTarget[] targets;
     private volatile long sideGeneration;
     private boolean copiedExtraction;
-    private final boolean operationRegion;
+    private enum Role { ARM, DEMAND, JOIN, BRANCH }
+    private final Role role;
 
-    AstSameFrameArm(Expr body) { this(body, false); }
-    private AstSameFrameArm(Expr body, boolean operationRegion) {
+    AstSameFrameArm(Expr body) { this(body, Role.ARM); }
+    private AstSameFrameArm(Expr body, Role role) {
         this.body = body;
-        this.operationRegion = operationRegion;
+        this.role = role;
         setRepresentation(body.getRepresentation());
         setCoreSourceLocation(body.getCoreSourceLocation());
     }
-    @Override public boolean isInstrumentable() { return !operationRegion && super.isInstrumentable(); }
-    @Override public boolean needsCallState() { return operationRegion ? body.needsCallState() : super.needsCallState(); }
+    @Override public boolean isInstrumentable() { return role == Role.ARM && super.isInstrumentable(); }
+    @Override public boolean needsCallState() { return role != Role.ARM ? body.needsCallState() : super.needsCallState(); }
 
     /** Only an unpublished recovery copy gains operation boundaries. Functions
      * already containing same-frame regions have retained their frame identity. */
@@ -49,9 +50,20 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
                     // Split the fresh join's first demand before constructing its
                     // side targets; both boundaries retain the original frame.
                     Expr first = firstOperation(operation, false);
-                    if (first instanceof Evaluate) prepare(first.replace(new AstSameFrameArm(first, true)));
+                    if (first instanceof Evaluate && first.getParent() instanceof LocalBinding binding &&
+                            binding.getParent() instanceof Case selection) {
+                        prepare(first.replace(new AstSameFrameArm(first, Role.DEMAND)));
+                        // Keep each complete alternative, including an installed probe,
+                        // in its original owner; local jumps cross the side unchanged.
+                        for (Alternative alternative : selection.alternatives) {
+                            Expr body = alternative.getBody();
+                            if (!(body instanceof AstSameFrameArm) && !body.getRepresentation().isTypedTransport() &&
+                                    NodeUtil.findFirstNodeInstance(body, LocalJoinCall.class) != null)
+                                prepare(body.replace(new AstSameFrameArm(body, Role.BRANCH)));
+                        }
+                    }
                 }
-                return prepare(operation.replace(new AstSameFrameArm(operation, true)));
+                return prepare(operation.replace(new AstSameFrameArm(operation, operation instanceof LocalJoinRegion ? Role.JOIN : Role.DEMAND)));
             }
         }
         return extract(region);
@@ -148,7 +160,9 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     private Object invoke(VirtualFrame frame, int mode, int[] slots, int offset) {
         Object[] arguments = mode == TUPLE ? new Object[]{frame.materialize(), slots, offset}
                 : new Object[]{frame.materialize()};
-        return Calls.indirect(call, targets[mode], arguments);
+        // A branch's first local jump must not initialize an indirect-call exception profile.
+        return role == Role.BRANCH ? ((OptimizedCallTarget) targets[mode]).call(this, arguments)
+                : Calls.indirect(call, targets[mode], arguments);
     }
     @Override public Object execute(VirtualFrame frame) {
         return targets == null ? body.execute(frame) : invoke(frame, OBJECT, null, 0);
@@ -190,7 +204,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
             this.mode = mode;
         }
         ContextRoot sourceRoot() { return (ContextRoot) arm.getRootNode(); }
-        boolean ownsCompilationFailure() { return arm.operationRegion; }
+        boolean ownsCompilationFailure() { return arm.role != Role.ARM; }
 
         boolean extractInCopy(FunctionRoot replacement) {
             var originalArms = NodeUtil.findAllNodeInstances(sourceRoot(), AstSameFrameArm.class);
@@ -232,7 +246,12 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
         }
         @Override public SourceSection getSourceSection() { return arm.getSourceSection(); }
         @Override public String getName() {
-            String kind = !arm.operationRegion ? "case arm" : arm.body instanceof LocalJoinRegion ? "join region" : "case demand";
+            String kind = switch (arm.role) {
+                case ARM -> "case arm";
+                case DEMAND -> "case demand";
+                case JOIN -> "join region";
+                case BRANCH -> "join branch";
+            };
             return arm.getRootNode().getName() + " <" + kind + ">";
         }
         @Override public boolean isCloningAllowed() { return false; }
