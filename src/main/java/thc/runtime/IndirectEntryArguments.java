@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
@@ -23,14 +24,16 @@ public final class IndirectEntryArguments extends Node {
         for (int i = start; i < positions.length; i++) {
             int position = positions[i];
             try { packet[position] = AstControl.forceCallback(frame, this, force, packet[position]); }
-            catch (AstCapture cut) {
-                int next = i + 1;
-                throw cut.append((saved, input) -> {
-                    packet[position] = input;
-                    forceFrom(saved, positions, packet, next);
-                    return Unit.INSTANCE;
-                });
-            }
+            catch (AstCapture cut) { throw appendCapture(cut, positions, packet, position, i + 1); }
         }
+    }
+    /** Retain only this invocation's unfinished strict-argument preparation. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture appendCapture(AstCapture cut, int[] positions, Object[] packet, int position, int next) {
+        return cut.append((saved, input) -> {
+            packet[position] = input;
+            forceFrom(saved, positions, packet, next);
+            return Unit.INSTANCE;
+        });
     }
 }

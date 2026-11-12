@@ -46,9 +46,15 @@ class GhcBCOContinuationTest {
             map("binders", list(arg("s", VOID), arg("value", REF))))), map("rep", REF, "binder", arg("pair", PAIR)));
         body = list("case", take("prefix"), "before", list(list("default", null, list(), body)),
             map("rep", REF, "binder", arg("before", PAIR)));
+        // This lazy poison declares the MVar payload dependency for transport only.
+        // Successful interruption/resumption must not force it; it is no native exception oracle.
+        var blockedProof = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+        var blocked = map("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+            "type", "SomeException", "lifted", true, "arity", 0, "rep", blockedProof,
+            "expr", v(CoreBlockedExceptions.MVAR, blockedProof));
         return map("instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2)),
             "bindings", list(map("id", "wait", "name", "wait", "lifted", true,
-                "expr", list("lam", list(arg("prefix", CELL), arg("cell", CELL)), body, map("resultRep", REF)))));
+                "expr", list("lam", list(arg("prefix", CELL), arg("cell", CELL)), body, map("resultRep", REF))), blocked));
     }
     private static Context context() { return context(0, null); }
     private static Context context(int sparkCapacity, String hosting) {
