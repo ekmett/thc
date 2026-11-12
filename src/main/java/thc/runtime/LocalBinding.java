@@ -45,7 +45,10 @@ public final class LocalBinding extends Node {
      * A suspended child still installs the original binder before saved selection. */
     DataValue evaluateDataWithSavedWrite(VirtualFrame frame) {
         try { return value.executeRequiredDataValue(frame); }
-        catch (AstCapture cut) { throw appendWrite(cut); }
+        catch (AstCapture cut) {
+            CompilerDirectives.transferToInterpreter();
+            throw appendWrite(cut);
+        }
         catch (DelimitedCut cut) {
             CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, (saved, input, ambient, outer) -> resumeWrite(saved, input.get()));
@@ -53,7 +56,10 @@ public final class LocalBinding extends Node {
     }
     public void write(VirtualFrame frame) {
         try { writeValue(frame); }
-        catch (AstCapture cut) { throw appendWrite(cut); }
+        catch (AstCapture cut) {
+            CompilerDirectives.transferToInterpreter();
+            throw appendWrite(cut);
+        }
         catch (DelimitedCut cut) {
             // append enters the interpreter too; enter before constructing its saved suffix.
             CompilerDirectives.transferToInterpreter();

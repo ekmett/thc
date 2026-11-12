@@ -8,6 +8,7 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.ExecutionSignature;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
@@ -561,6 +562,65 @@ class CaseBinderLifetimeTest {
                         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                     }
                 }
+            } finally { context.leave(); }
+        }
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private static void recordCaptureEntry(int[] compiled, boolean installed) {
+        if (installed) compiled[0]++;
+    }
+
+    @Test void firstCompiledDataCaptureKeepsItsTargetAndSavedWrite() throws Exception {
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = new FrameLayout(); int binder = layout.bind("dead", FrameSlotKind.Object);
+                int field = layout.bind("field", FrameSlotKind.Long); int[] compiled = {0};
+                var data = new DataLayout(language, "captured", "captured", new String[]{"IntRep"});
+                var proof = new CoreRepresentation(CoreKind.DATA, true, true);
+                var marker = new Object(); var cut = new AstCapture(marker, MaskingState.UNMASKED);
+                AstCapture[] observed = {null};
+                var direct = data.createLong(42);
+                Expr input = new Expr() {
+                    { setRepresentation(proof); }
+                    @Override public Object execute(VirtualFrame frame) { return executeDataValue(frame); }
+                    @Override public DataValue executeDataValue(VirtualFrame frame) {
+                        recordCaptureEntry(compiled, CompilerDirectives.inCompiledCode());
+                        if (frame.getArguments()[1] == cut) throw cut;
+                        return direct;
+                    }
+                };
+                Expr body = new Expr() {
+                    @Override public Object execute(VirtualFrame frame) {
+                        if (frame.getTag(binder) != FrameSlotKind.Illegal.tag) return -1L;
+                        return frame.getLong(field);
+                    }
+                };
+                var selection = new Case(input, binder, new Alternative[]{new Alternative(Alternative.DATA_ALTERNATIVE,
+                        data, new int[]{field}, body, new int[0][], false)}, new Metrics(false), proof, false).discardUnusedBinder();
+                var root = new GuestRoot(language, layout.build()) {
+                    @Child private Case value = selection;
+                    @Override protected boolean requiresMaterializableFrame() { return true; }
+                    @Override protected ExecutionSignature prepareForAOT() { return ExecutionSignature.GENERIC; }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        try { return value.execute(frame); }
+                        catch (AstCapture caught) { observed[0] = caught; return caught.freeze(this, frame.materialize()); }
+                    }
+                };
+                var target = (com.oracle.truffle.runtime.OptimizedCallTarget) root.getCallTarget();
+                assertTrue(target.prepareForAOT());
+                target.compile(true); target.waitForCompilation();
+                assertFalse(target.wasExecuted()); assertTrue(target.isValidLastTier());
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{0L, cut}));
+                assertEquals(1, compiled[0]); assertTrue(target.isValidLastTier());
+                assertSame(cut, observed[0]);
+                assertSame(marker, saved.getYielded()); assertSame(root, saved.getSourceRoot());
+                assertEquals(42L, saved.continueWith(data.createLong(42)));
+                assertEquals(1, compiled[0]); assertTrue(target.isValidLastTier());
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(data.createLong(42)));
             } finally { context.leave(); }
         }
     }
