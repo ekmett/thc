@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -27,8 +30,16 @@ public final class LocalRead extends Expr {
             ? frame.getInt(slot) : super.executeInt(frame);
     }
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
+        // Keep known frames virtual; isolate generic reads of incoming frames.
         return ownedStorage == FrameSlotKind.Long || (!cell && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Long) || frame.isLong(slot)
-            ? frame.getLong(slot) : super.executeLong(frame);
+            ? frame.getLong(slot)
+            : CompilerDirectives.isPartialEvaluationConstant(frame.getFrameDescriptor())
+                ? super.executeLong(frame) : readLongFallback(frame.materialize());
+    }
+    /** Retain generic carriers and recursive-cell checks outside the primitive read graph. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private long readLongFallback(MaterializedFrame frame) throws UnexpectedResultException {
+        return super.executeLong(frame);
     }
     @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
         return ownedStorage == FrameSlotKind.Float || (!cell && frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Float) || frame.isFloat(slot)
