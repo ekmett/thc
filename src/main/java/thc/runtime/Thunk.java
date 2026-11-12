@@ -52,6 +52,17 @@ public final class Thunk implements Lifted {
     public void setValue(Object value) { this.value = value; }
     public Thread getOwner() { return owner; }
     public void setOwner(Thread owner) { this.owner = owner; }
+    /** Claim only the initial state; the demanding operation covers this call
+     * with owner-checked cleanup, including an unwind after the ownership store. */
+    @TruffleBoundary(transferToInterpreterOnException = false, allowInlining = true)
+    boolean tryClaimFresh() {
+        synchronized (this) {
+            if (getState() != 0) return false;
+            owner = Thread.currentThread();
+            setState(1);
+            return true;
+        }
+    }
     /** Publish a completed evaluation and release its owned inputs atomically. */
     @TruffleBoundary(transferToInterpreterOnException = false, allowInlining = true)
     void publishSuccess(Object result) {
