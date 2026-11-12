@@ -21,6 +21,141 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OperandRetentionTest {
+    @Test void primitiveLoweringKeepsTypedOperandsOnFirstCompiledEntryAtDefaultBudget() throws Exception {
+        var scalar = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
+        for (String name : List.of("eqChar#", "+#", "negateInt64#")) {
+            var operandRep = Map.of("kind", "long", "primReps", List.of(name.equals("eqChar#") ? "WordRep" : name.equals("negateInt64#") ? "Int64Rep" : "IntRep"), "evaluated", true);
+            var resultRep = name.equals("negateInt64#") ? operandRep : scalar;
+            var literal = List.of("lit", name.equals("eqChar#") ? "char" : name.equals("negateInt64#") ? "int64" : "int", "21", Map.of("rep", operandRep));
+            var operands = name.equals("negateInt64#") ? List.of(literal) : List.of(literal, literal);
+            var call = List.of("app", List.of("prim", name), operands,
+                name.equals("negateInt64#") ? List.of(false) : List.of(false, false), false, false, Map.of("rep", resultRep));
+            var module = Map.<String, Object>of("instrument", true, "constructors", List.of(), "bindings", List.of(
+                Map.of("id", "entry", "name", "entry", "arity", 1, "lifted", true,
+                    "expr", List.of("lam", List.of(Map.of("id", "unused", "lifted", false, "rep", scalar)),
+                        call, Map.of("resultRep", resultRep)))));
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var program = new Program(language, module, true, false);
+                    var target = program.entryTarget("entry");
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), name);
+                    long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                    assertEquals(name.equals("eqChar#") ? 1L : name.equals("+#") ? 42L : -21L,
+                        assertInstanceOf(Long.class, Calls.target(target, new Object[]{0L, 0L})));
+                    assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                } finally { context.leave(); }
+            }
+        }
+    }
+    private static final class PrimitiveRoot extends GuestRoot {
+        @Child private Primitive body;
+        final boolean generic;
+        final SourceSection source;
+        PrimitiveRoot(Language language, String name, boolean generic, Expr... operands) {
+            super(language, new FrameLayout().build());
+            body = new Primitive(name, operands); this.generic = generic; source = operands[0].getSourceSection();
+        }
+        @Override public SourceSection getSourceSection() { return source; }
+        @Override public long bloom(VirtualFrame frame) { return 0L; }
+        @Override public Object execute(VirtualFrame frame) {
+            try { return generic ? body.execute(frame) : body.executeLong(frame); }
+            catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+        }
+    }
+    @Test void primitiveOperandsResumeSuccessiveCutsWithoutReplayingSourceEvents() throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var attachment = context.getEngine().getInstruments().get("thc-activation-test").lookup(AstInstrumentationTest.Attachment.class);
+                for (boolean generic : List.of(false, true)) {
+                    var order = new ArrayList<String>(); var events = new ArrayList<String>();
+                    var source = Source.newBuilder("thc", "x+y", "primitive-operands.hs").build();
+                    var first = new IndexOperand(19L, order, "first", true, false);
+                    var second = new IndexOperand(23L, order, "second", true, false);
+                    first.setCoreSourceLocation(new CoreSourceLocation(source.createSection(0, 1), List.of()));
+                    second.setCoreSourceLocation(new CoreSourceLocation(source.createSection(2, 1), List.of()));
+                    var root = new PrimitiveRoot(language, "+#", generic, first, second);
+                    var binding = attachment.attachStatements(source, new ExecutionEventListener() {
+                        @Override public void onEnter(EventContext event, VirtualFrame frame) { events.add(event.getInstrumentedSourceSection().getCharacters().toString()); }
+                        @Override public void onReturnValue(EventContext event, VirtualFrame frame, Object value) {}
+                        @Override public void onReturnExceptional(EventContext event, VirtualFrame frame, Throwable failure) {}
+                    });
+                    try {
+                        var saved = assertInstanceOf(AstContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                        assertEquals(List.of("first"), order);
+                        var remaining = assertInstanceOf(AstContinuation.class, saved.continueWith(19L));
+                        assertEquals(List.of("first", "second"), order);
+                        assertEquals(42L, assertInstanceOf(Long.class, remaining.continueWith(23L)));
+                        assertEquals(List.of("first", "second"), order);
+                        assertEquals(List.of("x", "y"), events);
+                        assertThrows(RuntimeFault.class, () -> remaining.continueWith(23L));
+                    } finally { binding.dispose(); }
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void primitiveDelimitedRecipesKeepSavedPrefixAndReadRemainingHeapOnEachInvocation() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var order = new ArrayList<String>();
+                var heap = ManagedAddress.fromByteArray(new byte[]{21});
+                Expr remaining = new Expr() { @Override public Object execute(VirtualFrame frame) { order.add("heap"); return heap.readWord8(0); } };
+                var firstRoot = new PrimitiveRoot(language, "+#", false,
+                    new IndexOperand(21L, order, "first", false, true), remaining);
+                var firstCut = assertThrows(DelimitedCut.class, () -> Calls.target(firstRoot.getCallTarget(), new Object[]{0L}));
+                assertEquals(1, firstCut.getFrames().size());
+                var firstRecipe = firstCut.getFrames().getFirst().getStep();
+                for (int value : new int[]{21, 22}) {
+                    heap.writeWord8(0, value);
+                    var copy = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, firstRoot.getFrameDescriptor());
+                    assertEquals(21L + value, firstRecipe.resume(copy, new DelimitedResume(21L), MaskingState.UNMASKED, null));
+                }
+                assertEquals(List.of("first", "heap", "heap"), order);
+                order.clear();
+                var prefix = new IndexOperand(19L, order, "first", false, false);
+                var secondRoot = new PrimitiveRoot(language, "+#", true, prefix, new IndexOperand(23L, order, "second", false, true));
+                var secondCut = assertThrows(DelimitedCut.class, () -> Calls.target(secondRoot.getCallTarget(), new Object[]{0L}));
+                assertEquals(1, secondCut.getFrames().size());
+                var secondRecipe = secondCut.getFrames().getFirst().getStep();
+                prefix.value = 100L;
+                for (long value : new long[]{23, 24}) {
+                    var copy = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, secondRoot.getFrameDescriptor());
+                    assertEquals(19L + value, secondRecipe.resume(copy, new DelimitedResume(value), MaskingState.UNMASKED, null));
+                }
+                assertEquals(List.of("first", "second"), order);
+                var wrong = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, secondRoot.getFrameDescriptor());
+                assertThrows(RuntimeFault.class, () -> secondRecipe.resume(wrong, new DelimitedResume(23), MaskingState.UNMASKED, null));
+            } finally { context.leave(); }
+        }
+    }
+    @Test void primitiveUnaryAndExceptionalSuffixKeepRequiredLongCarrier() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var order = new ArrayList<String>();
+                var unary = new PrimitiveRoot(language, "negateInt64#", true, new IndexOperand(21L, order, "unary", true, false));
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(unary.getCallTarget(), new Object[]{0L}));
+                assertEquals(-21L, saved.continueWith(21L));
+                var wrong = assertInstanceOf(AstContinuation.class, Calls.target(unary.getCallTarget(), new Object[]{0L}));
+                assertThrows(RuntimeFault.class, () -> wrong.continueWith(21));
+                var divide = new PrimitiveRoot(language, "quotInt#", false,
+                    new IndexOperand(42L, order, "dividend", false, false), new IndexOperand(0L, order, "divisor", true, false));
+                var dividing = assertInstanceOf(AstContinuation.class, Calls.target(divide.getCallTarget(), new Object[]{0L}));
+                assertThrows(ArithmeticException.class, () -> dividing.continueWith(0L));
+                assertEquals(List.of("unary", "unary", "dividend", "divisor"), order);
+            } finally { context.leave(); }
+        }
+    }
     @Test void scalarIndexLoweringKeepsStaticAddressOnFirstCompiledEntryAtDefaultBudget() throws Exception {
         var address = Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true);
         var index = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);

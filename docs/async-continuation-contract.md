@@ -77,10 +77,17 @@ Admission must also match the execution route chosen by the parent. A saved
 `executeLong` suffix does not cover a generic or tuple-returning entry; the
 declared result convention must select the covered route before execution.
 AST lowering sequences primitive and constructor operands into frame locals
-before executing the operation, except `indexCharOffAddr#`, `indexWord16OffAddr#`
-and `indexInt16OffAddr#`, whose owning node evaluates typed operands directly
-and records only the remaining work on a cut. A saved index operand retains its completed address without reevaluation;
-reusable delimited recipes share that guest heap address across invocations.
+before executing the operation. The unary and binary Long-carrier operations
+owned by `Primitive`, plus `indexCharOffAddr#`, `indexWord16OffAddr#` and
+`indexInt16OffAddr#`, evaluate their typed operands directly and record only the
+remaining work on a cut. A completed first operand is retained without
+reevaluation; reusable delimited recipes share guest heap values across
+invocations. These scalar operations cover generic and Long-result entries;
+the address index operations also preserve their entered Int-result route.
+Constructor cases carry the matched value into checked field restoration. An
+unused exact DATA binder can stay out of the frame during direct evaluation;
+a captured scrutinee still writes the binder before saved selection, and every
+selected or default arm clears the unused binder before entering its body.
 Calls preserve already evaluated arguments,
 pending strict forces and typed destinations. Typed argument loans are released
 after their values have entered the callee frame; saved tuple results use owned
