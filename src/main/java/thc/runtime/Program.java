@@ -1074,7 +1074,10 @@ public final class Program implements ExecutableProgram {
         FunctionSpec fn = thunkFunction(label, List.of(), expr, scope);
         TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
         if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
-        return new Delay(fn.target, fn.captureLayout, fn.captures, scope.programSlot).proven(evaluated(CoreRepresentations.expression(expr), false))
+        boolean[] referenceSources = new boolean[fn.captures.length];
+        for (int i = 0; i < referenceSources.length; i++)
+            referenceSources[i] = scope.layout.referenceSlot(fn.captures[i]);
+        return new Delay(fn.target, fn.captureLayout, fn.captures, scope.programSlot, referenceSources).proven(evaluated(CoreRepresentations.expression(expr), false))
             .located(sources.expression(expr, lowering().source));
     }
     private Expr argument(List<Object> expr, Scope scope, boolean lifted) { return argument(expr, scope, lifted, "argument thunk", false, lifted); }

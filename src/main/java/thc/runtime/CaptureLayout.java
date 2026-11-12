@@ -107,7 +107,14 @@ public final class CaptureLayout {
         return capture(frame, sourceSlots, null);
     }
     @ExplodeLoop public CapturedFrame capture(VirtualFrame frame, int[] sourceSlots, ExecutableProgram program) {
+        return capture(frame, sourceSlots, program, null);
+    }
+    /** Source storage certified by lowering; the captured value itself remains unevaluated. */
+    @ExplodeLoop CapturedFrame capture(VirtualFrame frame, int[] sourceSlots, ExecutableProgram program,
+                                     boolean[] referenceSources) {
         if (sourceSlots.length != fields.length) throw new IllegalStateException("Check failed.");
+        if (referenceSources != null && referenceSources.length != sourceSlots.length)
+            throw new IllegalArgumentException("Capture source certificate arity mismatch");
         CapturedFrame environment = shape.getFactory().create(this, allocationKey, program);
         for (int i = 0; i < fields.length; i++) {
             CaptureField field = fields[i];
@@ -141,7 +148,8 @@ public final class CaptureLayout {
                 else throw fault("Expected primitive Double capture");
                 field.initializeDouble(environment, value);
             }
-            else field.initialize(environment, FrameAccess.read(frame, slot));
+            else field.initialize(environment, referenceSources != null && referenceSources[i]
+                ? frame.getObject(slot) : FrameAccess.read(frame, slot));
         }
         return environment;
     }

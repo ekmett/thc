@@ -10,17 +10,22 @@ final class Delay extends Expr {
     private final RootCallTarget target;
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] captures;
+    @CompilationFinal(dimensions = 1) private final boolean[] referenceSources;
     private final int programSlot;
     Delay(RootCallTarget target, CaptureLayout captureLayout, int[] captures) {
         this(target, captureLayout, captures, -1);
     }
     Delay(RootCallTarget target, CaptureLayout captureLayout, int[] captures, int programSlot) {
+        this(target, captureLayout, captures, programSlot, null);
+    }
+    Delay(RootCallTarget target, CaptureLayout captureLayout, int[] captures, int programSlot, boolean[] referenceSources) {
         this.target = target; this.captureLayout = captureLayout; this.captures = captures;
         this.programSlot = programSlot;
+        this.referenceSources = referenceSources;
     }
     RootCallTarget target() { return target; }
     @Override public Thunk execute(VirtualFrame frame) {
         return new Thunk(target, captureLayout == null ? null : captureLayout.capture(frame, captures,
-            programSlot < 0 ? null : Program.instance(frame, programSlot)));
+            programSlot < 0 ? null : Program.instance(frame, programSlot), referenceSources));
     }
 }

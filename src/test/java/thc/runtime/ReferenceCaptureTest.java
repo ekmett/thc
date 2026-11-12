@@ -2,11 +2,17 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import thc.Language;
@@ -15,6 +21,61 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.RepresentationTestSupport.*;
 
 class ReferenceCaptureTest {
+    private static final class CaptureRoot extends ContextRoot {
+        @Child private Delay delay;
+        boolean compiled;
+        CaptureRoot(Language language, Delay delay) {
+            super(language, FrameDescriptor.newBuilder().build());
+            this.delay = delay;
+        }
+        @Override protected ExecutionSignature prepareForAOT() { return ExecutionSignature.GENERIC; }
+        @Override public Object execute(VirtualFrame frame) {
+            compiled = CompilerDirectives.inCompiledCode();
+            return delay.execute((MaterializedFrame) frame.getArguments()[0]);
+        }
+    }
+    @Test void firstCompiledDelayCopiesCertifiedReferencesWithoutForcingOrRebinding() throws Exception {
+        inLanguage(language -> {
+            var target = new RootNode(null) {
+                @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Capture must not force"); }
+            }.getCallTarget();
+            var layout = new FrameLayout();
+            int reference = layout.bind("reference", FrameSlotKind.Object);
+            int recursive = layout.bind("recursive", FrameSlotKind.Object);
+            int unknown = layout.bind("unknown");
+            int[] slots = {reference, recursive, unknown};
+            boolean[] certified = {layout.referenceSlot(reference), layout.referenceSlot(recursive), layout.referenceSlot(unknown)};
+            var captures = new CaptureLayout(language, new boolean[]{false, false, true});
+            var root = new CaptureRoot(language, new Delay(target, captures, slots, -1, certified));
+            var compiled = (OptimizedCallTarget) root.getCallTarget();
+            compiled.prepareForAOT();
+            assertFalse(compiled.wasExecuted());
+            compile(compiled);
+            var descriptor = layout.build();
+            var original = new Thunk(target, null);
+            var cell = new RecCell();
+            for (long number : new long[]{Long.MIN_VALUE, 37L}) {
+                var source = Truffle.getRuntime().createMaterializedFrame(new Object[0], descriptor);
+                source.setObject(reference, original); source.setObject(recursive, cell);
+                FrameAccess.writeLong(source, unknown, number);
+                if (number == 37L) {
+                    var widened = Truffle.getRuntime().createMaterializedFrame(new Object[0], descriptor);
+                    FrameAccess.writeObject(widened, unknown, new Object());
+                    assertTrue(source.isLong(unknown), "Another activation must not change this capture's tag");
+                }
+                var delayed = (Thunk) Calls.target(compiled, new Object[]{source});
+                assertTrue(root.compiled);
+                assertTrue(compiled.isValidLastTier());
+                var environment = delayed.getEnvironment();
+                assertSame(original, environment.getObject(0)); assertSame(cell, environment.getObject(1));
+                assertEquals(number, environment.getLong(2));
+                source.setObject(reference, new Object()); source.clear(recursive);
+                assertSame(original, environment.getObject(0)); assertSame(cell, environment.getObject(1));
+                assertEquals(0, original.getState()); assertEquals(0, delayed.getState()); assertFalse(cell.getInitialized());
+            }
+        });
+    }
+
     private final Map<String, Object> wide = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
     private final Map<String, Object> data = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
     private final Map<String, Object> closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
