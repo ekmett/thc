@@ -301,6 +301,26 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Compiler-owned suspension scratch registers have Object carriers on every
+     * write. Stateless operations also avoid first-use StoreLocal quickening. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticStoreObject {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor local, Object value,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            local.setObject(bytecode, frame, value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticLoadObject {
+        @Specialization public static Object apply(VirtualFrame frame, LocalAccessor local,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            return local.getObject(bytecode, frame);
+        }
+    }
+
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class PolyglotEval {
@@ -6098,26 +6118,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             Object value = local.getObject(bytecode, frame);
             if (!(value instanceof Double exact)) throw fail("Expected primitive Double");
             return exact;
-        }
-    }
-
-    /** Compiler-owned suspension scratch registers have Object carriers on every
-     * write. Stateless operations also avoid first-use StoreLocal quickening. */
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "local")
-    public static final class StaticStoreObject {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor local, Object value,
-                @Bind("$bytecodeNode") BytecodeNode bytecode) {
-            local.setObject(bytecode, frame, value);
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "local")
-    public static final class StaticLoadObject {
-        @Specialization public static Object apply(VirtualFrame frame, LocalAccessor local,
-                @Bind("$bytecodeNode") BytecodeNode bytecode) {
-            return local.getObject(bytecode, frame);
         }
     }
 
