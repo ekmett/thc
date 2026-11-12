@@ -77,7 +77,11 @@ Admission must also match the execution route chosen by the parent. A saved
 `executeLong` suffix does not cover a generic or tuple-returning entry; the
 declared result convention must select the covered route before execution.
 AST lowering sequences primitive and constructor operands into frame locals
-before executing the operation. Calls preserve already evaluated arguments,
+before executing the operation, except `indexCharOffAddr#`, `indexWord16OffAddr#`
+and `indexInt16OffAddr#`, whose owning node evaluates typed operands directly
+and records only the remaining work on a cut. A saved index operand retains its completed address without reevaluation;
+reusable delimited recipes share that guest heap address across invocations.
+Calls preserve already evaluated arguments,
 pending strict forces and typed destinations. Typed argument loans are released
 after their values have entered the callee frame; saved tuple results use owned
 storage. Operand temporaries remain live across a cut and clear when the saved
