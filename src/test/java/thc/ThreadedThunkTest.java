@@ -70,6 +70,42 @@ class ThreadedThunkTest {
             assertEquals(1, metrics.thunkCountsSnapshot().size()); assertEquals(1L, metrics.thunkCountsSnapshot().values().iterator().next().longValue());
         }
     }
+    @Test void freshDemandRechecksPublicationAfterWaitingForClaimMonitor() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); var evaluations = new AtomicInteger(); var answer = new Object();
+            var fixture = fixture(context, () -> new RootNode(null) {
+                @Override public Object execute(VirtualFrame frame) { evaluations.incrementAndGet(); return answer; }
+            }, new Metrics(true));
+            var thunk = fixture.thunk; var driver = fixture.driver;
+            var threads = java.lang.management.ManagementFactory.getThreadMXBean();
+            var readerThread = new AtomicReference<Thread>();
+            try (var pool = Executors.newSingleThreadExecutor()) {
+                Future<Object> reader;
+                synchronized (thunk.getMonitor()) {
+                    reader = pool.submit(() -> entered(context, () -> {
+                        readerThread.set(Thread.currentThread()); return driver.force(thunk);
+                    }));
+                    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                    while (true) {
+                        var thread = readerThread.get();
+                        var info = thread == null ? null : threads.getThreadInfo(thread.threadId());
+                        var lock = info == null ? null : info.getLockInfo();
+                        if (info != null && info.getThreadState() == Thread.State.BLOCKED && lock != null &&
+                                lock.getIdentityHashCode() == System.identityHashCode(thunk.getMonitor()) &&
+                                lock.getClassName().equals(Thunk.class.getName())) break;
+                        assertTrue(System.nanoTime() < deadline, "Fresh demander did not reach the claim monitor");
+                        Thread.sleep(1);
+                    }
+                    assertEquals(0, thunk.getState()); assertNull(thunk.getOwner());
+                    assertSame(answer, entered(context, () -> driver.force(thunk)));
+                    assertEquals(2, thunk.getState());
+                }
+                assertSame(answer, reader.get(5, TimeUnit.SECONDS));
+            }
+            assertEquals(1, evaluations.get()); assertEquals(2, thunk.getState());
+            assertNull(thunk.getOwner()); assertNull(thunk.getTarget()); assertNull(thunk.getEnvironment());
+        }
+    }
     @Test void recursiveOwnerBlackholesButForeignFailureReadersGetSeparateGuestWrappers() throws Exception {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); var driver = entered(context, () -> new Driver(new Metrics(true)));
