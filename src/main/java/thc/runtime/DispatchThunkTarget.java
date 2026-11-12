@@ -16,7 +16,7 @@ import com.oracle.truffle.api.nodes.Node;
 @ReportPolymorphism @GenerateInline @GenerateUncached
 public abstract class DispatchThunkTarget extends Node {
     public abstract Object execute(Node inliningTarget, RootCallTarget target, CapturedFrame environment, Metrics metrics);
-    @Specialization(guards = "target == cachedTarget", limit = "3")
+    @Specialization(guards = "target == cachedTarget", limit = "1")
     protected Object direct(RootCallTarget target, CapturedFrame environment, Metrics metrics,
             @Cached("target") RootCallTarget cachedTarget, @Cached("environment != null") boolean hasEnvironment,
             @Cached("createDirect(cachedTarget, metrics)") DirectCallNode call) {
