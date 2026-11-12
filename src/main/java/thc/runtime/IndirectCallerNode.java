@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
@@ -32,9 +33,14 @@ public final class IndirectCallerNode extends Node {
     public Object call(VirtualFrame frame, RootCallTarget target, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
         if (AstControl.captures(this)) {
             try { entryArguments.executeCaptured(frame, target, arguments); }
-            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, target, arguments, tailCall, tupleResult)); }
+            catch (AstCapture cut) { throw appendCapture(cut, target, arguments, tailCall, tupleResult); }
         } else entryArguments.execute(frame, target, arguments);
         return callEntered(frame, target, arguments, tailCall, tupleResult);
+    }
+    /** Retain the unentered invocation after strict-argument preparation suspends. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture appendCapture(AstCapture cut, RootCallTarget target, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
+        return cut.append((saved, input) -> callEntered(saved, target, arguments, tailCall, tupleResult));
     }
     private Object callEntered(VirtualFrame frame, RootCallTarget target, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
         Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
