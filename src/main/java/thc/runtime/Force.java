@@ -294,6 +294,7 @@ public final class Force extends Node {
             descent = null;
             SavedGuestContinuation leafContinuation;
             Object injected = Unit.INSTANCE;
+            AstStackScope spillScope = null;
             while (true) {
                 if (seen.put(leaf, true) != null) throw fault("Suspended thunk dependency cycle");
                 leafContinuation = continuationOf(leaf);
@@ -322,8 +323,12 @@ public final class Force extends Node {
                 }
                 parked.addLast(new Parked(leaf, leafContinuation));
                 if (drainSpills) {
-                    AstStackScope scope = astStackScope(this);
-                    scope.setMaxParkedSpillParents(Math.max(scope.getMaxParkedSpillParents(), parked.size()));
+                    // A blocking wait returns to this driver. A suspended wait
+                    // unwinds it and starts a new descent on resumption.
+                    if (spillScope == null) spillScope = astStackScope(this);
+                    int parentCount = parked.size();
+                    if (parentCount > spillScope.getMaxParkedSpillParents())
+                        spillScope.setMaxParkedSpillParents(parentCount);
                 }
                 leaf = child;
             }
