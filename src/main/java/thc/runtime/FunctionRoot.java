@@ -5,6 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -134,6 +135,36 @@ public final class FunctionRoot extends GuestRoot {
             // supersedes sibling failures that may have arrived during extraction.
             service.complete(this, claim, recoveredEntry != null);
         }
+    }
+
+    /** Retain this physical caller while bypassing already-published recovery forwarders. */
+    @TruffleBoundary private DirectCallNode compressRecoveredEntry(DirectCallNode observed) {
+        Object owner = compilationOwner();
+        if (owner == null || owner != thc.Language.currentState(this).getCompilationOwner()) return observed;
+        FunctionRoot source = this;
+        DirectCallNode edge = observed;
+        RootCallTarget endpoint;
+        while (true) {
+            if (edge.getCurrentCallTarget() != edge.getCallTarget() ||
+                    !(edge.getCallTarget() instanceof RootCallTarget target) ||
+                    !(target.getRootNode() instanceof FunctionRoot next) ||
+                    !source.isSelf(target) || next.compilationOwner() != owner || !next.recoveryBoundary ||
+                    next.getFrameDescriptor() != getFrameDescriptor() ||
+                    next.budgetGeneration <= source.budgetGeneration) return observed;
+            endpoint = target;
+            edge = next.recoveredEntry;
+            if (edge == null) break;
+            source = next;
+        }
+        if (endpoint == observed.getCallTarget()) return observed;
+        DirectCallNode prepared = DirectCallNode.create(endpoint);
+        return atomic(() -> {
+            if (recoveredEntry == observed) {
+                recoveredEntry = insert(prepared);
+                reportReplace(observed, prepared, "compressed published recovery entries");
+            }
+            return recoveredEntry;
+        });
     }
 
     final FunctionRoot copyForRecovery() {
@@ -583,7 +614,12 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             redirect = recoverEntry();
         }
-        if (redirect != null) return Calls.direct(redirect, frame.getArguments());
+        if (redirect != null) {
+            if (redirect.getCallTarget() instanceof RootCallTarget target &&
+                    target.getRootNode() instanceof FunctionRoot next && next.recoveredEntry != null)
+                redirect = compressRecoveredEntry(redirect);
+            return Calls.direct(redirect, frame.getArguments());
+        }
         // Interpreted fresh ingress can use its existing frame. Keep a compiled
         // arrival behind the boundary without letting its virtual frame escape.
         if (coldEntry && CompilerDirectives.inCompiledCode()) return executeCold(frame.getArguments());
