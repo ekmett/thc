@@ -23,8 +23,26 @@ final class BytecodeContinuations {
      * not retain their weak keys, frames or execution contexts. */
     private static final class Activation {
         WeakReference<Language.State> owner;
-        final WeakHashMap<ContinuationResult, Boolean> terminal = new WeakHashMap<>();
+        private WeakReference<ContinuationResult> firstTerminal;
+        private WeakHashMap<ContinuationResult, Boolean> terminal;
         Set<WindowsNativeIo.Request> requests;
+
+        /** Record the exact token under the activation lock, after owner validation. */
+        boolean markTerminal(ContinuationResult saved) {
+            if (terminal != null) return terminal.putIfAbsent(saved, Boolean.TRUE) == null;
+            var previous = firstTerminal == null ? null : firstTerminal.get();
+            if (previous == saved) return false;
+            if (previous == null) {
+                firstTerminal = new WeakReference<>(saved);
+            } else {
+                var promoted = new WeakHashMap<ContinuationResult, Boolean>();
+                promoted.put(previous, Boolean.TRUE);
+                promoted.put(saved, Boolean.TRUE);
+                terminal = promoted;
+                firstTerminal = null;
+            }
+            return true;
+        }
     }
     private static Activation activation(MaterializedFrame frame, boolean create) {
         synchronized (frame) {
@@ -130,7 +148,7 @@ final class BytecodeContinuations {
         var activation = owned(saved);
         synchronized (activation) {
             requireOwner(activation);
-            if (activation.terminal.putIfAbsent(saved, Boolean.TRUE) != null)
+            if (!activation.markTerminal(saved))
                 throw fault("Bytecode continuation was already consumed");
         }
     }
@@ -139,7 +157,7 @@ final class BytecodeContinuations {
         Set<WindowsNativeIo.Request> requests;
         synchronized (activation) {
             requireOwner(activation);
-            if (activation.terminal.putIfAbsent(saved, Boolean.TRUE) != null) return;
+            if (!activation.markTerminal(saved)) return;
             requests = activation.requests;
             activation.requests = null;
         }

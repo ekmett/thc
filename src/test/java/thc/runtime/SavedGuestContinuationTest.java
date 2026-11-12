@@ -168,7 +168,7 @@ class SavedGuestContinuationTest {
         }
     }
     private static WeakReference<Object> deadWitness() { return new WeakReference<>(new Object()); }
-    private static boolean collect(WeakReference<Object> reference) {
+    private static boolean collect(WeakReference<?> reference) {
         long deadline = System.nanoTime() + 3_000_000_000L;
         do {
             System.gc();
@@ -342,6 +342,35 @@ class SavedGuestContinuationTest {
                 SavedGuestContinuations.savedGuestContinuation(first).discard();
                 assertEquals(17L, SavedGuestContinuations.savedGuestContinuation(sameFrame).continueWith(17L));
                 assertEquals(23L, SavedGuestContinuations.savedGuestContinuation(copied).continueWith(23L));
+                for (var consumed : List.of(first, sameFrame, copied)) {
+                    var failure = assertThrows(RuntimeFault.class, () -> BytecodeContinuations.view(consumed).continueWith(41L));
+                    assertEquals("Bytecode continuation was already consumed", failure.getMessage());
+                }
+            } finally { context.leave(); }
+        }
+    }
+    private record TerminalKeyObservation(WeakReference<ContinuationResult> consumed, ContinuationResult sibling) {}
+    private static TerminalKeyObservation consumedTokenWithRetainedSibling(Language language) {
+        var sibling = rawToken(language);
+        // The interpreter's yield operand slot keeps the original result.
+        // Use a distinct key on its frame to isolate terminal bookkeeping.
+        var token = ContinuationResult.create(sibling.getContinuationRootNode(), sibling.getFrame(), sibling.getResult());
+        BytecodeContinuations.view(token).discard();
+        return new TerminalKeyObservation(new WeakReference<>(token), sibling);
+    }
+    @Test void bytecodeFirstTerminalKeyCanDieWhileItsFrameIsLive() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var observation = consumedTokenWithRetainedSibling(language);
+                var witness = deadWitness();
+                boolean collected = collect(observation.consumed());
+                assertTrue(witness.refersTo(null), "Independent dead key must establish collector progress");
+                assertTrue(collected, "A retained frame must not keep its consumed continuation token alive");
+                assertEquals(17L, BytecodeContinuations.view(observation.sibling()).continueWith(17L));
+                var failure = assertThrows(RuntimeFault.class, () -> BytecodeContinuations.view(observation.sibling()).continueWith(41L));
+                assertEquals("Bytecode continuation was already consumed", failure.getMessage());
             } finally { context.leave(); }
         }
     }
