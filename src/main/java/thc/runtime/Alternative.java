@@ -60,7 +60,7 @@ final class Alternative extends Node {
         if (value instanceof DataLayout.Reusable storage) storage.restoreVector(layout(frame), data, index, frame, slots, 0);
         else layout(frame).restoreVector(data, index, frame, slots, 0);
     }
-    boolean matchesData(VirtualFrame frame, DataValue value) {
+    boolean matchesData(VirtualFrame frame, Object value) {
         boolean matches = layout(frame).matches(value);
         return matchProfile == null ? matches : matchProfile.profile(matches);
     }

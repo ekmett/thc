@@ -1158,12 +1158,12 @@ public final class Program implements ExecutableProgram {
         Object head = at(expr, 1) instanceof List<?> value ? at(value, 0) : null;
         var metadata = CoreRepresentations.metadata(expr);
         boolean foreign = "var".equals(head) && metadata != null && metadata.containsKey("foreignCall");
-        // This node saves its exact remaining operand/read on a cut, keeping
+        // These owners save their exact remaining operation on a cut, keeping
         // ordinary scalar operands in Java locals rather than frame scratch slots.
-        boolean scalarIndex = "prim".equals(head) &&
-            IndexManagedScalarAddress.operation((String) at((List<?>) at(expr, 1), 1)) != null;
+        boolean ownedOperands = "prim".equals(head) &&
+            ownsPrimitiveOperands((String) at((List<?>) at(expr, 1), 1));
         // A foreign operand can suspend before the call, just like a primop operand.
-        OperandBuilder operands = capturesContinuations && !scalarIndex && "app".equals(at(expr, 0)) && (Arrays.asList("prim", "con").contains(head) || foreign) ?
+        OperandBuilder operands = capturesContinuations && !ownedOperands && "app".equals(at(expr, 0)) && (Arrays.asList("prim", "con").contains(head) || foreign) ?
             new OperandBuilder(scope.layout) : null;
         lowering().operands = operands;
         Expr result;
@@ -1499,7 +1499,11 @@ public final class Program implements ExecutableProgram {
         if (reusableCode) lowering().dependencies.add(id);
         return reusableCode ? new GlobalRead(required(indices, id), scope.programSlot) : new GlobalRead(global);
     }
+    private static boolean ownsPrimitiveOperands(String name) {
+        return Primitive.arity(name) >= 0 || IndexManagedScalarAddress.operation(name) != null;
+    }
     private Expr primitive(String name, Expr[] args, boolean someException) {
+        if (Primitive.arity(name) >= 0) return new Primitive(name, args);
         NarrowScalarOp narrow = NarrowScalarOp.named(name);
         if (narrow != null) return new NarrowScalarExpression(name, narrow, args);
         Expr floating = FloatingPrimitives.floatingPrimitive(name, args);

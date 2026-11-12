@@ -260,7 +260,11 @@ class CaseBinderLifetimeTest {
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void unusedConstructorReferenceDiesWhileTheSelectedBodyStillRuns(String backend) { unusedResultReference(backend, true); }
 
-    private static void unusedResultReference(String backend, boolean boxed) {
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void unmatchedConstructorReferenceDiesWhileDefaultBodyStillRuns(String backend) { unusedResultReference(backend, true, true); }
+
+    private static void unusedResultReference(String backend, boolean boxed) { unusedResultReference(backend, boxed, false); }
+    private static void unusedResultReference(String backend, boolean boxed, boolean unmatched) {
         var object = Map.<String, Object>of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
         var pair = boxed ? Map.<String, Object>of("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true)
                 : Map.<String, Object>of("kind", "unknown", "aggregate", "unboxed-tuple",
@@ -269,15 +273,18 @@ class CaseBinderLifetimeTest {
         var produce = node("app", node("var", "produce", Map.of("rep", CLOSURE)),
                 List.of(node("lit", "int", "41", Map.of("rep", LONG))), List.of(false), false, false, Map.of("rep", pair));
         var observe = node("app", node("var", "observe", Map.of("rep", CLOSURE)),
-                List.of(variable("number")), List.of(false), false, false, Map.of("rep", LONG));
-        var expression = node("case", produce, "pair", List.of(node("data", "Pair", List.of("number", "unused"), observe,
-                Map.of("binders", List.of(binder("number"), payload)))),
+                List.of(unmatched ? node("lit", "int", "41", Map.of("rep", LONG)) : variable("number")), List.of(false), false, false, Map.of("rep", LONG));
+        var alternatives = unmatched ? List.of(node("data", "Other", List.of(), node("lit", "int", "0", Map.of("rep", LONG))),
+                node("default", null, List.of(), observe)) : List.of(node("data", "Pair", List.of("number", "unused"), observe,
+                Map.of("binders", List.of(binder("number"), payload))));
+        var expression = node("case", produce, "pair", alternatives,
                 Map.of("rep", LONG, "binder", Map.of("id", "pair", "lifted", boxed, "rep", pair)));
         var parameters = List.of(Map.of("id", "produce", "lifted", true, "rep", CLOSURE),
                 Map.of("id", "observe", "lifted", true, "rep", CLOSURE));
         var module = Map.<String, Object>of("constructors", List.of(Map.of("id", "Pair", "name", "Pair", "kind", boxed ? "boxed" : "unboxed-tuple", "arity", 2,
                 "fieldReps", List.of(List.of("IntRep"), List.of("BoxedRep (Just Lifted)")),
-                "fieldLifted", List.of(false, true), "strictFields", List.of(false, false))),
+                "fieldLifted", List.of(false, true), "strictFields", List.of(false, false)),
+                Map.of("id", "Other", "name", "Other", "kind", "boxed", "arity", 0, "fieldReps", List.of(), "fieldLifted", List.of(), "strictFields", List.of())),
                 "bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
                         "expr", node("lam", parameters, expression, Map.of("rep", CLOSURE, "resultRep", LONG)))));
         // Interpreter frames expose the lifetime contract without depending on a
@@ -401,6 +408,168 @@ class CaseBinderLifetimeTest {
                 assertEquals(2, observations[2], "Both original entries must execute installed code without training");
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 assertSame(target, program.entryTarget("entry"));
+            } finally { context.leave(); }
+        }
+    }
+
+    private static final class MatchedArm extends Expr {
+        private final int slot, add;
+        private final boolean integer;
+        private final int[] compiled;
+        MatchedArm(int slot, int add, boolean integer, int[] compiled) {
+            this.slot = slot; this.add = add; this.integer = integer; this.compiled = compiled;
+            setRepresentation(new CoreRepresentation(CoreKind.LONG, true, true,
+                List.of(integer ? "Int16Rep" : "IntRep")));
+        }
+        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("typed arm used generic dispatch"); }
+        private long value(VirtualFrame frame) {
+            if (CompilerDirectives.inCompiledCode()) compiled[0]++;
+            return slot < 0 ? add : frame.getLong(slot) + add;
+        }
+        @Override public long executeLong(VirtualFrame frame) { if (integer) throw new AssertionError(); return value(frame); }
+        @Override public int executeInt(VirtualFrame frame) { if (!integer) throw new AssertionError(); return (int) value(frame); }
+    }
+    private static final class MatchedCaseRoot extends GuestRoot {
+        @Child private Case body;
+        private final boolean integer;
+        MatchedCaseRoot(Language language, com.oracle.truffle.api.frame.FrameDescriptor descriptor,
+                        Case body, boolean integer) {
+            super(language, descriptor); this.body = body; this.integer = integer;
+        }
+        @Override public Object execute(VirtualFrame frame) {
+            try {
+                if (integer) return body.executeRequiredInt(frame);
+                return body.executeRequiredLong(frame);
+            } catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+        }
+        @Override public long bloom(VirtualFrame frame) { return 0L; }
+        @Override public String getName() { return "matchedCase"; }
+        @Override public String toString() { return getName(); }
+    }
+    @Test void matchedDataArmsKeepTypedDispatchOnFirstCompiledEntries() throws Exception {
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var left = new DataLayout(language, "left", "left", new String[]{"IntRep"});
+                var right = new DataLayout(language, "right", "right", new String[]{"IntRep"});
+                var other = new DataLayout(language, "other", "other", new String[]{});
+                for (boolean typed : new boolean[]{false, true}) for (boolean integer : new boolean[]{false, true}) {
+                    var layout = new FrameLayout(); int binder = layout.bind("whole", FrameSlotKind.Object);
+                    int field = layout.bind("field", FrameSlotKind.Long); int[] compiled = {0};
+                    var proof = new CoreRepresentation(CoreKind.DATA, true, true);
+                    Expr input = new Expr() {
+                        { setRepresentation(proof); }
+                        @Override public Object execute(VirtualFrame frame) { return frame.getArguments()[1]; }
+                    };
+                    Alternative[] arms = {
+                        new Alternative(Alternative.DATA_ALTERNATIVE, left, new int[]{field}, new MatchedArm(field, 1, integer, compiled), new int[0][], false),
+                        new Alternative(Alternative.DATA_ALTERNATIVE, right, new int[]{field}, new MatchedArm(field, 2, integer, compiled), new int[0][], false),
+                        new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], new MatchedArm(-1, -1, integer, compiled), new int[0][], false)};
+                    Case selection = typed ? new DataCase(input, binder, arms, new Metrics(false), proof, false)
+                        : new Case(input, binder, arms, new Metrics(false));
+                    var target = new MatchedCaseRoot(language, layout.build(), selection.discardUnusedBinder(), integer).getCallTarget();
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    Object[] values = {left.createLong(40), right.createLong(40), other.create(new Object[0])};
+                    int[] expected = {41, 42, -1};
+                    for (int i = 0; i < values.length; i++) {
+                        Object result = Calls.target(target, new Object[]{0L, values[i]});
+                        if (integer) assertEquals(expected[i], assertInstanceOf(Integer.class, result));
+                        else assertEquals((long) expected[i], assertInstanceOf(Long.class, result));
+                        assertEquals(i + 1, compiled[0]);
+                        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    }
+                }
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void unusedDataBinderDirectAndCapturedPathsKeepOneEvaluation() {
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var data = new DataLayout(language, "captured", "captured", new String[]{"IntRep"});
+                for (int mode = 0; mode < 3; mode++) {
+                    final int operation = mode; int[] calls = {0}, bodies = {0};
+                    var layout = new FrameLayout(); int binder = layout.bind("dead", FrameSlotKind.Object);
+                    int field = layout.bind("field", FrameSlotKind.Long);
+                    var proof = new CoreRepresentation(CoreKind.DATA, true, true);
+                    Expr input = new Expr() {
+                        { setRepresentation(proof); }
+                        @Override public Object execute(VirtualFrame frame) {
+                            calls[0]++;
+                            if (operation == 1) throw new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this));
+                            if (operation == 2) throw new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                                SynchronousMasking.current(this), this);
+                            return frame.getArguments()[1];
+                        }
+                    };
+                    Expr body = new Expr() {
+                        { setRepresentation(new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"))); }
+                        @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                        @Override public long executeLong(VirtualFrame frame) {
+                            assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(binder)); bodies[0]++;
+                            return frame.getLong(field);
+                        }
+                    };
+                    var arm = new Alternative(Alternative.DATA_ALTERNATIVE, data, new int[]{field}, body, new int[0][], false);
+                    var selection = new Case(input, binder, new Alternative[]{arm}, new Metrics(false), proof, true).discardUnusedBinder();
+                    var root = new MatchedCaseRoot(language, layout.build(), selection, false);
+                    var value = data.createLong(42);
+                    if (mode == 0) assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L, value}));
+                    else if (mode == 1) {
+                        var saved = assertInstanceOf(AstContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L, value}));
+                        assertEquals(0, bodies[0]); assertEquals(42L, saved.continueWith(value));
+                        assertThrows(RuntimeFault.class, () -> saved.continueWith(value));
+                    } else {
+                        var cut = assertThrows(DelimitedCut.class, () -> Calls.target(root.getCallTarget(), new Object[]{0L, value}));
+                        assertEquals(2, cut.getFrames().size(), "Saved binder write precedes case selection");
+                        for (int invocation = 0; invocation < 2; invocation++) {
+                            var copy = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, root.getFrameDescriptor());
+                            Object answer = value;
+                            for (var saved : cut.getFrames()) answer = saved.getStep().resume(copy, new DelimitedResume(answer), MaskingState.UNMASKED, null);
+                            assertEquals(42L, answer);
+                        }
+                    }
+                    assertEquals(1, calls[0]); assertEquals(mode == 2 ? 2 : 1, bodies[0]);
+                }
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void nullableTypedCaseResultDoesNotReuseAnOlderBinder() {
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var data = new DataLayout(language, "stale", "stale", new String[]{});
+                var stale = data.create(new Object[0]); var layout = new FrameLayout();
+                int binder = layout.bind("dead", FrameSlotKind.Object);
+                var proof = new CoreRepresentation(CoreKind.DATA, true, true);
+                Expr input = new Expr() {
+                    { setRepresentation(proof); }
+                    @Override public Object execute(VirtualFrame frame) { return null; }
+                    @Override public DataValue executeDataValue(VirtualFrame frame) { return null; }
+                };
+                var arms = new Alternative[]{
+                    new Alternative(Alternative.DATA_ALTERNATIVE, data, new int[0], new Literal(11L), new int[0][], false),
+                    new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], new Literal(42L), new int[0][], false)};
+                var selection = new Case(input, binder, arms, new Metrics(false), proof, false).discardUnusedBinder();
+                var root = new GuestRoot(language, layout.build()) {
+                    @Child private Case body = selection;
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        frame.setObject(binder, stale);
+                        return body.executeRequiredLong(frame);
+                    }
+                };
+                assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L}));
             } finally { context.leave(); }
         }
     }

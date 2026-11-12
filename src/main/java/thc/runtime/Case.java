@@ -19,6 +19,7 @@ class Case extends Expr {
     @Children protected Alternative[] alternatives;
     @Child private LocalBinding scrutinee;
     private final boolean delimited;
+    private final boolean directDataScrutinee;
     @CompilationFinal private boolean unusedBinder;
     @CompilationFinal private LiteralIndex literalIndex;
 
@@ -124,14 +125,24 @@ class Case extends Expr {
             binderProof.copy(binderProof.getKind(), false, binderProof.getPresent(), binderProof.getPrimReps(),
                 binderProof.getComponents(), binderProof.getVector(), binderProof.getAlternatives(),
                 binderProof.getTagSlot(), binderProof.getAlternativeSlots())));
+        boolean dataAlternatives = true;
+        for (Alternative alternative : alternatives)
+            dataAlternatives &= alternative.getKind() == DATA_ALTERNATIVE || alternative.getKind() == DEFAULT_ALTERNATIVE;
+        directDataScrutinee = dataAlternatives && evaluatedScrutinee.getRepresentation().getEvaluated()
+            && evaluatedScrutinee.getRepresentation().getKind() == CoreKind.DATA;
         this.scrutinee = new LocalBinding(binderSlot, evaluatedScrutinee, true);
     }
     @Override public void prepareTuple(int[] slots, int offset) {
         for (Alternative alternative : alternatives) alternative.getBody().prepareTuple(slots, offset);
     }
-    protected final void prepare(VirtualFrame frame) { prepare(frame, null, 0); }
-    protected final void prepare(VirtualFrame frame, int[] destination, int offset) {
-        try { scrutinee.write(frame); }
+    protected final void prepare(VirtualFrame frame) { prepareData(frame, null, 0); }
+    protected final void prepare(VirtualFrame frame, int[] destination, int offset) { prepareData(frame, destination, offset); }
+    private DataValue prepareData(VirtualFrame frame, int[] destination, int offset) {
+        try {
+            if (unusedBinder && directDataScrutinee) return scrutinee.evaluateDataWithSavedWrite(frame);
+            scrutinee.write(frame);
+            return null;
+        }
         catch (AstCapture cut) { throw appendCapture(cut, destination, offset); }
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
@@ -162,141 +173,199 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) return selected(frame, alt);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? dataScrutinee(frame) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) return selected(frame, alt, matched);
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
         return selected(frame, fallback);
     }
+    protected Object dataScrutinee(VirtualFrame frame) { return frame.isObject(binderSlot) ? frame.getObject(binderSlot) : null; }
     protected boolean matches(VirtualFrame frame, Alternative alternative) { return alternative.matches(frame, binderSlot); }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
-        prepare(frame);
+        DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).execute(frame);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.execute(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).execute(frame);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.execute(frame);
     }
     @ExplodeLoop @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
-        prepare(frame);
+        DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).executeInt(frame);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.executeInt(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).executeInt(frame);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.executeInt(frame);
     }
     @ExplodeLoop @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-        prepare(frame);
+        DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).executeLong(frame);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.executeLong(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).executeLong(frame);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.executeLong(frame);
     }
     @ExplodeLoop @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
-        prepare(frame);
+        DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).executeFloat(frame);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.executeFloat(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).executeFloat(frame);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.executeFloat(frame);
     }
     @ExplodeLoop @Override public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-        prepare(frame);
+        DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).executeDouble(frame);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.executeDouble(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).executeDouble(frame);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.executeDouble(frame);
     }
     @ExplodeLoop @Override public Closure executeClosure(VirtualFrame frame) throws UnexpectedResultException {
-        prepare(frame);
+        DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).executeClosure(frame);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.executeClosure(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).executeClosure(frame);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.executeClosure(frame);
     }
     @ExplodeLoop @Override public DataValue executeDataValue(VirtualFrame frame) throws UnexpectedResultException {
-        prepare(frame);
+        DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).executeDataValue(frame);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.executeDataValue(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).executeDataValue(frame);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.executeDataValue(frame);
     }
     @ExplodeLoop @Override public ManagedAddress executeAddress(VirtualFrame frame) throws UnexpectedResultException {
-        prepare(frame);
+        DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).executeAddress(frame);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.executeAddress(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).executeAddress(frame);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.executeAddress(frame);
     }
     @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        prepare(frame, slots, offset);
+        DataValue direct = prepareData(frame, slots, offset);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (literalIndex == null ? matches(frame, alt) : choice == index) {
-                return selected(frame, alt).executeTuple(frame, slots, offset);
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
+                Expr body = selected(frame, alt, matched);
+                matched = null;
+                direct = null;
+                return body.executeTuple(frame, slots, offset);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return selected(frame, fallback).executeTuple(frame, slots, offset);
+        Expr body = selected(frame, fallback);
+        direct = null;
+        return body.executeTuple(frame, slots, offset);
     }
-    @ExplodeLoop protected final Expr selected(VirtualFrame frame, Alternative alt) {
+    protected final Expr selected(VirtualFrame frame, Alternative alt) {
+        return selected(frame, alt, alt.getKind() == DATA_ALTERNATIVE ? frame.getObject(binderSlot) : null);
+    }
+    @ExplodeLoop private Expr selected(VirtualFrame frame, Alternative alt, Object scrutinee) {
         if (alt.getKind() == DATA_ALTERNATIVE) {
-            Object scrutinee = frame.getObject(binderSlot);
             if (!(scrutinee instanceof DataValue data)) throw fault("Invalid constructor case");
             for (int i = 0; i < alt.getFields().length; i++) {
                 int[] lanes = i < alt.getVectorFields().length ? alt.getVectorFields()[i] : null;

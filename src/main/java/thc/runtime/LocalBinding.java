@@ -40,6 +40,16 @@ public final class LocalBinding extends Node {
         if (referenceKind == CoreKind.ADDRESS) return value.executeRequiredAddress(frame);
         return value.execute(frame);
     }
+    /** Exact DATA case preparation may keep a dead binder off the direct path.
+     * A suspended child still installs the original binder before saved selection. */
+    DataValue evaluateDataWithSavedWrite(VirtualFrame frame) {
+        try { return value.executeRequiredDataValue(frame); }
+        catch (AstCapture cut) { throw appendWrite(cut); }
+        catch (DelimitedCut cut) {
+            CompilerDirectives.transferToInterpreter();
+            throw cut.append(frame, (saved, input, ambient, outer) -> resumeWrite(saved, input.get()));
+        }
+    }
     public void write(VirtualFrame frame) {
         try { writeValue(frame); }
         catch (AstCapture cut) { throw appendWrite(cut); }

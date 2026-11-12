@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import static thc.runtime.RuntimeFault.fault;
@@ -61,8 +64,49 @@ final class Primitive extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
     @Override public long executeLong(VirtualFrame frame) {
-        long x = arguments[0].executeRequiredLong(frame);
-        long y = arguments.length == 2 ? arguments[1].executeRequiredLong(frame) : 0L;
+        return afterFirst(frame, first(frame));
+    }
+    private long first(VirtualFrame frame) {
+        try { return arguments[0].executeRequiredLong(frame); }
+        catch (AstCapture cut) { throw appendFirst(cut); }
+        catch (DelimitedCut cut) {
+            CompilerDirectives.transferToInterpreter();
+            throw appendFirst(frame.materialize(), cut);
+        }
+    }
+    private long second(VirtualFrame frame, long first) {
+        try { return arguments[1].executeRequiredLong(frame); }
+        catch (AstCapture cut) { throw appendSecond(cut, first); }
+        catch (DelimitedCut cut) {
+            CompilerDirectives.transferToInterpreter();
+            throw appendSecond(frame.materialize(), cut, first);
+        }
+    }
+    private long afterFirst(VirtualFrame frame, long first) {
+        return apply(first, arguments.length == 2 ? second(frame, first) : 0L);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture appendFirst(AstCapture cut) {
+        return cut.append((saved, input) -> afterFirst(saved, requiredLong(input)));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture appendSecond(AstCapture cut, long first) {
+        return cut.append((saved, input) -> apply(first, requiredLong(input)));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private DelimitedCut appendFirst(MaterializedFrame frame, DelimitedCut cut) {
+        return cut.append(frame, (saved, input, ambient, outer) -> afterFirst(saved, requiredLong(input.get())));
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private DelimitedCut appendSecond(MaterializedFrame frame, DelimitedCut cut, long first) {
+        return cut.append(frame, (saved, input, ambient, outer) -> apply(first, requiredLong(input.get())));
+    }
+    private static long requiredLong(Object value) {
+        if (value instanceof Long number) return number;
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        throw new RuntimeFault("Expected primitive Long");
+    }
+    private long apply(long x, long y) {
         return switch (operation) {
             case "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> Long.bitCount(x & bitMask);
             case "clz8#", "clz16#", "clz32#", "clz64#" -> Long.numberOfLeadingZeros(x & bitMask) - bitShift;
