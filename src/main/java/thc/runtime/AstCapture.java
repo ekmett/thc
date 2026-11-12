@@ -49,7 +49,7 @@ public final class AstCapture extends ControlFlowException {
     public AstContinuation freeze(GuestRoot root, MaterializedFrame frame) { return freeze(root, frame, false); }
     @TruffleBoundary public AstContinuation freeze(GuestRoot root, MaterializedFrame frame, boolean rootEntrySpill) {
         var saved = new AstContinuation(root, yielded instanceof AstPendingTail tail ? tail.publish() : yielded,
-            logicalMask, frame, List.copyOf(steps), annotations, rootEntrySpill, yielded instanceof AstPendingTail);
+            logicalMask, frame, steps, annotations, rootEntrySpill, yielded instanceof AstPendingTail);
         steps.clear();
         return saved;
     }
