@@ -24,9 +24,13 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
     private void executeBody(VirtualFrame frame, Expr body) {
         if (!delimited && !AstControl.captures(this)) { executeUninterrupted(frame, body); return; }
         try { executeUninterrupted(frame, body); }
-        catch (AstCapture cut) { throw cut.append((saved, input) -> { saveResult(saved, input); return null; }); }
+        catch (AstCapture cut) {
+            CompilerDirectives.transferToInterpreter();
+            throw cut.append((saved, input) -> { saveResult(saved, input); return null; });
+        }
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, (saved, input, ambient, outerMask) -> {
                 Object value = input.get(); if (!tuple) writeReferenceResult(saved, value); return null;
             });

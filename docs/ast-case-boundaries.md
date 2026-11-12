@@ -149,6 +149,9 @@ interpreted; its failure initiates no child recovery or retry of that physical
 target. Ordinary case-arm failures
 and OSR failures retain their source-function recovery policy. Receipts remain
 context-owned and live only with their physical side roots.
+Join result capture handlers transfer without invalidation before constructing
+their saved callbacks. Guest execution and its result write precede that transfer;
+the same cut, frame, result checks and continuation steps remain at their owners.
 
 The pinned terminal runtime rejects explicit submissions and queued work for
 retired targets, and honors the launcher's diagnostic-retry opt-out. Stock

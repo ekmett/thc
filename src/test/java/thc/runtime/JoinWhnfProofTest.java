@@ -210,6 +210,52 @@ class JoinWhnfProofTest {
         assertEquals(42L, frame.getLong(result));
     }
 
+    @Test void firstCompiledObjectCaptureKeepsItsTargetAndSavedResult() throws Exception {
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000")
+                .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.DiagnoseFailure", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var expression = region(join("identity", List.of(parameter("value", data)), variable("value")),
+                        variable("tree"), false);
+                var program = new Program(language, Map.of("instrument", true, "bindings", List.of(
+                        binding("entry", lambda(List.of(parameter("tree", data)), expression, data)))), true);
+                var target = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("entry");
+                var operation = single(NodeUtil.findAllNodeInstances(target.getRootNode(), LocalJoinRegion.class));
+                var original = NodeUtil.findFirstNodeInstance(operation, LocalRead.class);
+                int[] entries = {0, 0};
+                original.replace(new Expr() {
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                        recordEntry(entries, com.oracle.truffle.api.CompilerDirectives.inCompiledCode());
+                        throw new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this));
+                    }
+                }.proven(original.getRepresentation()));
+                var value = new Thunk(new com.oracle.truffle.api.nodes.RootNode(null) {
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                        throw new AssertionError("Resuming a lazy result must not force it");
+                    }
+                }.getCallTarget(), null);
+                assertFalse(target.wasExecuted());
+                target.prepareForAOT(); compile(target);
+                var runtime = com.oracle.truffle.api.Truffle.getRuntime();
+                runtime.getClass().getMethod("bypassedInstalledCode", com.oracle.truffle.runtime.OptimizedCallTarget.class)
+                        .invoke(runtime, target);
+                assertArrayEquals(new int[]{0, 0}, entries);
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{0L, value}));
+                assertArrayEquals(new int[]{1, 1}, entries);
+                assertSame(target.getRootNode(), saved.getSourceRoot()); assertSame(Unit.INSTANCE, saved.getYielded());
+                assertTrue(target.isValidLastTier());
+                assertSame(value, saved.continueWith(value));
+                assertArrayEquals(new int[]{1, 1}, entries); assertEquals(0, value.getState());
+                assertTrue(target.isValidLastTier());
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(value));
+            } finally { context.leave(); }
+        }
+    }
     @Test void recursiveDataJoinsKeepWhnfWhileLazyReturningJoinsRemainLazy() throws Exception { checkDataJoins(true); }
     @Test void nonrecursiveDataJoinsKeepWhnfWhileLazyReturningJoinsRemainLazy() throws Exception { checkDataJoins(false); }
     private void checkDataJoins(boolean recursive) throws Exception {
