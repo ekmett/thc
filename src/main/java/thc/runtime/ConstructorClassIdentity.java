@@ -17,12 +17,14 @@ public final class ConstructorClassIdentity {
             else if (owner != token) exclusive.invalidate();
             return exclusive;
         }
+        synchronized void markShared() { exclusive.invalidate(); }
     }
     // Neither the token nor registry entry retains the class or its layout.
     private static final ClassValue<Owners> registry = new ClassValue<>() {
         @Override protected Owners computeValue(Class<?> type) { return new Owners(); }
     };
     @TruffleBoundary private static Assumption register(Class<?> type, Object owner) { return registry.get(type).register(owner); }
+    @TruffleBoundary static void markShared(Class<?> type) { registry.get(type).markShared(); }
     private final Class<?> carrier;
     private final Object owner = new Object();
     private final Assumption exclusive;
