@@ -66,6 +66,72 @@ class CoreProofJoinTest {
         // Acyclic join regions must not own loops; roots and generic forcing retain theirs.
         boolean all = true; for (var region : regions) { for (var child : region.getChildren()) if (child instanceof LoopNode) { all = false; break; } if (!all) break; } assertTrue(all);
     }
+    @Test void sharedJoinBodySlotsRetainSuspendedArgumentsAndEscapedCaptures() {
+        java.util.function.Function<String, Map<String, Object>> fnArg = id ->
+                map("id", id, "name", id, "lifted", true, "rep", closure);
+        java.util.function.BiFunction<String, List<Object>, List<Object>> fn = (id, body) ->
+                list("lam", list(fnArg.apply(id), arg(id + "Number")), body,
+                        map("rep", closure, "resultRep", longProof));
+        java.util.function.Function<String, List<Object>> fv = id -> list("var", id, meta(closure));
+        var finish = list("case", prim("+#", v("finishNumber"), n(100)), "finishScratch",
+                list(list("default", null, list(), call("finish", v("finishScratch")))),
+                with(meta(), "binder", arg("finishScratch")));
+        var nested = let(false, List.of(bind("inner", lam(List.of("innerNumber"),
+                call("b", fv.apply("next"), v("innerNumber"))), 1)), call("inner", v("nextScratch")));
+        var next = list("case", prim("+#", v("nextNumber"), n(10)), "nextScratch",
+                list(list("default", null, list(), nested)), with(meta(), "binder", arg("nextScratch")));
+        var entry = list("case", n(40), "entryScratch", list(list("default", null, list(),
+                let(false, List.of(bind("kept", lam(List.of("increment"),
+                        prim("+#", v("entryScratch"), v("increment"))))),
+                        call("a", fv.apply("kept"), prim("+#", n(1), call("pause", n(2))))))),
+                with(meta(), "binder", arg("entryScratch")));
+        var body = let(true, List.of(bind("a", fn.apply("next", next), 2),
+                bind("b", fn.apply("finish", finish), 2)), entry);
+        var function = list("lam", list(fnArg.apply("pause")), body,
+                map("rep", closure, "resultRep", longProof));
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads();
+            threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var module = map("bindings", list(bind("entry", function)), "instrument", true);
+                var program = Program.prepareCode(language, module, List.of("entry"), 1).newInstance(language);
+                var target = program.entryTarget("entry");
+                var cases = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class);
+                assertTrue(cases.size() >= 3);
+                assertTrue(cases.stream().map(node -> node.binderSlot).distinct().count() < cases.size(),
+                        "the continuation must exercise physically shared case storage");
+                int[] effects = {0, 0};
+                var pause = new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects[0]++;
+                        long value = (Long) frame.getArguments()[1];
+                        var request = threads.send(threads.currentIdentity(), "join pause");
+                        assertSame(request, GuestThreads.pollCurrent(this, false));
+                        return new AstCapture(request, SynchronousMasking.current(this))
+                                .append((saved, input) -> { effects[1]++; return value; })
+                                .freeze(this, frame.materialize());
+                    }
+                };
+                var saved = assertInstanceOf(AstContinuation.class,
+                        Calls.target(target, new Object[]{0L, ((Closure) program.entryValue("entry")).environment,
+                                new Closure(null, 1, pause.getCallTarget())}));
+                assertArrayEquals(new int[]{1, 0}, effects);
+                assertEquals(0L, program.diagnostics().get("localJoinTransfers"));
+                saved.asyncRequest().acknowledge();
+                var resumed = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) { return force.drainStack(saved, null); }
+                }.getCallTarget().call();
+                assertEquals(153L, resumed);
+                assertArrayEquals(new int[]{1, 1}, effects, "the prefix and suspended operand each run once");
+                assertEquals(3L, program.diagnostics().get("localJoinTransfers"));
+            } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
+
     @Test void compiledRecursiveJoinPollsWithoutCallingAnotherRoot() throws Exception {
         var step = choose(prim("<=#", v("n"), n(0)), v("acc"), call("loop", prim("-#", v("n"), n(1)), prim("+#", v("acc"), n(1))));
         var body = let(true, List.of(bind("loop", lam(List.of("n", "acc"), step), 2)), call("loop", v("input"), n(0)));
