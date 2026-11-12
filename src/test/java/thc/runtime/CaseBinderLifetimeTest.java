@@ -156,7 +156,7 @@ class CaseBinderLifetimeTest {
         }
     }
 
-    @Test void freshSelfTransferScratchIsDeadWithoutChangingReservedNullSlots() throws Exception {
+    @Test void freshProgramFrameStartsWithBloomAndClearsSelfTransferScratch() throws Exception {
         var recurse = node("app", node("var", "entry"), List.of(variable("input")), List.of(false));
         var expression = node("case", variable("input"), "seen", List.of(
                 node("lit", node("int", "0"), List.of(), node("lit", "int", "42", Map.of("rep", LONG))),
@@ -170,7 +170,11 @@ class CaseBinderLifetimeTest {
                 Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = new Program(language, data, false);
                 var target = program.entryTarget("entry");
-                var descriptor = target.getRootNode().getFrameDescriptor();
+                var root = (FunctionRoot) target.getRootNode();
+                var descriptor = root.getFrameDescriptor();
+                assertEquals("<TCO Bloom Filter>", descriptor.getSlotName(FrameLayout.BLOOM_FILTER));
+                assertEquals("input", descriptor.getSlotName(FrameLayout.BLOOM_FILTER + 1));
+                long expectedBloom = root.entryBloom(0L);
                 var scratch = new java.util.ArrayList<Integer>();
                 for (int slot = 0; slot < descriptor.getNumberOfSlots(); slot++)
                     if (String.valueOf(descriptor.getSlotName(slot)).startsWith("<self argument ")) scratch.add(slot);
@@ -184,7 +188,7 @@ class CaseBinderLifetimeTest {
                     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
                     @Override public long executeLong(VirtualFrame frame) {
                         if (frame.getTag(scratchSlot) == FrameSlotKind.Illegal.tag) observations[0]++;
-                        if (frame.isObject(FrameLayout.TAIL_RESULT) && frame.getObject(FrameLayout.TAIL_RESULT) == null) observations[1]++;
+                        if (frame.isLong(FrameLayout.BLOOM_FILTER) && frame.getLong(FrameLayout.BLOOM_FILTER) == expectedBloom) observations[1]++;
                         if (CompilerDirectives.inCompiledCode()) observations[2]++;
                         return 42L;
                     }

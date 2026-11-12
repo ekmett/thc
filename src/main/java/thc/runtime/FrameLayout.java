@@ -17,7 +17,18 @@ public final class FrameLayout {
         final FrameDescriptor.Builder builder = FrameDescriptor.newBuilder();
         final List<FrameSlotKind> kinds = new ArrayList<>();
         final LinkedHashSet<Integer> initialClears = new LinkedHashSet<>();
+        final int firstLocalSlot;
         int cursor;
+
+        Allocation(boolean reserveTailSlots) {
+            bind("<TCO Bloom Filter>", FrameSlotKind.Long);
+            if (reserveTailSlots) {
+                bind("<TCO Result>", FrameSlotKind.Object);
+                bind("<TCO Function>", FrameSlotKind.Object);
+                bind("<TCO Arguments>", FrameSlotKind.Object);
+            }
+            firstLocalSlot = cursor;
+        }
 
         int bind(String name, FrameSlotKind kind) {
             if (kind == FrameSlotKind.Illegal) {
@@ -41,17 +52,17 @@ public final class FrameLayout {
         this.locals = locals;
     }
     public FrameLayout() {
-        this(new Allocation(), new HashMap<>());
-        allocation.bind("<TCO Bloom Filter>", FrameSlotKind.Long);
-        allocation.bind("<TCO Result>", FrameSlotKind.Object);
-        allocation.bind("<TCO Function>", FrameSlotKind.Object);
-        allocation.bind("<TCO Arguments>", FrameSlotKind.Object);
+        this(new Allocation(true), new HashMap<>());
     }
+    static FrameLayout forProgramBody() {
+        return new FrameLayout(new Allocation(false), new HashMap<>());
+    }
+    int firstLocalSlot() { return allocation.firstLocalSlot; }
     public FrameLayout scope() { return new FrameLayout(allocation, new HashMap<>(locals)); }
     /** Only fresh compiler-owned slots whose consumers always write before reading. */
     void clearInitially(int... slots) {
         for (int slot : slots) {
-            if (slot <= TAIL_ARGUMENTS || slot >= allocation.kinds.size()) throw new IllegalArgumentException("Invalid initial scratch slot");
+            if (slot < firstLocalSlot() || slot >= allocation.kinds.size()) throw new IllegalArgumentException("Invalid initial scratch slot");
             allocation.initialClears.add(slot);
         }
     }
