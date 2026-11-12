@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -146,6 +147,8 @@ class Case extends Expr {
         catch (AstCapture cut) { throw appendCapture(cut, destination, offset); }
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
+            // Enter the capture path before constructing its saved selection.
+            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new DelimitedStep() {
                 @Override public Object resume(MaterializedFrame frame, DelimitedResume input,
                                                MaskingState ambient, DelimitedStep outerMask) {
