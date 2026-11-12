@@ -2724,7 +2724,15 @@ public final class Program implements ExecutableProgram {
         boolean emptyTuple = false;
         for (Expr node : nodes) if (node.getRepresentation().isEmptyTuple()) { emptyTuple = true; break; }
         if (!reusableCode && tail && self != null && self.getInputLayout() == null && !emptyTuple && self.getArity() > 0 && nodes.length <= self.getArity()) {
-            int[] temporaries = vectorSlots(scope, self.getArity(), "<self argument ");
+            int supplied = self.getArity() - nodes.length;
+            int[] temporaries = new int[self.getArity()];
+            for (int i = 0; i < temporaries.length; i++) {
+                // This site can dispatch to another target. Only actual operands,
+                // not the enclosing function's formals, prove its scratch carrier.
+                FrameSlotKind kind = i < supplied ? FrameSlotKind.Illegal :
+                    FrameLayout.carrierKind(nodes[i - supplied].getRepresentation());
+                temporaries[i] = scope.layout.bind("<self argument " + i + ">", kind);
+            }
             scope.layout.clearInitially(temporaries);
             return new AstTailApplication(function, nodes, self, temporaries, metrics);
         }
