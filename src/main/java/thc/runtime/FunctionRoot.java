@@ -327,7 +327,7 @@ public final class FunctionRoot extends GuestRoot {
                 throw new IllegalArgumentException("Initial scratch slot aliases live input");
         initialClears = slots.clone();
     }
-    @ExplodeLoop private void clearInitialLocals(VirtualFrame frame) {
+    private void clearInitialLocals(VirtualFrame frame) {
         for (int slot : initialClears) frame.clear(slot);
     }
     void configureProgramSlot(int slot, Object codeIdentity) {

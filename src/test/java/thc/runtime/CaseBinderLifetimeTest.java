@@ -156,6 +156,47 @@ class CaseBinderLifetimeTest {
         }
     }
 
+    private static final class ObserveFreshSlots extends Expr {
+        @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] slots;
+        private final int[] compiled;
+        ObserveFreshSlots(int[] slots, int[] compiled) { this.slots = slots; this.compiled = compiled; }
+        @Override public boolean needsCallState() { return false; }
+        @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+        @com.oracle.truffle.api.nodes.ExplodeLoop
+        @Override public long executeLong(VirtualFrame frame) {
+            for (int slot : slots) if (frame.getTag(slot) != FrameSlotKind.Illegal.tag) return -1L;
+            if (CompilerDirectives.inCompiledCode()) compiled[0]++;
+            return 42L;
+        }
+    }
+    @Test void wideFreshScratchStartsClearedOnItsFirstCompiledEntry() throws Exception {
+        List<Object> body = node("lit", "int", "42", Map.of("rep", LONG));
+        for (int i = 0; i < 27; i++) body = node("case", variable("input"), "dead" + i,
+                List.of(node("default", null, List.of(), body)), Map.of("rep", LONG, "binder", binder("dead" + i)));
+        var data = Map.<String, Object>of("bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true,
+                "rep", CLOSURE, "expr", node("lam", List.of(binder("input")), body,
+                        Map.of("rep", CLOSURE, "resultRep", LONG)))));
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, data, false);
+                var target = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("entry");
+                var cases = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class);
+                int[] slots = cases.stream().mapToInt(selection -> selection.binderSlot).distinct().toArray();
+                assertEquals(27, slots.length);
+                int[] compiled = {0};
+                var observation = new ObserveFreshSlots(slots, compiled);
+                observation.setRepresentation(((GuestRoot) target.getRootNode()).getScalarResultProof());
+                cases.getFirst().replace(observation);
+                // Inspect the fresh activation without executing or training its original body.
+                target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                assertEquals(42L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 7L}));
+                assertEquals(1, compiled[0]); assertTrue(target.isValidLastTier());
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void freshProgramFrameStartsWithBloomAndClearsSelfTransferScratch() throws Exception {
         var recurse = node("app", node("var", "entry"), List.of(variable("input")), List.of(false));
         var expression = node("case", variable("input"), "seen", List.of(
