@@ -622,7 +622,7 @@ public final class FunctionRoot extends GuestRoot {
         }
         // Interpreted fresh ingress can use its existing frame. Keep a compiled
         // arrival behind the boundary without letting its virtual frame escape.
-        if (coldEntry && CompilerDirectives.inCompiledCode()) return executeCold(frame.getArguments());
+        if (CompilerDirectives.inCompiledCode() && coldEntry) return executeCold(frame.getArguments());
         return executeEntry(frame);
     }
     /** Fresh ingress has not consumed a typed loan or initialized any guest locals yet. */
