@@ -45,9 +45,10 @@ class LocalJoinGraphBudgetTest {
         if (depth == 0) return primitive("xorI#", variable("key"), integer(index));
         return primitive("+#", arithmetic(depth - 1, index * 2), arithmetic(depth - 1, index * 2 + 1));
     }
-    static Map<String,Object> module(int depth) {
+    static Map<String,Object> module(int depth) { return module(depth, 8); }
+    static Map<String,Object> module(int depth, int arms) {
         List<Object> work = integer(0);
-        for (int arm = 0; arm < 8; arm++) work = primitive("+#", work,
+        for (int arm = 0; arm < arms; arm++) work = primitive("+#", work,
                 choice("selected" + arm, variable("key"), List.of(
                         node("default", null, List.of(), arithmetic(depth, arm + 1)))));
         var recurse = apply(node("var", "loop", Map.of("rep", CLOSURE)),
