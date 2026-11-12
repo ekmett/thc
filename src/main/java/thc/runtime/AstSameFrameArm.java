@@ -100,7 +100,9 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     }
 
     private Object invoke(VirtualFrame frame, int mode, int[] slots, int offset) {
-        return Calls.indirect(call, targets[mode], new Object[]{frame.materialize(), slots, offset});
+        Object[] arguments = mode == TUPLE ? new Object[]{frame.materialize(), slots, offset}
+                : new Object[]{frame.materialize()};
+        return Calls.indirect(call, targets[mode], arguments);
     }
     @Override public Object execute(VirtualFrame frame) {
         return targets == null ? body.execute(frame) : invoke(frame, OBJECT, null, 0);

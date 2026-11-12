@@ -13,7 +13,7 @@ public final class LocalJoinRegion extends Expr {
     private final int selector, result;
     private final TupleShape tuple;
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] tupleSlots;
-    private final boolean delimited;
+    private final boolean delimited, referenceResult;
     @Child private LocalJoinRepeater single;
     @Child private LoopNode loop;
     public LocalJoinRegion(Object group, int selector, int result, Expr[] bodies, CoreRepresentation proof, boolean recursive) {
@@ -23,9 +23,14 @@ public final class LocalJoinRegion extends Expr {
         this(group, selector, result, bodies, proof, recursive, tuple, tupleSlots, false);
     }
     public LocalJoinRegion(Object group, int selector, int result, Expr[] bodies, CoreRepresentation proof, boolean recursive, TupleShape tuple, int[] tupleSlots, boolean delimited) {
+        this(group, selector, result, bodies, proof, recursive, tuple, tupleSlots, delimited, false);
+    }
+    LocalJoinRegion(Object group, int selector, int result, Expr[] bodies, CoreRepresentation proof, boolean recursive,
+                    TupleShape tuple, int[] tupleSlots, boolean delimited, boolean referenceResult) {
         this.group = group; this.selector = selector; this.result = result; this.tuple = tuple; this.tupleSlots = tupleSlots; this.delimited = delimited;
+        this.referenceResult = referenceResult;
         setRepresentation(proof);
-        LocalJoinRepeater repeater = new LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots, delimited);
+        LocalJoinRepeater repeater = new LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots, delimited, referenceResult);
         if (recursive) loop = Truffle.getRuntime().createLoopNode(repeater); else single = repeater;
     }
     private void run(VirtualFrame frame) { run(frame, null, 0); }
@@ -85,7 +90,7 @@ public final class LocalJoinRegion extends Expr {
     private Object resultValue(VirtualFrame frame) {
         VectorLayout layout = getTypedVectorLayout();
         if (layout != null) return layout.read(frame, tupleSlots, 0);
-        return getRepresentation().isEvaluatedReference() ? frame.getObject(result) : FrameAccess.read(frame, result);
+        return referenceResult || getRepresentation().isEvaluatedReference() ? frame.getObject(result) : FrameAccess.read(frame, result);
     }
     @Override public Object execute(VirtualFrame frame) { run(frame); return resultValue(frame); }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException { run(frame); return getRepresentation().isInt() ? frame.getInt(result) : RuntimeTypesGen.expectInteger(FrameAccess.read(frame, result)); }

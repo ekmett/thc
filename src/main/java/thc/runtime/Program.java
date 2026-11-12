@@ -511,7 +511,13 @@ public final class Program implements ExecutableProgram {
     }
     private static <T> T at(List<T> values, int index) { return index >= 0 && index < values.size() ? values.get(index) : null; }
     private record Local(int slot, boolean primitive, CoreRepresentation proof, boolean cell,
-                         boolean[] entry, int[] tupleSlots, CoreApplicationCertificates.Arity arityCertificate) {}
+                         boolean[] entry, int[] tupleSlots, CoreApplicationCertificates.Arity arityCertificate,
+                         FrameSlotKind joinScalar) {
+        Local(int slot, boolean primitive, CoreRepresentation proof, boolean cell, boolean[] entry, int[] tupleSlots,
+              CoreApplicationCertificates.Arity arityCertificate) {
+            this(slot, primitive, proof, cell, entry, tupleSlots, arityCertificate, null);
+        }
+    }
     private static final class Scope {
         final FrameLayout layout;
         final Map<String, Local> locals;
@@ -538,8 +544,13 @@ public final class Program implements ExecutableProgram {
         }
         Local bind(String id, boolean primitive, CoreRepresentation proof, boolean cell, boolean[] entry,
                    CoreApplicationCertificates.Arity arityCertificate, FrameSlotKind kind) {
+            return bind(id, primitive, proof, cell, entry, arityCertificate, kind, null);
+        }
+        Local bind(String id, boolean primitive, CoreRepresentation proof, boolean cell, boolean[] entry,
+                   CoreApplicationCertificates.Arity arityCertificate, FrameSlotKind kind, FrameSlotKind joinScalar) {
             if (proof.hasBoxedPointer()) kind = FrameSlotKind.Object;
-            Local local = new Local(layout.bind(id, kind), proof.getPresent() ? proof.isLong() : primitive, proof, cell, entry, null, arityCertificate);
+            Local local = new Local(layout.bind(id, kind), proof.getPresent() ? proof.isLong() : primitive, proof, cell, entry,
+                null, arityCertificate, joinScalar);
             locals.put(id, local); joins.remove(id);
             return local;
         }
@@ -557,12 +568,12 @@ public final class Program implements ExecutableProgram {
         void refine(String id, CoreRepresentation proof) {
             Local local = locals.get(id);
             if (local != null) locals.put(id, new Local(local.slot, proof.getPresent() ? proof.isLong() : local.primitive,
-                proof, local.cell, local.entry, local.tupleSlots, local.arityCertificate));
+                proof, local.cell, local.entry, local.tupleSlots, local.arityCertificate, local.joinScalar));
         }
         void publish(String id, CoreRepresentation proof) {
             refine(id, proof);
             Local local = locals.get(id);
-            if (local != null) locals.put(id, new Local(local.slot, local.primitive, local.proof, false, local.entry, local.tupleSlots, local.arityCertificate));
+            if (local != null) locals.put(id, new Local(local.slot, local.primitive, local.proof, false, local.entry, local.tupleSlots, local.arityCertificate, local.joinScalar));
         }
         void bindJoin(String id, LocalJoinTarget target) { joins.put(id, target); locals.remove(id); }
     }
@@ -592,7 +603,7 @@ public final class Program implements ExecutableProgram {
             int slot = layout.bind("<async operand " + bindings.size() + ">", kind);
             temporaries.add(slot);
             bindings.add(new LocalBinding(slot, value, proof.isLong()));
-            return new LocalRead(slot, false, layout.referenceSlot(slot)).proven(proof);
+            return new LocalRead(slot, false, layout.referenceSlot(slot) ? FrameSlotKind.Object : null).proven(proof);
         }
         Expr finish(Expr body) {
             return bindings.isEmpty() ? body : new AstOperands(bindings.toArray(LocalBinding[]::new), ints(temporaries), body);
@@ -1343,6 +1354,14 @@ public final class Program implements ExecutableProgram {
         local.layout.clearInitially(dead);
         return new TupleCase(scrutinee, slots, caseArm((List<Object>) alt.get(3), local, tail, 1, false), dead);
     }
+    /** Only scalar carriers whose ordinary join writes have exact typed routes. */
+    private FrameSlotKind joinScalarCarrier(CoreRepresentation proof) {
+        if (reusableCode) return null;
+        if (proof.isLong()) return FrameSlotKind.Long;
+        if (proof.isFloat()) return FrameSlotKind.Float;
+        if (proof.isDouble()) return FrameSlotKind.Double;
+        return null;
+    }
     private Expr joinJump(LocalJoinTarget target, List<List<Object>> args, List<?> flags, Scope scope) {
         return joinJump(target, args, flags, scope, new boolean[args.size()]);
     }
@@ -1365,10 +1384,14 @@ public final class Program implements ExecutableProgram {
                 typedTemps[i] = new int[ArgumentLayout.leaves(target.getProofs()[i]).size()];
                 for (int j = 0; j < typedTemps[i].length; j++) typedTemps[i][j] = scope.layout.bind("<join typed argument " + i + " field " + j + ">", FrameLayout.carrierKind(ArgumentLayout.leaves(target.getProofs()[i]).get(j)));
                 temps[i] = -1;
-            } else temps[i] = scope.layout.bind("<join argument " + i + ">", reusableCode ?
-                FrameLayout.carrierKind(target.getProofs()[i]) : FrameSlotKind.Illegal);
+            } else {
+                CoreRepresentation proof = target.getProofs()[i];
+                FrameSlotKind scalar = joinScalarCarrier(proof);
+                temps[i] = scope.layout.bind("<join argument " + i + ">", scalar != null ? scalar :
+                    reusableCode ? FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal);
+            }
         }
-        return new LocalJoinCall((thc.Language) language, target, nodes, temps, codeMetrics(), typedTemps);
+        return new LocalJoinCall((thc.Language) language, target, nodes, temps, codeMetrics(), typedTemps, !reusableCode);
     }
     private Expr compileJoins(List<Object> expr, Scope outer, boolean tail, List<CoreJoinDefinition> definitions) {
         boolean recursive = Boolean.TRUE.equals(expr.get(1));
@@ -1414,8 +1437,11 @@ public final class Program implements ExecutableProgram {
                     int[] lanes = new int[ArgumentLayout.leaves(proof).size()];
                     for (int j = 0; j < lanes.length; j++) lanes[j] = scope.layout.bind(parameter.get("id") + " join typed field " + j, FrameLayout.carrierKind(ArgumentLayout.leaves(proof).get(j)));
                     scope.bindTuple((String) parameter.get("id"), evaluated(proof, true), lanes);
-                } else scope.bind((String) parameter.get("id"), !lifted && !Boolean.TRUE.equals(parameter.get("coercion")),
-                    proof, false, null, null, reusableCode ? FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal);
+                } else {
+                    FrameSlotKind scalar = joinScalarCarrier(proof);
+                    scope.bind((String) parameter.get("id"), !lifted && !Boolean.TRUE.equals(parameter.get("coercion")), proof,
+                        false, null, null, scalar != null ? scalar : reusableCode ? FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal, scalar);
+                }
             }
             bodyScopes.add(scope);
         }
@@ -1472,9 +1498,10 @@ public final class Program implements ExecutableProgram {
         Expr[] nodes = new Expr[bodies.size() + 1]; nodes[0] = entry;
         for (int i = 0; i < bodies.size(); i++) nodes[i + 1] = bodies.get(i);
         int selector = recursive ? local.layout.bind("<join selector>", FrameSlotKind.Long) : -1;
-        return new LocalJoinRegion(identity, selector,
-            local.layout.bind("<join result>", FrameLayout.carrierKind(result)),
-            nodes, result, recursive, tuple, tupleSlots, delimited);
+        int resultSlot = local.layout.bind("<join result>", FrameLayout.carrierKind(result));
+        return new LocalJoinRegion(identity, selector, resultSlot,
+            nodes, result, recursive, tuple, tupleSlots, delimited,
+            tuple == null && local.layout.referenceSlot(resultSlot));
     }
     private DataLayout dataLayout(String id) {
         try (var ownership = preparationLock.acquire()) {
@@ -1628,7 +1655,9 @@ public final class Program implements ExecutableProgram {
                         yield local.proof.isVector() ? new VectorLocalRead(shape, local.tupleSlots) : new TupleLocalRead(shape, local.tupleSlots);
                     }
                     if (local.slot < 0 && local.proof.getKind() == CoreKind.VOID) yield new Literal(thc.runtime.Unit.INSTANCE).proven(local.proof);
-                    yield new LocalRead(local.slot, local.cell, scope.layout.referenceSlot(local.slot)).proven(local.proof);
+                    FrameSlotKind storage = local.joinScalar != null ? local.joinScalar :
+                        scope.layout.referenceSlot(local.slot) ? FrameSlotKind.Object : null;
+                    yield new LocalRead(local.slot, local.cell, storage).proven(local.proof);
                 }
                 GlobalBinding global = globals.get(id);
                 if (global != null) {

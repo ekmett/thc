@@ -59,11 +59,27 @@ public final class DirectCallerNode extends Node {
         } else {
             try {
                 arguments[0] = 0L;
-                result = handoff != null ? handoff.call(frame, arguments, callNode, false) : Calls.direct(callNode, arguments);
+                DirectCallNode entry = nonTailEntry();
+                result = handoff != null ? handoff.call(frame, arguments, entry, false) : Calls.direct(entry, arguments);
                 normalProfile.enter();
             } catch (TailCall tail) { if (tupleResult != null) throw tail; tailProfile.enter(); result = loop.execute(tail); }
         }
         return AstControl.complete(this, result, target, tupleResult);
+    }
+    private DirectCallNode nonTailEntry() {
+        DirectCallNode observed = callNode;
+        if (!(observed.getCurrentCallTarget() instanceof RootCallTarget physical) ||
+                !(physical.getRootNode() instanceof FunctionRoot root) || root.noGraphFailure.isValid())
+            return observed;
+        // Failure invalidates before publication. A miss still enters the old
+        // target and can claim recovery. The boundary prevents folding that miss.
+        RootCallTarget next = root.publishedRecoveryTarget();
+        if (next == null || observed.getParent() != this) return observed;
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        return atomic(() -> {
+            if (callNode != observed || observed.getCurrentCallTarget() != physical) return callNode;
+            return observed.replace(DirectCallNode.create(next), "enter published function recovery target");
+        });
     }
     public static DirectCallerNode create(RootCallTarget target, Metrics metrics) { return new DirectCallerNode(target, metrics); }
 }

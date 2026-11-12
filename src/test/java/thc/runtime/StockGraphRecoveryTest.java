@@ -119,6 +119,12 @@ class StockGraphRecoveryTest {
         Controls.tailAnchor();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void directCallerEntersPublishedPhysicalRecoveryWithoutReplaying(boolean split) throws Exception {
+        Controls.directRecovery(split);
+    }
+
     private static void ownership(boolean bytecode) {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
@@ -1220,6 +1226,79 @@ class StockGraphRecoveryTest {
                 if (CompilerDirectives.inCompiledCode()) compiled.incrementAndGet();
                 long next = frame.getLong(count) + 1; frame.setLong(count, next);
                 return next < 4096;
+            }
+        }
+
+        static void directRecovery(boolean split) throws Exception {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.DiagnoseFailure", "false")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
+                    long[] values = new long[4096];
+                    for (int i = 0; i < values.length; i++) values[i] = i + 1;
+                    var heavy = new Pair(new AstSameFrameArm(new Heavy(values, effects, source)),
+                            new AstSameFrameArm(new Heavy(values, effects, source)));
+                    var metrics = new Metrics(true);
+                    var logical = new FunctionRoot(language, new FrameLayout().build(), "direct recovery", null,
+                            new int[0], new int[0], new int[0], heavy, metrics).getCallTarget();
+                    var parent = new ContextRoot(language, new FrameLayout().build()) {
+                        @Child private DirectCallerNode direct = new DirectCallerNode(logical, metrics);
+                        @Override public Object execute(VirtualFrame frame) {
+                            return direct.call(frame, frame.getArguments(), false);
+                        }
+                    };
+                    var caller = (OptimizedCallTarget) parent.getCallTarget();
+                    var originalCall = NodeUtil.findFirstNodeInstance(parent, DirectCallNode.class);
+                    if (split) assertTrue(originalCall.cloneCallTarget());
+                    var failed = (OptimizedCallTarget) originalCall.getCurrentCallTarget();
+                    assertEquals(split, failed != logical);
+                    var failedRoot = (FunctionRoot) failed.getRootNode();
+                    var failure = assertThrows(OptimizationFailedException.class, () -> failed.compile(true));
+                    assertTrue(failure.toString().contains("GraphTooBigBailoutException"));
+                    assertNull(recovered(failedRoot));
+                    long value = 17;
+                    for (int i = 0; i < values.length; i++) value = (value ^ values[i]) * 17 + i;
+                    long expected = value * 2;
+
+                    int before = failed.getCallCount();
+                    assertEquals(expected, Calls.target(caller, new Object[]{0L}));
+                    assertEquals(before + 1, failed.getCallCount(), "missing publication enters the physical failed root once");
+                    assertEquals(2, effects.get());
+                    var first = (OptimizedCallTarget) recovered(failedRoot);
+                    assertNotNull(first); assertSame(first.getRootNode(), source.get());
+                    assertEquals(expected, Calls.target(caller, new Object[]{0L}));
+                    assertEquals(4, effects.get());
+                    assertSame(first.getRootNode(), source.get());
+                    assertEquals(before + 1, failed.getCallCount(), "published recovery must bypass the retired source");
+                    assertSame(logical, NodeUtil.findFirstNodeInstance(parent, DirectCallerNode.class).getTarget());
+
+                    assertTrue(caller.compile(true)); assertTrue(caller.isValidLastTier());
+                    int firstCalls = first.getCallCount();
+                    var nextFailure = assertThrows(OptimizationFailedException.class, () -> first.compile(true));
+                    assertTrue(nextFailure.toString().contains("GraphTooBigBailoutException"));
+                    assertFalse(caller.isValidLastTier(), "the caller depended on the current endpoint's failure assumption");
+                    assertNull(recovered((FunctionRoot) first.getRootNode()));
+                    assertEquals(expected, Calls.target(caller, new Object[]{0L}));
+                    assertEquals(6, effects.get());
+                    assertEquals(firstCalls + 1, first.getCallCount(), "the current retired endpoint gets the first recovery entry");
+                    var second = (OptimizedCallTarget) recovered((FunctionRoot) first.getRootNode());
+                    assertNotNull(second); assertSame(second.getRootNode(), source.get());
+                    assertTrue(second.compile(true)); assertTrue(second.isValidLastTier());
+                    long compiled = metrics.getCompiledEntries();
+                    assertEquals(expected, Calls.target(caller, new Object[]{0L}));
+                    assertTrue(metrics.getCompiledEntries() > compiled);
+                    assertEquals(8, effects.get());
+                    assertSame(second.getRootNode(), source.get());
+                    assertEquals(firstCalls + 1, first.getCallCount());
+                    assertEquals(before + 1, failed.getCallCount());
+                    if (split) assertEquals(0, ((OptimizedCallTarget) logical).getCallCount());
+                } finally { context.leave(); }
             }
         }
 

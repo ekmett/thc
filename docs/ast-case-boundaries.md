@@ -128,6 +128,13 @@ when it can reduce the body. Existing body executions and parked continuations
 keep their frame, program counter and lexical cleanup. See the
 [stock-runtime workflow](contributing.md) for eligibility and limitations.
 
+On non-tail entry, a direct caller can adopt a compatible published recovery
+target before constructing a frame for the retired target. While publication is
+pending, the caller enters its current target and allows normal fresh-entry
+recovery. The logical target still supplies entry and completion checks. The
+selected physical target receives the same packet, and saved continuations
+resume their original frames.
+
 The pinned terminal runtime rejects explicit submissions and queued work for
 retired targets, and honors the launcher's diagnostic-retry opt-out. Stock
 Truffle still bypasses its terminal flag at explicit `compile()` entry and
