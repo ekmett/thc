@@ -93,6 +93,7 @@ public final class FunctionRoot extends GuestRoot {
     @Child private volatile DirectCallNode recoveredEntry;
     @CompilationFinal private volatile boolean coldEntry;
     @CompilationFinal private boolean recoveryBoundary;
+    @CompilationFinal private boolean materializeRecoveryFrame;
 
     @Override public Node copy() {
         FunctionRoot copy = (FunctionRoot) super.copy();
@@ -124,6 +125,7 @@ public final class FunctionRoot extends GuestRoot {
             }
             replacement.budgetGeneration = budgetGeneration + 1;
             replacement.recoveryBoundary = true;
+            replacement.materializeRecoveryFrame = !replacement.copyInitialFrame && AstSameFrameArm.hasExtractedRegion(replacement);
             DirectCallNode prepared = DirectCallNode.create(replacement.getCallTarget());
             return atomic(() -> {
                 if (recoveredEntry == null && service.publishable(this, claim)) {
@@ -688,6 +690,7 @@ public final class FunctionRoot extends GuestRoot {
             Metrics invocation = invocationMetrics(frame);
             if (invocation.getEnabled() && CompilerDirectives.inCompiledCode()) invocation.incrementCompiledEntries();
         }
+        if (materializeRecoveryFrame) CompilerDirectives.materialize(frame.materialize());
         if (spill) return captureStack(initialCaptureFrame(frame, deferredBloom));
         if (!capturesContinuations) return executeCapturableBody(frame);
         try { return executeCapturableBody(frame); }

@@ -130,6 +130,12 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
         }
     }
 
+    static boolean hasExtractedRegion(Node root) {
+        for (AstSameFrameArm arm : NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class))
+            if (arm.targets != null) return true;
+        return false;
+    }
+
     @Override public boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
         RootCallTarget[] current = targets;
         if (current != null) for (RootCallTarget target : current)
