@@ -11,10 +11,12 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
     private final int selector, result;
     @Children private Expr[] bodies;
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] tupleSlots;
-    private final boolean delimited, tuple, exactLong, exactFloat, exactDouble;
+    private final boolean delimited, tuple, exactLong, exactFloat, exactDouble, referenceResult;
     private final CoreKind referenceKind;
-    LocalJoinRepeater(Object group, int selector, int result, Expr[] bodies, CoreRepresentation proof, int[] tupleSlots, boolean delimited) {
+    LocalJoinRepeater(Object group, int selector, int result, Expr[] bodies, CoreRepresentation proof, int[] tupleSlots,
+                      boolean delimited, boolean referenceResult) {
         this.group = group; this.selector = selector; this.result = result; this.bodies = bodies; this.tupleSlots = tupleSlots; this.delimited = delimited;
+        this.referenceResult = referenceResult;
         if (proof.isTypedTransport()) for (Expr body : bodies) body.prepareTuple(tupleSlots, 0);
         tuple = proof.isTypedTransport(); exactLong = proof.isLong(); exactFloat = proof.isFloat(); exactDouble = proof.isDouble();
         referenceKind = proof.getEvaluated() ? proof.getKind() : CoreKind.UNKNOWN;
@@ -26,7 +28,7 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
             throw cut.append(frame, (saved, input, ambient, outerMask) -> {
-                Object value = input.get(); if (!tuple) FrameAccess.write(saved, result, value); return null;
+                Object value = input.get(); if (!tuple) writeReferenceResult(saved, value); return null;
             });
         }
     }
@@ -45,7 +47,7 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
             if (referenceKind == CoreKind.DATA && !(value instanceof DataValue)) throw fault("Expected constructor join result");
             if (referenceKind == CoreKind.CLOSURE && !(value instanceof Closure)) throw fault("Expected closure join result");
             if (referenceKind == CoreKind.ADDRESS && !(value instanceof ManagedAddress)) throw fault("Expected address join result");
-            FrameAccess.write(frame, result, value);
+            writeReferenceResult(frame, value);
         }
     }
     private void executeUninterrupted(VirtualFrame frame, Expr body) {
@@ -53,10 +55,15 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
         else if (exactLong) FrameAccess.writeLong(frame, result, body.executeRequiredLong(frame));
         else if (exactFloat) FrameAccess.writeFloat(frame, result, body.executeRequiredFloat(frame));
         else if (exactDouble) FrameAccess.writeDouble(frame, result, body.executeRequiredDouble(frame));
-        else if (referenceKind == CoreKind.DATA) FrameAccess.write(frame, result, body.executeRequiredDataValue(frame));
-        else if (referenceKind == CoreKind.CLOSURE) FrameAccess.write(frame, result, body.executeRequiredClosure(frame));
-        else if (referenceKind == CoreKind.ADDRESS) FrameAccess.write(frame, result, body.executeRequiredAddress(frame));
-        else FrameAccess.write(frame, result, body.execute(frame));
+        else if (referenceKind == CoreKind.DATA) writeReferenceResult(frame, body.executeRequiredDataValue(frame));
+        else if (referenceKind == CoreKind.CLOSURE) writeReferenceResult(frame, body.executeRequiredClosure(frame));
+        else if (referenceKind == CoreKind.ADDRESS) writeReferenceResult(frame, body.executeRequiredAddress(frame));
+        else writeReferenceResult(frame, body.execute(frame));
+    }
+    private void writeReferenceResult(VirtualFrame frame, Object value) {
+        // The lowering owner allocated Object storage; this says nothing about WHNF.
+        if (referenceResult) frame.setObject(result, value);
+        else FrameAccess.write(frame, result, value);
     }
     @ExplodeLoop void executeTarget(VirtualFrame frame, long selected) {
         for (int index = 1; index < bodies.length; index++) if (selected == index) { executeBody(frame, bodies[index]); return; }
