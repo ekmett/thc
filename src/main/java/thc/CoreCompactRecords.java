@@ -299,15 +299,32 @@ public final class CoreCompactRecords {
         if (schema == 2) field(cursor, result, "argumentTypes", () -> list(cursor, () -> element(cursor, () -> text(cursor))));
         return result;
     }
+    @FunctionalInterface private interface MetaReader {
+        Object read(CoreCompactRecords records, CoreCompactCursor cursor) throws Throwable;
+    }
+    private void metaField(CoreCompactCursor cursor, Map<String,Object> target, String key, MetaReader read) throws Throwable {
+        int tag = cursor.readByte();
+        switch (tag) {
+            case 0 -> {}
+            case 1 -> target.put(key, null);
+            case 2 -> target.put(key, read.read(this, cursor));
+            default -> throw error("Invalid compact Core presence tag: " + tag);
+        }
+    }
     private Map<String,Object> meta(CoreCompactCursor cursor, Origin origin) throws Throwable {
         var result = map("compactOrigin", origin);
-        field(cursor, result, "rep", () -> rep(cursor)); field(cursor, result, "resultRep", () -> rep(cursor));
-        field(cursor, result, "entryStrict", () -> list(cursor, cursor::readBoolean));
-        field(cursor, result, "entryStrictSource", () -> text(cursor)); field(cursor, result, "callDemand", () -> demand(cursor));
-        field(cursor, result, "foreignCall", () -> foreign(cursor, false));
-        field(cursor, result, "exceptionPayload", () -> map("schema", cursor.unsigned(), "type", text(cursor)));
-        field(cursor, result, "enumFamily", () -> family(cursor)); field(cursor, result, "dataToTagFamily", () -> tagFamily(cursor));
-        field(cursor, result, "unsafeEqualityCase", () -> text(cursor));
+        // The fixed readers take the decoder and cursor at invocation.
+        metaField(cursor, result, "rep", CoreCompactRecords::rep);
+        metaField(cursor, result, "resultRep", CoreCompactRecords::rep);
+        metaField(cursor, result, "entryStrict", (records, input) -> list(input, input::readBoolean));
+        metaField(cursor, result, "entryStrictSource", CoreCompactRecords::text);
+        metaField(cursor, result, "callDemand", CoreCompactRecords::demand);
+        metaField(cursor, result, "foreignCall", (records, input) -> records.foreign(input, false));
+        metaField(cursor, result, "exceptionPayload", (records, input) ->
+            map("schema", input.unsigned(), "type", records.text(input)));
+        metaField(cursor, result, "enumFamily", CoreCompactRecords::family);
+        metaField(cursor, result, "dataToTagFamily", CoreCompactRecords::tagFamily);
+        metaField(cursor, result, "unsafeEqualityCase", CoreCompactRecords::text);
         return result;
     }
     private List<Object> expression(CoreCompactCursor cursor) throws Throwable {
