@@ -3,11 +3,14 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -56,6 +59,58 @@ class BlockedOwnerProtocolTest {
         }
         assertEquals(0, continuations.get(), "Another logical guest stole the original evaluator's continuation");
         fail("Shared demand never reached its wait");
+    }
+
+    private static final class Publisher extends RootNode {
+        Publisher() { super(null); }
+        @Override public Object execute(VirtualFrame frame) {
+            Thunk thunk = (Thunk) frame.getArguments()[0];
+            synchronized (thunk.getMonitor()) {
+                thunk.setValue(frame.getArguments()[1]); thunk.setOwner(null); thunk.setState(2);
+                thunk.notifyUpdate();
+            }
+            return CompilerDirectives.inCompiledCode();
+        }
+    }
+
+    @Test void compiledPublicationWakesNewAndRepeatedPhysicalWaiters() throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build();
+             var pool = Executors.newSingleThreadExecutor()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var target = (OptimizedCallTarget) new Publisher().getCallTarget();
+                target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                var thunk = new Thunk(target, null);
+                Object initial = new Object();
+                assertEquals(true, Calls.target(target, new Object[]{thunk, initial}));
+                assertSame(initial, thunk.getValue());
+                for (int attempt = 0; attempt < 2; ++attempt) {
+                    Object answer = new Object();
+                    var waiting = new CountDownLatch(1);
+                    synchronized (thunk.getMonitor()) { thunk.setState(1); }
+                    var result = pool.submit(() -> {
+                        synchronized (thunk.getMonitor()) {
+                            waiting.countDown();
+                            while (thunk.getState() != 2) thunk.awaitUpdate();
+                            return thunk.getValue();
+                        }
+                    });
+                    try {
+                        assertTrue(waiting.await(5, TimeUnit.SECONDS));
+                        assertEquals(true, Calls.target(target, new Object[]{thunk, answer}));
+                        assertSame(answer, result.get(5, TimeUnit.SECONDS));
+                        assertTrue(target.isValidLastTier());
+                    } finally {
+                        synchronized (thunk.getMonitor()) {
+                            thunk.setValue(answer); thunk.setState(2); thunk.notifyAll();
+                        }
+                        result.cancel(true);
+                    }
+                }
+            } finally { context.leave(); }
+        }
     }
 
     @Test void rescueUsesOrdinaryAsyncOriginAndDefersUnderUninterruptibleMask() {
