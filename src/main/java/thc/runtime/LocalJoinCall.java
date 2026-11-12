@@ -95,7 +95,7 @@ public final class LocalJoinCall extends Expr {
                 if (referenceKinds[i] == CoreKind.DATA && !(value instanceof DataValue)) throw fault("Expected constructor join argument");
                 if (referenceKinds[i] == CoreKind.CLOSURE && !(value instanceof Closure)) throw fault("Expected closure join argument");
                 if (referenceKinds[i] == CoreKind.ADDRESS && !(value instanceof ManagedAddress)) throw fault("Expected address join argument");
-                FrameAccess.write(frame, target.getSlots()[i], value);
+                FrameAccess.writeObject(frame, target.getSlots()[i], value);
             } else FrameAccess.write(frame, target.getSlots()[i], FrameAccess.read(frame, temporaries[i]));
         }
         for (int temporary : temporaries) if (temporary >= 0) frame.clear(temporary);
