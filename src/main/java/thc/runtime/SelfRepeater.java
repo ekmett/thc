@@ -11,11 +11,10 @@ final class SelfRepeater extends Node implements RepeatingNode {
     private final Metrics metrics;
     SelfRepeater(FunctionBody body, Metrics metrics) { this.body = body; this.metrics = metrics; }
     boolean needsCallState() { return body.needsCallState(); }
-    private Metrics invocationMetrics(VirtualFrame frame) {
-        return metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
+    private Metrics invocationMetrics(VirtualFrame frame, FunctionRoot root) {
+        return metrics != null ? metrics : root.invocationMetrics(frame);
     }
-    Object once(VirtualFrame frame) {
-        if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");
+    Object once(VirtualFrame frame, FunctionRoot root) {
         root.forceEntry(frame);
         root.pollBeforeBody(this);
         HandoffEntry entry = root.getHandoff();
@@ -37,22 +36,21 @@ final class SelfRepeater extends Node implements RepeatingNode {
     }
     @Override public boolean executeRepeating(VirtualFrame frame) { throw new IllegalStateException("value loop"); }
     @Override public Object executeRepeatingWithValue(VirtualFrame frame) {
-        try { return once(frame); }
+        if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");
+        try { return once(frame, root); }
         catch (AstSelfCall ignored) {
-            Metrics invocation = invocationMetrics(frame);
+            Metrics invocation = invocationMetrics(frame, root);
             if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
             return CONTINUE_LOOP_STATUS;
         } catch (HandoffTailCall tail) {
-            if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");
             if (!root.isSelf(tail.getTarget())) throw tail;
-            Metrics invocation = invocationMetrics(frame);
+            Metrics invocation = invocationMetrics(frame, root);
             if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
             root.restoreHandoff(frame, tail.getArguments(), false, null);
             return CONTINUE_LOOP_STATUS;
         } catch (TailCall tail) {
-            if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");
             if (!root.isSelf(tail.getTarget())) throw tail;
-            Metrics invocation = invocationMetrics(frame);
+            Metrics invocation = invocationMetrics(frame, root);
             if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
             root.restoreTail(frame, tail);
             return CONTINUE_LOOP_STATUS;

@@ -771,7 +771,7 @@ public final class FunctionRoot extends GuestRoot {
     private Object executeBody(VirtualFrame frame) {
         if (role == FunctionRootRole.PASS_THROUGH) {
             if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function body node");
-            try { return repeating.once(frame); }
+            try { return repeating.once(frame, this); }
             catch (TailCall tail) {
                 if (programSlot < 0) throw tail;
                 // Keep the normal transfer inside the owning function's loop,
@@ -781,7 +781,7 @@ public final class FunctionRoot extends GuestRoot {
         }
         if (hasSelfTail) return loop.execute(frame);
         if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function self-loop node");
-        try { return repeating.once(frame); }
+        try { return repeating.once(frame, this); }
         catch (AstSelfCall ignored) {
             tailCallProfile.enter();
             if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
