@@ -86,7 +86,7 @@ class StockGraphRecoveryTest {
         Truffle.getRuntime();
         Controls.recoverBytecodeOsr(false);
     }
-    @Test void installedBytecodeEntryClaimsTheRealFailureOfItsSavedLoopOsr() {
+    @Test void savedLoopOsrFailureInvalidatesInstalledBytecodeEntryBeforeFreshRecovery() {
         Truffle.getRuntime();
         Controls.recoverBytecodeOsr(true);
     }
@@ -815,12 +815,38 @@ class StockGraphRecoveryTest {
                         parkedPc = parked.getContinuationRootNode().getLocation().getBytecodeIndex();
                         assertSame(root, parked.getContinuationRootNode().getSourceRootNode());
                         assertEquals(1, entries.getVisits().get()); assertEquals(0, checkpoint.getVisits().get());
-                        assertTrue(((OptimizedCallTarget) target).compile(true));
-                        assertTrue(((OptimizedCallTarget) target).isValidLastTier());
-                        ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode((OptimizedCallTarget) target);
-                        assertEquals(10733223936L, parked.continueWith(Unit.INSTANCE));
-                        assertTrue(((OptimizedCallTarget) target).isValidLastTier(),
-                                "the independently installed normal entry must survive the real OSR failure");
+                        var entry = (OptimizedCallTarget) target;
+                        assertTrue(entry.compile(true));
+                        assertTrue(entry.isValidLastTier());
+                        assertTrue(entry.canBeInlined());
+                        assertTrue(root.noGraphFailure.isValid());
+                        int installations = entry.getSuccessfulCompilationCount();
+                        var runtime = (OptimizedTruffleRuntime) Truffle.getRuntime();
+                        var invalidations = new CopyOnWriteArrayList<Object>();
+                        var entryFailures = new AtomicInteger();
+                        var listener = new OptimizedTruffleRuntimeListener() {
+                            @Override public void onCompilationInvalidated(OptimizedCallTarget invalidated, Object source,
+                                    CharSequence reason) {
+                                if (invalidated == entry) invalidations.add(source);
+                            }
+                            @Override public void onCompilationFailed(OptimizedCallTarget failed, String reason,
+                                    boolean bailout, boolean permanent, int tier, java.util.function.Supplier<String> stack) {
+                                if (failed == entry) entryFailures.incrementAndGet();
+                            }
+                        };
+                        runtime.addListener(listener);
+                        try {
+                            runtime.bypassedInstalledCode(entry);
+                            assertEquals(10733223936L, parked.continueWith(Unit.INSTANCE));
+                        } finally { runtime.removeListener(listener); }
+                        assertEquals(List.of(root.noGraphFailure), invalidations,
+                                "the owned OSR failure invalidates installed entry code that omitted its receipt read");
+                        assertFalse(root.noGraphFailure.isValid());
+                        assertFalse(entry.isValid());
+                        assertTrue(entry.canBeInlined(), "only the failed physical OSR target is retired");
+                        assertEquals(0, entryFailures.get());
+                        assertEquals(installations, entry.getSuccessfulCompilationCount());
+                        assertNull(recovered(root), "a compiler callback must leave recovery for fresh ingress");
                     } else assertEquals(10733223936L, Calls.target(target, new Object[]{0L}));
                     assertEquals(4096, checkpoint.getVisits().get()); assertEquals(0, checkpoint.getCompiledVisits().get());
                     var failure = root.graphFailure.get(); assertNotNull(failure, "actual bytecode OSR must fail the fixed budget");
@@ -828,6 +854,7 @@ class StockGraphRecoveryTest {
                     assertSame(root, GraphRecovery.source(failure.target().getRootNode()));
                     assertTrue(GraphRecovery.graphTooBig(failure.reason(), true, true));
                     assertFalse(failure.target().isSubmittedForCompilation()); assertFalse(failure.target().isValid());
+                    assertFalse(failure.target().canBeInlined(), "the failed physical OSR target is retired");
                     assertNotSame(target, failure.target());
                     var failedBytecode = root.getBytecodeNode();
                     if (installedEntry) {
