@@ -20,6 +20,7 @@ final class Alternative extends Node {
     @Child private Expr body;
     @CompilationFinal(dimensions = 1) private int[] deadReferences = new int[0];
     @CompilationFinal(dimensions = 2) private final int[][] vectorFields;
+    @CompilationFinal(dimensions = 1) private final boolean[] objectFields;
     private final CountingConditionProfile matchProfile;
     private final int programSlot;
     private final int constructorIndex;
@@ -28,11 +29,12 @@ final class Alternative extends Node {
         this(kind, value, fields, body, vectorFields, true);
     }
     Alternative(int kind, Object value, int[] fields, Expr body, int[][] vectorFields, boolean profileChoice) {
-        this(kind, value, fields, body, vectorFields, profileChoice, -1, -1);
+        this(kind, value, fields, body, vectorFields, profileChoice, -1, -1, null);
     }
     Alternative(int kind, Object value, int[] fields, Expr body, int[][] vectorFields, boolean profileChoice,
-                int programSlot, int constructorIndex) {
+                int programSlot, int constructorIndex, boolean[] objectFields) {
         this.kind = kind; this.value = value; this.fields = fields; this.body = body; this.vectorFields = vectorFields;
+        this.objectFields = objectFields;
         this.programSlot = programSlot; this.constructorIndex = constructorIndex;
         // A singleton still checks its match. Do not store the uncached sentinel:
         // NodeUtil clones it, losing the identity guard around its disabled counters.
@@ -53,8 +55,9 @@ final class Alternative extends Node {
         return constructorIndex < 0 ? (DataLayout) value : Program.instance(frame, programSlot).constructorLayout(constructorIndex);
     }
     void restore(DataValue data, int index, VirtualFrame frame, int slot) {
-        if (value instanceof DataLayout.Reusable storage) storage.restore(layout(frame), data, index, frame, slot);
-        else layout(frame).restore(data, index, frame, slot);
+        boolean objectSlot = objectFields != null && objectFields[index];
+        if (value instanceof DataLayout.Reusable storage) storage.restore(layout(frame), data, index, frame, slot, objectSlot);
+        else layout(frame).restore(data, index, frame, slot, objectSlot);
     }
     void restoreVector(DataValue data, int index, VirtualFrame frame, int[] slots) {
         if (value instanceof DataLayout.Reusable storage) storage.restoreVector(layout(frame), data, index, frame, slots, 0);
