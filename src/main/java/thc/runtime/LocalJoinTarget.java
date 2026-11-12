@@ -28,6 +28,7 @@ public final class LocalJoinTarget {
     public int[][] getTypedSlots() { return typedSlots; } public LocalJoinJump getJump() { return jump; }
     /** Set once after lowering the group, before publishing its AST. */
     void setBodySlots(int first, int limit) { firstBodySlot = first; bodySlotLimit = limit; }
+    boolean clearsSlots(int first, int last) { return firstBodySlot <= first && last < bodySlotLimit; }
     void clearBodySlots(VirtualFrame frame) {
         // Constant slot indices let Graal keep an owned frame virtual. With a
         // dynamic descriptor, count the clears instead of expanding a large

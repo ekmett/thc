@@ -11,6 +11,7 @@ public final class LocalJoinCall extends Expr {
     @Children private Expr[] arguments;
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] temporaries;
     private final Metrics metrics;
+    private final int firstTemporarySlot, lastTemporarySlot;
     @CompilerDirectives.CompilationFinal(dimensions = 2) private final int[][] typedTemporaries;
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final CoreKind[] referenceKinds;
     @Children private TupleLocalRead[] typedCopies;
@@ -19,6 +20,18 @@ public final class LocalJoinCall extends Expr {
     }
     public LocalJoinCall(thc.Language language, LocalJoinTarget target, Expr[] arguments, int[] temporaries, Metrics metrics, int[][] typedTemporaries) {
         this.target = target; this.arguments = arguments; this.temporaries = temporaries; this.metrics = metrics; this.typedTemporaries = typedTemporaries;
+        int first = Integer.MAX_VALUE;
+        int last = -1;
+        for (int slot : temporaries) if (slot >= 0) {
+            first = Math.min(first, slot);
+            last = Math.max(last, slot);
+        }
+        for (int[] fields : typedTemporaries) if (fields != null) for (int slot : fields) {
+            first = Math.min(first, slot);
+            last = Math.max(last, slot);
+        }
+        firstTemporarySlot = first;
+        lastTemporarySlot = last;
         CoreRepresentation proof = target.getResult();
         setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(),
             proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
@@ -92,8 +105,12 @@ public final class LocalJoinCall extends Expr {
                 FrameAccess.write(frame, target.getSlots()[i], value);
             } else FrameAccess.write(frame, target.getSlots()[i], FrameAccess.read(frame, temporaries[i]));
         }
-        for (int temporary : temporaries) if (temporary >= 0) frame.clear(temporary);
-        for (int[] fields : typedTemporaries) if (fields != null) for (int field : fields) frame.clear(field);
+        // Lowered staging slots normally lie inside the target's body cleanup.
+        // Directly constructed transfers can have staging slots outside it.
+        if (!target.clearsSlots(firstTemporarySlot, lastTemporarySlot)) {
+            for (int temporary : temporaries) if (temporary >= 0) frame.clear(temporary);
+            for (int[] fields : typedTemporaries) if (fields != null) for (int field : fields) frame.clear(field);
+        }
         // All arguments have arrived, including after suspension. Old body locals
         // are dead at the jump; retaining them would carry boxed values around a loop.
         target.clearBodySlots(frame);

@@ -66,6 +66,7 @@ class TupleJoinLoweringTest {
                     }
                 }
                 var metrics = new Metrics(true); var call = new LocalJoinCall(language, target, new Expr[]{new Operand(0, 2), new Operand(1, 0)}, new int[]{-1, -1}, metrics, new int[][]{{4, 5}, {6, 7}});
+                target.setBodySlots(4, 6);
                 assertSame(target.getJump(), assertThrows(LocalJoinJump.class, () -> call.execute(frame))); assertEquals(List.of(0, 1), events);
                 assertEquals(Long.MAX_VALUE, frame.getLong(0)); assertSame(right, frame.getObject(1)); assertEquals(Long.MIN_VALUE, frame.getLong(2)); assertSame(left, frame.getObject(3));
                 var field = frame.getClass().getDeclaredField("indexedLocals"); field.setAccessible(true); var references = (Object[]) field.get(frame);

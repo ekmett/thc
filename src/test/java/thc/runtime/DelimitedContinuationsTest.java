@@ -256,6 +256,7 @@ class DelimitedContinuationsTest {
                         layout.bind("pending third", FrameSlotKind.Double)};
                     var target = new LocalJoinTarget(group, 1, slots, new CoreRepresentation[]{number, number, number});
                     var call = new LocalJoinCall(language, target, arguments, temporaries, new Metrics(false));
+                    target.setBodySlots(temporaries[0], layout.nextSlot());
                     selected = new LocalJoinRegion(group, layout.bind("selector"), layout.bind("join result"),
                         new Expr[]{call, body}, number, false, null, new int[0], true);
                 } else selected = new AstOperands(new LocalBinding[]{new LocalBinding(slots[0], arguments[0], false),
