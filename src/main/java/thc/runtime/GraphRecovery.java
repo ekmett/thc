@@ -52,7 +52,10 @@ public final class GraphRecovery implements AutoCloseable {
     }
 
     static ContextRoot source(RootNode root) {
-        if (root instanceof AstSameFrameArm.ArmRoot arm) return source(arm.sourceRoot());
+        // Opaque operation sides cannot contribute their graph to the parent.
+        // Retire that physical side without cancelling independent parent code.
+        if (root instanceof AstSameFrameArm.ArmRoot arm)
+            return arm.ownsCompilationFailure() ? arm : source(arm.sourceRoot());
         if (root instanceof ContextRoot contextRoot) return contextRoot;
         if (root instanceof ContinuationRootNode continuation)
             return continuation.getSourceRootNode() instanceof RootNode original ? source(original) : null;

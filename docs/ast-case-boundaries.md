@@ -116,7 +116,7 @@ The next fresh function entry claims the failed task, clones the body with indep
 case targets and fresh loop state, and applies the finite extraction to that
 replacement. Entry publication adopts the child and reports the structural change
 atomically. Old `executeBody` paths, tail anchors and saved frames remain on their
-original body; no guest invocation is replayed. A failed same-frame side selects
+original body; no guest invocation is replayed. A failed ordinary same-frame case side selects
 the corresponding nested region in the copied owning function, even when that
 function's enclosing target was successfully installed. Recovery-created entries
 and side edges veto inlining so a small trace cannot rebuild the failed parent
@@ -127,6 +127,15 @@ and initializes its cold frame there. Recovery publishes a replacement only
 when it can reduce the body. Existing body executions and parked continuations
 keep their frame, program counter and lexical cleanup. See the
 [stock-runtime workflow](contributing.md) for eligibility and limitations.
+
+Recovery can also separate a case demand or scalar local-join operation into an
+opaque side using the same activation frame. These operation sides own their
+physical failure receipts: failure retires the side without invalidating or
+replacing the independently compilable parent. The retired operation continues
+interpreted; its failure initiates no child recovery or retry of that physical
+target. Ordinary case-arm failures
+and OSR failures retain their source-function recovery policy. Receipts remain
+context-owned and live only with their physical side roots.
 
 The pinned terminal runtime rejects explicit submissions and queued work for
 retired targets, and honors the launcher's diagnostic-retry opt-out. Stock

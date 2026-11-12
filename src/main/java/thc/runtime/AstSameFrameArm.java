@@ -182,6 +182,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
             this.mode = mode;
         }
         ContextRoot sourceRoot() { return (ContextRoot) arm.getRootNode(); }
+        boolean ownsCompilationFailure() { return arm.operationRegion; }
 
         boolean extractInCopy(FunctionRoot replacement) {
             var originalArms = NodeUtil.findAllNodeInstances(sourceRoot(), AstSameFrameArm.class);

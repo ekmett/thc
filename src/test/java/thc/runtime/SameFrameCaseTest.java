@@ -394,8 +394,14 @@ class SameFrameCaseTest {
         }
     }
 
-    @Test void joinOperationSeparatesItsCallerBeforeFirstExecution() throws Exception {
-        try (var context = context()) {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void joinOperationSeparatesItsCallerBeforeFirstExecution(boolean failSide) throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000")
+                .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.DiagnoseFailure", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -413,10 +419,42 @@ class SameFrameCaseTest {
                 assertEquals(regions + 1, NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).size());
                 assertFalse(target.wasExecuted());
                 compile(target);
+                if (failSide) {
+                    var side = (OptimizedCallTarget) targets(boundary)[2];
+                    var physical = (ContextRoot) side.getRootNode();
+                    var parent = (ContextRoot) root;
+                    var service = Language.currentState().getGraphRecovery();
+                    assertSame(physical, GraphRecovery.source(physical));
+                    assertSame(side, assertThrows(com.oracle.truffle.api.OptimizationFailedException.class,
+                            () -> side.compile(true)).getCallTarget());
+                    var receipt = physical.graphFailure.get();
+                    assertNotNull(receipt);
+                    assertSame(side, receipt.target());
+                    assertTrue(GraphRecovery.graphTooBig(receipt.reason(), receipt.bailout(), receipt.permanent()));
+                    assertFalse(side.isValid()); assertFalse(side.compile(true));
+                    assertFalse(physical.noGraphFailure.isValid());
+                    assertNull(parent.graphFailure.get()); assertTrue(parent.noGraphFailure.isValid());
+                    assertFalse(parent.compilationFailureObserved); assertTrue(target.isValidLastTier());
+                    context.leave();
+                    try (var other = context()) {
+                        other.initialize("thc"); other.enter();
+                        try {
+                            assertNull(Language.currentState().getGraphRecovery().claim(physical));
+                            assertNull(service.claim(physical));
+                            assertSame(receipt, physical.graphFailure.get());
+                        } finally { other.leave(); }
+                    } finally { context.enter(); }
+                }
                 assertEquals(0L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
+                long compiledBefore = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                 assertEquals(10193L, Calls.target(target, new Object[]{0L, 1L, 0L}));
+                assertEquals(compiledBefore + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue(),
+                        "The first post-failure parent call must enter its installed code");
                 assertEquals(2L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
                 assertTrue(target.isValidLastTier());
+                assertNull(((ContextRoot) root).graphFailure.get());
+                assertEquals(0, ((FunctionRoot) root).getGraphBudgetGeneration());
+                assertSame(target, program.entryTarget("entry"));
             } finally { context.leave(); }
         }
     }
