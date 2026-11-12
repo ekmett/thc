@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 import thc.Language;
@@ -33,7 +34,12 @@ class CaseBinderLifetimeTest {
             .findFirst().orElseThrow();
     }
     private static Map<String, Object> module(boolean used, boolean defaults) {
+        return module(used, defaults, false);
+    }
+    private static Map<String, Object> module(boolean used, boolean defaults, boolean deadScratch) {
         var body = used ? variable("seen") : node("lit", "int", "42", Map.of("rep", LONG));
+        if (deadScratch) body = node("case", node("lit", "int", "0", Map.of("rep", LONG)), "scratch",
+                List.of(node("default", null, List.of(), body)), Map.of("rep", LONG, "binder", binder("scratch")));
         var fallback = node("default", null, List.of(), body);
         var alternatives = defaults ? List.of(fallback) : List.of(node("lit", node("int", "0"), List.of(), body));
         var expression = node("case", variable("input"), "seen", alternatives,
@@ -46,14 +52,15 @@ class CaseBinderLifetimeTest {
         @Child private Expr body;
         private final int slot;
         private final int[] observations;
-        Observe(Expr body, int slot, int[] observations) {
-            this.body = body; this.slot = slot; this.observations = observations;
+        private final byte expectedTag;
+        Observe(Expr body, int slot, int[] observations, FrameSlotKind expectedKind) {
+            this.body = body; this.slot = slot; this.observations = observations; expectedTag = expectedKind.tag;
             setRepresentation(body.getRepresentation());
         }
         @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
         @Override public long executeLong(VirtualFrame frame) {
             observations[0]++;
-            if (frame.getTag(slot) == FrameSlotKind.Illegal.tag) observations[1]++;
+            if (frame.getTag(slot) == expectedTag) observations[1]++;
             if (CompilerDirectives.inCompiledCode()) observations[2]++;
             return body.executeRequiredLong(frame);
         }
@@ -123,35 +130,82 @@ class CaseBinderLifetimeTest {
         assertNull(FrameAccess.read(frame, FrameLayout.TAIL_RESULT));
     }
 
-    @ParameterizedTest @ValueSource(booleans = {false, true})
-    void onlyDeadCaseBinderStartsClearedAtFreshCompiledEntry(boolean used) throws Exception {
+    @ParameterizedTest @CsvSource({"false, false", "true, false", "true, true"})
+    void caseBinderHasTheExpectedTagsOnFirstCompiledEntry(boolean used, boolean deadScratch) throws Exception {
         try (var context = executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new Program(language, module(used, true), false);
+                var program = new Program(language, module(used, true, deadScratch), false);
                 var target = program.entryTarget("entry");
-                var selection = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class).getFirst();
+                var cases = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class);
+                assertEquals(deadScratch ? 2 : 1, cases.size());
+                var selection = cases.getFirst();
                 var scrutinee = scrutinee(selection);
-                int[] observations = new int[3];
+                byte freshTag = (used && !deadScratch ? FrameSlotKind.Object : FrameSlotKind.Illegal).tag;
+                int[] observations = new int[3], armObservations = new int[3];
                 Expr observed = new Expr() {
                     @Child private Expr value = scrutinee;
                     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
                     @Override public long executeLong(VirtualFrame frame) {
                         observations[0]++;
-                        if (frame.getTag(selection.binderSlot) == (used ? FrameSlotKind.Object.tag : FrameSlotKind.Illegal.tag)) observations[1]++;
+                        if (frame.getTag(selection.binderSlot) == freshTag) observations[1]++;
                         if (CompilerDirectives.inCompiledCode()) observations[2]++;
                         return value.executeRequiredLong(frame);
                     }
                 };
                 observed.setRepresentation(scrutinee.getRepresentation());
                 scrutinee.replace(observed);
+                Expr arm = selection.alternatives[0].getBody();
+                arm.replace(new Observe(arm, selection.binderSlot, armObservations, used ? FrameSlotKind.Long : FrameSlotKind.Illegal));
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                 target.getClass().getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 assertEquals(used ? 7L : 42L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 7L}));
                 assertArrayEquals(new int[]{1, 1, 1}, observations);
+                assertArrayEquals(new int[]{1, 1, 1}, armObservations);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+            } finally { context.leave(); }
+        }
+    }
+
+    private static final class ObserveFreshSlots extends Expr {
+        @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] slots;
+        private final int[] compiled;
+        ObserveFreshSlots(int[] slots, int[] compiled) { this.slots = slots; this.compiled = compiled; }
+        @Override public boolean needsCallState() { return false; }
+        @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+        @com.oracle.truffle.api.nodes.ExplodeLoop
+        @Override public long executeLong(VirtualFrame frame) {
+            for (int slot : slots) if (frame.getTag(slot) != FrameSlotKind.Illegal.tag) return -1L;
+            if (CompilerDirectives.inCompiledCode()) compiled[0]++;
+            return 42L;
+        }
+    }
+    @Test void wideFreshScratchStartsClearedOnItsFirstCompiledEntry() throws Exception {
+        List<Object> body = node("lit", "int", "42", Map.of("rep", LONG));
+        for (int i = 0; i < 27; i++) body = node("case", variable("input"), "dead" + i,
+                List.of(node("default", null, List.of(), body)), Map.of("rep", LONG, "binder", binder("dead" + i)));
+        var data = Map.<String, Object>of("bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true,
+                "rep", CLOSURE, "expr", node("lam", List.of(binder("input")), body,
+                        Map.of("rep", CLOSURE, "resultRep", LONG)))));
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, data, false);
+                var target = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("entry");
+                var cases = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class);
+                int[] slots = cases.stream().mapToInt(selection -> selection.binderSlot).distinct().toArray();
+                assertEquals(27, slots.length);
+                int[] compiled = {0};
+                var observation = new ObserveFreshSlots(slots, compiled);
+                observation.setRepresentation(((GuestRoot) target.getRootNode()).getScalarResultProof());
+                cases.getFirst().replace(observation);
+                // Inspect the fresh activation without executing or training its original body.
+                target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                assertEquals(42L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 7L}));
+                assertEquals(1, compiled[0]); assertTrue(target.isValidLastTier());
             } finally { context.leave(); }
         }
     }
@@ -226,7 +280,7 @@ class CaseBinderLifetimeTest {
                 interrupted.setRepresentation(scrutinee.getRepresentation());
                 scrutinee.replace(interrupted);
                 Expr body = selection.alternatives[0].getBody();
-                body.replace(new Observe(body, selection.binderSlot, observations));
+                body.replace(new Observe(body, selection.binderSlot, observations, FrameSlotKind.Illegal));
                 var saved = assertInstanceOf(AstContinuation.class,
                         ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 7L}));
                 assertEquals(1, entries[0]);
@@ -400,7 +454,7 @@ class CaseBinderLifetimeTest {
                 int[] observations = new int[3];
                 for (Alternative arm : selection.alternatives) {
                     Expr body = arm.getBody();
-                    body.replace(new Observe(body, selection.binderSlot, observations));
+                    body.replace(new Observe(body, selection.binderSlot, observations, FrameSlotKind.Illegal));
                 }
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                 target.getClass().getMethod("waitForCompilation").invoke(target);

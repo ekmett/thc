@@ -191,9 +191,11 @@ selector and result storage remain outside the cleared range. Selectors use
 fresh slots. Saved activations keep their own values and resume points.
 
 Fresh AST function-body layouts reserve only the ancestry slot at index zero.
-Already allocated initializer layouts and runtime adapters retain their existing
-layout, including the reserved tail-call slots where needed. Lowering validates
-initial scratch clears against the layout's reserved prefix and live inputs.
+When lowering identifies scratch that must start cleared, the whole fresh frame
+starts with unwritten slots. Entry and body operations write live slots before
+reading them. Already allocated initializer layouts and runtime adapters retain
+their null default and reserved tail-call slots where needed. Explicit initial
+scratch clears on those layouts stay outside the reserved prefix and live inputs.
 
 Bytecode budget recovery can prepare a separate target for a substantial closed
 nonrecursive join body, using the existing finite expression-region protocol.

@@ -16,11 +16,12 @@ public final class FrameLayout {
     private static final class Allocation {
         final FrameDescriptor.Builder builder = FrameDescriptor.newBuilder();
         final List<FrameSlotKind> kinds = new ArrayList<>();
-        final LinkedHashSet<Integer> initialClears = new LinkedHashSet<>();
+        final LinkedHashSet<Integer> initialClears;
         final int firstLocalSlot;
         int cursor;
 
         Allocation(boolean reserveTailSlots) {
+            initialClears = reserveTailSlots ? new LinkedHashSet<>() : null;
             bind("<TCO Bloom Filter>", FrameSlotKind.Long);
             if (reserveTailSlots) {
                 bind("<TCO Result>", FrameSlotKind.Object);
@@ -63,10 +64,15 @@ public final class FrameLayout {
     void clearInitially(int... slots) {
         for (int slot : slots) {
             if (slot < firstLocalSlot() || slot >= allocation.kinds.size()) throw new IllegalArgumentException("Invalid initial scratch slot");
-            allocation.initialClears.add(slot);
+            if (allocation.initialClears != null) allocation.initialClears.add(slot);
         }
+        // A fresh lowered body writes live locals before reading them. Let the
+        // frame constructor set the initial tags when this body needs clears.
+        if (allocation.initialClears == null && slots.length != 0) allocation.builder.defaultValueIllegal();
     }
-    int[] initialClears() { return allocation.initialClears.stream().mapToInt(Integer::intValue).toArray(); }
+    int[] initialClears() {
+        return allocation.initialClears == null ? new int[0] : allocation.initialClears.stream().mapToInt(Integer::intValue).toArray();
+    }
     /** Storage for a completed scalar or a physical tuple leaf, not a WHNF certificate. */
     public static FrameSlotKind carrierKind(CoreRepresentation proof) {
         if (proof.isInt()) return FrameSlotKind.Int;
