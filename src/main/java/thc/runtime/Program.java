@@ -1498,9 +1498,10 @@ public final class Program implements ExecutableProgram {
         Expr[] nodes = new Expr[bodies.size() + 1]; nodes[0] = entry;
         for (int i = 0; i < bodies.size(); i++) nodes[i + 1] = bodies.get(i);
         int selector = recursive ? local.layout.bind("<join selector>", FrameSlotKind.Long) : -1;
-        return new LocalJoinRegion(identity, selector,
-            local.layout.bind("<join result>", FrameLayout.carrierKind(result)),
-            nodes, result, recursive, tuple, tupleSlots, delimited);
+        int resultSlot = local.layout.bind("<join result>", FrameLayout.carrierKind(result));
+        return new LocalJoinRegion(identity, selector, resultSlot,
+            nodes, result, recursive, tuple, tupleSlots, delimited,
+            tuple == null && local.layout.referenceSlot(resultSlot));
     }
     private DataLayout dataLayout(String id) {
         try (var ownership = preparationLock.acquire()) {
