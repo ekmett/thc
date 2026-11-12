@@ -125,6 +125,12 @@ public final class Evaluate extends Expr {
     }
     @CompilationFinal private boolean genericDataValue;
     @Override public DataValue executeDataValue(VirtualFrame frame) throws UnexpectedResultException {
+        // Local reads cannot capture a continuation. Only an actual thunk needs
+        // the force operation's capture policy, including its saved child update.
+        if (value instanceof LocalRead && value.getRepresentation().getKind() == CoreKind.DATA) {
+            if (value.getRepresentation().getEvaluated()) return value.executeDataValue(frame);
+            return RuntimeTypesGen.expectDataValue(forceResult(frame, value.execute(frame)));
+        }
         if (AstControl.INSTANCE.captures(this)) return RuntimeTypesGen.expectDataValue(executeAsync(frame));
         if (value.getRepresentation().getEvaluated() || value.getRepresentation().isLong()) return value.executeDataValue(frame);
         if (value.getRepresentation().getKind() == CoreKind.DATA || genericDataValue)

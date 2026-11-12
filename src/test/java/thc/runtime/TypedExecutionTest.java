@@ -222,8 +222,126 @@ class TypedExecutionTest {
             } finally { context.leave(); }
         }
     }
+    @Test void evaluatedLocalDataDemandPreservesCellsAndUnexpectedValues() throws Exception {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var data = new DataLayout(language, "evaluated", "evaluated", new String[0]);
+                var answer = data.create(new Object[0]); int[] demands = {0};
+                var thunk = new Thunk(new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { demands[0]++; return answer; }
+                }.getCallTarget(), null);
+                for (boolean captures : new boolean[]{false, true}) for (boolean cells : new boolean[]{false, true}) {
+                    var layout = new FrameLayout(); int slot = layout.bind("data", com.oracle.truffle.api.frame.FrameSlotKind.Object);
+                    var proof = new CoreRepresentation(CoreKind.DATA, true, true);
+                    var evaluation = new Evaluate(new LocalRead(slot, cells).proven(proof), new Metrics(false));
+                    var root = evaluationOwner(language, evaluation, captures, layout.build());
+                    var frame = Truffle.getRuntime().createVirtualFrame(new Object[]{0L}, root.getFrameDescriptor());
+                    frame.setObject(slot, answer); assertSame(answer, evaluation.executeDataValue(frame));
+                    frame.setObject(slot, thunk);
+                    assertSame(thunk, assertThrows(UnexpectedResultException.class, () -> evaluation.executeDataValue(frame)).getResult());
+                    assertSame(thunk, frame.getObject(slot)); assertEquals(0, demands[0]);
+                    frame.setObject(slot, null);
+                    if (cells) assertEquals("Uninitialized local binding", assertThrows(RuntimeFault.class,
+                        () -> evaluation.executeDataValue(frame)).getMessage());
+                    else assertNull(assertThrows(UnexpectedResultException.class, () -> evaluation.executeDataValue(frame)).getResult());
+                    if (cells) {
+                        var recursive = new RecCell(); frame.setObject(slot, recursive);
+                        assertEquals("Recursive binding read before initialization", assertThrows(RuntimeFault.class,
+                            () -> evaluation.executeDataValue(frame)).getMessage());
+                        recursive.setInitialized(true); recursive.setValue(answer);
+                        assertSame(answer, evaluation.executeDataValue(frame)); assertSame(recursive, frame.getObject(slot));
+                        recursive.setValue(thunk);
+                        assertSame(thunk, assertThrows(UnexpectedResultException.class, () -> evaluation.executeDataValue(frame)).getResult());
+                        assertSame(thunk, recursive.getValue()); assertEquals(0, demands[0]);
+                    }
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void lazyLocalDataDemandUpdatesOnlyItsLocalLinkAndMemoizesFailure() throws Exception {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var data = new DataLayout(language, "lazy", "lazy", new String[0]);
+                var answer = data.create(new Object[0]);
+                for (boolean captures : new boolean[]{false, true}) for (boolean cells : new boolean[]{false, true}) {
+                    var layout = new FrameLayout(); int slot = layout.bind("data", com.oracle.truffle.api.frame.FrameSlotKind.Object);
+                    var proof = new CoreRepresentation(CoreKind.DATA, false, true); var metrics = new Metrics(true);
+                    var evaluation = new Evaluate(new LocalRead(slot, cells).proven(proof), metrics);
+                    var root = evaluationOwner(language, evaluation, captures, layout.build());
+                    var frame = Truffle.getRuntime().createVirtualFrame(new Object[]{0L}, root.getFrameDescriptor());
+                    var thunk = new Thunk(new RootNode(null) {
+                        @Override public Object execute(VirtualFrame frame) { return answer; }
+                    }.getCallTarget(), null);
+                    var recursive = new RecCell(); recursive.setInitialized(true); recursive.setValue(thunk);
+                    frame.setObject(slot, cells ? recursive : thunk);
+                    assertSame(answer, evaluation.executeDataValue(frame));
+                    assertSame(cells ? recursive : answer, frame.getObject(slot));
+                    if (cells) assertSame(answer, recursive.getValue());
+                    assertSame(answer, evaluation.executeDataValue(frame));
+                    assertEquals(1, metrics.getThunkEvaluations()); assertEquals(0, metrics.getThunkHits());
+                    assertSame(answer, thunk.getValue()); assertEquals(2, thunk.getState());
+                    recursive.setValue(thunk); frame.setObject(slot, cells ? recursive : thunk);
+                    assertSame(answer, evaluation.executeDataValue(frame));
+                    assertEquals(1, metrics.getThunkEvaluations()); assertEquals(1, metrics.getThunkHits());
+
+                    var failure = new RuntimeFault("lazy DATA failure");
+                    var failed = new Thunk(new RootNode(null) {
+                        @Override public Object execute(VirtualFrame frame) { throw failure; }
+                    }.getCallTarget(), null);
+                    recursive.setValue(failed); frame.setObject(slot, cells ? recursive : failed);
+                    for (int attempt = 0; attempt < 2; attempt++)
+                        assertSame(failure, assertThrows(RuntimeFault.class, () -> evaluation.executeDataValue(frame)));
+                    assertSame(cells ? recursive : failed, frame.getObject(slot));
+                    if (cells) assertSame(failed, recursive.getValue());
+                    assertEquals(3, failed.getState()); assertEquals(2, metrics.getThunkEvaluations());
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void evaluatedNonlocalDataRetainsTypedAndGenericCaptureDispatch() throws Exception {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var data = new DataLayout(language, "generic", "generic", new String[0]);
+                var answer = data.create(new Object[0]); var resumed = new Object();
+                class Operand extends Expr {
+                    int genericExecutions, typedExecutions; AstCapture cut;
+                    Operand() { setRepresentation(new CoreRepresentation(CoreKind.DATA, true, true)); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        genericExecutions++; if (cut != null) throw cut; return answer;
+                    }
+                    @Override public DataValue executeDataValue(VirtualFrame frame) {
+                        typedExecutions++; if (cut != null) throw cut; return null;
+                    }
+                }
+                for (boolean captures : new boolean[]{false, true}) {
+                    var operand = new Operand(); var evaluation = new Evaluate(operand, new Metrics(false));
+                    var root = evaluationOwner(language, evaluation, captures);
+                    var frame = Truffle.getRuntime().createVirtualFrame(new Object[]{0L}, root.getFrameDescriptor());
+                    assertSame(captures ? answer : null, evaluation.executeDataValue(frame));
+                    operand.cut = new AstCapture(AstStackSpill.INSTANCE, MaskingState.UNMASKED);
+                    var cut = assertThrows(AstCapture.class, () -> evaluation.executeDataValue(frame));
+                    assertSame(operand.cut, cut);
+                    var saved = cut.freeze(root, frame.materialize());
+                    assertSame(resumed, saved.continueWith(resumed), "Evaluated demand must not append a forcing recipe");
+                    assertThrows(RuntimeFault.class, () -> saved.continueWith(resumed));
+                    assertEquals(captures ? 2 : 0, operand.genericExecutions);
+                    assertEquals(captures ? 0 : 2, operand.typedExecutions);
+                }
+            } finally { context.leave(); }
+        }
+    }
     private static FunctionRoot evaluationOwner(Language language, Evaluate evaluation, boolean captures) {
-        var root = new FunctionRoot(language, new FrameLayout().build(), "generic evaluated demand", null,
+        return evaluationOwner(language, evaluation, captures, new FrameLayout().build());
+    }
+    private static FunctionRoot evaluationOwner(Language language, Evaluate evaluation, boolean captures,
+                                                 com.oracle.truffle.api.frame.FrameDescriptor descriptor) {
+        var root = new FunctionRoot(language, descriptor, "generic evaluated demand", null,
             new int[0], new int[0], new int[0], evaluation, new Metrics(false), new CoreRepresentation[0],
             evaluation.getRepresentation(), null, new boolean[0], null, null, new int[0], null, false,
             new int[0][], false, FunctionRootRole.FUNCTION, captures);
