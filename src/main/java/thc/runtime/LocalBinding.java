@@ -29,6 +29,7 @@ public final class LocalBinding extends Node {
         generic = !preferLong || proof.getPresent() && !exactLong;
     }
     boolean needsCallState() { return value.needsCallState(); }
+    Evaluate demandCandidate() { return value instanceof Evaluate demand && demand.demandsValue() ? demand : null; }
     boolean readsRawReference(int destination, int otherTemporary) {
         return slot == destination && typedSlots == null && generic && !exactLong &&
             (referenceKind == CoreKind.UNKNOWN || referenceKind == CoreKind.OBJECT) &&

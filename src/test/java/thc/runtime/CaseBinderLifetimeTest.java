@@ -565,7 +565,8 @@ class CaseBinderLifetimeTest {
         }
     }
 
-    @Test void unusedDataBinderDirectAndCapturedPathsKeepOneEvaluation() {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void unusedDataBinderDirectAndCapturedPathsKeepOneEvaluation(boolean extracted) throws Exception {
         try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.Compilation", "false").build()) {
             context.initialize("thc"); context.enter();
@@ -578,7 +579,7 @@ class CaseBinderLifetimeTest {
                     int field = layout.bind("field", FrameSlotKind.Long);
                     var proof = new CoreRepresentation(CoreKind.DATA, true, true);
                     Expr input = new Expr() {
-                        { setRepresentation(proof); }
+                        { setRepresentation(new CoreRepresentation(CoreKind.DATA, !extracted, true)); }
                         @Override public Object execute(VirtualFrame frame) {
                             calls[0]++;
                             if (operation == 1) throw new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this));
@@ -595,9 +596,19 @@ class CaseBinderLifetimeTest {
                             return frame.getLong(field);
                         }
                     };
-                    var arm = new Alternative(Alternative.DATA_ALTERNATIVE, data, new int[]{field}, body, new int[0][], false);
+                    var region = new AstSameFrameArm(body);
+                    var arm = new Alternative(Alternative.DATA_ALTERNATIVE, data, new int[]{field}, region, new int[0][], false);
                     var selection = new Case(input, binder, new Alternative[]{arm}, new Metrics(false), proof, true).discardUnusedBinder();
                     var root = new MatchedCaseRoot(language, layout.build(), selection, false);
+                    if (extracted) {
+                        root.getCallTarget();
+                        assertTrue(AstSameFrameArm.extractFresh(root));
+                        var targetField = AstSameFrameArm.class.getDeclaredField("targets"); targetField.setAccessible(true);
+                        assertNull(targetField.get(region), "Demand must precede the alternative body");
+                        var demand = NodeUtil.findFirstNodeInstance(selection.scrutineeBinding(), AstSameFrameArm.class);
+                        assertNotNull(demand); assertNotNull(targetField.get(demand));
+                        assertFalse(demand.isInstrumentable());
+                    }
                     var value = data.createLong(42);
                     if (mode == 0) assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L, value}));
                     else if (mode == 1) {

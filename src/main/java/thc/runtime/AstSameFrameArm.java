@@ -27,11 +27,45 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     @CompilationFinal(dimensions = 1) private volatile RootCallTarget[] targets;
     private volatile long sideGeneration;
     private boolean copiedExtraction;
+    private final boolean demandRegion;
 
-    AstSameFrameArm(Expr body) {
+    AstSameFrameArm(Expr body) { this(body, false); }
+    private AstSameFrameArm(Expr body, boolean demandRegion) {
         this.body = body;
+        this.demandRegion = demandRegion;
         setRepresentation(body.getRepresentation());
         setCoreSourceLocation(body.getCoreSourceLocation());
+    }
+    @Override public boolean isInstrumentable() { return !demandRegion && super.isInstrumentable(); }
+    @Override public boolean needsCallState() { return demandRegion ? body.needsCallState() : super.needsCallState(); }
+
+    /** Only an unpublished recovery copy gains demand boundaries. Functions
+     * already containing same-frame regions have retained their frame identity. */
+    static boolean extractFresh(Node region) {
+        if (NodeUtil.findFirstNodeInstance(region.getRootNode(), AstSameFrameArm.class) != null) {
+            Evaluate demand = firstDemand(region);
+            if (demand != null) return prepare(demand.replace(new AstSameFrameArm(demand, true)));
+        }
+        return extract(region);
+    }
+
+    private static Evaluate firstDemand(Node node) {
+        if (node instanceof AstSameFrameArm arm && arm.targets != null) return null;
+        Node first = null;
+        if (node instanceof Case selection) {
+            LocalBinding binding = selection.scrutineeBinding();
+            Evaluate demand = binding.demandCandidate();
+            if (demand != null) return demand;
+            first = binding;
+            demand = firstDemand(first);
+            if (demand != null) return demand;
+        }
+        for (Node child : node.getChildren()) {
+            if (child == first) continue;
+            Evaluate demand = firstDemand(child);
+            if (demand != null) return demand;
+        }
+        return null;
     }
 
     /** A real failure extracts one remaining region; already separated bodies
@@ -147,7 +181,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
             var originalArms = NodeUtil.findAllNodeInstances(sourceRoot(), AstSameFrameArm.class);
             var copiedArms = NodeUtil.findAllNodeInstances(replacement, AstSameFrameArm.class);
             int index = originalArms.indexOf(arm);
-            return index >= 0 && originalArms.size() == copiedArms.size() && extract(copiedArms.get(index).body);
+            return index >= 0 && originalArms.size() == copiedArms.size() && extractFresh(copiedArms.get(index).body);
         }
         @Override public Object execute(VirtualFrame callFrame) {
             Object[] args = callFrame.getArguments();
@@ -182,7 +216,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
             }
         }
         @Override public SourceSection getSourceSection() { return arm.getSourceSection(); }
-        @Override public String getName() { return arm.getRootNode().getName() + " <case arm>"; }
+        @Override public String getName() { return arm.getRootNode().getName() + (arm.demandRegion ? " <case demand>" : " <case arm>"); }
         @Override public boolean isCloningAllowed() { return false; }
     }
 

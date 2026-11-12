@@ -109,7 +109,7 @@ public final class FunctionRoot extends GuestRoot {
             FunctionRoot replacement = copyForRecovery();
             boolean reduced = claim.target().getRootNode() instanceof AstSameFrameArm.ArmRoot side
                     ? side.extractInCopy(replacement)
-                    : deferredBudget ? AstDeferredArm.extractFresh(replacement) : AstSameFrameArm.extract(replacement);
+                    : deferredBudget ? AstDeferredArm.extractFresh(replacement) : AstSameFrameArm.extractFresh(replacement);
             if (!reduced) {
                 atomic(() -> {
                     if (recoveredEntry == null && service.publishable(this, claim)) {

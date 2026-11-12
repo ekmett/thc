@@ -23,6 +23,7 @@ class Case extends Expr {
     private final boolean directDataScrutinee;
     @CompilationFinal private boolean unusedBinder;
     @CompilationFinal private LiteralIndex literalIndex;
+    final LocalBinding scrutineeBinding() { return scrutinee; }
 
     /** Prepare only label selection; arm bodies and their activation stay here. */
     final void prepareLiteralIndex(CoreRepresentation binderProof) {

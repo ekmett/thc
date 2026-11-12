@@ -277,7 +277,8 @@ class SameFrameCaseTest {
         }
     }
 
-    @Test void extractedArmCaptureResumesOriginalJoinFrameAndSuffixOnce() throws Exception {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void extractedArmCaptureResumesOriginalJoinFrameAndSuffixOnce(boolean demand) throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -289,10 +290,23 @@ class SameFrameCaseTest {
                 assertEquals(8, arms.size());
                 var state = new CaptureState();
                 var arm = arms.getFirst();
-                var field = AstSameFrameArm.class.getDeclaredField("body"); field.setAccessible(true);
-                Expr old = (Expr) field.get(arm);
-                old.replace(new CutBody(state).proven(old.getRepresentation()));
-                assertTrue(AstSameFrameArm.extract(arm));
+                if (demand) {
+                    var selection = (Case) arm.getParent().getParent();
+                    var original = NodeUtil.findFirstNodeInstance(selection.scrutineeBinding(), Evaluate.class);
+                    var replacement = new Evaluate(new CutBody(state), new Metrics(false));
+                    replacement.setRepresentation(original.getRepresentation());
+                    original.replace(replacement);
+                    assertTrue(AstSameFrameArm.extractFresh(target.getRootNode()));
+                    assertNull(targets(arm), "The case demand must be separated before its returning arm");
+                    arm = assertInstanceOf(AstSameFrameArm.class, replacement.getParent());
+                    assertFalse(arm.isInstrumentable());
+                    assertEquals(replacement.needsCallState(), arm.needsCallState());
+                } else {
+                    var field = AstSameFrameArm.class.getDeclaredField("body"); field.setAccessible(true);
+                    Expr old = (Expr) field.get(arm);
+                    old.replace(new CutBody(state).proven(old.getRepresentation()));
+                    assertTrue(AstSameFrameArm.extract(arm));
+                }
                 while (AstSameFrameArm.extract(target.getRootNode())) { }
                 RootCallTarget side = targets(arm)[2];
                 compile(side);
@@ -305,9 +319,9 @@ class SameFrameCaseTest {
                 assertEquals(1, state.prefix); assertEquals(1, state.compiled);
                 // A first async capture may deopt under the ordinary exception profile.
                 // The saved suffix must still preserve identity, effects, frame and mask.
-                // First arm's original sum[16..31]=376 is replaced with 500;
-                // all seven siblings and the caller's +17 suffix still run once.
-                assertEquals(10317L, saved.continueWith(500L));
+                // Replacing the arm changes its sum[16..31]=376 to 500.
+                // Replacing only its unused scrutinee retains every original sum.
+                assertEquals(demand ? 10193L : 10317L, saved.continueWith(500L));
                 assertEquals(1, state.prefix); assertEquals(1, state.resumes);
                 assertEquals(2L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
                 assertEquals(ambient, SynchronousMasking.current(target.getRootNode()));
