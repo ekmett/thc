@@ -24,7 +24,7 @@ final class BytecodeContinuations {
     private static final class Activation {
         WeakReference<Language.State> owner;
         final WeakHashMap<ContinuationResult, Boolean> terminal = new WeakHashMap<>();
-        final Set<WindowsNativeIo.Request> requests = new HashSet<>();
+        Set<WindowsNativeIo.Request> requests;
     }
     private static Activation activation(MaterializedFrame frame, boolean create) {
         synchronized (frame) {
@@ -58,11 +58,17 @@ final class BytecodeContinuations {
     /** Only explicitly owned native tokens, never retained shared children. */
     @TruffleBoundary static void ownRequest(MaterializedFrame frame, WindowsNativeIo.Request request) {
         var activation = activation(frame, true);
-        synchronized (activation) { activation.requests.add(request); }
+        synchronized (activation) {
+            if (activation.requests == null) activation.requests = new HashSet<>();
+            activation.requests.add(request);
+        }
     }
     @TruffleBoundary static void releaseRequest(MaterializedFrame frame, WindowsNativeIo.Request request) {
         var activation = activation(frame, false);
-        if (activation != null) synchronized (activation) { activation.requests.remove(request); }
+        if (activation == null) return;
+        synchronized (activation) {
+            if (activation.requests != null) activation.requests.remove(request);
+        }
     }
     private static Activation owned(ContinuationResult saved) {
         var activation = activation(saved.getFrame(), false);
@@ -72,7 +78,8 @@ final class BytecodeContinuations {
     private static void requireOwner(Activation activation) {
         if (activation.owner == null || activation.owner.get() != Language.currentState(null))
             throw fault("Bytecode continuation belongs to another execution context");
-        for (var request : activation.requests) request.preflightFromSavedActivation();
+        if (activation.requests != null)
+            for (var request : activation.requests) request.preflightFromSavedActivation();
     }
     /** Authorization only, before an outer thunk/segment/request changes owner. */
     @TruffleBoundary static void preflight(ContinuationResult saved) {
@@ -129,13 +136,14 @@ final class BytecodeContinuations {
     }
     @TruffleBoundary private static void discard(ContinuationResult saved) {
         var activation = owned(saved);
-        WindowsNativeIo.Request[] requests;
+        Set<WindowsNativeIo.Request> requests;
         synchronized (activation) {
             requireOwner(activation);
             if (activation.terminal.putIfAbsent(saved, Boolean.TRUE) != null) return;
-            requests = activation.requests.toArray(WindowsNativeIo.Request[]::new);
-            activation.requests.clear();
+            requests = activation.requests;
+            activation.requests = null;
         }
+        if (requests == null) return;
         // The terminal claim and retired registrations survive every cleanup failure.
         Throwable failure = null;
         for (var request : requests) try { request.discardFromSavedActivation(); }
