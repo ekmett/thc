@@ -19,7 +19,6 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 /** Fixed storage metadata for durable selected captures, never an invocation frame. */
 public final class CaptureLayout {
     @CompilationFinal(dimensions = 1) private final CaptureField[] fields;
-    @CompilationFinal(dimensions = 1) private final int[] offsets;
     private final Object allocationKey = new Object();
     private final StaticShape<CapturedFrameFactory> shape;
     public CaptureLayout(TruffleLanguage<?> language, boolean[] eligible) {
@@ -72,20 +71,22 @@ public final class CaptureLayout {
                 throw new IllegalArgumentException("Failed requirement.");
         }
         fields = new CaptureField[count];
-        offsets = new int[count + 1];
         for (int i = 0; i < count; i++) {
             fields[i] = new CaptureField(i, eligible[i] && exactReference[i] == null && !exactFloat[i] &&
                 !exactDouble[i] && exactInt[i] == null, exactLong[i], exactReference[i], exactFloat[i],
                 exactDouble[i], vectors[i], exactInt[i]);
-            offsets[i + 1] = offsets[i] + 1;
         }
         StaticShape.Builder builder = StaticShape.newBuilder(language);
         builder.safetyChecks(!Boolean.getBoolean(Frames.STATIC_SHAPE_UNCHECKED_PROPERTY));
         for (CaptureField field : fields) field.register(builder);
         shape = builder.build(CapturedFrame.class, CapturedFrameFactory.class);
     }
-    public int getStorageSize() { return offsets[offsets.length - 1]; }
-    public int fieldWidth(int index) { return offsets[index + 1] - offsets[index]; }
+    public int getStorageSize() { return fields.length; }
+    /** Each capture consumes one source slot, including a vector. */
+    public int fieldWidth(int index) {
+        if (index < 0 || index >= fields.length) throw new ArrayIndexOutOfBoundsException(index);
+        return 1;
+    }
     public boolean isVector(int index) { return fields[index].vector != null; }
     /** Declared frame carrier, or Illegal when the environment selects Long versus Object. */
     FrameSlotKind fixedFrameKind(int index) {
@@ -106,12 +107,12 @@ public final class CaptureLayout {
         return capture(frame, sourceSlots, null);
     }
     @ExplodeLoop public CapturedFrame capture(VirtualFrame frame, int[] sourceSlots, ExecutableProgram program) {
-        if (sourceSlots.length != getStorageSize()) throw new IllegalStateException("Check failed.");
+        if (sourceSlots.length != fields.length) throw new IllegalStateException("Check failed.");
         CapturedFrame environment = shape.getFactory().create(this, allocationKey, program);
         for (int i = 0; i < fields.length; i++) {
             CaptureField field = fields[i];
-            if (field.vector != null) { field.vector.initialize(environment, frame, sourceSlots, offsets[i]); continue; }
-            int slot = sourceSlots[offsets[i]];
+            if (field.vector != null) { field.vector.initialize(environment, frame, sourceSlots, i); continue; }
+            int slot = sourceSlots[i];
             if (field.exactInt != null) {
                 int value;
                 if (frame.isInt(slot)) value = frame.getInt(slot);
@@ -159,17 +160,16 @@ public final class CaptureLayout {
     }
     @ExplodeLoop public CapturedFrame captureLocals(BytecodeNode bytecode, VirtualFrame frame, LocalAccessor[] sourceSlots,
                                                   ExecutableProgram program) {
-        if (sourceSlots.length != getStorageSize()) throw new IllegalStateException("Check failed.");
+        if (sourceSlots.length != fields.length) throw new IllegalStateException("Check failed.");
         CapturedFrame environment = shape.getFactory().create(this, allocationKey, program);
         try { for (int i = 0; i < fields.length; i++) {
             CaptureField field = fields[i];
-            int offset = offsets[i];
-            if (field.vector != null) field.vector.initialize(environment, bytecode, frame, sourceSlots, offset);
-            else if (field.exactInt != null) field.initializeInt(environment, sourceSlots[offset].getInt(bytecode, frame));
-            else if (field.exactLong) field.initializeLong(environment, sourceSlots[offset].getLong(bytecode, frame));
-            else if (field.exactFloat) field.initializeFloat(environment, sourceSlots[offset].getFloat(bytecode, frame));
-            else if (field.exactDouble) field.initializeDouble(environment, sourceSlots[offset].getDouble(bytecode, frame));
-            else field.initialize(environment, sourceSlots[offset].getObject(bytecode, frame));
+            if (field.vector != null) field.vector.initialize(environment, bytecode, frame, sourceSlots, i);
+            else if (field.exactInt != null) field.initializeInt(environment, sourceSlots[i].getInt(bytecode, frame));
+            else if (field.exactLong) field.initializeLong(environment, sourceSlots[i].getLong(bytecode, frame));
+            else if (field.exactFloat) field.initializeFloat(environment, sourceSlots[i].getFloat(bytecode, frame));
+            else if (field.exactDouble) field.initializeDouble(environment, sourceSlots[i].getDouble(bytecode, frame));
+            else field.initialize(environment, sourceSlots[i].getObject(bytecode, frame));
         } } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) { throw propagate(failure); }
         return environment;
     }
