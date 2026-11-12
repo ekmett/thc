@@ -11,9 +11,18 @@ public final class CoreCallInventory {
     /** Keep non-null descriptors, including malformed values for admission to reject. */
     public static List<Object> calls(Object value) {
         var result = new ArrayList<Object>();
+        appendCalls(value, result);
+        return result;
+    }
+    static void appendCalls(Object value, List<Object> result) {
         collect(value, fields -> {
-            if (fields.get("foreignCall") != null) result.add(fields.get("foreignCall"));
+            var descriptor = fields.get("foreignCall");
+            if (descriptor != null) result.add(descriptor);
         });
+    }
+    static List<Map<?,?>> mapDescriptors(List<?> descriptors) {
+        var result = new ArrayList<Map<?,?>>();
+        for (Object descriptor : descriptors) if (descriptor instanceof Map<?,?> call) result.add(call);
         return result;
     }
     /** Archive and CAPI scans inspect only map-valued descriptors. */

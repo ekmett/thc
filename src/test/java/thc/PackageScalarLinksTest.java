@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.*;
+import java.util.zip.ZipFile;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreFormatTestSupport.*;
 
@@ -269,6 +273,65 @@ class PackageScalarLinksTest {
         var original = module();
         assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(original,
                 "bindings", list(map("foreignCall", "malformed")))));
+    }
+    @Test void compactVerificationChecksColdBindingsBeforeCompleteNativeProvenance(@TempDir Path directory) throws Exception {
+        var base = module();
+        var proof = object(base, "staticForeignImports");
+        var number = map("kind", "long", "primReps", list("Int32Rep"), "evaluated", false);
+        var state = map("kind", "void", "primReps", List.of(), "evaluated", false);
+        var result = map("kind", "unknown", "primReps", list("Int32Rep"), "aggregate", "unboxed-tuple",
+            "components", list(with(state, "evaluated", true), with(number, "evaluated", true)), "evaluated", false);
+        var call = map("schema", 1L, "target", map("kind", "static", "unit", base.get("unit"), "symbol", "scalar_value",
+            "isFunction", true), "convention", "ccall", "safety", "unsafe", "arity", 2L, "suppliedArity", 2L,
+            "argumentReps", list(number, state), "resultRep", result);
+        var bindings = new ArrayList<Map<String,Object>>();
+        for (var name : List.of("first", "second", "cold"))
+            bindings.add(map("id", "scalar-fixture:Scalar." + name, "arity", 0L,
+                "expr", list("lit", "int", "7", name.equals("cold") ? map() : map("foreignCall", call))));
+        base = with(base, "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", bindings);
+
+        var expectedInventories = List.of(list(call, call), list(call), list(call, call, call),
+            list(call, with(call, "safety", "safe")));
+        for (int index = 0; index < expectedInventories.size(); index++) {
+            var path = directory.resolve("verify-" + index + ".cbd");
+            var model = with(base, "staticForeignImports", with(proof, "expectedCalls", expectedInventories.get(index)));
+            var record = CoreCbdFixtures.module(path, model);
+            if (index == 0) assertEquals(3L, verifyCompact(record));
+            else assertEquals(index == 3 ? "Demanded Core foreign call is absent from original inventory" :
+                "Retained Core foreign-call inventory differs",
+                assertThrows(IllegalArgumentException.class, () -> verifyCompact(record)).getMessage());
+
+            if (index == 1) {
+                long expressionOffset;
+                try (var file = new CoreCompactFile(path, (String) record.get("sha256"), true)) {
+                    var decoded = new CoreCompactRecords(file, path.toString()).binding(file.lookup("scalar-fixture:Scalar.cold"));
+                    var metadata = (Map<?,?>) ((List<?>) decoded.get("expr")).getLast();
+                    expressionOffset = ((CoreCompactRecords.Origin) metadata.get("compactOrigin")).dataOffset();
+                }
+                var malformed = directory.resolve("malformed.cbd");
+                try (var zip = new ZipFile(path.toFile())) {
+                    var payloads = new ArrayList<byte[]>();
+                    for (var member : CoreCbdArchive.NAMES)
+                        try (var bytes = zip.getInputStream(zip.getEntry(member))) { payloads.add(bytes.readAllBytes()); }
+                    // The cold binding's fingerprint sorts after both actual call sites.
+                    payloads.getFirst()[Math.toIntExact(expressionOffset)] = (byte) 255;
+                    Files.write(malformed, CoreCbdTestSupport.archive(payloads.removeLast(), payloads, Set.of(), false));
+                }
+                var sha = hash(Files.readAllBytes(malformed));
+                var broken = with(record, "sha256", sha, "compact",
+                    with(object(record, "compact"), "path", malformed.toString(), "sha256", sha));
+                assertEquals("Invalid compact Core expression tag: 255",
+                    assertThrows(IllegalArgumentException.class, () -> verifyCompact(broken)).getMessage());
+            }
+        }
+    }
+    private long verifyCompact(Map<String,Object> module) {
+        var units = CoreUnitDirectory.read(map("format", "thc-core-packages", "schema", 1L, "ghc", "9.14.1",
+            "units", list(map("id", "scalar-fixture", "depends", List.of(), "modules", list(module)))));
+        try (var sources = units.open(true, false)) {
+            sources.verifyModule(units.getModules().getFirst());
+            return sources.compactCounters().getFirst().statistics().decodedBindings();
+        }
     }
     @Test void demandedBindingsUseOriginalInventoriesWithoutClaimingCompleteness() throws Exception {
         var base = module(); var proof = object(base, "staticForeignImports"); var call = map("target", map("unit", base.get("unit"), "symbol", "scalar_value"));

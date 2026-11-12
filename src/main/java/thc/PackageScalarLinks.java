@@ -132,7 +132,10 @@ public final class PackageScalarLinks {
     public static PackageScalarAdmission read(Map<?,?> module) { return read(module, true, true); }
     public static PackageScalarAdmission read(Map<?,?> module, boolean validateArchive) { return read(module, validateArchive, true); }
     public static PackageScalarAdmission read(Map<?,?> module, boolean validateArchive, boolean completeBindings) {
-        if (validateArchive) PackageNativeArchives.read(module, completeBindings);
+        return read(module, validateArchive, completeBindings, null);
+    }
+    static PackageScalarAdmission read(Map<?,?> module, boolean validateArchive, boolean completeBindings, List<?> actualCalls) {
+        if (validateArchive) PackageNativeArchives.read(module, completeBindings, actualCalls);
         boolean nativeLink = module.containsKey("packageNativeLink");
         Object raw = module.get(nativeLink ? "packageNativeLink" : "packageScalarLink"); if (raw == null) return null;
         check(!nativeLink || !module.containsKey("packageScalarLink"), "two package link profiles");
@@ -369,7 +372,8 @@ public final class PackageScalarLinks {
             // A callable import is not authority to publish a typed CLabel finalizer.
             if (!finalizers.contains(signature.entry())) proved.add(signature.entry());
         }
-        CoreCallInventory.check(proof.get("expectedCalls"), CoreCallInventory.calls(module.get("bindings")), completeBindings);
+        var calls = actualCalls == null ? CoreCallInventory.calls(module.get("bindings")) : actualCalls;
+        CoreCallInventory.check(proof.get("expectedCalls"), calls, completeBindings);
         var admittedEntries = new ArrayList<String>();
         for (var signature : link.getAbi()) admittedEntries.add(signature.entry());
         proved.retainAll(admittedEntries); return new PackageScalarAdmission(link, proved);

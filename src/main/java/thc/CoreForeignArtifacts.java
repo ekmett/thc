@@ -150,9 +150,12 @@ public final class CoreForeignArtifacts {
     }
     public static void validateArchive(Map<?,?> module) { validateArchive(module, true); }
     public static void validateArchive(Map<?,?> module, boolean completeBindings) {
+        validateArchive(module, completeBindings, null);
+    }
+    static void validateArchive(Map<?,?> module, boolean completeBindings, List<?> actualCalls) {
         if (version(module.get("schema"), 1)) {
             require(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"), "Foreign artifacts require Core schema 2");
-            PackageScalarLinks.read(module, true, completeBindings);
+            PackageScalarLinks.read(module, true, completeBindings, actualCalls);
             return;
         }
         require(version(module.get("schema"), 2), "Unsupported Core schema: " + module.get("schema"));
@@ -174,7 +177,7 @@ public final class CoreForeignArtifacts {
         }
         require(nonempty, "Core schema 2 requires foreign artifacts");
         if (module.containsKey("foreignLink")) linked(module, completeBindings);
-        if (PackageScalarLinks.read(module, true, completeBindings) == null) ManagedImportAdmission.read(module, completeBindings);
+        if (PackageScalarLinks.read(module, true, completeBindings, actualCalls) == null) ManagedImportAdmission.read(module, completeBindings);
     }
     private static Map<?,?> artifactRecord(Object value, String... keys) {
         require(value instanceof Map<?,?> map && map.keySet().equals(Set.of(keys)), "Invalid Core foreign artifact record");

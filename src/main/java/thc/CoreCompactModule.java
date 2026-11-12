@@ -71,13 +71,18 @@ public final class CoreCompactModule implements AutoCloseable {
         try {
             var facts = metadata();
             var offsets = new ArrayList<Long>();
+            var actualCalls = facts.get("staticForeignImports") instanceof Map<?,?> proof &&
+                    "verified".equals(proof.get("status")) &&
+                    (facts.get("packageScalarLink") != null || facts.get("packageNativeLink") != null ||
+                     facts.get("packageNativeArchive") != null) ? new ArrayList<Object>() : null;
             // Check every cold record even when its module has no foreign declarations.
             // Each decode has a short-lived shape dictionary; complete verification never retains all bodies.
             file.verifyBindingOffsets(offset -> {
-                decodeBinding(new CoreCompactRecords(file, artifact.sha256()), offset);
+                var binding = decodeBinding(new CoreCompactRecords(file, artifact.sha256()), offset);
+                if (actualCalls != null) CoreCallInventory.appendCalls(binding, actualCalls);
                 offsets.add(offset);
             });
-            // Existing admissions see the complete inventory and preserve occurrence multiplicity.
+            // Export and bridge admission can still inspect the original bindings.
             var bindings = new AbstractList<Map<String,Object>>() {
                 @Override public int size() { return offsets.size(); }
                 @Override public Map<String,Object> get(int index) {
@@ -85,7 +90,7 @@ public final class CoreCompactModule implements AutoCloseable {
                 }
             };
             var original = new LinkedHashMap<>(facts); original.put("bindings", bindings);
-            CoreForeignArtifacts.INSTANCE.validateArchive(original, true);
+            CoreForeignArtifacts.validateArchive(original, true, actualCalls);
             CoreModules.admission(original, null);
             CoreForeignExceptionBridge.read(original);
             verified = true;

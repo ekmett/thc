@@ -56,6 +56,9 @@ public final class PackageNativeArchives {
     }
     public static PackageNativeArchive read(Map<?,?> module) { return read(module, true); }
     public static PackageNativeArchive read(Map<?,?> module, boolean completeBindings) {
+        return read(module, completeBindings, null);
+    }
+    static PackageNativeArchive read(Map<?,?> module, boolean completeBindings, List<?> actualCalls) {
         Object raw = module.get("packageNativeArchive");
         if (raw == null) {
             check(!(module.get("staticForeignImports") instanceof Map<?,?> proof &&
@@ -90,7 +93,9 @@ public final class PackageNativeArchives {
                 check(module.containsKey("foreign") || Objects.equals(stubs.get("source"), ""), "missing retained stubs");
             }
             if (module.containsKey("foreign")) check(Objects.equals(module.get("foreign"), p.get("expectedForeign")), "retained product differs");
-            CoreCallInventory.check(p.get("expectedCalls"), CoreCallInventory.mapCalls(module.get("bindings")), completeBindings);
+            var calls = actualCalls == null ? CoreCallInventory.mapCalls(module.get("bindings")) :
+                CoreCallInventory.mapDescriptors(actualCalls);
+            CoreCallInventory.check(p.get("expectedCalls"), calls, completeBindings);
             var binders = new HashSet<Object>();
             for (Object item : list(p.get("imports"))) {
                 var entry = record(item, "binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted");
@@ -149,7 +154,7 @@ public final class PackageNativeArchives {
         if (artifact != null) {
             check(!module.containsKey("packageNativeLink") && unknown == null, "archive is also executable");
             var retained = new LinkedHashMap<Object,Object>(module); retained.put("packageNativeLink", artifact);
-            PackageScalarLinks.read(retained, false, completeBindings);
+            PackageScalarLinks.read(retained, false, completeBindings, actualCalls);
         }
         return new PackageNativeArchive(unit + ":" + module.get("module") + " has archive-only native obligations" + " (unsupported=" + expected.size() + ", conflicting=" + conflictSymbols + ", unclassified=" + unknown + ", unresolved=" + unresolved + ")", unknown != null || !unresolved.isEmpty(), unit, expected);
     }
