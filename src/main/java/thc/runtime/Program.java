@@ -1444,8 +1444,12 @@ public final class Program implements ExecutableProgram {
         // follow it, so a join transfer clears only completed entry/body locals.
         int firstBodySlot = local.layout.nextSlot();
         Expr entry = compile((List<Object>) expr.get(3), local, tail);
+        int bodySlotLimit = local.layout.nextSlot();
         List<Expr> bodies = new ArrayList<>();
         for (int i = 0; i < definitions.size(); i++) {
+            // A jump copies every argument to the preallocated formals before
+            // clearing the previous body. Entry and join scratch slots can share.
+            local.layout.alternativeSlot(firstBodySlot);
             CoreJoinDefinition definition = definitions.get(i);
             Scope bodyScope = bodyScopes.get(i);
             bodies.add(withSource(sources.binding(definition.getBinding(), lowering().source), () -> {
@@ -1453,8 +1457,9 @@ public final class Program implements ExecutableProgram {
                 node.setRepresentation(node.getRepresentation().refine(evaluated(definition.getResult(), false)));
                 return node;
             }));
+            bodySlotLimit = Math.max(bodySlotLimit, local.layout.nextSlot());
         }
-        int bodySlotLimit = local.layout.nextSlot();
+        local.layout.alternativeSlot(bodySlotLimit);
         for (LocalJoinTarget target : targets) target.setBodySlots(firstBodySlot, bodySlotLimit);
         CoreRepresentation result = entry.getRepresentation().refine(evaluated(CoreRepresentations.expression(expr), false));
         for (Expr body : bodies) TupleShape.requireCompatible(result, body.getRepresentation(), false);

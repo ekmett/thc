@@ -82,7 +82,7 @@ public final class FrameLayout {
     }
     /** Return the allocation cursor without reserving a slot. */
     int nextSlot() { return allocation.cursor; }
-    /** Move between mutually exclusive alternatives of the same scalar case. */
+    /** Move between mutually exclusive case alternatives or local-join bodies. */
     void alternativeSlot(int slot) { allocation.cursor = slot; }
     public FrameDescriptor build() { return allocation.builder.build(); }
 }
