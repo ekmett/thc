@@ -129,7 +129,10 @@ keep their frame, program counter and lexical cleanup. See the
 [stock-runtime workflow](contributing.md) for eligibility and limitations.
 
 Recovery can also separate a case demand or scalar local-join operation into an
-opaque side using the same activation frame. These operation sides own their
+opaque side using the same activation frame. A fresh join extraction also
+separates its first eligible demand, if that is the first operation within its
+region. This bounded setup stops at existing regions and constructs both sides
+before publishing the recovery clone. These operation sides own their
 physical failure receipts: failure retires the side without invalidating or
 replacing the independently compilable parent. The retired operation continues
 interpreted; its failure initiates no child recovery or retry of that physical

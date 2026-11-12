@@ -44,7 +44,15 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     static boolean extractFresh(Node region) {
         if (NodeUtil.findFirstNodeInstance(region.getRootNode(), AstSameFrameArm.class) != null) {
             Expr operation = firstOperation(region, false);
-            if (operation != null) return prepare(operation.replace(new AstSameFrameArm(operation, true)));
+            if (operation != null) {
+                if (operation instanceof LocalJoinRegion) {
+                    // Split the fresh join's first demand before constructing its
+                    // side targets; both boundaries retain the original frame.
+                    Expr first = firstOperation(operation, false);
+                    if (first instanceof Evaluate) prepare(first.replace(new AstSameFrameArm(first, true)));
+                }
+                return prepare(operation.replace(new AstSameFrameArm(operation, true)));
+            }
         }
         return extract(region);
     }

@@ -312,6 +312,7 @@ class SameFrameCaseTest {
     private static final class CaptureState {
         final Object marker = new Object();
         int prefix, resumes, compiled;
+        long resumeValue = 500L;
         MaterializedFrame frame;
         long bloom;
     }
@@ -332,15 +333,16 @@ class SameFrameCaseTest {
                 assertSame(state.frame, saved);
                 assertEquals(state.bloom, saved.getLong(FrameLayout.BLOOM_FILTER));
                 assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this));
-                assertEquals(500L, input);
+                assertEquals(state.resumeValue, input);
                 state.resumes++;
                 return input;
             });
         }
     }
 
-    @ParameterizedTest @ValueSource(booleans = {false, true})
-    void extractedArmCaptureResumesOriginalJoinFrameAndSuffixOnce(boolean demand) throws Exception {
+    @ParameterizedTest @ValueSource(ints = {0, 1, 2})
+    void extractedArmCaptureResumesOriginalJoinFrameAndSuffixOnce(int mode) throws Exception {
+        boolean demand = mode != 0;
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -351,14 +353,22 @@ class SameFrameCaseTest {
                         .filter(candidate -> candidate.getParent() instanceof Alternative).toList();
                 assertEquals(8, arms.size());
                 var state = new CaptureState();
+                if (mode == 2) state.resumeValue = 0L;
                 var arm = arms.getFirst();
                 if (demand) {
-                    var selection = (Case) arm.getParent().getParent();
+                    var selection = mode == 2
+                            ? NodeUtil.findFirstNodeInstance(NodeUtil.findFirstNodeInstance(target.getRootNode(), LocalJoinRegion.class), Case.class)
+                            : (Case) arm.getParent().getParent();
                     var original = NodeUtil.findFirstNodeInstance(selection.scrutineeBinding(), Evaluate.class);
                     var replacement = new Evaluate(new CutBody(state), new Metrics(false));
                     replacement.setRepresentation(original.getRepresentation());
                     original.replace(replacement);
-                    assertTrue(AstSameFrameArm.extractFresh(selection));
+                    assertTrue(AstSameFrameArm.extractFresh(mode == 2 ? target.getRootNode() : selection));
+                    if (mode == 2) {
+                        var join = NodeUtil.findFirstNodeInstance(target.getRootNode(), LocalJoinRegion.class);
+                        var joinSide = assertInstanceOf(AstSameFrameArm.class, join.getParent());
+                        assertNotNull(targets(joinSide));
+                    }
                     assertNull(targets(arm), "The case demand must be separated before its returning arm");
                     arm = assertInstanceOf(AstSameFrameArm.class, replacement.getParent());
                     assertFalse(arm.isInstrumentable());
@@ -383,9 +393,11 @@ class SameFrameCaseTest {
                 // The saved suffix must still preserve identity, effects, frame and mask.
                 // Replacing the arm changes its sum[16..31]=376 to 500.
                 // Replacing only its unused scrutinee retains every original sum.
-                assertEquals(demand ? 10193L : 10317L, saved.continueWith(500L));
+                // The leading join demand instead resumes with zero and exits
+                // with its initial value 10, plus the enclosing suffix 17.
+                assertEquals(mode == 2 ? 27L : demand ? 10193L : 10317L, saved.continueWith(state.resumeValue));
                 assertEquals(1, state.prefix); assertEquals(1, state.resumes);
-                assertEquals(2L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
+                assertEquals(mode == 2 ? 1L : 2L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
                 assertEquals(ambient, SynchronousMasking.current(target.getRootNode()));
                 assertThrows(RuntimeFault.class, () -> saved.continueWith(500L));
                 assertSame(target, program.entryTarget("entry"));
