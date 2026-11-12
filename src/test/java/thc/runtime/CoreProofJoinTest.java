@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.LoopNode;
@@ -14,6 +15,8 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
@@ -66,7 +69,8 @@ class CoreProofJoinTest {
         // Acyclic join regions must not own loops; roots and generic forcing retain theirs.
         boolean all = true; for (var region : regions) { for (var child : region.getChildren()) if (child instanceof LoopNode) { all = false; break; } if (!all) break; } assertTrue(all);
     }
-    @Test void sharedJoinBodySlotsRetainSuspendedArgumentsAndEscapedCaptures() {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void sharedJoinBodySlotsRetainSuspendedArgumentsAndEscapedCaptures(boolean prepared) {
         java.util.function.Function<String, Map<String, Object>> fnArg = id ->
                 map("id", id, "name", id, "lifted", true, "rep", closure);
         java.util.function.BiFunction<String, List<Object>, List<Object>> fn = (id, body) ->
@@ -96,7 +100,8 @@ class CoreProofJoinTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var module = map("bindings", list(bind("entry", function)), "instrument", true);
-                var program = Program.prepareCode(language, module, List.of("entry"), 1).newInstance(language);
+                var program = prepared ? Program.prepareCode(language, module, List.of("entry"), 1).newInstance(language)
+                        : new Program(language, module, true);
                 var target = program.entryTarget("entry");
                 var descriptor = target.getRootNode().getFrameDescriptor();
                 int selectors = 0;
@@ -121,9 +126,10 @@ class CoreProofJoinTest {
                                 .freeze(this, frame.materialize());
                     }
                 };
-                var saved = assertInstanceOf(AstContinuation.class,
-                        Calls.target(target, new Object[]{0L, ((Closure) program.entryValue("entry")).environment,
-                                new Closure(null, 1, pause.getCallTarget())}));
+                var environment = ((Closure) program.entryValue("entry")).environment;
+                var operand = new Closure(null, 1, pause.getCallTarget());
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(target,
+                        environment == null ? new Object[]{0L, operand} : new Object[]{0L, environment, operand}));
                 assertArrayEquals(new int[]{1, 0}, effects);
                 assertEquals(0L, program.diagnostics().get("localJoinTransfers"));
                 saved.asyncRequest().acknowledge();
@@ -306,6 +312,36 @@ class CoreProofJoinTest {
             java.util.function.LongConsumer check = n -> assertEquals((n % 2 == 0L ? -5_000_000_001L : 5_000_000_001L) + 17, run(p, n)); check.accept(100_000); check.accept(100_001); compile(p); check.accept(100_002); check.accept(100_003);
             assertTrue(count(p, "localJoinTransfers") > 400_000); assertEquals(0L, count(p, "tailBounces")); assertEquals(0L, count(p, "papAllocations"));
         });
+    }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void floatingJoinCarriesSignedZeroThroughAFormal(boolean single) {
+        String kind = single ? "float" : "double";
+        var rep = map("kind", kind, "primReps", list(single ? "FloatRep" : "DoubleRep"), "evaluated", true);
+        var parameter = map("id", "value", "name", "value", "lifted", false, "rep", rep);
+        var rhs = list("lam", list(parameter), list("var", "value", meta(rep)), map("rep", closure, "resultRep", rep));
+        var join = with(bind("finish", rhs, 1), "joinResultRep", rep);
+        var jump = list("app", list("var", "finish", meta(closure)), list(list("lit", kind, "-0.0", meta(rep))),
+                list(false), false, false, meta(rep));
+        var body = list("let", false, list(join), jump, meta(rep));
+        var entry = bind("entry", list("lam", list(arg("unused")), body, map("rep", closure, "resultRep", rep)));
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, map("bindings", list(entry)));
+                var target = program.entryTarget("entry");
+                var descriptor = target.getRootNode().getFrameDescriptor();
+                var carrier = single ? FrameSlotKind.Float : FrameSlotKind.Double;
+                var initialKinds = new ArrayList<FrameSlotKind>();
+                for (int i = 0; i < descriptor.getNumberOfSlots(); i++)
+                    if ("value".equals(descriptor.getSlotName(i)) || "<join argument 0>".equals(descriptor.getSlotName(i)))
+                        initialKinds.add(descriptor.getSlotKind(i));
+                Object result = Calls.target(target, new Object[]{0L, 1L});
+                if (single) assertEquals(Float.floatToRawIntBits(-0.0f), Float.floatToRawIntBits(assertInstanceOf(Float.class, result)));
+                else assertEquals(Double.doubleToRawLongBits(-0.0), Double.doubleToRawLongBits(assertInstanceOf(Double.class, result)));
+                assertEquals(List.of(carrier, carrier), initialKinds);
+            } finally { context.leave(); }
+        }
     }
     @Test void mutualJoinsAndNestedOuterTransfersStayInTheirLexicalRegion() throws ReflectiveOperationException {
         var even = choose(prim("<=#", v("n"), n(0)), n(20), call("odd", prim("-#", v("n"), n(1))));
