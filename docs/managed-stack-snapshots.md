@@ -39,6 +39,11 @@ concrete, but does not retain those original note IDs/labels/exclusive ends.
 Bytecode snapshots preserve the sections without inventing the missing notes.
 The runtime may elide tail frames; this API records the live guest frames the
 Truffle iterator exposes, not a historical call log or a one-to-one GHC stack.
+Repeated compiler recovery may also elide intermediate entry frames that only
+forward to an already-published replacement. The original caller and the actual
+body remain live; genuine recursive activations are not deduplicated. Raw
+Truffle/debugger stack depths and internal root-fallback rows can therefore
+decrease after recovery.
 Internal application and nonlocal demand roots are real live guest frames. Their
 Core identity and source metadata remain absent when they have no original
 binding; they do not borrow a caller's identity or callsite.

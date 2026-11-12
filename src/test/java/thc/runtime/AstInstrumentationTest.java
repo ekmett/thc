@@ -26,6 +26,10 @@ public class AstInstrumentationTest {
             return instrumenter.attachExecutionEventListener(SourceSectionFilter.newBuilder()
                 .sourceIs(source).tagIs(StandardTags.StatementTag.class).indexIn(2, 1).build(), listener);
         }
+        EventBinding<ExecutionEventListener> attachStatements(Source source, ExecutionEventListener listener) {
+            return instrumenter.attachExecutionEventListener(SourceSectionFilter.newBuilder()
+                .sourceIs(source).tagIs(StandardTags.StatementTag.class).build(), listener);
+        }
     }
     private static void await(CountDownLatch latch) {
         try { assertTrue(latch.await(30, TimeUnit.SECONDS), "Activation barrier timed out"); }

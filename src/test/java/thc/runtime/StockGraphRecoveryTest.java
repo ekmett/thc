@@ -1238,9 +1238,17 @@ class StockGraphRecoveryTest {
                     for (int i = 0; i < values.length; i++) values[i] = i + 1;
                     Expr heavy = new AstSameFrameArm(new Heavy(values, effects, source));
                     if (twice) heavy = new Pair(heavy, new AstSameFrameArm(new Heavy(values, effects, source)));
+                    var locations = com.oracle.truffle.api.source.Source.newBuilder("thc", "r\nm\nc", "RecoveryFrames.hs").build();
+                    if (twice) {
+                        var section = locations.createSection(2, 1);
+                        var note = new CoreSourceNote("marker", section, "recovered body", 2, 1, 2, 2);
+                        heavy = new Pair(heavy, new Literal(0L).located(new CoreSourceLocation(section, List.of(note))));
+                        heavy.located(new CoreSourceLocation(locations.createSection(0, 1), List.of()));
+                    }
                     var metrics = new Metrics(true);
                     var root = new FunctionRoot(language, new FrameLayout().build(), "stock recovery", null,
                             new int[0], new int[0], new int[0], heavy, metrics);
+                    if (twice) root.configureCoreIdentity(new CoreFunctionIdentity("test:Recovery.entry", "test", "Recovery", "entry"));
                     var target = (OptimizedCallTarget) root.getCallTarget();
                     var oldLoops = NodeUtil.findAllNodeInstances(root, OptimizedOSRLoopNode.class);
                     var failure = assertThrows(OptimizationFailedException.class, () -> target.compile(true));
@@ -1263,6 +1271,8 @@ class StockGraphRecoveryTest {
                     assertEquals(0, root.getGraphBudgetGeneration());
                     assertEquals(1, replacement.getGraphBudgetGeneration());
                     var fresh = (OptimizedCallTarget) replacement.getCallTarget();
+                    var first = replacement;
+                    var firstChildren = NodeUtil.findAllNodeInstances(first, AstSameFrameArm.class);
                     if (twice) {
                         var nextFailure = assertThrows(OptimizationFailedException.class, () ->
                                 ((OptimizedCallTarget) source.get().getCallTarget()).compile(true));
@@ -1283,8 +1293,81 @@ class StockGraphRecoveryTest {
                     assertEquals(expected, Calls.target(target, new Object[]{0L}));
                     assertEquals(beforeEffects + perCall, effects.get()); assertTrue(metrics.getCompiledEntries() > before);
                     assertSame(replacement, source.get());
+                    if (twice) {
+                        assertSame(fresh, recovered(root), "Fresh entry bypasses the intermediate published forwarder");
+                        assertSame(fresh, recovered(first), "The intermediate root still owns its original edge");
+                        assertEquals(firstChildren, NodeUtil.findAllNodeInstances(first, AstSameFrameArm.class));
+                        observeRecoveredFrames(context, language, root, replacement, locations, expected);
+                    }
                 } finally { context.leave(); }
             }
+        }
+
+        private static final class RecursiveCaller extends Expr {
+            @Child private DirectCallNode self;
+            @Child private DirectCallNode leaf;
+            RecursiveCaller(com.oracle.truffle.api.RootCallTarget target) {
+                leaf = DirectCallNode.create(target); setRepresentation(LONG);
+            }
+            void initialize(com.oracle.truffle.api.RootCallTarget target) { self = insert(DirectCallNode.create(target)); }
+            @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+            @Override public long executeLong(VirtualFrame frame) {
+                long remaining = (Long) frame.getArguments()[1];
+                if (remaining == 0) return (Long) Calls.direct(leaf, new Object[]{0L});
+                return 1L + (Long) Calls.direct(self, new Object[]{0L, remaining - 1});
+            }
+        }
+
+        private static void observeRecoveredFrames(Context context, Language language, FunctionRoot original,
+                FunctionRoot endpoint, com.oracle.truffle.api.source.Source locations, long expected) {
+            var callerBody = new RecursiveCaller(original.getCallTarget());
+            callerBody.located(new CoreSourceLocation(locations.createSection(4, 1), List.of()));
+            var caller = new FunctionRoot(language, new FrameLayout().build(), original.getName(), null,
+                new int[0], new int[0], new int[0], callerBody, new Metrics(false));
+            caller.configureCoreIdentity(original.getCoreIdentity());
+            callerBody.initialize(caller.getCallTarget());
+            var attachment = context.getEngine().getInstruments().get("thc-activation-test")
+                .lookup(AstInstrumentationTest.Attachment.class);
+            var statements = new AtomicInteger(); var bodies = new AtomicInteger(); var actions = new AtomicInteger();
+            var scheduled = new AtomicReference<java.util.concurrent.Future<?>>();
+            var snapshot = new AtomicReference<ManagedStackSnapshot>();
+            var frames = new java.util.ArrayList<RootNode>();
+            var bodyEvents = attachment.attachStatements(locations, new com.oracle.truffle.api.instrumentation.ExecutionEventListener() {
+                @Override public void onEnter(com.oracle.truffle.api.instrumentation.EventContext event, VirtualFrame frame) {
+                    if (event.getInstrumentedSourceSection().getCharIndex() != 2) bodies.incrementAndGet();
+                }
+                @Override public void onReturnValue(com.oracle.truffle.api.instrumentation.EventContext event, VirtualFrame frame, Object value) {}
+                @Override public void onReturnExceptional(com.oracle.truffle.api.instrumentation.EventContext event, VirtualFrame frame, Throwable failure) {}
+            });
+            var marker = attachment.attach(locations, new com.oracle.truffle.api.instrumentation.ExecutionEventListener() {
+                @Override public void onEnter(com.oracle.truffle.api.instrumentation.EventContext event, VirtualFrame frame) {
+                    statements.incrementAndGet();
+                    snapshot.set(ManagedStackSnapshot.capture(event.getInstrumentedNode()));
+                    Truffle.getRuntime().iterateFrames(active -> {
+                        if (active.getCallTarget() instanceof com.oracle.truffle.api.RootCallTarget target &&
+                                target.getRootNode() instanceof GuestRoot root) frames.add(root);
+                        return null;
+                    });
+                    scheduled.set(Language.currentState().getEnv().submitThreadLocal(new Thread[]{Thread.currentThread()},
+                        new com.oracle.truffle.api.ThreadLocalAction(true, false) {
+                            @Override protected void perform(Access access) { actions.incrementAndGet(); }
+                        }));
+                }
+                @Override public void onReturnValue(com.oracle.truffle.api.instrumentation.EventContext event, VirtualFrame frame, Object value) {}
+                @Override public void onReturnExceptional(com.oracle.truffle.api.instrumentation.EventContext event, VirtualFrame frame, Throwable failure) {}
+            });
+            try {
+                assertEquals(expected + 2, Calls.target(caller.getCallTarget(), new Object[]{0L, 2L}));
+                assertEquals(1, statements.get(), "Only the actual recovered body executes the marker");
+                assertEquals(4, bodies.get(), "The body and three genuine recursive activations retain their statement events");
+                assertEquals(List.of(endpoint, original, caller, caller, caller), frames);
+                var captured = snapshot.get().getFrames(); assertEquals(5, captured.size());
+                assertEquals(List.of(2, 1, 3, 3, 3), captured.stream().map(value -> value.getLocation().getStartLine()).toList());
+                assertEquals("marker", captured.getFirst().getNotes().getFirst().getId());
+                assertTrue(captured.stream().allMatch(value -> value.getCoreIdentity().getBindingId().equals("test:Recovery.entry")));
+                assertNotNull(scheduled.get()); assertTrue(scheduled.get().isDone());
+                assertEquals(1, actions.get(), "Ordinary endpoint/caller return safepoints still deliver the pending action");
+            } finally { marker.dispose(); bodyEvents.dispose(); }
         }
 
         private static final class Pair extends Expr {
