@@ -748,7 +748,7 @@ public final class Program implements ExecutableProgram {
                     defaultArm = (List<Object>) alternative.get(3);
             }
         }
-        Scope scope = initializedBody == null ? new Scope(new FrameLayout(), defaultArm) : outer;
+        Scope scope = initializedBody == null ? new Scope(FrameLayout.forProgramBody(), defaultArm) : outer;
         if (reusableCode) scope.programSlot = scope.layout.bind("<program instance>", FrameSlotKind.Object);
         Set<String> free = coreFreeVariables(expression);
         Set<String> argumentIds = new LinkedHashSet<>();
@@ -897,7 +897,7 @@ public final class Program implements ExecutableProgram {
         // Keep their frame identity even before any graph-budget extraction occurs.
         root.configureInitialFrameCopy(!delimited &&
             com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(body, AstSameFrameArm.class) == null);
-        root.configureInitialClears(scope.layout.initialClears());
+        root.configureInitialClears(scope.layout.firstLocalSlot(), scope.layout.initialClears());
         root.configureInputProofs(inputProofs);
         root.configureScalarVoidInputs(inputProofs);
         root.configureEagerAsyncPolls(eagerAsyncPolls);

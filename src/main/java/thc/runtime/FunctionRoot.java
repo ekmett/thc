@@ -320,9 +320,9 @@ public final class FunctionRoot extends GuestRoot {
     /** Set by lowering before publication, only for bodies without exposed frame aliases. */
     void configureInitialFrameCopy(boolean enabled) { copyInitialFrame = enabled; }
     /** Freeze lowering's dead-slot list before publication; saved frames never reinitialize it. */
-    void configureInitialClears(int[] slots) {
+    void configureInitialClears(int firstLocalSlot, int[] slots) {
         for (int slot : slots)
-            if (slot <= FrameLayout.TAIL_ARGUMENTS || slot >= getFrameDescriptor().getNumberOfSlots() ||
+            if (slot < firstLocalSlot || slot >= getFrameDescriptor().getNumberOfSlots() ||
                     contains(argumentSlots, slot) || contains(environmentSlots, slot))
                 throw new IllegalArgumentException("Initial scratch slot aliases live input");
         initialClears = slots.clone();
