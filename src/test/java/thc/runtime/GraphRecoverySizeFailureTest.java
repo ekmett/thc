@@ -179,6 +179,10 @@ class GraphRecoverySizeFailureTest {
                     int innerIndex = NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).indexOf(inner);
                     var copiedInner = NodeUtil.findAllNodeInstances(fresh, AstSameFrameArm.class).get(innerIndex);
                     assertNotNull(sideTarget(copiedInner), "recovery must reduce the failed sibling's nested arm");
+                    var copiedSource = NodeUtil.cloneNode(root);
+                    assertEquals(6L, Calls.target(copiedSource.getCallTarget(), new Object[]{0L}));
+                    assertEquals(3, effects.get());
+                    assertSame(fresh, executed.get(), "Copying a published redirect still enters its replacement");
                 } finally { context.leave(); }
             }
         }

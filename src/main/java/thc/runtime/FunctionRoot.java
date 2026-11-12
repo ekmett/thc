@@ -101,6 +101,13 @@ public final class FunctionRoot extends GuestRoot {
         return copy;
     }
 
+    @Override public Node deepCopy() {
+        FunctionRoot copy = (FunctionRoot) super.deepCopy();
+        // Truffle clones child fields after copy() resets the root's recovery state.
+        if (copy.recoveredEntry != null) copy.noGraphFailure.invalidate();
+        return copy;
+    }
+
     @TruffleBoundary private DirectCallNode recoverEntry() {
         var service = thc.Language.currentState(this).getGraphRecovery();
         var claim = service.claim(this);
@@ -609,16 +616,19 @@ public final class FunctionRoot extends GuestRoot {
         }
     }
     @Override public Object execute(VirtualFrame frame) {
-        DirectCallNode redirect = recoveredEntry;
-        if (redirect == null && !noGraphFailure.isValid() && graphFailure.get() != null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            redirect = recoverEntry();
-        }
-        if (redirect != null) {
-            if (redirect.getCallTarget() instanceof RootCallTarget target &&
-                    target.getRootNode() instanceof FunctionRoot next && next.recoveredEntry != null)
-                redirect = compressRecoveredEntry(redirect);
-            return Calls.direct(redirect, frame.getArguments());
+        // A recovery redirect is published only after the first failure invalidates this assumption.
+        if (!noGraphFailure.isValid()) {
+            DirectCallNode redirect = recoveredEntry;
+            if (redirect == null && graphFailure.get() != null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                redirect = recoverEntry();
+            }
+            if (redirect != null) {
+                if (redirect.getCallTarget() instanceof RootCallTarget target &&
+                        target.getRootNode() instanceof FunctionRoot next && next.recoveredEntry != null)
+                    redirect = compressRecoveredEntry(redirect);
+                return Calls.direct(redirect, frame.getArguments());
+            }
         }
         // Interpreted fresh ingress can use its existing frame. Keep a compiled
         // arrival behind the boundary without letting its virtual frame escape.
