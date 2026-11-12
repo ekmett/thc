@@ -47,7 +47,7 @@ class ThunkDispatchTest {
             }.getCallTarget();
         }
         var metrics = new Metrics(true); var driver = new ForceDriver(metrics);
-        // Both direct shapes, cache overflow, then every shape again through the indirect path.
+        // The first target is direct; a second target switches every shape to indirect dispatch.
         for (int step = 0; step < 10; step++) {
             int index = step < 5 ? step : 9 - step; var item = cases[index];
             var thunk = new Thunk(targets[index], item.captured ? environment : null);
@@ -58,7 +58,7 @@ class ThunkDispatchTest {
         }
         assertEquals(10, evaluations[0], "Each thunk target is entered exactly once");
         assertEquals(10L, metrics.getThunkEvaluations()); assertEquals(10L, metrics.getThunkHits());
-        assertEquals(3L, metrics.getDirectCacheMisses()); assertTrue(metrics.getIndirectCalls() > 0L);
+        assertEquals(1L, metrics.getDirectCacheMisses()); assertEquals(9L, metrics.getIndirectCalls());
     }); }
     @Test void capturedThunkTailBounceStillUpdatesTheOriginalThunk() { withCapture(environment -> {
         int[] completions = {0};
