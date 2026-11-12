@@ -1471,8 +1471,8 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < tupleSlots.length; i++) tupleSlots[i] = local.layout.bind("<join tuple result " + i + ">", FrameLayout.carrierKind(tuple.getLeaves()[i]));
         Expr[] nodes = new Expr[bodies.size() + 1]; nodes[0] = entry;
         for (int i = 0; i < bodies.size(); i++) nodes[i + 1] = bodies.get(i);
-        return new LocalJoinRegion(identity, local.layout.bind("<join selector>", reusableCode ? FrameSlotKind.Long : FrameSlotKind.Illegal),
-            local.layout.bind("<join result>", reusableCode ? FrameLayout.carrierKind(result) : FrameSlotKind.Illegal),
+        return new LocalJoinRegion(identity, local.layout.bind("<join selector>", FrameSlotKind.Long),
+            local.layout.bind("<join result>", FrameLayout.carrierKind(result)),
             nodes, result, recursive, tuple, tupleSlots, delimited);
     }
     private DataLayout dataLayout(String id) {
