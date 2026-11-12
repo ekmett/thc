@@ -183,6 +183,18 @@ no closure boundary and does not inline arbitrary lambdas or discard a
 state-producing argument. Ordinary captured joins and non-tail transfers remain
 rejected. Ordinary validated joins stay inside the current guest root. Nonrecursive groups use acyclic dispatch: the AST catches one lexical transfer and bytecode emits forward branches without a selector or loop. Recursive groups retain a local loop and backedges. Both evaluate operands into temporaries before replacing parameters, preserving swaps and mutually recursive transfers. A join region may itself appear within a larger non-tail expression: leaving that region resumes the outer continuation. Join transfers do not allocate closures or ordinary application packets.
 
+AST joins allocate formals before a shared scratch range. Entry and mutually
+exclusive join bodies reuse compatible slots in that range. A transfer copies
+all arguments to their formals before clearing the previous body's scratch;
+selector and result storage remain outside the cleared range. Selectors use
+`Long` storage, results use their known carriers, and unknown carriers retain
+fresh slots. Saved activations keep their own values and resume points.
+
+Fresh AST function-body layouts reserve only the ancestry slot at index zero.
+Already allocated initializer layouts and runtime adapters retain their existing
+layout, including the reserved tail-call slots where needed. Lowering validates
+initial scratch clears against the layout's reserved prefix and live inputs.
+
 Bytecode budget recovery can prepare a separate target for a substantial closed
 nonrecursive join body, using the existing finite expression-region protocol.
 The original transfer binds and demands its arguments before that target captures
