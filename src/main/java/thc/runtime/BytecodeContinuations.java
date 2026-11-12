@@ -106,12 +106,13 @@ final class BytecodeContinuations {
             else if (value instanceof Force.DriverWait driver) value = driver.segment;
             else if (value instanceof Thunk thunk) value = thunk.getState() == 5 ? thunk.getValue() : null;
             else if (value instanceof CallSegment segment) value = segment.getState() == 5 ? segment.getValue() : null;
-            else {
-                var saved = SavedGuestContinuations.savedGuestContinuation(value);
-                if (saved == null) return;
+            else if (value instanceof ContinuationResult saved) {
+                preflight(saved);
+                value = saved.getResult();
+            } else if (value instanceof SavedGuestContinuation saved) {
                 preflight(saved);
                 value = saved.getYielded();
-            }
+            } else return;
         }
     }
     @TruffleBoundary private static void claim(ContinuationResult saved) {

@@ -109,11 +109,8 @@ public final class PendingWait extends AbstractTruffleException implements Inter
             }
             if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
             else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
-            else {
-                SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(value);
-                if (saved == null) return null;
-                value = saved.getYielded();
-            }
+            else if (value instanceof ContinuationResult saved) value = saved.getResult();
+            else value = ((SavedGuestContinuation) value).getYielded();
         }
     }
 }
