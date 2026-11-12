@@ -296,7 +296,7 @@ class SameFrameCaseTest {
                     var replacement = new Evaluate(new CutBody(state), new Metrics(false));
                     replacement.setRepresentation(original.getRepresentation());
                     original.replace(replacement);
-                    assertTrue(AstSameFrameArm.extractFresh(target.getRootNode()));
+                    assertTrue(AstSameFrameArm.extractFresh(selection));
                     assertNull(targets(arm), "The case demand must be separated before its returning arm");
                     arm = assertInstanceOf(AstSameFrameArm.class, replacement.getParent());
                     assertFalse(arm.isInstrumentable());
@@ -328,6 +328,33 @@ class SameFrameCaseTest {
                 assertThrows(RuntimeFault.class, () -> saved.continueWith(500L));
                 assertSame(target, program.entryTarget("entry"));
 
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void joinOperationSeparatesItsCallerBeforeFirstExecution() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, LocalJoinGraphBudgetTest.module(4), true);
+                var target = (OptimizedCallTarget) program.entryTarget("entry");
+                var root = target.getRootNode();
+                var join = NodeUtil.findFirstNodeInstance(root, LocalJoinRegion.class);
+                int regions = NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).size();
+                assertTrue(AstSameFrameArm.extractFresh(root));
+                var boundary = assertInstanceOf(AstSameFrameArm.class, join.getParent());
+                assertNotNull(targets(boundary)); assertFalse(boundary.isInstrumentable());
+                assertEquals(regions + 1, NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).size());
+                assertTrue(AstSameFrameArm.extractFresh(join));
+                assertSame(boundary, join.getParent(), "A side must split inside its operation, not wrap it again");
+                assertEquals(regions + 1, NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).size());
+                assertFalse(target.wasExecuted());
+                compile(target);
+                assertEquals(0L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
+                assertEquals(10193L, Calls.target(target, new Object[]{0L, 1L, 0L}));
+                assertEquals(2L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
+                assertTrue(target.isValidLastTier());
             } finally { context.leave(); }
         }
     }

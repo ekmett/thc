@@ -27,43 +27,47 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     @CompilationFinal(dimensions = 1) private volatile RootCallTarget[] targets;
     private volatile long sideGeneration;
     private boolean copiedExtraction;
-    private final boolean demandRegion;
+    private final boolean operationRegion;
 
     AstSameFrameArm(Expr body) { this(body, false); }
-    private AstSameFrameArm(Expr body, boolean demandRegion) {
+    private AstSameFrameArm(Expr body, boolean operationRegion) {
         this.body = body;
-        this.demandRegion = demandRegion;
+        this.operationRegion = operationRegion;
         setRepresentation(body.getRepresentation());
         setCoreSourceLocation(body.getCoreSourceLocation());
     }
-    @Override public boolean isInstrumentable() { return !demandRegion && super.isInstrumentable(); }
-    @Override public boolean needsCallState() { return demandRegion ? body.needsCallState() : super.needsCallState(); }
+    @Override public boolean isInstrumentable() { return !operationRegion && super.isInstrumentable(); }
+    @Override public boolean needsCallState() { return operationRegion ? body.needsCallState() : super.needsCallState(); }
 
-    /** Only an unpublished recovery copy gains demand boundaries. Functions
+    /** Only an unpublished recovery copy gains operation boundaries. Functions
      * already containing same-frame regions have retained their frame identity. */
     static boolean extractFresh(Node region) {
         if (NodeUtil.findFirstNodeInstance(region.getRootNode(), AstSameFrameArm.class) != null) {
-            Evaluate demand = firstDemand(region);
-            if (demand != null) return prepare(demand.replace(new AstSameFrameArm(demand, true)));
+            Expr operation = firstOperation(region, false);
+            if (operation != null) return prepare(operation.replace(new AstSameFrameArm(operation, true)));
         }
         return extract(region);
     }
 
-    private static Evaluate firstDemand(Node node) {
-        if (node instanceof AstSameFrameArm arm && arm.targets != null) return null;
+    private static Expr firstOperation(Node node, boolean nested) {
+        // Existing regions own their descendants. An extracted side starts its
+        // search at its body, so it must not separate that same operation again.
+        if (node instanceof AstSameFrameArm) return null;
+        if (nested && node instanceof LocalJoinRegion join && !join.getRepresentation().isTypedTransport() &&
+                !(join.getParent() instanceof com.oracle.truffle.api.instrumentation.InstrumentableNode.WrapperNode)) return join;
         Node first = null;
         if (node instanceof Case selection) {
             LocalBinding binding = selection.scrutineeBinding();
             Evaluate demand = binding.demandCandidate();
             if (demand != null) return demand;
             first = binding;
-            demand = firstDemand(first);
-            if (demand != null) return demand;
+            Expr operation = firstOperation(first, true);
+            if (operation != null) return operation;
         }
         for (Node child : node.getChildren()) {
             if (child == first) continue;
-            Evaluate demand = firstDemand(child);
-            if (demand != null) return demand;
+            Expr operation = firstOperation(child, true);
+            if (operation != null) return operation;
         }
         return null;
     }
@@ -216,7 +220,10 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
             }
         }
         @Override public SourceSection getSourceSection() { return arm.getSourceSection(); }
-        @Override public String getName() { return arm.getRootNode().getName() + (arm.demandRegion ? " <case demand>" : " <case arm>"); }
+        @Override public String getName() {
+            String kind = !arm.operationRegion ? "case arm" : arm.body instanceof LocalJoinRegion ? "join region" : "case demand";
+            return arm.getRootNode().getName() + " <" + kind + ">";
+        }
         @Override public boolean isCloningAllowed() { return false; }
     }
 
