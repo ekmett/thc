@@ -52,6 +52,61 @@ class SameFrameCaseTest {
         Object marker = new Object();
         final UnexpectedResultException unexpected = new UnexpectedResultException(marker);
     }
+    @TruffleBoundary private static void observeBorrowedJoin(State state, boolean compiled) {
+        state.effects++;
+        if (compiled) state.compiled++;
+    }
+    @Test void firstCompiledBorrowedJoinTransfersScalarFormals() throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000")
+                .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.DiagnoseFailure", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, LocalJoinGraphBudgetTest.module(0, 0), true);
+                var owner = (OptimizedCallTarget) program.entryTarget("entry");
+                var selection = NodeUtil.findFirstNodeInstance(owner.getRootNode(), Case.class);
+                var branch = java.util.Arrays.stream(selection.alternatives)
+                        .filter(alt -> NodeUtil.findFirstNodeInstance(alt, LocalJoinCall.class) != null).findFirst().orElseThrow();
+                var original = branch.getBody();
+                var call = NodeUtil.findFirstNodeInstance(branch, LocalJoinCall.class);
+                var targetField = LocalJoinCall.class.getDeclaredField("target");
+                targetField.setAccessible(true);
+                var target = (LocalJoinTarget) targetField.get(call);
+                var state = new State();
+                var observed = new Expr() {
+                    @Child private Expr transfer = original;
+                    @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                    @Override public long executeLong(VirtualFrame frame) {
+                        observeBorrowedJoin(state, CompilerDirectives.inCompiledCode());
+                        return transfer.executeRequiredLong(frame);
+                    }
+                }.proven(original.getRepresentation());
+                var arm = new AstSameFrameArm(observed);
+                original.replace(arm);
+                assertTrue(AstSameFrameArm.extract(arm));
+                var side = (OptimizedCallTarget) targets(arm)[2];
+                compile(side);
+                assertFalse(owner.wasExecuted()); assertFalse(side.wasExecuted());
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L, 7L, 0L},
+                        owner.getRootNode().getFrameDescriptor());
+                int[] slots = target.getSlots();
+                frame.setLong(slots[0], 7L);
+                frame.setLong(slots[1], Long.MIN_VALUE);
+                var jump = assertThrowsExactly(LocalJoinJump.class, () -> Calls.target(side, new Object[]{frame}));
+                assertSame(target.getJump(), jump);
+                assertEquals(6L, frame.getLong(slots[0]));
+                assertEquals(0L, frame.getLong(slots[1]));
+                assertEquals(1, state.effects); assertEquals(1, state.compiled);
+                assertEquals(1L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
+                assertTrue(side.isValidLastTier());
+                assertFalse(owner.wasExecuted());
+            } finally { context.leave(); }
+        }
+    }
     private static final class ScratchValue extends Expr {
         private final State state;
         ScratchValue(State state) {
