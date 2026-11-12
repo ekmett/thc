@@ -25,7 +25,8 @@ public abstract class DispatchThunkTarget extends Node {
     @Specialization(replaces = "direct")
     protected Object indirect(RootCallTarget target, CapturedFrame environment, Metrics metrics, @Cached("create()") IndirectCallNode call) {
         if (metrics.getEnabled()) metrics.incrementIndirectCalls();
-        return environment != null ? Calls.indirect(call, target, new Object[] {0L, environment}) : Calls.indirect(call, target, new Object[] {0L});
+        Object[] arguments = environment != null ? new Object[] {0L, environment} : new Object[] {0L};
+        return Calls.indirect(call, target, arguments);
     }
     public static DirectCallNode createDirect(RootCallTarget target, Metrics metrics) {
         if (metrics.getEnabled()) metrics.incrementDirectCacheMisses();
