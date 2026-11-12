@@ -897,7 +897,7 @@ public final class Program implements ExecutableProgram {
         // Keep their frame identity even before any graph-budget extraction occurs.
         root.configureInitialFrameCopy(!delimited &&
             com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(body, AstSameFrameArm.class) == null);
-        root.configureInitialClears(scope.layout.firstLocalSlot(), scope.layout.initialClears());
+        root.configureInitialClears(scope.layout.firstLocalSlot(), scope.layout.initialClears(), scope.layout.usesIllegalDefault());
         root.configureInputProofs(inputProofs);
         root.configureScalarVoidInputs(inputProofs);
         root.configureEagerAsyncPolls(eagerAsyncPolls);

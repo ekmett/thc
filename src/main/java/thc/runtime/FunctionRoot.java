@@ -319,13 +319,13 @@ public final class FunctionRoot extends GuestRoot {
     public HandoffEntry getHandoff() { return handoff; }
     /** Set by lowering before publication, only for bodies without exposed frame aliases. */
     void configureInitialFrameCopy(boolean enabled) { copyInitialFrame = enabled; }
-    /** Freeze lowering's dead-slot list before publication; saved frames never reinitialize it. */
-    void configureInitialClears(int firstLocalSlot, int[] slots) {
+    /** Validate lowering's dead slots before publication, including those cleared by the descriptor. */
+    void configureInitialClears(int firstLocalSlot, int[] slots, boolean clearedByDefault) {
         for (int slot : slots)
             if (slot < firstLocalSlot || slot >= getFrameDescriptor().getNumberOfSlots() ||
                     contains(argumentSlots, slot) || contains(environmentSlots, slot))
                 throw new IllegalArgumentException("Initial scratch slot aliases live input");
-        initialClears = slots.clone();
+        initialClears = clearedByDefault ? new int[0] : slots.clone();
     }
     @ExplodeLoop private void clearInitialLocals(VirtualFrame frame) {
         for (int slot : initialClears) frame.clear(slot);

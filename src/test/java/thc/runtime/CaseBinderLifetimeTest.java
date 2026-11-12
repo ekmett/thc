@@ -130,6 +130,26 @@ class CaseBinderLifetimeTest {
         assertNull(FrameAccess.read(frame, FrameLayout.TAIL_RESULT));
     }
 
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void descriptorClearsStillRejectLiveInputAliases(boolean captureAlias) {
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = FrameLayout.forProgramBody();
+                int argument = layout.bind("argument", FrameSlotKind.Object);
+                int capture = layout.bind("capture", FrameSlotKind.Object);
+                layout.clearInitially(captureAlias ? capture : argument);
+                var root = new FunctionRoot(language, layout.build(), "scratch validation",
+                        new CaptureLayout(language, new boolean[]{false}), new int[]{capture},
+                        new int[]{argument}, new int[]{0}, new Literal(42L), new Metrics(false));
+                assertTrue(layout.usesIllegalDefault());
+                assertThrows(IllegalArgumentException.class, () ->
+                        root.configureInitialClears(layout.firstLocalSlot(), layout.initialClears(), layout.usesIllegalDefault()));
+            } finally { context.leave(); }
+        }
+    }
+
     @ParameterizedTest @CsvSource({"false, false", "true, false", "true, true"})
     void caseBinderHasTheExpectedTagsOnFirstCompiledEntry(boolean used, boolean deadScratch) throws Exception {
         try (var context = executionContext(false)) {
