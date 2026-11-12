@@ -284,6 +284,32 @@ class SavedGuestContinuationTest {
     private static ContinuationResult rawToken(BytecodeRoot root) {
         return assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
     }
+    @Test void bytecodeAuxiliarySlotLookupFollowsDescriptorCopiesAndDisabledHoles() {
+        var descriptor = com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build();
+        var key = new Object();
+        assertEquals(-1, AuxiliarySlotLookup.findActive(descriptor, key));
+        assertTrue(descriptor.getAuxiliarySlots().isEmpty());
+
+        int slot = descriptor.findOrAddAuxiliarySlot(key);
+        var laterKey = new Object();
+        int later = descriptor.findOrAddAuxiliarySlot(laterKey);
+        assertTrue(later > slot);
+        assertEquals(slot, AuxiliarySlotLookup.findActive(descriptor, key));
+        var activeCopy = descriptor.copy();
+
+        descriptor.disableAuxiliarySlot(key);
+        assertEquals(later + 1, descriptor.getNumberOfAuxiliarySlots());
+        assertEquals(-1, AuxiliarySlotLookup.findActive(descriptor, key));
+        assertEquals(later, AuxiliarySlotLookup.findActive(descriptor, laterKey));
+        assertEquals(slot, AuxiliarySlotLookup.findActive(activeCopy, key));
+        var disabledCopy = descriptor.copy();
+        assertEquals(-1, AuxiliarySlotLookup.findActive(disabledCopy, key));
+
+        assertEquals(slot, descriptor.findOrAddAuxiliarySlot(key));
+        assertEquals(slot, AuxiliarySlotLookup.findActive(descriptor, key));
+        assertEquals(-1, AuxiliarySlotLookup.findActive(disabledCopy, key));
+    }
+
     @Test void bytecodeCaptureReactivatesDisabledSlotAndReadDoesNotAdoptIt() {
         try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();

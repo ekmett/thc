@@ -51,9 +51,8 @@ final class BytecodeContinuations {
             if (create) {
                 slot = descriptor.findOrAddAuxiliarySlot(ACTIVATION);
             } else {
-                Integer activeSlot = descriptor.getAuxiliarySlots().get(ACTIVATION);
-                if (activeSlot == null) return null;
-                slot = activeSlot;
+                slot = AuxiliarySlotLookup.findActive(descriptor, ACTIVATION);
+                if (slot < 0) return null;
             }
             Activation activation = (Activation) frame.getAuxiliarySlot(slot);
             if (activation == null && create) {

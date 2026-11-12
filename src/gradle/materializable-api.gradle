@@ -34,10 +34,12 @@ def requireApiArchive = { File file, String hash ->
 def prepareMaterializableApi = tasks.register("prepareMaterializableApi", Sync) {
     from(provider { zipTree(materializableApiSource.singleFile) })
     include("com/oracle/truffle/api/nodes/RootNode.java", "com/oracle/truffle/api/nodes/NodeAccessor.java",
-        "com/oracle/truffle/api/bytecode/ContinuationRootNode.java", "com/oracle/truffle/polyglot/JDKSupport.java")
+        "com/oracle/truffle/api/bytecode/ContinuationRootNode.java", "com/oracle/truffle/api/frame/FrameDescriptor.java",
+        "com/oracle/truffle/polyglot/JDKSupport.java")
     into(layout.buildDirectory.dir("materializable-api/source"))
     inputs.files("tools/truffle-protocol/materializable-root.patch", "tools/truffle-protocol/declared-return-api.patch",
-        "tools/truffle-protocol/graph-budget-api.patch", "tools/truffle-protocol/mount-carrier-lookup.patch")
+        "tools/truffle-protocol/graph-budget-api.patch", "tools/truffle-protocol/mount-carrier-lookup.patch",
+        "tools/truffle-protocol/active-auxiliary-slot-api.patch")
     doFirst {
         requireApiArchive(materializableApiSource.singleFile,
             "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064")
@@ -63,8 +65,15 @@ def prepareMaterializableApi = tasks.register("prepareMaterializableApi", Sync) 
             environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
             commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/mount-carrier-lookup.patch").absolutePath)
         }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/active-auxiliary-slot-api.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
         checkBuild(destinationDir.toPath().resolve("com/oracle/truffle/api/nodes/RootNode.java").toFile().getText("UTF-8")
             .contains("materializableFramePolicyVersion")) { "Materializable-root API patch was not applied" }
+        checkBuild(destinationDir.toPath().resolve("com/oracle/truffle/api/frame/FrameDescriptor.java").toFile().getText("UTF-8")
+            .contains("findActiveAuxiliarySlot")) { "Active auxiliary-slot API patch was not applied" }
     }
 }
 def compileMaterializableApi = tasks.register("compileMaterializableApi", JavaCompile) {
@@ -93,7 +102,7 @@ def materializableApiJar = tasks.register("materializableApiJar", Jar) {
     group = "build"
     description = "Build pinned API source classes with declared materialization and completion contracts."
     archiveBaseName.set("thc-truffle-api")
-    archiveVersion.set("$materializableApiVersion-protocol3-carrier1-args1")
+    archiveVersion.set("$materializableApiVersion-protocol3-carrier1-args1-aux1")
     destinationDirectory.set(layout.buildDirectory.dir("materializable-api"))
     preserveFileTimestamps = false
     reproducibleFileOrder = true
@@ -103,6 +112,7 @@ def materializableApiJar = tasks.register("materializableApiJar", Jar) {
         exclude("com/oracle/truffle/api/nodes/RootNode.class", "com/oracle/truffle/api/nodes/RootNode\$*.class",
             "com/oracle/truffle/api/nodes/NodeAccessor.class", "com/oracle/truffle/api/nodes/NodeAccessor\$*.class",
             "com/oracle/truffle/api/bytecode/ContinuationRootNode.class",
+            "com/oracle/truffle/api/frame/FrameDescriptor.class", "com/oracle/truffle/api/frame/FrameDescriptor\$*.class",
             "com/oracle/truffle/polyglot/JDKSupport.class", "com/oracle/truffle/polyglot/JDKSupport\$*.class",
             "META-INF/MANIFEST.MF")
     }
@@ -115,7 +125,7 @@ def materializableApiJar = tasks.register("materializableApiJar", Jar) {
             manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
         }
         manifest.attributes(["Implementation-Title": "THC declared root protocol Truffle API",
-            "Implementation-Version": "$materializableApiVersion-protocol3-carrier1-args1",
+            "Implementation-Version": "$materializableApiVersion-protocol3-carrier1-args1-aux1",
             "Upstream-Source-SHA256": "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064"])
     }
 }
@@ -160,6 +170,8 @@ tasks.register("verifyMaterializableApiSelection") {
             name == "com/oracle/truffle/api/nodes/NodeAccessor.class" ||
             name.startsWith("com/oracle/truffle/api/nodes/NodeAccessor\$") ||
             name == "com/oracle/truffle/api/bytecode/ContinuationRootNode.class" ||
+            name == "com/oracle/truffle/api/frame/FrameDescriptor.class" ||
+            name.startsWith("com/oracle/truffle/api/frame/FrameDescriptor\$") ||
             name == "com/oracle/truffle/polyglot/JDKSupport.class" ||
             name.startsWith("com/oracle/truffle/polyglot/JDKSupport\$") }
         def digest = { byte[] bytes -> MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -186,6 +198,7 @@ tasks.register("verifyMaterializableApiSelection") {
                     digest(file("tools/truffle-protocol/declared-return-api.patch").bytes) + "  declared-return-api.patch\n" +
                     digest(file("tools/truffle-protocol/graph-budget-api.patch").bytes) + "  graph-budget-api.patch\n" +
                     digest(file("tools/truffle-protocol/mount-carrier-lookup.patch").bytes) + "  mount-carrier-lookup.patch\n" +
+                    digest(file("tools/truffle-protocol/active-auxiliary-slot-api.patch").bytes) + "  active-auxiliary-slot-api.patch\n" +
                     "Preserved upstream nonreplacement entries: " + stockEntries.count { !replaced(it.name) } + "\n", "UTF-8")
             }
         }

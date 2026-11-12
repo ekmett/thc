@@ -1,0 +1,26 @@
+diff --git a/com/oracle/truffle/api/frame/FrameDescriptor.java b/com/oracle/truffle/api/frame/FrameDescriptor.java
+--- a/com/oracle/truffle/api/frame/FrameDescriptor.java
++++ b/com/oracle/truffle/api/frame/FrameDescriptor.java
+@@ -376,6 +376,22 @@
+     }
+ 
+     /**
++     * Returns the index of the currently active auxiliary slot for the given key.
++     *
++     * @param key the key passed to {@link #findOrAddAuxiliarySlot(Object)}
++     * @return the active slot index, or -1 if the key is absent or disabled
++     */
++    public int findActiveAuxiliarySlot(Object key) {
++        CompilerAsserts.neverPartOfCompilation(NEVER_PART_OF_COMPILATION_MESSAGE);
++        synchronized (this) {
++            EconomicMap<Object, Integer> slots = auxiliarySlotMap;
++            Integer index = slots == null ? null : slots.get(key);
++            BitSet disabled = disabledAuxiliarySlots;
++            return index == null || (disabled != null && disabled.get(index)) ? -1 : index;
++        }
++    }
++
++    /**
+      * Returns all currently active auxiliary slots along with their indexes. This is a slow
+      * operation that returns a data structure that is not backed by the frame descriptor, i.e.,
+      * which does not reflect changes to the set of active auxiliary slots in either direction.

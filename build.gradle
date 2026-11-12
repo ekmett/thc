@@ -131,6 +131,8 @@ def graalVersion = "25.3.4.1"
 def stockTruffleOption = providers.gradleProperty("thc.stockTruffle").orElse("false").get()
 requireBuild(stockTruffleOption in ["true", "false"]) { "thc.stockTruffle must be true or false" }
 def stockTruffle = stockTruffleOption == "true"
+def truffleApiSources = file(stockTruffle ? "src/truffle-stock/java" : "src/truffle-overlay/java")
+sourceSets.main { java.srcDir(truffleApiSources) }
 if (!stockTruffle) {
     apply(from: "src/gradle/materializable-api.gradle")
     apply(from: "src/gradle/protocol-runtime.gradle")
@@ -221,8 +223,7 @@ def processedMainSources = layout.buildDirectory.dir("generated/main/java")
 def processedMainResources = layout.buildDirectory.dir("generated/main/processor-resources")
 def processMainJava = tasks.register("processMainJava", JavaCompile) {
     dependsOn(generateSimdFamilies)
-    source(fileTree("src/main/java") { include("**/*.java") })
-    source(fileTree(layout.buildDirectory.dir("generated/simd/java")) { include("**/*.java") })
+    source(sourceSets.main.java)
     classpath = sourceSets.main.compileClasspath
     options.annotationProcessorPath = configurations.annotationProcessor
     options.compilerArgs.add("-proc:only")
@@ -248,7 +249,7 @@ tasks.named("javadoc", Javadoc) {
     options.charSet = "UTF-8"
     options.docEncoding = "UTF-8"
     options.addStringOption("-add-modules", "jdk.incubator.vector")
-    options.addStringOption("sourcepath", [file("src/main/java"), processedMainSources.get().asFile,
+    options.addStringOption("sourcepath", [file("src/main/java"), truffleApiSources, processedMainSources.get().asFile,
         layout.buildDirectory.dir("generated/simd/java").get().asFile].collect { it.path }.join(File.pathSeparator))
     options.addBooleanOption("notimestamp", true)
     options.linkSource = true
