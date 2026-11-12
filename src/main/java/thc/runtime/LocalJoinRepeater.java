@@ -20,15 +20,19 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
         referenceKind = proof.getEvaluated() ? proof.getKind() : CoreKind.UNKNOWN;
     }
     private void executeBody(VirtualFrame frame, Expr body) {
-        if (!delimited && !AstControl.captures(this)) { executeUninterrupted(frame, body); return; }
         try { executeUninterrupted(frame, body); }
-        catch (AstCapture cut) { throw cut.append((saved, input) -> { saveResult(saved, input); return null; }); }
+        catch (AstCapture cut) { throw captureResult(cut); }
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
             throw cut.append(frame, (saved, input, ambient, outerMask) -> {
                 Object value = input.get(); if (!tuple) FrameAccess.write(saved, result, value); return null;
             });
         }
+    }
+    @CompilerDirectives.TruffleBoundary(transferToInterpreterOnException = false)
+    private AstCapture captureResult(AstCapture cut) {
+        if (!delimited && !AstControl.captures(this)) return cut;
+        return cut.append((saved, input) -> { saveResult(saved, input); return null; });
     }
     private void saveResult(VirtualFrame frame, Object value) {
         if (tuple) return;

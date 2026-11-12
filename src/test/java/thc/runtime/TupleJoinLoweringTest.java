@@ -6,6 +6,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +26,49 @@ class TupleJoinLoweringTest {
     private CoreRepresentation tuple(CoreRepresentation... components) {
         var reps = new ArrayList<String>(); for (var component : components) reps.addAll(Objects.requireNonNull(component.getPrimReps()));
         return new CoreRepresentation(CoreKind.UNKNOWN, true, true, reps, Arrays.asList(components), null, null, null, null);
+    }
+    @Test void joinCapturesOnlyTheSuffixOwnedByItsRootPolicy() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean captures : new boolean[]{false, true}) {
+                    var layout = new FrameLayout();
+                    int selector = layout.bind("join selector"), result = layout.bind("join result");
+                    var cut = new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED).append((saved, input) -> 37L);
+                    var delimited = new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                            MaskingState.UNMASKED, null);
+                    class Body extends Expr {
+                        MaterializedFrame entered;
+                        RuntimeException failure = cut;
+                        @Override public Object execute(VirtualFrame frame) {
+                            entered = frame.materialize();
+                            throw failure;
+                        }
+                    }
+                    var body = new Body();
+                    var join = new LocalJoinRegion(new Object(), selector, result, new Expr[]{body}, longProof, false);
+                    var root = new FunctionRoot(language, layout.build(), "join capture policy", null,
+                            new int[0], new int[0], new int[0], join, new Metrics(false), new CoreRepresentation[0],
+                            longProof, null, new boolean[0], null, null, new int[0], null, false, new int[0][],
+                            false, FunctionRootRole.FUNCTION, captures);
+                    var target = root.getCallTarget();
+                    AstContinuation saved;
+                    if (captures) {
+                        saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{0L}));
+                    } else {
+                        assertSame(cut, assertThrows(AstCapture.class, () -> Calls.target(target, new Object[]{0L})));
+                        saved = cut.freeze(root, body.entered);
+                    }
+                    assertEquals(37L, saved.continueWith(Unit.INSTANCE));
+                    assertEquals(captures, body.entered.isLong(result));
+                    body.failure = delimited;
+                    assertSame(delimited, assertThrows(DelimitedCut.class, () -> Calls.target(target, new Object[]{0L})));
+                    assertTrue(delimited.getFrames().isEmpty());
+                }
+            } finally { context.leave(); }
+        }
     }
     @Test void tupleResultScratchIsClearedAfterCopyingUnlessTheDestinationAliasesIt() {
         try (var context = Context.newBuilder("thc").build()) {
