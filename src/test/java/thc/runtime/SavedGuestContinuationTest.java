@@ -545,9 +545,13 @@ class SavedGuestContinuationTest {
 
     private static final class Driver extends RootNode {
         @Child private Force force = new Force(new Metrics(false));
+        int compiledEntries;
         Driver() { super(null); }
         Driver(Language language) { super(language); }
-        @Override public Object execute(VirtualFrame frame) { return frame.getArguments()[0] instanceof CallSegment segment ? force.executeInitialization(segment) : force.execute(frame, frame.getArguments()[0]); }
+        @Override public Object execute(VirtualFrame frame) {
+            if (CompilerDirectives.inCompiledCode()) compiledEntries++;
+            return frame.getArguments()[0] instanceof CallSegment segment ? force.executeInitialization(segment) : force.execute(frame, frame.getArguments()[0]);
+        }
         Object force(Object boundary) { return Calls.target(getCallTarget(), new Object[]{boundary}); }
         Object deliver(CapturedAsyncRequest request) { return force.deliverAtCapturedIOHandler(request); }
     }
@@ -879,6 +883,111 @@ class SavedGuestContinuationTest {
                 assertEquals(2, parent.getState()); assertEquals(2, child.getState());
                 assertEquals(1, parentSaved.resumes); assertEquals(1, childSaved.resumes);
                 assertEquals(43L, driver.force(parent)); assertEquals(1, parentSaved.resumes);
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void freshDemandRacingWithPublicationResumesTheFirstInstalledSuffix() throws Exception {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            AstContinuation saved;
+            Thunk thunk;
+            Driver driver;
+            var metrics = new Metrics(true);
+            var compiled = (OptimizedCallTarget) new RootNode(null) {
+                @Override public com.oracle.truffle.api.nodes.ExecutionSignature prepareForAOT() {
+                    return com.oracle.truffle.api.nodes.ExecutionSignature.create(Long.class, new Class<?>[0]);
+                }
+                @Override public Object execute(VirtualFrame frame) {
+                    if (CompilerDirectives.inCompiledCode()) metrics.incrementCompiledEntries();
+                    return 42L;
+                }
+            }.getCallTarget();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var owner = new LifetimeOwner(language);
+                saved = new AstContinuation(owner, Unit.INSTANCE, MaskingState.UNMASKED,
+                    Truffle.getRuntime().createMaterializedFrame(new Object[0], owner.getFrameDescriptor()),
+                    List.of((frame, input) -> {
+                        assertSame(Unit.INSTANCE, input);
+                        return Calls.target(compiled, new Object[0]);
+                    }), StackAnnotationState.EMPTY);
+                thunk = new Thunk(owner.getCallTarget(), null);
+                driver = new Driver();
+            } finally { context.leave(); }
+            var started = new java.util.concurrent.CountDownLatch(1);
+            var carrier = new java.util.concurrent.atomic.AtomicReference<Thread>();
+            try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+                java.util.concurrent.Future<Object> result;
+                synchronized (thunk.getMonitor()) {
+                    result = executor.submit(() -> {
+                        context.enter();
+                        try {
+                            assertFalse(compiled.wasExecuted()); assertTrue(compiled.prepareForAOT());
+                            compiled.compile(true); compiled.waitForCompilation(); assertTrue(compiled.isValidLastTier());
+                            assertFalse(compiled.wasExecuted());
+                            carrier.set(Thread.currentThread()); started.countDown();
+                            return driver.force(thunk);
+                        } finally { context.leave(); }
+                    });
+                    assertTrue(started.await(10, java.util.concurrent.TimeUnit.SECONDS));
+                    var threads = java.lang.management.ManagementFactory.getThreadMXBean();
+                    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                    while (true) {
+                        var info = threads.getThreadInfo(carrier.get().threadId(), 32);
+                        if (info != null && info.getThreadState() == Thread.State.BLOCKED &&
+                                info.getLockInfo().getIdentityHashCode() == System.identityHashCode(thunk) &&
+                                Arrays.stream(info.getStackTrace()).anyMatch(frame ->
+                                    frame.getClassName().equals(Force.class.getName()) && frame.getMethodName().equals("executeOne"))) break;
+                        assertTrue(System.nanoTime() < deadline, "Fresh demand did not reach the held thunk monitor");
+                        Thread.sleep(1);
+                    }
+                    // The reader observed a fresh body before this exact publication.
+                    thunk.setState(1); thunk.setOwner(Thread.currentThread());
+                    thunk.setValue(saved); thunk.setTarget(null); thunk.setEnvironment(null);
+                    thunk.setOwner(null); thunk.setState(5);
+                }
+                assertEquals(42L, result.get(10, java.util.concurrent.TimeUnit.SECONDS));
+            }
+            assertEquals(1L, metrics.getCompiledEntries(), "The saved suffix's first entry stays compiled across the ownership retry");
+            assertTrue(compiled.isValidLastTier());
+            assertEquals(1, compiled.getSuccessfulCompilationCount());
+            assertEquals(2, thunk.getState()); assertEquals(42L, thunk.getValue()); assertNull(thunk.getOwner());
+            context.enter();
+            try { assertEquals(42L, driver.force(thunk)); }
+            finally { context.leave(); }
+            assertEquals(1L, metrics.getCompiledEntries(), "The shared answer never reenters the completed suffix");
+        }
+    }
+
+    @Test void freshDemandCompilesAfterPublishedAndParkedHistory() {
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var evaluations = new java.util.concurrent.atomic.AtomicInteger();
+                var body = new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { evaluations.incrementAndGet(); return 42L; }
+                }.getCallTarget();
+                var driver = new Driver();
+                var fresh = new Thunk(body, null);
+                // Each operation establishes a distinct demand state at the same site.
+                assertEquals(42L, driver.force(fresh));
+                assertEquals(42L, driver.force(fresh));
+                var saved = new Saved(body.getRootNode(), Unit.INSTANCE, input -> 42L);
+                assertEquals(42L, driver.force(parked(body, saved)));
+                assertEquals(1, saved.resumes); assertEquals(1, evaluations.get());
+                var target = (OptimizedCallTarget) driver.getCallTarget();
+                target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                assertEquals(1, evaluations.get(), "Compilation cannot execute another thunk body");
+                var unexecuted = new Thunk(body, null);
+                assertEquals(0, unexecuted.getState());
+                int compiledBefore = driver.compiledEntries;
+                assertEquals(42L, driver.force(unexecuted));
+                assertEquals(compiledBefore + 1, driver.compiledEntries, "The first new demand enters installed code after saved history");
+                assertTrue(target.isValidLastTier()); assertEquals(2, unexecuted.getState());
+                assertEquals(2, evaluations.get(), "The new thunk executes once");
             } finally { context.leave(); }
         }
     }

@@ -72,24 +72,25 @@ public final class Force extends Node {
     }
     private Object attemptThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
-        SavedGuestContinuation observed = null;
         switch (original.getState()) {
             case 2 -> { if (invocationMetrics.getEnabled()) invocationMetrics.incrementThunkHits(); return original.getValue(); }
             case 3 -> throw rethrowFailure(original);
             case 4 -> throw fault("Interrupted thunk has no resumable continuation");
-            case 5 -> {
-                resumeProfile.enter();
-                observed = savedGuestContinuation(original.getValue());
-                BytecodeContinuations.preflightWait(observed);
-            }
+            case 5 -> { resumeProfile.enter(); return resumeThunk(original, invocationMetrics); }
         }
+        return executeOne(original, null, thc.runtime.Unit.INSTANCE, invocationMetrics, true);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Object resumeThunk(Thunk original, Metrics invocationMetrics) {
+        SavedGuestContinuation observed = savedGuestContinuation(original.getValue());
+        BytecodeContinuations.preflightWait(observed);
         PendingWait pending = PendingWait.of(observed);
         if (pending != null && !pending.abandoned() && pending.owner != GuestThreads.executingCurrent(this)) {
             awaitOwner(original); return RETRY;
         }
         // The continuation owns its callee frame; never materialize this caller.
         if (suspendedChild(observed) != null) return resumeChain(original, false, false, invocationMetrics);
-        return executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics, true);
+        return executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics, false);
     }
 
     /** Deliver at this exact captured caller while its shared child remains parked. */
@@ -205,8 +206,8 @@ public final class Force extends Node {
             request.getTargetId() == GuestThreads.current(this).currentId() && request.getState() == AsyncRequestState.CLAIMED;
     }
     // Partial evaluation reaches this only with retryOuterAfterWait=true: every
-    // claim returns or throws on its first iteration. The false caller belongs
-    // exclusively to the boundary resumeChain, which retains the actual wait loop.
+    // claim returns or throws on its first iteration. The false callers belong
+    // to the parked-demand boundaries, which retain the actual wait loop.
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_UNROLL_UNTIL_RETURN)
     private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics,
                               boolean retryOuterAfterWait) {
@@ -230,7 +231,11 @@ public final class Force extends Node {
                         }
                         case 5 -> {
                             resumeProfile.enter();
-                            if (observed != null && original.getValue() != observed.getIdentity() ||
+                            // A fresh demand may race with another evaluator parking.
+                            // Refresh outside the monitor through the cold retry path;
+                            // saved validation and resumption never enter this compiled claim.
+                            if (retryOuterAfterWait) claim = 3;
+                            else if (observed != null && original.getValue() != observed.getIdentity() ||
                                 observed == null && suspendedChild(savedGuestContinuation(original.getValue())) != null) claim = 3;
                             else {
                                 continuation = savedGuestContinuation(original.getValue());
