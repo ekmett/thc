@@ -44,7 +44,9 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     static boolean extractFresh(Node region) {
         if (NodeUtil.findFirstNodeInstance(region.getRootNode(), AstSameFrameArm.class) != null) {
             Expr operation = firstOperation(region, false);
-            if (operation != null) return prepare(operation.replace(new AstSameFrameArm(operation, true)));
+            if (operation instanceof Evaluate demand) {
+                if (demand.outlineDemand()) return true;
+            } else if (operation != null) return prepare(operation.replace(new AstSameFrameArm(operation, true)));
         }
         return extract(region);
     }
@@ -224,7 +226,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
         }
         @Override public SourceSection getSourceSection() { return arm.getSourceSection(); }
         @Override public String getName() {
-            String kind = !arm.operationRegion ? "case arm" : arm.body instanceof LocalJoinRegion ? "join region" : "case demand";
+            String kind = arm.operationRegion ? "join region" : "case arm";
             return arm.getRootNode().getName() + " <" + kind + ">";
         }
         @Override public boolean isCloningAllowed() { return false; }

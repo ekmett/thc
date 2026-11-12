@@ -5,13 +5,18 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.bytecode.ContinuationResult;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
 import java.util.ArrayDeque;
 import java.util.IdentityHashMap;
 import static thc.runtime.RuntimeFault.fault;
@@ -20,7 +25,7 @@ import static thc.runtime.SavedGuestContinuations.asyncRequest;
 import static thc.runtime.AstStacks.astStackScope;
 import static thc.runtime.AstStacks.stackSpill;
 
-public final class Force extends Node {
+public final class Force extends Node implements ReplaceObserver {
     private static final Object RETRY = new Object();
     private record Parked(Object boundary, SavedGuestContinuation continuation) {}
     /** Retain failure data, never a shared mutable Truffle stack trace. */
@@ -33,6 +38,8 @@ public final class Force extends Node {
     private final BranchProfile resumeProfile = BranchProfile.create();
     private final BranchProfile suspensionProfile = BranchProfile.create();
     @CompilationFinal private volatile boolean seenThunk;
+    @CompilationFinal private volatile OptimizedCallTarget demandSide;
+    private boolean copiedDemandSide;
 
     public Force(Metrics metrics) { this(metrics, false); }
     public Force(Metrics metrics, boolean asyncMode) {
@@ -54,10 +61,70 @@ public final class Force extends Node {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             seenThunk = true;
         }
-        return executeThunk(original, invocationMetrics);
+        OptimizedCallTarget side = demandSide;
+        return side == null ? executeThunk(original, invocationMetrics) : side.call(this, original, invocationMetrics);
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
     private Object executeCold(Thunk original, Metrics invocationMetrics) { return executeThunk(original, invocationMetrics); }
+
+    boolean hasDemandSide() { return demandSide != null; }
+
+    /** Only an unpublished recovery body gains this boundary. The caller still
+     * owns operand evaluation, frame writeback and the saved case continuation. */
+    boolean outlineDemand() {
+        return atomic(() -> {
+            if (demandSide != null || !(getRootNode() instanceof ContextRoot source) || source.compilationOwner() == null)
+                return false;
+            var side = (OptimizedCallTarget) new DemandRoot(source, this).getCallTarget();
+            side.prepareForAOT();
+            demandSide = side;
+            reportReplace(this, this, "separate thunk demand after graph budget failure");
+            return true;
+        });
+    }
+
+    @Override public Node copy() {
+        Force clone = (Force) super.copy();
+        clone.copiedDemandSide = copiedDemandSide || demandSide != null;
+        clone.demandSide = null;
+        return clone;
+    }
+
+    static void restoreCopiedDemandSides(Node root) {
+        for (Force force : NodeUtil.findAllNodeInstances(root, Force.class)) {
+            if (force.copiedDemandSide) {
+                force.outlineDemand();
+                force.copiedDemandSide = false;
+            }
+        }
+    }
+
+    @Override public boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
+        OptimizedCallTarget side = demandSide;
+        if (side != null) side.nodeReplaced(oldNode, newNode, reason);
+        return false;
+    }
+
+    /** A physical compilation owner for thunk execution. The force remains
+     * adopted by its original caller for context, masking and source identity. */
+    private static final class DemandRoot extends ContextRoot {
+        private final Force force;
+        DemandRoot(ContextRoot source, Force force) {
+            super(source, FrameDescriptor.newBuilder().build());
+            this.force = force;
+        }
+        @Override public Object execute(VirtualFrame frame) {
+            Object[] arguments = frame.getArguments();
+            return force.executeThunk((Thunk) arguments[0], (Metrics) arguments[1]);
+        }
+        @Override protected ExecutionSignature prepareForAOT() { return ExecutionSignature.GENERIC; }
+        @Override public boolean requiresUnprofiledReturn() { return true; }
+        @Override protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {
+            return rootCompilation;
+        }
+        @Override public boolean isInternal() { return true; }
+        @Override public String getName() { return force.getRootNode().getName() + " <thunk demand>"; }
+    }
 
     private Object executeThunk(Thunk original, Metrics invocationMetrics) {
         Object result = attemptThunk(original, invocationMetrics);

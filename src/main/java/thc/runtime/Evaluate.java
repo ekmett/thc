@@ -11,9 +11,10 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 public final class Evaluate extends Expr {
     // Evaluation/forcing is typed transport, not another source statement.
     @Override public boolean isInstrumentable() { return false; }
-    boolean demandsValue() {
-        return !value.getRepresentation().getEvaluated() && !value.getRepresentation().isTypedTransport();
+    boolean canOutlineDemand() {
+        return !force.hasDemandSide() && !value.getRepresentation().getEvaluated() && !value.getRepresentation().isTypedTransport();
     }
+    boolean outlineDemand() { return force.outlineDemand(); }
     @Child private Expr value;
     @Child private Force force;
     public Evaluate(Expr value, Metrics metrics) {

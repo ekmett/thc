@@ -173,6 +173,7 @@ public final class FunctionRoot extends GuestRoot {
         FunctionRoot replacement = NodeUtil.cloneNode(this);
         freshLoops(replacement);
         AstSameFrameArm.restoreCopiedExtractions(replacement);
+        Force.restoreCopiedDemandSides(replacement);
         return replacement;
     }
 

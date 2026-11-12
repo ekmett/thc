@@ -665,8 +665,10 @@ class CaseBinderLifetimeTest {
                         assertTrue(AstSameFrameArm.extractFresh(root));
                         var targetField = AstSameFrameArm.class.getDeclaredField("targets"); targetField.setAccessible(true);
                         assertNull(targetField.get(region), "Demand must precede the alternative body");
-                        var demand = NodeUtil.findFirstNodeInstance(selection.scrutineeBinding(), AstSameFrameArm.class);
-                        assertNotNull(demand); assertNotNull(targetField.get(demand));
+                        var demand = NodeUtil.findFirstNodeInstance(selection.scrutineeBinding(), Evaluate.class);
+                        assertNotNull(demand);
+                        assertSame(selection.scrutineeBinding(), demand.getParent());
+                        assertTrue(NodeUtil.findFirstNodeInstance(demand, Force.class).hasDemandSide());
                         assertFalse(demand.isInstrumentable());
                     }
                     var value = data.createLong(42);

@@ -14,6 +14,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
@@ -38,6 +39,11 @@ class SameFrameCaseTest {
         var field = AstSameFrameArm.class.getDeclaredField("targets");
         field.setAccessible(true);
         return (RootCallTarget[]) field.get(arm);
+    }
+    private static RootCallTarget demandSide(Force force) throws Exception {
+        var field = Force.class.getDeclaredField("demandSide");
+        field.setAccessible(true);
+        return (RootCallTarget) field.get(force);
     }
     private static void compile(RootCallTarget raw) throws Exception {
         OptimizedCallTarget target = (OptimizedCallTarget) raw;
@@ -315,6 +321,83 @@ class SameFrameCaseTest {
         MaterializedFrame frame;
         long bloom;
     }
+
+    @Test void frameFreeDemandKeepsItsFirstCompiledCallerAcrossAChildCut() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var frameLayout = FrameDescriptor.newBuilder().build();
+                var caller = new GuestRoot(language, frameLayout) {
+                    @Child private Force force = new Force(new Metrics(false));
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override protected boolean requiresMaterializableFrame() { return true; }
+                    @Override protected ExecutionSignature prepareForAOT() { return ExecutionSignature.GENERIC; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        try { return AstControl.forceCallback(frame, this, force, frame.getArguments()[0]); }
+                        catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+                    }
+                };
+                var parent = (OptimizedCallTarget) caller.getCallTarget();
+                var force = NodeUtil.findFirstNodeInstance(caller, Force.class);
+                // A recovered demand already has a dispatch history. Seed the
+                // indirect arm without entering the caller or the cutting child.
+                for (long value : new long[]{1L, 2L})
+                    assertEquals(value, force.execute(null, new Thunk(RootNode.createConstantNode(value).getCallTarget(), null)));
+                assertTrue(force.outlineDemand()); assertFalse(force.outlineDemand());
+                var side = (OptimizedCallTarget) demandSide(force);
+                var physical = (ContextRoot) side.getRootNode();
+                assertSame(caller.compilationOwner(), physical.compilationOwner());
+                assertSame(physical, GraphRecovery.source(physical));
+                assertEquals(0, physical.getFrameDescriptor().getNumberOfSlots());
+                var state = new CaptureState();
+                var child = new GuestRoot(language, frameLayout) {
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override protected boolean requiresMaterializableFrame() { return true; }
+                    @Override protected ExecutionSignature prepareForAOT() { return ExecutionSignature.GENERIC; }
+                    @Override public Object execute(VirtualFrame frame) { return cut(frame.materialize(), CompilerDirectives.inCompiledCode()); }
+                    @TruffleBoundary private AstContinuation cut(MaterializedFrame frame, boolean compiled) {
+                        state.prefix++;
+                        var threads = Language.currentState(this).getThreads();
+                        var request = threads.send(threads.currentIdentity(), state.marker);
+                        assertSame(request, GuestThreads.pollMandatoryCurrent(this, true));
+                        request.compiledCapture = compiled;
+                        return new AstCapture(request, SynchronousMasking.current(this)).append((saved, input) -> {
+                            assertSame(frame, saved); assertSame(Unit.INSTANCE, input); state.resumes++; return 42L;
+                        }).freeze(this, frame);
+                    }
+                }.getCallTarget();
+                compile(side); compile(parent); compile(child);
+                assertFalse(parent.wasExecuted()); assertFalse(side.wasExecuted());
+                assertFalse(((OptimizedCallTarget) child).wasExecuted());
+                var published = new Thunk(child, null); published.setValue(41L); published.setState(2);
+                var installed = java.util.List.<RootCallTarget>of(parent, side);
+                var interpreted = ThreadInventoryCoreEvidence.interpretedCalls(installed);
+                assertEquals(41L, Calls.target(parent, new Object[]{published}));
+                assertEquals(interpreted, ThreadInventoryCoreEvidence.interpretedCalls(installed));
+                assertTrue(parent.isValidLastTier()); assertTrue(side.isValidLastTier());
+
+                var threads = Language.currentState().getThreads();
+                threads.enterCurrent(null, false, true, null);
+                try {
+                    var thunk = new Thunk(child, null);
+                    var saved = assertInstanceOf(AstContinuation.class, Calls.target(parent, new Object[]{thunk}));
+                    assertSame(caller, saved.getSourceRoot());
+                    assertTrue(saved.asyncRequest().compiledCapture);
+                    assertSame(state.marker, saved.asyncRequest().getPayload());
+                    assertEquals(1, state.prefix); assertEquals(5, thunk.getState());
+                    assertTrue(parent.isValidLastTier());
+                    saved.asyncRequest().acknowledge();
+                    assertEquals(42L, force.drainStack(saved));
+                    assertEquals(42L, thunk.getValue()); assertEquals(2, thunk.getState());
+                    assertEquals(1, state.prefix); assertEquals(1, state.resumes);
+                    assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                    assertTrue(parent.isValidLastTier());
+                } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
+            } finally { context.leave(); }
+        }
+    }
+
     private static final class CutBody extends Expr {
         private final CaptureState state;
         CutBody(CaptureState state) { this.state = state; }
@@ -360,9 +443,21 @@ class SameFrameCaseTest {
                     original.replace(replacement);
                     assertTrue(AstSameFrameArm.extractFresh(selection));
                     assertNull(targets(arm), "The case demand must be separated before its returning arm");
-                    arm = assertInstanceOf(AstSameFrameArm.class, replacement.getParent());
-                    assertFalse(arm.isInstrumentable());
-                    assertEquals(replacement.needsCallState(), arm.needsCallState());
+                    assertSame(selection.scrutineeBinding(), replacement.getParent());
+                    assertFalse(replacement.isInstrumentable());
+                    var force = NodeUtil.findFirstNodeInstance(replacement, Force.class);
+                    var side = demandSide(force);
+                    assertNotNull(side);
+                    assertEquals(0, side.getRootNode().getFrameDescriptor().getNumberOfSlots());
+                    var copy = ((FunctionRoot) target.getRootNode()).copyForRecovery();
+                    var copiedForce = NodeUtil.findAllNodeInstances(copy, Force.class).stream()
+                            .filter(Force::hasDemandSide).findFirst().orElseThrow();
+                    var copiedSide = demandSide(copiedForce);
+                    assertNotSame(side, copiedSide);
+                    assertSame(copy, copiedForce.getRootNode());
+                    var sideOwner = copiedSide.getRootNode().getClass().getDeclaredField("force");
+                    sideOwner.setAccessible(true);
+                    assertSame(copiedForce, sideOwner.get(copiedSide.getRootNode()));
                 } else {
                     var field = AstSameFrameArm.class.getDeclaredField("body"); field.setAccessible(true);
                     Expr old = (Expr) field.get(arm);
@@ -370,15 +465,14 @@ class SameFrameCaseTest {
                     assertTrue(AstSameFrameArm.extract(arm));
                 }
                 while (AstSameFrameArm.extract(target.getRootNode())) { }
-                RootCallTarget side = targets(arm)[2];
-                compile(side);
+                compile(demand ? target : targets(arm)[2]);
                 MaskingState ambient = SynchronousMasking.current(target.getRootNode());
                 SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(
                         Calls.target(target, new Object[]{0L, 1L, 0L}));
                 assertNotNull(saved);
                 assertSame(state.marker, saved.getYielded());
                 assertSame(target.getRootNode(), saved.getSourceRoot());
-                assertEquals(1, state.prefix); assertEquals(1, state.compiled);
+                assertEquals(1, state.prefix);
                 // A first async capture may deopt under the ordinary exception profile.
                 // The saved suffix must still preserve identity, effects, frame and mask.
                 // Replacing the arm changes its sum[16..31]=376 to 500.
@@ -389,6 +483,7 @@ class SameFrameCaseTest {
                 assertEquals(ambient, SynchronousMasking.current(target.getRootNode()));
                 assertThrows(RuntimeFault.class, () -> saved.continueWith(500L));
                 assertSame(target, program.entryTarget("entry"));
+                assertEquals(1, state.compiled);
 
             } finally { context.leave(); }
         }
