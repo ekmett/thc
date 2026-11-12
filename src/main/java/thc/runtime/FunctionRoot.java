@@ -732,7 +732,10 @@ public final class FunctionRoot extends GuestRoot {
     private Object executeCapturableBody(VirtualFrame frame) {
         if (!enableDelimited) return executeBody(frame);
         try { return executeBody(frame); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedRootStep(this)); }
+        catch (DelimitedCut cut) {
+            CompilerDirectives.transferToInterpreter();
+            throw cut.append(frame, new DelimitedRootStep(this));
+        }
     }
     /** Called only after a saved self transfer unwound its lexical scopes. */
     Object resumeSelf(VirtualFrame frame) {
