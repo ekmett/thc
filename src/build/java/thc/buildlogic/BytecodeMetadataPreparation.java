@@ -79,7 +79,7 @@ public final class BytecodeMetadataPreparation {
         }
         // END THC sparse compilation metadata v1
     """.indent(4);
-    private static final String COUNTS = """
+    static final String COUNTS = """
         @Override
         @ExplodeLoop
         public final int getLocalCount(int bci) {

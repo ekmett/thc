@@ -36,12 +36,30 @@ public final class BytecodeStackPreparation {
     """;
     private static final String RESERVED_SLOT = "    private static final int CONTINUATION_FRAME_INDEX = 0;\n";
     private static final String USER_SLOTS = "    private static final int USER_LOCALS_START_INDEX = 1;\n";
-    // Keep the pinned repair intact, but outside the compiled matching-tag path.
-    // A captured frame can outlive a local-tag change in a different activation.
-    private static final String RECONCILE = """
+    private static final String LOCAL_OFFSET_HELPERS = """
         @ExplodeLoop
-        private void reconcileContinuationLocals(int bci, FrameWithoutBoxing frame) {
-            CompilerAsserts.partialEvaluationConstant(bci);
+        protected final int localOffsetToTableIndex(int bci, int localOffset) {
+            int count = 0;
+            for (int index = 0; index < locals.length; index += LOCALS_LENGTH) {
+                int startIndex = locals[index + LOCALS_OFFSET_START_BCI];
+                int endIndex = locals[index + LOCALS_OFFSET_END_BCI];
+                if (bci >= startIndex && bci < endIndex) {
+                    if (count == localOffset) {
+                        return index;
+                    }
+                    count++;
+                }
+            }
+            return -1;
+        }
+
+        protected final int localOffsetToLocalIndex(int bci, int localOffset) {
+            int tableIndex = localOffsetToTableIndex(bci, localOffset);
+            assert locals[tableIndex + LOCALS_OFFSET_FRAME_INDEX] == localOffset + USER_LOCALS_START_INDEX : "Inconsistent indices.";
+            return locals[tableIndex + LOCALS_OFFSET_LOCAL_INDEX];
+        }
+""";
+    private static final String LOCAL_OFFSET_LOOKUP = """
             int localCount = getLocalCount(bci);
             CompilerAsserts.partialEvaluationConstant(localCount);
             for (int localOffset = 0; localOffset < localCount; localOffset++) {
@@ -51,6 +69,26 @@ public final class BytecodeStackPreparation {
                     continue;
                 }
                 int localIndex = localOffsetToLocalIndex(bci, localOffset);
+""";
+    // Offsets enumerate the active rows in table order, including Illegal slots.
+    private static final String LIVE_LOCAL_ROWS = """
+            assert validateBytecodeIndex(bci);
+            int localOffset = -1;
+            for (int index = 0; index < locals.length; index += LOCALS_LENGTH) {
+                if (bci < locals[index + LOCALS_OFFSET_START_BCI] || bci >= locals[index + LOCALS_OFFSET_END_BCI]) continue;
+                int frameIndex = USER_LOCALS_START_INDEX + ++localOffset;
+                byte frameTag = FRAMES.getTag(frame, frameIndex);
+                if (frameTag == FrameTags.ILLEGAL) continue;
+                assert locals[index + LOCALS_OFFSET_FRAME_INDEX] == frameIndex : "Inconsistent indices.";
+                int localIndex = locals[index + LOCALS_OFFSET_LOCAL_INDEX];
+""";
+    // Keep the pinned repair intact, but outside the compiled matching-tag path.
+    // A captured frame can outlive a local-tag change in a different activation.
+    private static final String RECONCILE = """
+        @ExplodeLoop
+        private void reconcileContinuationLocals(int bci, FrameWithoutBoxing frame) {
+            CompilerAsserts.partialEvaluationConstant(bci);
+""" + LOCAL_OFFSET_LOOKUP + """
                 byte cachedTag = getCachedLocalTagInternal(this.localTags_, localIndex);
                 if (frameTag == cachedTag) {
                     continue;
@@ -95,6 +133,8 @@ public final class BytecodeStackPreparation {
                 // THC stale continuation repair v1: mismatch is an interpreter slow path.
                 CompilerDirectives.transferToInterpreterAndInvalidate();
 """);
+    private static final String ONE_PASS_RECONCILE = replaceOnce(COLD_RECONCILE, LOCAL_OFFSET_LOOKUP, LIVE_LOCAL_ROWS,
+        "Changed continuation local iteration");
     // SAVED_OPERANDS removes the sole producer of the split-frame pointer. Remove its
     // consumers in the same pinned transform, not the actual stores/clears or slot 0.
     // Reversible markers allow the whole generated-source pipeline to run again.
@@ -209,8 +249,12 @@ public final class BytecodeStackPreparation {
         require(VERSION.equals(version), "Review bytecode stack entry for Truffle " + version);
         String result = unix(source, "Mixed generated source newlines");
         require(result.contains(TAG_ENCODING), "Changed four-tag continuation configuration encoding");
+        require(result.contains(BytecodeMetadataPreparation.COUNTS) && result.contains(LOCAL_OFFSET_HELPERS),
+            "Changed generated continuation local offset semantics");
         if (result.contains("THC stale continuation repair")) {
-            result = replaceOnce(result, COLD_RECONCILE, RECONCILE, "Changed stale continuation repair");
+            String prepared = result.contains(ONE_PASS_RECONCILE) ? ONE_PASS_RECONCILE : COLD_RECONCILE;
+            result = replaceOnce(result, prepared, RECONCILE, "Changed stale continuation repair");
+            require(!result.contains("THC stale continuation repair"), "Unexpected stale continuation repair");
         }
         for (String[] pair : FORWARDING) result = result.replace(pair[1], pair[0]);
         require(!result.contains("THC unified frame"), "Changed unified frame preparation");
@@ -234,7 +278,7 @@ public final class BytecodeStackPreparation {
         String consumers = replaceOnce(result, RESERVED_SLOT, "", "Changed reserved continuation slot");
         consumers = replaceOnce(consumers, USER_SLOTS, "", "Changed user local offset");
         require(!consumers.contains("CONTINUATION_FRAME_INDEX"), "Unknown split-frame producer or consumer");
-        result = replaceOnce(result, RECONCILE, COLD_RECONCILE, "Changed continuation local reconciliation");
+        result = replaceOnce(result, RECONCILE, ONE_PASS_RECONCILE, "Changed continuation local reconciliation");
         return newline(source, result);
     }
 
@@ -252,7 +296,7 @@ public final class BytecodeStackPreparation {
             + "    Object resume() { return root.continueAt(bytecodeNode, index, sp, frame, this); }\n"
             + "    void savedLocals() {\n" + VIRTUAL_OPERANDS + "    }\n"
             + SIGNATURE + "        return existingBody();\n    }\n"
-            + RECONCILE
+            + BytecodeMetadataPreparation.COUNTS + LOCAL_OFFSET_HELPERS + RECONCILE
             + java.util.Arrays.stream(FORWARDING).filter(p -> !p[0].contains("? (FrameWithoutBoxing)"))
                 .map(p -> p[0]).collect(java.util.stream.Collectors.joining()) + "}\n";
         String after = transform(before, VERSION);
@@ -263,6 +307,8 @@ public final class BytecodeStackPreparation {
         reject(after.replace(coldControlFlow, controlFlowCall), VERSION);
         reject(after.replace(coldControlFlow, controlFlowCall + "            CompilerDirectives.transferToInterpreter();\n"), VERSION);
         require(transform(after, VERSION).equals(after), "Stack entry preparation is not idempotent");
+        require(transform(after.replace(ONE_PASS_RECONCILE, COLD_RECONCILE), VERSION).equals(after),
+            "Previous continuation preparation did not restore and upgrade");
         require(transform(before.replace("\n", "\r\n"), VERSION).equals(after.replace("\n", "\r\n")),
             "Stack entry preparation changed newlines");
         reject(before, "changed-version");
@@ -286,14 +332,19 @@ public final class BytecodeStackPreparation {
         require(after.contains("FRAMES.clear(frame, USER_LOCALS_START_INDEX + localOffset)"), "Lost local cleanup");
         require(after.contains("frame.materialize()"), "Lost yield materialization");
         require(!RECONCILE.equals(COLD_RECONCILE), "Missing stale-frame slow path");
+        require(after.contains(LIVE_LOCAL_ROWS), "Missing one-pass live local iteration");
         reject(before.replace("if (frameTag == cachedTag)", "if (frameTag != cachedTag)"), VERSION);
         reject(before.replace("if (frameTag == FrameTags.ILLEGAL)", "if (false)"), VERSION);
+        reject(before.replace(LOCAL_OFFSET_HELPERS, LOCAL_OFFSET_HELPERS.replace("bci < endIndex", "bci <= endIndex")), VERSION);
         reject(before.replace("setLocalValueImpl(frame, localOffset, value, bci)", "setLocalValueImpl(frame, 0, value, bci)"), VERSION);
         for (String kind : new String[]{"Int", "Long", "Float", "Double", "Boolean", "Object"}) {
             reject(before.replace("frame.get" + kind + "(frameIndex)", "frame.get" + kind + "(0)"), VERSION);
         }
         reject(after.replace("THC stale continuation repair v1", "THC stale continuation repair changed"), VERSION);
-        reject(after.replace(COLD_RECONCILE, COLD_RECONCILE.replace(
+        reject(after.replace(ONE_PASS_RECONCILE, ONE_PASS_RECONCILE.replace(
             "CompilerDirectives.transferToInterpreterAndInvalidate();", "")), VERSION);
+        reject(after.replace("bci >= locals[index + LOCALS_OFFSET_END_BCI]", "bci > locals[index + LOCALS_OFFSET_END_BCI]"), VERSION);
+        reject(after.replace("+ ++localOffset", "+ localOffset++"), VERSION);
+        reject(after + COLD_RECONCILE, VERSION);
     }
 }
