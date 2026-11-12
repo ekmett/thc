@@ -162,7 +162,12 @@ public final class DataLayout {
         }
         fields = chosenFields; shape = chosenShape;
         ownedCarrier = reserved ? sample.getClass() : null;
-        constructorClass = reusable == null ? new ConstructorClassIdentity(sample.getClass()) : null;
+        if (reusable == null) constructorClass = new ConstructorClassIdentity(sample.getClass());
+        else {
+            // Reusable factories can share the carrier of an ordinary layout.
+            ConstructorClassIdentity.markShared(sample.getClass());
+            constructorClass = null;
+        }
         nullaryValue = arity == 0 ? sample : null;
         boolean cache = Boolean.getBoolean(BOXED_VALUE_CACHE_PROPERTY) && fieldReps.length == 1 && !hasAggregateFields;
         boolean intlike = cache && id.equals(BOXED_INT_CONSTRUCTOR_ID) && name.equals("I#") && fieldReps[0].equals("IntRep");

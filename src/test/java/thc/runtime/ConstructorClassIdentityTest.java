@@ -73,6 +73,47 @@ class ConstructorClassIdentityTest {
             assertFalse(proof(third).isExclusive()); assertTrue(third.matches(c)); assertFalse(third.matches(a)); assertFalse(third.matches(b));
         }));
     }
+    @Test void reusableNullaryLayoutsInvalidateSharedCarrierMatching() throws Exception {
+        String property = ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY;
+        String previous = System.setProperty(property, "false");
+        try {
+            matching(true, () -> {
+                context("array-based", language -> {
+                    var ordinary = new DataLayout(language, "Ordinary", "Ordinary", new String[0]);
+                    var ordinaryValue = ordinary.allocate();
+                    assertTrue(proof(ordinary).isExclusive());
+                    var target = new MatchRoot(ordinary).getCallTarget();
+                    for (int i = 0; i < 30; i++) {
+                        assertTrue(matches(target, ordinaryValue));
+                        assertFalse(matches(target, null));
+                        assertFalse(matches(target, "foreign"));
+                    }
+                    compile(target);
+
+                    var storage = new DataLayout.Reusable(language, "Shared", "Shared", CoreFields.EMPTY);
+                    var reusable = storage.instantiate();
+                    var reusableValue = reusable.allocate();
+                    assertSame(ordinaryValue.getClass(), reusableValue.getClass());
+                    assertFalse(ordinary.matches(reusableValue));
+                    assertFalse(valid(target), "A reusable owner must invalidate compiled class matching");
+                    assertTrue(reusable.matches(reusableValue));
+                    assertFalse(reusable.matches(ordinaryValue));
+                    assertFalse(matches(target, reusableValue));
+                    assertTrue(matches(target, ordinaryValue));
+                });
+                context("array-based", language -> {
+                    var reusable = new DataLayout.Reusable(language, "Shared", "Shared", CoreFields.EMPTY).instantiate();
+                    var ordinary = new DataLayout(language, "Ordinary", "Ordinary", new String[0]);
+                    assertSame(reusable.allocate().getClass(), ordinary.allocate().getClass());
+                    assertFalse(proof(ordinary).isExclusive());
+                    assertFalse(ordinary.matches(reusable.allocate()));
+                    assertTrue(ordinary.matches(ordinary.allocate()));
+                });
+            });
+        } finally {
+            if (previous == null) System.clearProperty(property); else System.setProperty(property, previous);
+        }
+    }
     private static final class AcrossContexts {}
     private static final class UniformA {}
     private static final class UniformB {}
