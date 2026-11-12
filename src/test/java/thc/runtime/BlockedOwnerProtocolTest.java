@@ -73,6 +73,51 @@ class BlockedOwnerProtocolTest {
         }
     }
 
+    private static final class FreshPublication extends RootNode {
+        final com.oracle.truffle.api.RootCallTarget body;
+        final Object answer;
+        int compiledEntries, lastState;
+        FreshPublication(com.oracle.truffle.api.RootCallTarget body, Object answer) {
+            super(null); this.body = body; this.answer = answer;
+        }
+        final Thunk claim() {
+            var thunk = new Thunk(body, null);
+            synchronized (thunk.getMonitor()) { thunk.setOwner(Thread.currentThread()); thunk.setState(1); }
+            return thunk;
+        }
+        final Object answer(Thunk thunk) {
+            lastState = thunk.getState();
+            if (CompilerDirectives.inCompiledCode()) compiledEntries++;
+            return thunk.getValue();
+        }
+        @Override public String getName() { return "freshThunkPublication"; }
+        @Override public String toString() { return getName(); }
+        @Override public Object execute(VirtualFrame frame) {
+            Thunk thunk = claim();
+            thunk.publishSuccess(answer);
+            return answer(thunk);
+        }
+    }
+    @Test void freshLocalPublicationKeepsItsFirstCompiledValue() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Object expected = new Object();
+                var body = new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Publication executes no guest body"); }
+                }.getCallTarget();
+                var root = new FreshPublication(body, expected);
+                var target = (OptimizedCallTarget) root.getCallTarget();
+                target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                assertSame(expected, Calls.target(target, new Object[0]));
+                assertEquals(2, root.lastState); assertEquals(1, root.compiledEntries);
+                assertTrue(target.isValidLastTier());
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void compiledPublicationWakesNewAndRepeatedPhysicalWaiters() throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")

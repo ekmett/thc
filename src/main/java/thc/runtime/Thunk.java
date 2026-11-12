@@ -52,6 +52,14 @@ public final class Thunk implements Lifted {
     public void setValue(Object value) { this.value = value; }
     public Thread getOwner() { return owner; }
     public void setOwner(Thread owner) { this.owner = owner; }
+    /** Publish a completed evaluation and release its owned inputs atomically. */
+    @TruffleBoundary(transferToInterpreterOnException = false, allowInlining = true)
+    void publishSuccess(Object result) {
+        synchronized (this) {
+            value = result; target = null; environment = null;
+            owner = null; setState(2); notifyUpdate();
+        }
+    }
     /** Caller holds this thunk's monitor. Registration precedes the atomic wait release. */
     void awaitUpdate() throws InterruptedException { hasWaited = true; wait(); }
     /** Caller holds this thunk's monitor. Once contended, retain every later wakeup. */
