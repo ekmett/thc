@@ -98,6 +98,12 @@ class CoreProofJoinTest {
                 var module = map("bindings", list(bind("entry", function)), "instrument", true);
                 var program = Program.prepareCode(language, module, List.of("entry"), 1).newInstance(language);
                 var target = program.entryTarget("entry");
+                var descriptor = target.getRootNode().getFrameDescriptor();
+                int selectors = 0;
+                for (int slot = 0; slot < descriptor.getNumberOfSlots(); slot++) {
+                    if ("<join selector>".equals(descriptor.getSlotName(slot))) selectors++;
+                }
+                assertEquals(1, selectors, "only the recursive join needs a selector slot");
                 var cases = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class);
                 assertTrue(cases.size() >= 3);
                 assertTrue(cases.stream().map(node -> node.binderSlot).distinct().count() < cases.size(),
