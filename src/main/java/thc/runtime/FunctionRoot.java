@@ -647,16 +647,18 @@ public final class FunctionRoot extends GuestRoot {
             Object result;
             try { result = executeInitial(frame, stack.getDepth() >= AstStackScope.MAX_DEPTH, true); }
             finally { stack.setDepth(stack.getDepth() - 1); }
-            if (driver) {
-                SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
-                if (saved != null) {
-                    CompilerDirectives.transferToInterpreter();
-                    if (saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved,
-                        saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, false, invocationMetrics(frame));
-                }
-            }
-            return result;
+            return driver ? finishDriverResult(result, invocationMetrics(frame)) : result;
         } finally { if (driver) stack.setDriving(false); }
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Object finishDriverResult(Object result, Metrics invocation) {
+        SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
+        if (saved != null) {
+            CompilerDirectives.transferToInterpreter();
+            if (saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved,
+                saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, false, invocation);
+        }
+        return result;
     }
     private Object executeInitial(VirtualFrame frame, boolean spill, boolean needsCallState) {
         boolean deferredBloom = false;
