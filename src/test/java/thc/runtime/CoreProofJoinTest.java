@@ -138,6 +138,80 @@ class CoreProofJoinTest {
         }
     }
 
+    @Test void ordinarySelfScratchSharesJoinBodiesWithoutReplayingSavedOperands() throws Exception {
+        java.util.function.Function<String, Map<String, Object>> fnArg = id ->
+                map("id", id, "name", id, "lifted", true, "rep", closure);
+        java.util.function.Function<String, List<Object>> fv = id -> list("var", id, meta(closure));
+        var a = list("case", prim("+#", v("aNumber"), n(33)), "original",
+                list(list("default", null, list(),
+                        let(false, List.of(bind("kept", lam(List.of("increment"),
+                                prim("+#", v("original"), v("increment"))))),
+                                call("b", fv.apply("kept"), v("aNumber"))))),
+                with(meta(), "binder", arg("original")));
+        var b = call("entry", call("pause", v("bNumber")),
+                call("pause", call("finish", n(3))), fv.apply("pause"));
+        var bFunction = list("lam", list(fnArg.apply("finish"), arg("bNumber")), b,
+                map("rep", closure, "resultRep", longProof));
+        var body = choose(prim("==#", v("remaining"), n(0)), v("answer"),
+                let(true, List.of(bind("a", lam(List.of("aNumber"), a), 1),
+                        bind("b", bFunction, 2)), call("a", n(7))));
+        var function = list("lam", list(arg("remaining"), arg("answer"), fnArg.apply("pause")),
+                body, map("rep", closure, "resultRep", longProof));
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                // Ordinary lowering is essential: reusable code excludes AstTailApplication.
+                var program = new Program(language,
+                        map("bindings", list(bind("entry", function)), "instrument", true));
+                var target = program.entryTarget("entry");
+                var transfers = NodeUtil.findAllNodeInstances(target.getRootNode(), AstTailApplication.class);
+                assertEquals(1, transfers.size(), "Exercise the original self-tail lowerer");
+                var scratchField = AstTailApplication.class.getDeclaredField("temporaries");
+                scratchField.setAccessible(true);
+                int[] scratch = (int[]) scratchField.get(transfers.getFirst());
+                var cases = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class);
+                assertTrue(cases.stream().anyMatch(node -> node.binderSlot == scratch[0]),
+                        "The self operand must reuse a sibling join body's case storage");
+                var effects = new ArrayList<String>();
+                var pause = new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        long value = (Long) frame.getArguments()[1];
+                        effects.add("enter " + value);
+                        if (value != 7L) return value;
+                        var request = threads.send(threads.currentIdentity(), "self operand pause");
+                        assertSame(request, GuestThreads.pollCurrent(this, false));
+                        return new AstCapture(request, SynchronousMasking.current(this))
+                                .append((saved, input) -> { effects.add("resume " + value); return 0L; })
+                                .freeze(this, frame.materialize());
+                    }
+                };
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(target,
+                        new Object[]{0L, 1L, -1L, new Closure(null, 1, pause.getCallTarget())}));
+                assertEquals(List.of("enter 7"), effects);
+                assertEquals(0L, count(program, "selfTailReentries"));
+                assertSame(target.getRootNode(), saved.getSourceRoot());
+                var frameField = AstContinuation.class.getDeclaredField("frame"); frameField.setAccessible(true);
+                var savedFrame = (com.oracle.truffle.api.frame.MaterializedFrame) frameField.get(saved);
+                saved.asyncRequest().acknowledge();
+                var resumed = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) { return force.drainStack(saved, null); }
+                }.getCallTarget().call();
+                // The escaped closure keeps 7 + 33 while its old slot becomes self scratch.
+                assertEquals(43L, resumed);
+                assertEquals(List.of("enter 7", "resume 7", "enter 43"), effects);
+                assertEquals(1L, count(program, "selfTailReentries"));
+                for (int slot : scratch)
+                    assertEquals(com.oracle.truffle.api.frame.FrameSlotKind.Illegal.tag, savedFrame.getTag(slot),
+                            "Completed self transfer releases its shared scratch");
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+            } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
+
     @Test void compiledRecursiveJoinPollsWithoutCallingAnotherRoot() throws Exception {
         var step = choose(prim("<=#", v("n"), n(0)), v("acc"), call("loop", prim("-#", v("n"), n(1)), prim("+#", v("acc"), n(1))));
         var body = let(true, List.of(bind("loop", lam(List.of("n", "acc"), step), 2)), call("loop", v("input"), n(0)));
