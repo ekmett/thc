@@ -3,16 +3,197 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.instrumentation.EventContext;
+import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
 import org.junit.jupiter.api.Test;
+import org.graalvm.polyglot.Context;
+import thc.Language;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OperandRetentionTest {
+    @Test void scalarIndexLoweringKeepsStaticAddressOnFirstCompiledEntryAtDefaultBudget() throws Exception {
+        var address = Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true);
+        var index = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
+        for (String name : List.of("indexCharOffAddr#", "indexWord16OffAddr#", "indexInt16OffAddr#")) {
+            String carrier = name.equals("indexCharOffAddr#") ? "WordRep" : name.equals("indexWord16OffAddr#") ? "Word16Rep" : "Int16Rep";
+            var result = Map.of("kind", "long", "primReps", List.of(carrier), "evaluated", true);
+            var read = List.of("app", List.of("prim", name),
+                List.of(List.of("lit", "string-bytes", "ffff", Map.of("rep", address)),
+                    List.of("lit", "int", "0", Map.of("rep", index))),
+                List.of(false, false), false, false, Map.of("rep", result));
+            var module = Map.<String, Object>of("instrument", true, "constructors", List.of(), "bindings", List.of(
+                Map.of("id", "entry", "name", "entry", "arity", 1, "lifted", true,
+                    "expr", List.of("lam", List.of(Map.of("id", "unused", "lifted", false, "rep", index)),
+                        read, Map.of("resultRep", result)))));
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var program = new Program(language, module, true, false);
+                    var target = program.entryTarget("entry");
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), name);
+                    long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                    Object answer = Calls.target(target, new Object[]{0L, 0L});
+                    if (name.equals("indexCharOffAddr#")) assertEquals(255L, assertInstanceOf(Long.class, answer));
+                    else assertEquals(name.equals("indexInt16OffAddr#") ? -1 : 65535, assertInstanceOf(Integer.class, answer));
+                    assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                } finally { context.leave(); }
+            }
+        }
+    }
+    private static final class IndexOperand extends Expr {
+        Object value;
+        final List<String> order;
+        final String name;
+        final boolean cut, delimited;
+        IndexOperand(Object value, List<String> order, String name, boolean cut, boolean delimited) {
+            this.value = value; this.order = order; this.name = name; this.cut = cut; this.delimited = delimited;
+        }
+        @Override public Object execute(VirtualFrame frame) {
+            order.add(name);
+            if (delimited) throw new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                SynchronousMasking.current(this), this);
+            if (cut) throw new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this));
+            return value;
+        }
+    }
+    private static final class IndexRoot extends GuestRoot {
+        @Child private IndexManagedScalarAddress body;
+        private final boolean integer;
+        private final SourceSection source;
+        IndexRoot(Language language, ManagedAddressRead operation, Expr address, Expr element, boolean integer) {
+            super(language, new FrameLayout().build());
+            this.body = new IndexManagedScalarAddress(operation, address, element); this.integer = integer;
+            source = address.getSourceSection();
+        }
+        @Override public SourceSection getSourceSection() { return source; }
+        @Override public long bloom(VirtualFrame frame) { return 0L; }
+        @Override public Object execute(VirtualFrame frame) {
+            try { if (integer) return body.executeInt(frame); return body.executeLong(frame); }
+            catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+        }
+    }
+    @Test void scalarIndexSavesOnlyRemainingOperandsAcrossSuccessiveCuts() throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var attachment = context.getEngine().getInstruments().get("thc-activation-test")
+                    .lookup(AstInstrumentationTest.Attachment.class);
+                for (var operation : List.of(ManagedAddressRead.CHAR, ManagedAddressRead.WORD16, ManagedAddressRead.INT16)) {
+                    var order = new ArrayList<String>();
+                    var events = new ArrayList<String>();
+                    var source = Source.newBuilder("thc", "a+i", "scalar-index-operands.hs").build();
+                    var bytes = ManagedAddress.fromByteArray(new byte[]{(byte) 0xff, (byte) 0xff});
+                    var address = new IndexOperand(bytes, order, "address", true, false);
+                    var element = new IndexOperand(0L, order, "element", true, false);
+                    address.setCoreSourceLocation(new CoreSourceLocation(source.createSection(0, 1), List.of()));
+                    element.setCoreSourceLocation(new CoreSourceLocation(source.createSection(2, 1), List.of()));
+                    var root = new IndexRoot(language, operation, address, element, operation.isInt());
+                    var binding = attachment.attachStatements(source, new ExecutionEventListener() {
+                        @Override public void onEnter(EventContext event, VirtualFrame frame) {
+                            events.add(event.getInstrumentedSourceSection().getCharacters().toString());
+                        }
+                        @Override public void onReturnValue(EventContext event, VirtualFrame frame, Object value) {}
+                        @Override public void onReturnExceptional(EventContext event, VirtualFrame frame, Throwable failure) {}
+                    });
+                    try {
+                        var first = assertInstanceOf(AstContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                        assertEquals(List.of("address"), order);
+                        var saved = assertInstanceOf(AstContinuation.class, first.continueWith(bytes));
+                        assertEquals(List.of("address", "element"), order);
+                        Object answer = saved.continueWith(0L);
+                        if (operation.isInt()) assertEquals(operation == ManagedAddressRead.INT16 ? -1 : 65535, assertInstanceOf(Integer.class, answer));
+                        else assertEquals(255L, assertInstanceOf(Long.class, answer));
+                        assertEquals(List.of("address", "element"), order, "Neither completed operand is reevaluated");
+                        assertEquals(List.of("a", "i"), events, "Original child statement events retain order across both cuts");
+                        assertThrows(RuntimeFault.class, () -> saved.continueWith(0L));
+                    } finally { binding.dispose(); }
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void scalarIndexDelimitedRecipeKeepsSharedAddressAndExactEnteredCarrier() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var order = new ArrayList<String>();
+                var bytes = ManagedAddress.fromByteArray(new byte[]{41, 42});
+                var address = new IndexOperand(bytes, order, "address", false, false);
+                var element = new IndexOperand(0L, order, "element", false, true);
+                var root = new IndexRoot(language, ManagedAddressRead.CHAR, address, element, false);
+                var cut = assertThrows(DelimitedCut.class, () -> Calls.target(root.getCallTarget(), new Object[]{0L}));
+                assertEquals(List.of("address", "element"), order);
+                assertEquals(1, cut.getFrames().size());
+                var recipe = cut.getFrames().getFirst().getStep();
+                for (long index : new long[]{0, 1}) {
+                    var copy = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, root.getFrameDescriptor());
+                    Object answer = recipe.resume(copy, new DelimitedResume(index), MaskingState.UNMASKED, null);
+                    assertEquals(index == 0 ? 41L : 73L, assertInstanceOf(Long.class, answer));
+                    bytes.writeWord8(1, 73);
+                }
+                assertEquals(List.of("address", "element"), order, "Repeated invocations share heap values without replaying operands");
+                var wrong = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, root.getFrameDescriptor());
+                assertThrows(RuntimeFault.class, () -> recipe.resume(wrong, new DelimitedResume(0), MaskingState.UNMASKED, null));
+                order.clear();
+                var addressRoot = new IndexRoot(language, ManagedAddressRead.CHAR,
+                    new IndexOperand(bytes, order, "address", false, true),
+                    new IndexOperand(0L, order, "element", false, false), false);
+                var addressCut = assertThrows(DelimitedCut.class, () -> Calls.target(addressRoot.getCallTarget(), new Object[]{0L}));
+                assertEquals(List.of("address"), order);
+                var addressRecipe = addressCut.getFrames().getFirst().getStep();
+                for (int invocation = 0; invocation < 2; invocation++) {
+                    var copy = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, addressRoot.getFrameDescriptor());
+                    assertEquals(41L, addressRecipe.resume(copy, new DelimitedResume(bytes), MaskingState.UNMASKED, null));
+                }
+                assertEquals(List.of("address", "element", "element"), order,
+                    "Only the remaining element executes for each captured-address invocation");
+            } finally { context.leave(); }
+        }
+    }
+    @Test void scalarIndexRejectsWrongResumedOperandsAndPreservesEnteredRoute() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var order = new ArrayList<String>();
+                var bytes = ManagedAddress.fromByteArray(new byte[]{1});
+                var address = new IndexOperand(bytes, order, "address", true, false);
+                var element = new IndexOperand(0L, order, "element", false, false);
+                var root = new IndexRoot(language, ManagedAddressRead.CHAR, address, element, false);
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                assertTrue(assertThrows(RuntimeFault.class, () -> saved.continueWith(1L)).getMessage().contains("Addr#"));
+                assertEquals(List.of("address"), order, "Invalid resumed address never evaluates the element");
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(bytes));
+                order.clear();
+                var wrongRoute = new IndexRoot(language, ManagedAddressRead.CHAR,
+                    new IndexOperand(bytes, order, "address", false, false),
+                    new IndexOperand(0L, order, "element", true, false), true);
+                var wrong = assertInstanceOf(AstContinuation.class, Calls.target(wrongRoute.getCallTarget(), new Object[]{0L}));
+                assertTrue(assertThrows(RuntimeFault.class, () -> wrong.continueWith(0L)).getMessage().contains("narrow address read"));
+                assertEquals(List.of("address", "element"), order);
+                assertThrows(RuntimeFault.class, () -> wrong.continueWith(0L));
+            } finally { context.leave(); }
+        }
+    }
     private static VirtualFrame frame(int slots) {
         var builder = FrameDescriptor.newBuilder();
         for (int i = 0; i < slots; i++) builder.addSlot(FrameSlotKind.Illegal, "slot " + i, null);

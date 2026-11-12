@@ -1158,8 +1158,12 @@ public final class Program implements ExecutableProgram {
         Object head = at(expr, 1) instanceof List<?> value ? at(value, 0) : null;
         var metadata = CoreRepresentations.metadata(expr);
         boolean foreign = "var".equals(head) && metadata != null && metadata.containsKey("foreignCall");
+        // This node saves its exact remaining operand/read on a cut, keeping
+        // ordinary scalar operands in Java locals rather than frame scratch slots.
+        boolean scalarIndex = "prim".equals(head) &&
+            IndexManagedScalarAddress.operation((String) at((List<?>) at(expr, 1), 1)) != null;
         // A foreign operand can suspend before the call, just like a primop operand.
-        OperandBuilder operands = capturesContinuations && "app".equals(at(expr, 0)) && (Arrays.asList("prim", "con").contains(head) || foreign) ?
+        OperandBuilder operands = capturesContinuations && !scalarIndex && "app".equals(at(expr, 0)) && (Arrays.asList("prim", "con").contains(head) || foreign) ?
             new OperandBuilder(scope.layout) : null;
         lowering().operands = operands;
         Expr result;
@@ -1500,6 +1504,11 @@ public final class Program implements ExecutableProgram {
         if (narrow != null) return new NarrowScalarExpression(name, narrow, args);
         Expr floating = FloatingPrimitives.floatingPrimitive(name, args);
         if (floating != null) return floating;
+        ManagedAddressRead scalarIndex = IndexManagedScalarAddress.operation(name);
+        if (scalarIndex != null) {
+            requirePrimitiveArity(name, args, 2);
+            return new IndexManagedScalarAddress(scalarIndex, args[0], args[1]);
+        }
         return switch (name) {
             case "reallyUnsafePtrEquality#" -> { requirePrimitiveArity(name, args, 2); yield new PointerEquality(args[0], args[1]); }
             case "raise#" -> { requirePrimitiveArity(name, args, 1); yield new RaiseException(args[0], someException); }
@@ -1522,15 +1531,10 @@ public final class Program implements ExecutableProgram {
                 requirePrimitiveArity(name, args, 2);
                 yield name.equals("minusAddr#") ? new SubtractManagedAddress(args[0], args[1]) : new RemainderManagedAddress(args[0], args[1]);
             }
-            case "plusAddr#", "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> {
+            case "plusAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> {
                 requirePrimitiveArity(name, args, 2);
                 yield name.equals("plusAddr#") ? new PlusManagedAddress(args[0], args[1]) :
-                    name.equals("indexCharOffAddr#") ? new IndexManagedScalarAddress(ManagedAddressRead.CHAR, args[0], args[1]) :
                     new IndexManagedByte(name.equals("indexInt8OffAddr#"), args[0], args[1]);
-            }
-            case "indexWord16OffAddr#", "indexInt16OffAddr#" -> {
-                requirePrimitiveArity(name, args, 2);
-                yield new IndexManagedScalarAddress(name.equals("indexInt16OffAddr#") ? ManagedAddressRead.INT16 : ManagedAddressRead.WORD16, args[0], args[1]);
             }
             default -> new Primitive(name, args);
         };
