@@ -111,8 +111,8 @@ public final class DataLayout {
         void initializeDouble(DataLayout owner, DataValue value, int index, double field) {
             checkOwner(owner); owner.checkField(value, index); fields[index].initializeDouble(value, field);
         }
-        void restore(DataLayout owner, DataValue value, int index, Frame frame, int slot) {
-            checkOwner(owner); owner.checkField(value, index); fields[index].restore(value, frame, slot);
+        void restore(DataLayout owner, DataValue value, int index, Frame frame, int slot, boolean objectSlot) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].restore(value, frame, slot, objectSlot);
         }
         void initializeVector(DataLayout owner, DataValue value, int index, Frame frame, int[] slots, int offset) {
             checkOwner(owner); owner.checkField(value, index); fields[index].vector.initialize(value, frame, slots, offset);
@@ -393,7 +393,10 @@ public final class DataLayout {
     public long readLong(DataValue value, int index) { checkField(value, index); return fields[index].readLong(value); }
     public float readFloat(DataValue value, int index) { checkField(value, index); return fields[index].readFloat(value); }
     public double readDouble(DataValue value, int index) { checkField(value, index); return fields[index].readDouble(value); }
-    public void restore(DataValue value, int index, Frame frame, int slot) { checkField(value, index); fields[index].restore(value, frame, slot); }
+    public void restore(DataValue value, int index, Frame frame, int slot) { restore(value, index, frame, slot, false); }
+    void restore(DataValue value, int index, Frame frame, int slot, boolean objectSlot) {
+        checkField(value, index); fields[index].restore(value, frame, slot, objectSlot);
+    }
     @TruffleBoundary public String describe(DataValue value) {
         if (!owns(value)) throw fault("Constructor value does not match layout");
         if (arity == 0) return name;
@@ -478,13 +481,17 @@ public final class DataLayout {
         long readLong(DataValue value) { if (kind != LONG) throw fault("Constructor field is not primitive Long"); return property.getLong(value); }
         float readFloat(DataValue value) { if (kind != FLOAT) throw fault("Constructor field is not primitive Float"); return property.getFloat(value); }
         double readDouble(DataValue value) { if (kind != DOUBLE) throw fault("Constructor field is not primitive Double"); return property.getDouble(value); }
-        void restore(DataValue value, Frame frame, int slot) {
+        void restore(DataValue value, Frame frame, int slot, boolean objectSlot) {
             switch (kind) {
                 case INT -> FrameAccess.writeInt(frame, slot, narrowInteger.read(property, value));
                 case LONG -> FrameAccess.writeLong(frame, slot, property.getLong(value));
                 case FLOAT -> FrameAccess.writeFloat(frame, slot, property.getFloat(value));
                 case DOUBLE -> FrameAccess.writeDouble(frame, slot, property.getDouble(value));
-                case OBJECT -> FrameAccess.write(frame, slot, property.getObject(value));
+                case OBJECT -> {
+                    Object field = property.getObject(value);
+                    if (objectSlot) frame.setObject(slot, field);
+                    else FrameAccess.write(frame, slot, field);
+                }
                 case VOID -> FrameAccess.write(frame, slot, thc.runtime.Unit.INSTANCE);
                 case VECTOR -> throw fault("Vector constructor field requires a typed destination");
             }

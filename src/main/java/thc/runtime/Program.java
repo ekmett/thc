@@ -1768,6 +1768,7 @@ public final class Program implements ExecutableProgram {
             var metadata = CoreRepresentations.alternativeBinders(alt);
             boolean[] strict = kind.equals("data") ? strictConstructorFields((String) alt.get(1), ids.size()) : null;
             int[][] vectorFields = new int[layout != null ? layout.getArity() : ids.size()][];
+            boolean[] objectFields = null;
             List<Integer> slots = new ArrayList<>();
             for (int index = 0; index < ids.size(); index++) {
                 String id = ids.get(index);
@@ -1805,8 +1806,16 @@ public final class Program implements ExecutableProgram {
                         int[] lanes = {child.layout.bind(id + " constructor vector", FrameSlotKind.Object)};
                         vectorFields[physical] = lanes;
                         slots.add(child.bindTuple(id, proof, lanes).slot);
-                    } else slots.add(child.bind(id, layout != null && layout.isLong(physical), proof,
-                        false, null, null, FrameLayout.carrierKind(proof)).slot);
+                    } else {
+                        int slot = child.bind(id, layout != null && layout.isLong(physical), proof,
+                            false, null, null, FrameLayout.carrierKind(proof)).slot;
+                        // A borrowed frame keeps the owning function's allocation-time Object slots.
+                        if (layout != null && layout.compactPointer(physical) && child.layout.referenceSlot(slot)) {
+                            if (objectFields == null) objectFields = new boolean[layout.getArity()];
+                            objectFields[physical] = true;
+                        }
+                        slots.add(slot);
+                    }
                 }
             }
             int tag = switch (kind) {
@@ -1818,8 +1827,9 @@ public final class Program implements ExecutableProgram {
             Expr body = caseArm((List<Object>) alt.get(3), child, tail, alternatives.length, substantialSiblings);
             alternatives[a] = reusableCode && layout != null ?
                 new Alternative(tag, layout.reusableStorage(), ints(slots), body, vectorFields, false,
-                    scope.programSlot, required(constructorIndices, layout.getId())) :
-                new Alternative(tag, value, ints(slots), body, vectorFields, !reusableCode && alternatives.length > 1);
+                    scope.programSlot, required(constructorIndices, layout.getId()), objectFields) :
+                new Alternative(tag, value, ints(slots), body, vectorFields, !reusableCode && alternatives.length > 1,
+                    -1, -1, objectFields);
             int[] dead = CoreFreeVariables.unusedConstructorReferences(alt, layout);
             for (int i = 0; i < dead.length; i++) dead[i] = slots.get(dead[i]);
             child.layout.clearInitially(dead);

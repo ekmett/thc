@@ -24,6 +24,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.RepresentationTestSupport.*;
 
 /** Transport controls: explicit extraction here is not the real-bailout acceptance test. */
 class SameFrameCaseTest {
@@ -243,6 +244,67 @@ class SameFrameCaseTest {
                 }
                 assertEquals(1, state.effects); assertEquals(1, state.compiled);
                 assertSame(target, root.getCallTarget()); assertTrue(target.isValidLastTier()); assertTrue(side.isValidLastTier());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void firstCompiledConstructorCaseRestoresTheBorrowedFrame() throws Exception {
+        var boxed = list("BoxedRep (Just Lifted)");
+        var data = map("kind", "data", "primReps", boxed, "evaluated", true);
+        var object = map("kind", "object", "primReps", boxed, "evaluated", false);
+        var closure = map("kind", "closure", "primReps", boxed, "evaluated", true);
+        var input = map("id", "input", "lifted", true, "rep", data);
+        var payload = map("id", "payload", "lifted", true, "rep", object);
+        var match = list("data", "Box", list("payload"), list("var", "payload", map("rep", object)),
+            map("binders", list(payload)));
+        var body = list("case", list("var", "input", map("rep", data)), "whole", list(match),
+            map("rep", object, "binder", map("id", "whole", "lifted", true, "rep", data)));
+        var box = map("id", "Box", "name", "Box", "kind", "boxed", "arity", 1,
+            "fieldReps", list(boxed), "fieldTypes", list(object), "fieldLifted", list(true), "strictFields", list(false));
+        var entry = map("id", "entry", "name", "entry", "lifted", true, "rep", closure,
+            "expr", list("lam", list(input), body, map("rep", closure, "resultRep", object)));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, map("constructors", list(box), "bindings", list(entry)), false);
+                var root = program.entryTarget("entry").getRootNode();
+                var selection = NodeUtil.findFirstNodeInstance(root, Case.class);
+                var descriptor = root.getFrameDescriptor();
+                int inputSlot = FrameLayout.BLOOM_FILTER + 1;
+                assertEquals("input", descriptor.getSlotName(inputSlot));
+                int payloadSlot = selection.alternatives[0].getFields()[0];
+                assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(payloadSlot));
+                int[] compiled = {0};
+                Expr original = selection.alternatives[0].getBody();
+                original.replace(new Expr() {
+                    @Child private Expr value = original;
+                    @Override public Object execute(VirtualFrame frame) {
+                        if (CompilerDirectives.inCompiledCode()) compiled[0]++;
+                        return value.execute(frame);
+                    }
+                }.proven(original.getRepresentation()));
+                var region = selection.replace(new AstSameFrameArm(selection));
+                assertTrue(AstSameFrameArm.extract(root));
+                var side = (OptimizedCallTarget) targets(region)[0];
+                compile(side);
+                assertFalse(side.wasExecuted());
+                var layout = program.constructorLayout("Box");
+                Object marker = Long.valueOf(1_000_000L);
+                var value = layout.create(new Object[]{marker});
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[0], descriptor);
+                frame.setObject(inputSlot, value);
+                assertSame(marker, Calls.target(side, new Object[]{frame, null, 0}));
+                assertSame(marker, frame.getObject(payloadSlot));
+                assertEquals(1, compiled[0]);
+                assertTrue(side.isValidLastTier());
+
+                var generic = FrameDescriptor.newBuilder();
+                int genericSlot = generic.addSlot(FrameSlotKind.Illegal, null, null);
+                var genericFrame = Truffle.getRuntime().createMaterializedFrame(new Object[0], generic.build());
+                layout.restore(value, 0, genericFrame, genericSlot);
+                assertEquals(FrameSlotKind.Long, genericFrame.getFrameDescriptor().getSlotKind(genericSlot));
+                assertEquals(1_000_000L, genericFrame.getLong(genericSlot));
             } finally { context.leave(); }
         }
     }
