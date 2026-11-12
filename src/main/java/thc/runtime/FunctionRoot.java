@@ -137,10 +137,15 @@ public final class FunctionRoot extends GuestRoot {
         }
     }
 
-    /** Retain this physical caller while bypassing already-published recovery forwarders. */
-    @TruffleBoundary private DirectCallNode compressRecoveredEntry(DirectCallNode observed) {
+    /** Caller-side entry can follow publication without claiming or executing this root. */
+    @TruffleBoundary RootCallTarget publishedRecoveryTarget() {
+        DirectCallNode observed = recoveredEntry;
+        return observed == null ? null : recoveryEndpoint(observed);
+    }
+
+    private RootCallTarget recoveryEndpoint(DirectCallNode observed) {
         Object owner = compilationOwner();
-        if (owner == null || owner != thc.Language.currentState(this).getCompilationOwner()) return observed;
+        if (owner == null || owner != thc.Language.currentState(this).getCompilationOwner()) return null;
         FunctionRoot source = this;
         DirectCallNode edge = observed;
         RootCallTarget endpoint;
@@ -150,13 +155,19 @@ public final class FunctionRoot extends GuestRoot {
                     !(target.getRootNode() instanceof FunctionRoot next) ||
                     !source.isSelf(target) || next.compilationOwner() != owner || !next.recoveryBoundary ||
                     next.getFrameDescriptor() != getFrameDescriptor() ||
-                    next.budgetGeneration <= source.budgetGeneration) return observed;
+                    next.budgetGeneration <= source.budgetGeneration) return null;
             endpoint = target;
             edge = next.recoveredEntry;
             if (edge == null) break;
             source = next;
         }
-        if (endpoint == observed.getCallTarget()) return observed;
+        return endpoint;
+    }
+
+    /** Retain this physical caller while bypassing already-published recovery forwarders. */
+    @TruffleBoundary private DirectCallNode compressRecoveredEntry(DirectCallNode observed) {
+        RootCallTarget endpoint = recoveryEndpoint(observed);
+        if (endpoint == null || endpoint == observed.getCallTarget()) return observed;
         DirectCallNode prepared = DirectCallNode.create(endpoint);
         return atomic(() -> {
             if (recoveredEntry == observed) {
