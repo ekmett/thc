@@ -114,33 +114,37 @@ final class BytecodeContinuations {
     @TruffleBoundary static void preflightWait(Object value) {
         ContinuationVisited seen = null;
         Object first = null, second = null, third = null;
-        for (;;) {
-            if (value != null) {
-                if (seen == null) {
-                    if (value == first || value == second || value == third)
-                        throw fault("Suspended guest dependency cycle");
-                    if (first == null) first = value;
-                    else if (second == null) second = value;
-                    else if (third == null) third = value;
-                    else {
-                        seen = new ContinuationVisited();
-                        seen.add(first); seen.add(second); seen.add(third); seen.add(value);
-                        first = null; second = null; third = null;
-                    }
-                } else if (!seen.add(value)) throw fault("Suspended guest dependency cycle");
+        try {
+            for (;;) {
+                if (value != null) {
+                    if (seen == null) {
+                        if (value == first || value == second || value == third)
+                            throw fault("Suspended guest dependency cycle");
+                        if (first == null) first = value;
+                        else if (second == null) second = value;
+                        else if (third == null) third = value;
+                        else {
+                            seen = ContinuationVisited.acquire();
+                            seen.add(first); seen.add(second); seen.add(third); seen.add(value);
+                            first = null; second = null; third = null;
+                        }
+                    } else if (!seen.add(value)) throw fault("Suspended guest dependency cycle");
+                }
+                if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
+                else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
+                else if (value instanceof Force.DriverWait driver) value = driver.segment;
+                else if (value instanceof Thunk thunk) value = thunk.getState() == 5 ? thunk.getValue() : null;
+                else if (value instanceof CallSegment segment) value = segment.getState() == 5 ? segment.getValue() : null;
+                else if (value instanceof ContinuationResult saved) {
+                    preflight(saved);
+                    value = saved.getResult();
+                } else if (value instanceof SavedGuestContinuation saved) {
+                    preflight(saved);
+                    value = saved.getYielded();
+                } else return;
             }
-            if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
-            else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
-            else if (value instanceof Force.DriverWait driver) value = driver.segment;
-            else if (value instanceof Thunk thunk) value = thunk.getState() == 5 ? thunk.getValue() : null;
-            else if (value instanceof CallSegment segment) value = segment.getState() == 5 ? segment.getValue() : null;
-            else if (value instanceof ContinuationResult saved) {
-                preflight(saved);
-                value = saved.getResult();
-            } else if (value instanceof SavedGuestContinuation saved) {
-                preflight(saved);
-                value = saved.getYielded();
-            } else return;
+        } finally {
+            if (seen != null) seen.release();
         }
     }
     @TruffleBoundary private static void claim(ContinuationResult saved) {

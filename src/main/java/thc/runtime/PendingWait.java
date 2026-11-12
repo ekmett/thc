@@ -88,29 +88,33 @@ public final class PendingWait extends AbstractTruffleException implements Inter
     @TruffleBoundary private static PendingWait findSavedWait(Object value) {
         ContinuationVisited seen = null;
         Object first = null, second = null, third = null;
-        for (;;) {
-            if (value instanceof PendingWait pending) return pending;
-            // Only carriers with successors need cycle membership.
-            if (!(value instanceof ThunkSuspended) && !(value instanceof CallSegmentSuspended) &&
-                !(value instanceof SavedGuestContinuation) && !(value instanceof ContinuationResult)) return null;
-            if (value != null) {
-                if (seen == null) {
-                    if (value == first || value == second || value == third)
-                        throw new RuntimeFault("Suspended guest dependency cycle");
-                    if (first == null) first = value;
-                    else if (second == null) second = value;
-                    else if (third == null) third = value;
-                    else {
-                        seen = new ContinuationVisited();
-                        seen.add(first); seen.add(second); seen.add(third); seen.add(value);
-                        first = null; second = null; third = null;
-                    }
-                } else if (!seen.add(value)) throw new RuntimeFault("Suspended guest dependency cycle");
+        try {
+            for (;;) {
+                if (value instanceof PendingWait pending) return pending;
+                // Only carriers with successors need cycle membership.
+                if (!(value instanceof ThunkSuspended) && !(value instanceof CallSegmentSuspended) &&
+                    !(value instanceof SavedGuestContinuation) && !(value instanceof ContinuationResult)) return null;
+                if (value != null) {
+                    if (seen == null) {
+                        if (value == first || value == second || value == third)
+                            throw new RuntimeFault("Suspended guest dependency cycle");
+                        if (first == null) first = value;
+                        else if (second == null) second = value;
+                        else if (third == null) third = value;
+                        else {
+                            seen = ContinuationVisited.acquire();
+                            seen.add(first); seen.add(second); seen.add(third); seen.add(value);
+                            first = null; second = null; third = null;
+                        }
+                    } else if (!seen.add(value)) throw new RuntimeFault("Suspended guest dependency cycle");
+                }
+                if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
+                else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
+                else if (value instanceof ContinuationResult saved) value = saved.getResult();
+                else value = ((SavedGuestContinuation) value).getYielded();
             }
-            if (value instanceof ThunkSuspended suspended) value = suspended.getThunk().getValue();
-            else if (value instanceof CallSegmentSuspended suspended) value = suspended.getSegment().getValue();
-            else if (value instanceof ContinuationResult saved) value = saved.getResult();
-            else value = ((SavedGuestContinuation) value).getYielded();
+        } finally {
+            if (seen != null) seen.release();
         }
     }
 }

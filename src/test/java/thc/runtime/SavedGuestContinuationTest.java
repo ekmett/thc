@@ -912,17 +912,77 @@ class SavedGuestContinuationTest {
         var before = order.stream().mapToInt(edge -> edge.reads).toArray();
         start.nested = () -> { start.nested = null; inspect.accept(start); };
         inspect.accept(start);
-        for (int i = 0; i < order.size(); i++)
-            assertEquals(before[i] + (i < 4 ? 2 : 0), order.get(i).reads);
         var last = order.get(3);
+        last.nested = () -> {
+            last.nested = null;
+            inspect.accept(start);
+            // The outer walk still owns its earlier membership after the nested walk finishes.
+            last.next = start;
+        };
+        var nestedCycle = assertThrows(RuntimeFault.class, () -> inspect.accept(start));
+        assertEquals("Suspended guest dependency cycle", nestedCycle.getMessage());
+        last.next = null;
+        for (int i = 0; i < order.size(); i++)
+            assertEquals(before[i] + (i < 4 ? 4 : 0), order.get(i).reads);
         last.failure = new RuntimeFault("successor inspection failed");
         assertSame(last.failure, assertThrows(RuntimeFault.class, () -> inspect.accept(start)));
         last.failure = null;
         inspect.accept(start);
         for (int i = 0; i < order.size(); i++)
-            assertEquals(before[i] + (i < 4 ? 4 : 0), order.get(i).reads,
+            assertEquals(before[i] + (i < 4 ? 6 : 0), order.get(i).reads,
                 "A failed inspection must not retain membership for a later call");
     }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void dependencyInspectionReusesOnlyClearedBoundedScratch(boolean preflight) throws ReflectiveOperationException {
+        var field = ContinuationVisited.class.getDeclaredField("SCRATCH");
+        field.setAccessible(true);
+        var scratch = (ThreadLocal<?>) field.get(null);
+        java.util.function.Consumer<Object> inspect = preflight ? BytecodeContinuations::preflightWait
+            : value -> assertNull(PendingWait.of(value));
+        scratch.remove();
+        Object[] firstTable;
+        try {
+            try (var first = Main.executionContext()) {
+                first.initialize("thc"); first.enter();
+                try {
+                    inspect.accept(savedChain(Language.currentState(), 90, null));
+                    firstTable = assertInstanceOf(Object[].class, scratch.get());
+                    assertEquals(256, firstTable.length);
+                    for (Object key : firstTable) assertNull(key);
+                } finally { first.leave(); }
+            }
+            try (var second = Main.executionContext()) {
+                second.initialize("thc"); second.enter();
+                try {
+                    var state = Language.currentState();
+                    var failure = new RuntimeFault("successor inspection failed");
+                    var terminal = new SavedGuestContinuation() {
+                        @Override public Object getSourceRoot() { return state; }
+                        @Override public Object getIdentity() { return this; }
+                        @Override public Object getYielded() {
+                            assertNull(scratch.get(), "An active table must be absent from the cache");
+                            throw failure;
+                        }
+                        @Override public Object continueWith(Object input) { return fail("Inspection resumed a saved body"); }
+                    };
+                    assertSame(failure, assertThrows(RuntimeFault.class,
+                        () -> inspect.accept(savedChain(state, 4, terminal))));
+                    assertSame(firstTable, scratch.get());
+                    for (Object key : firstTable) assertNull(key);
+                    inspect.accept(savedChain(state, 256, null));
+                    assertNull(scratch.get(), "An oversized table must be discarded");
+                } finally { second.leave(); }
+            }
+        } finally { scratch.remove(); }
+    }
+
+    private static Object savedChain(Object root, int length, Object next) {
+        for (int i = 0; i < length; i++)
+            next = new Saved(root, next, input -> fail("Inspection resumed a saved body"));
+        return next;
+    }
+
     @Test void dependencyCycleRejectsBeforeAnyBoundaryChangesOwnership() {
         try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();

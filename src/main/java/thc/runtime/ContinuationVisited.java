@@ -2,11 +2,37 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import java.util.Arrays;
+
 /** Append-only identity membership owned by one suspended dependency inspection. */
 final class ContinuationVisited {
     private static final int MAX_CAPACITY = 1 << 29;
-    private Object[] keys = new Object[128];
+    private static final int MAX_CACHED_CAPACITY = 256;
+    private static final ThreadLocal<Object[]> SCRATCH = new ThreadLocal<>();
+    private Object[] keys;
     private int size;
+
+    private ContinuationVisited(Object[] keys) {
+        this.keys = keys;
+    }
+
+    static ContinuationVisited acquire() {
+        Object[] table = SCRATCH.get();
+        if (table == null) table = new Object[128];
+        else SCRATCH.set(null);
+        return new ContinuationVisited(table);
+    }
+
+    void release() {
+        Object[] table = keys;
+        keys = null;
+        if (table.length <= MAX_CACHED_CAPACITY) {
+            // Keep the table leased until all guest references have been cleared.
+            Arrays.fill(table, null);
+            SCRATCH.set(table);
+        }
+    }
+
     private static int index(Object key, int mask) {
         int hash = System.identityHashCode(key);
         return (hash - (hash << 7)) & mask;
