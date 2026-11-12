@@ -272,12 +272,45 @@ class SavedGuestContinuationTest {
 
     private static ContinuationResult rawToken(Language language) { return rawToken(language, Unit.INSTANCE); }
     private static ContinuationResult rawToken(Language language, Object marker) {
-        var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+        return rawToken(rawTokenRoot(language, marker));
+    }
+    private static BytecodeRoot rawTokenRoot(Language language, Object marker) {
+        return BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
             b.beginRoot(); b.beginReturn();
             b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(marker); b.endRecordContinuationOwner(); b.endYield();
             b.endReturn(); b.endRoot();
         }).getNode(0);
+    }
+    private static ContinuationResult rawToken(BytecodeRoot root) {
         return assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+    }
+    @Test void bytecodeCaptureReactivatesDisabledSlotAndReadDoesNotAdoptIt() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var root = rawTokenRoot(language, Unit.INSTANCE);
+                var descriptor = root.getFrameDescriptor();
+                var originalKeys = descriptor.getAuxiliarySlots().keySet();
+                var first = SavedGuestContinuations.savedGuestContinuation(rawToken(root));
+                assertEquals(41L, first.continueWith(41L));
+                var active = descriptor.getAuxiliarySlots();
+                var added = active.keySet().stream().filter(key -> !originalKeys.contains(key)).toList();
+                assertEquals(1, added.size());
+                var key = added.getFirst();
+                int slot = active.get(key);
+                descriptor.disableAuxiliarySlot(key);
+                var rejected = assertThrows(RuntimeFault.class, () -> first.continueWith(42L));
+                assertEquals("Bytecode continuation has no execution provenance", rejected.getMessage());
+                assertFalse(descriptor.getAuxiliarySlots().containsKey(key));
+
+                var next = SavedGuestContinuations.savedGuestContinuation(rawToken(root));
+                assertEquals(slot, descriptor.getAuxiliarySlots().get(key));
+                assertEquals(43L, next.continueWith(43L));
+                var consumed = assertThrows(RuntimeFault.class, () -> first.continueWith(42L));
+                assertEquals("Bytecode continuation was already consumed", consumed.getMessage());
+            } finally { context.leave(); }
+        }
     }
     @Test void bytecodeAliasesShareTerminalResumeAndDiscard() {
         try (var context = Main.executionContext()) {

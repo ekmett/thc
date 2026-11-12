@@ -28,10 +28,14 @@ final class BytecodeContinuations {
     }
     private static Activation activation(MaterializedFrame frame, boolean create) {
         synchronized (frame) {
-            Integer slot = frame.getFrameDescriptor().getAuxiliarySlots().get(ACTIVATION);
-            if (slot == null) {
-                if (!create) return null;
-                slot = frame.getFrameDescriptor().findOrAddAuxiliarySlot(ACTIVATION);
+            var descriptor = frame.getFrameDescriptor();
+            int slot;
+            if (create) {
+                slot = descriptor.findOrAddAuxiliarySlot(ACTIVATION);
+            } else {
+                Integer activeSlot = descriptor.getAuxiliarySlots().get(ACTIVATION);
+                if (activeSlot == null) return null;
+                slot = activeSlot;
             }
             Activation activation = (Activation) frame.getAuxiliarySlot(slot);
             if (activation == null && create) {
