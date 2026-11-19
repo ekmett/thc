@@ -4,6 +4,14 @@
 """Check release qualification and installation identity without a runtime build."""
 
 import hashlib
+import contextlib
+import http.server
+import json
+import os
+import socket
+import threading
+import urllib.error
+import urllib.request
 import io
 from pathlib import Path
 import sys
@@ -18,10 +26,167 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from platform_paths import build_flavor, jdk_home, reported_flavor
 from package_jdk import static_libraries
 import build_graal
+import build_runtime
 import check_runtime
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_acquisition_failure_stops_before_hotspot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'upstream/labsjdk25').mkdir(parents=True)
+            calls = []
+            def run(script, *args):
+                calls.append((script, args))
+                if script == 'build_graal.py' and '--download-only' in args:
+                    raise subprocess.CalledProcessError(1, script)
+                if '--output' in args:
+                    Path(args[args.index('--output') + 1]).mkdir()
+            with patch.object(sys, 'argv', ['build_runtime.py', 'graalvm']), \
+                    patch.object(build_runtime, 'ROOT', root), \
+                    patch.object(build_runtime, 'run', side_effect=run), \
+                    patch.object(build_runtime.subprocess, 'run') as child, \
+                    self.assertRaises(subprocess.CalledProcessError):
+                build_runtime.main()
+            child.assert_not_called()
+            self.assertEqual(calls[-1], ('build_graal.py', ('--download-only', '--boot-jdk')))
+            self.assertFalse((root / 'build/graalvm').exists())
+
+    def test_boot_acquisition_keeps_jdk_requirements(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            with patch.dict(os.environ, {'JAM_BOOT_JDK': str(home)}), \
+                    patch.object(build_graal.subprocess, 'check_output', return_value='OpenJDK 25') as describe:
+                for version, expected in (('25.0.1', home), ('25', home), ('24.0.2', None)):
+                    (home / 'release').write_text(f'JAVA_VERSION="{version}"\n')
+                    with self.subTest(version=version), contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(build_graal.boot_jdk(), expected.resolve() if expected else None)
+                (home / 'release').write_text('JAVA_VERSION="25.0.1"\n')
+                describe.return_value = 'GraalVM Community 25'
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertIsNone(build_graal.boot_jdk())
+                (home / 'release').write_text('JAVA_VERSION="21.0.1"\n')
+                with self.assertRaises(SystemExit):
+                    build_graal.boot_jdk()
+        env = {'JAVA_HOME': '/selected/jdk25', 'MX_CACHE_DIR': '/selected/cache'}
+        with patch.object(build_graal, 'run_mx') as mx:
+            build_graal.acquire(env)
+        self.assertEqual(mx.call_args.args, ('vm', ['--max-cpus', '3', '--env', 'ce',
+                                                  'build', '--download-only'], env))
+        self.assertEqual(mx.call_args.kwargs, {'timeout': 600})
+        self.assertNotIn('JDK_VERSION_CHECK', env)
+        self.assertNotIn('JVMCI_VERSION_CHECK', env)
+
+    def test_acquisition_http_receipts_preserve_response_and_errors(self):
+        payload = b'owned dependency fixture\x00\xff'
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith('/redirect'):
+                    self.send_response(302)
+                    self.send_header('Location', '/artifact?secret=redirect-token')
+                elif self.path.startswith('/artifact'):
+                    self.send_response(200)
+                else:
+                    self.send_response(404)
+                    self.send_header('Location', 'https://user:secret@[broken')
+                self.send_header('X-Request-ID', 'fixture-request')
+                self.send_header('Set-Cookie', 'secret=cookie-token')
+                self.end_headers()
+                if self.path.startswith('/artifact'):
+                    self.wfile.write(payload)
+            def log_message(self, *args):
+                pass
+        with http.server.HTTPServer(('127.0.0.1', 0), Handler) as server:
+            worker = threading.Thread(target=server.serve_forever)
+            worker.start()
+            try:
+                base = f'http://127.0.0.1:{server.server_port}'
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),
+                                                     build_graal.AcquisitionResponse())
+                log = io.StringIO()
+                with contextlib.redirect_stderr(log):
+                    with opener.open(base + '/redirect?secret=initial-token', timeout=5) as response:
+                        self.assertEqual(response.read(), payload)
+                    with self.assertRaises(urllib.error.HTTPError) as failure:
+                        opener.open(base + '/missing', timeout=5)
+                    self.assertEqual(failure.exception.code, 404)
+                    failure.exception.close()
+                receipts = [json.loads(line.removeprefix('THC acquisition HTTP '))
+                            for line in log.getvalue().splitlines()]
+                self.assertEqual([r['status'] for r in receipts], [302, 200, 404])
+                self.assertEqual(receipts[0]['redirect'], base + '/artifact')
+                self.assertTrue(all(r['x-request-id'] == 'fixture-request' for r in receipts))
+                for secret in ('initial-token', 'redirect-token', 'cookie-token', 'set-cookie'):
+                    self.assertNotIn(secret, log.getvalue())
+                self.assertEqual(build_graal.diagnostic_url('https://user:pass@example.org/a?q=secret#frag'),
+                                 'https://example.org/a')
+            finally:
+                server.shutdown()
+                worker.join()
+
+    def test_acquisition_preserves_late_proxy_configuration(self):
+        payload = b'proxied fixture'
+        class Proxy(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(payload)
+            def log_message(self, *args):
+                pass
+        with http.server.HTTPServer(('127.0.0.1', 0), Proxy) as server, \
+                tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'upstream/graal25/vm').mkdir(parents=True)
+            producer = root / 'mx.py'
+            # mx normalizes a sole HTTPS proxy to cover HTTP before urlopen.
+            producer.write_text('import os,urllib.request\n'
+                                'os.environ["http_proxy"] = os.environ["https_proxy"]\n'
+                                'with urllib.request.urlopen("http://127.0.0.2/fixture", timeout=2) as r:\n'
+                                '    print(r.read().hex())\n')
+            env = {k: v for k, v in os.environ.items() if not k.lower().endswith('_proxy')}
+            env.update(MX_PYTHON=sys.executable, https_proxy=f'http://127.0.0.1:{server.server_port}')
+            worker = threading.Thread(target=server.serve_forever)
+            worker.start()
+            try:
+                with patch.object(build_graal, 'ROOT', root), patch.object(build_graal, 'MX', producer):
+                    result = build_graal.run_mx('vm', [], env, capture=True, timeout=5)
+                self.assertEqual(result, payload.hex())
+            finally:
+                server.shutdown()
+                worker.join()
+
+    def test_acquisition_child_failure_and_deadline(self):
+        # A tiny explicit producer exercises the actual selected Python launcher;
+        # it is not a replacement mx resolver or a test of upstream hash code.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'upstream/graal25/vm').mkdir(parents=True)
+            producer = root / 'mx.py'
+            producer.write_text('raise SystemExit(7)\n')
+            env = dict(os.environ, MX_PYTHON=sys.executable)
+            with patch.object(build_graal, 'ROOT', root), patch.object(build_graal, 'MX', producer):
+                with self.assertRaises(subprocess.CalledProcessError) as failure:
+                    build_graal.run_mx('vm', [], env, timeout=5)
+                self.assertEqual(failure.exception.returncode, 7)
+                producer.write_text('import time\ntime.sleep(60)\n')
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    build_graal.run_mx('vm', [], env, timeout=0.2)
+                if os.name != 'nt':
+                    ready = root / 'listening-port'
+                    child = ('import socket,time; from pathlib import Path; '
+                             's=socket.socket(); s.bind(("127.0.0.1",0)); s.listen(); '
+                             f'Path({str(ready)!r}).write_text(str(s.getsockname()[1])); '
+                             'time.sleep(60)')
+                    producer.write_text('import subprocess,sys,time\n' +
+                                        f'subprocess.Popen([sys.executable, "-c", {child!r}])\n' +
+                                        'time.sleep(60)\n')
+                    with self.assertRaises(subprocess.TimeoutExpired):
+                        build_graal.run_mx('vm', [], env, timeout=2)
+                    port = int(ready.read_text())
+                    with self.assertRaises(OSError):
+                        with socket.create_connection(('127.0.0.1', port), timeout=1):
+                            pass
+
     def test_static_archive_closure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

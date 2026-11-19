@@ -64,7 +64,21 @@ python3 tools/check_runtime.py substratevm
 ```
 
 The build acquires and checks upstream sources, prepares the patch and overlay
-trees, builds LabsJDK, and packages GraalVM with Native Image in `build/graalvm`.
+trees, acquires the pinned Graal build dependencies with mx's download-only
+mode, builds LabsJDK, and packages GraalVM with Native Image in `build/graalvm`.
+Early acquisition uses a non-GraalVM boot JDK 25. With boot JDK 24 or a GraalVM
+boot JDK it explicitly defers until LabsJDK is available: Graal requires JDK 25
+to load its dependency graph and rejects a GraalVM image as its own base JDK. The
+builder checks the same dependency graph again before compiling Graal, reusing
+`MX_CACHE_DIR` (default `.toolchains/mx-cache`) and mx's pinned digest checks.
+No version checks are disabled. Acquisition failure stops the producer.
+
+`THC_VM_ACQUISITION_TIMEOUT` sets the acquisition failure budget in seconds
+(default 600), separately from build performance targets. It includes cold
+fetches and source resolution; tune it from measured platform acquisition times.
+HTTP receipts record status, redacted redirect destinations and allowlisted
+server/request identifiers, without credentials, query strings or response
+bodies. Repository selection and mx's existing retry policy are unchanged.
 `jam-graalvm` and `jam-substratevm` are CMake targets for the same distribution.
 Keep `JAM_BUILD_FLAVOR` consistent through the build and checks. `fastdebug`
 retains VM assertions and `release` is optimized. `THC_VM_NATIVE_CONFIG`
