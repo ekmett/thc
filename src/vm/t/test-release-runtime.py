@@ -28,9 +28,67 @@ from package_jdk import static_libraries
 import build_graal
 import build_runtime
 import check_runtime
+import fetch_sources
+from email.message import Message
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_source_fetch_failure_provenance_and_hash_gate(self):
+        # A single owned pinned input drives the real producer, without acquisition.
+        payload = b'owned pinned source fixture\x00'
+        revision = 'a' * 40
+        path = 'src/fixture.cc'
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'config').mkdir()
+            (root / 'config/source-pins.json').write_text(json.dumps({
+                'fixture': {'repo': 'fixture/producer', 'commit': revision,
+                            'files': [path], 'sha256': {path: hashlib.sha256(payload).hexdigest()}}}))
+            dest = root / 'upstream/sources/fixture' / revision / path
+            headers = Message()
+            headers['Retry-After'] = '120'
+            headers['X-GitHub-Request-Id'] = 'fixture-request'
+            headers['Set-Cookie'] = 'cookie-secret'
+            headers['Location'] = '/retry?token=redirect-secret#fragment-secret'
+            failure = urllib.error.HTTPError(
+                'https://user:password@responder.invalid/source?token=query-secret',
+                429, 'Too Many Requests', headers, io.BytesIO(b'body-secret'))
+            with patch.object(fetch_sources, '__file__', str(root / 'tools/fetch_sources.py')), \
+                    patch.object(sys, 'argv', ['fetch_sources.py']), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                log = io.StringIO()
+                with patch.object(fetch_sources.urllib.request, 'urlopen', side_effect=failure) as opening, \
+                        contextlib.redirect_stderr(log), self.assertRaises(urllib.error.HTTPError) as raised:
+                    fetch_sources.main()
+                self.assertIs(raised.exception, failure)
+                opening.assert_called_once_with(
+                    f'https://raw.githubusercontent.com/fixture/producer/{revision}/{path}', timeout=30)
+                self.assertFalse(dest.exists())
+                receipt = json.loads(log.getvalue().removeprefix('THC source fetch failure '))
+                self.assertEqual((receipt['label'], receipt['revision'], receipt['path'], receipt['status']),
+                                 ('fixture', revision, path, 429))
+                self.assertEqual(receipt['url'], 'https://responder.invalid/source')
+                self.assertEqual(receipt['redirect'], 'https://responder.invalid/retry')
+                self.assertEqual(receipt['retry-after'], '120')
+                self.assertEqual(receipt['x-github-request-id'], 'fixture-request')
+                for secret in ('user', 'password', 'query-secret', 'redirect-secret',
+                               'fragment-secret', 'cookie-secret', 'body-secret'):
+                    self.assertNotIn(secret, log.getvalue())
+                # Malformed diagnostic metadata must preserve the original failure.
+                headers.replace_header('Location', 'https://user:password@[broken')
+                with patch.object(fetch_sources.urllib.request, 'urlopen', side_effect=failure), \
+                        contextlib.redirect_stderr(io.StringIO()), self.assertRaises(urllib.error.HTTPError) as raised:
+                    fetch_sources.main()
+                self.assertIs(raised.exception, failure)
+                failure.close()
+                with patch.object(fetch_sources.urllib.request, 'urlopen', return_value=io.BytesIO(b'wrong')):
+                    with self.assertRaisesRegex(RuntimeError, 'Source hash mismatch'):
+                        fetch_sources.main()
+                self.assertFalse(dest.exists())
+                with patch.object(fetch_sources.urllib.request, 'urlopen', return_value=io.BytesIO(payload)):
+                    fetch_sources.main()
+                self.assertEqual(dest.read_bytes(), payload)
+
     def test_acquisition_failure_stops_before_hotspot(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

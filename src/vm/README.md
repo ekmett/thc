@@ -79,6 +79,10 @@ fetches and source resolution; tune it from measured platform acquisition times.
 HTTP receipts record status, redacted redirect destinations and allowlisted
 server/request identifiers, without credentials, query strings or response
 bodies. Repository selection and mx's existing retry policy are unchanged.
+Per-file pinned source HTTP failures identify the label, revision and path,
+status, redacted effective URL and any failure-response redirect, plus allowlisted
+Retry-After and request identifiers. These receipts do not capture intermediate
+redirect history or change the source hashes, 30-second request timeout or retries.
 `jam-graalvm` and `jam-substratevm` are CMake targets for the same distribution.
 Keep `JAM_BUILD_FLAVOR` consistent through the build and checks. `fastdebug`
 retains VM assertions and `release` is optimized. `THC_VM_NATIVE_CONFIG`
