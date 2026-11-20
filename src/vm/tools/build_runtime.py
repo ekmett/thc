@@ -36,6 +36,7 @@ def main():
         run('prepare_jdk.py')
     run('prepare_graal.py')
     run('check_patches.py', '--graal')
+    run('build_graal.py', '--download-only', '--boot-jdk')
     if platform.system() == 'Windows':
         subprocess.run(['pwsh', '-NoProfile', '-File', str(ROOT / 'tools/build_hotspot.ps1')], check=True)
     else:
