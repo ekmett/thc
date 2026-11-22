@@ -38,7 +38,7 @@ Unrelated directory members change consumed inputs or make generation fail:
   bytearray (018), mutable-bytearrays (019), resize-bytearrays (020),
   mutable-bytearray-size (021), compare-byte-arrays (022): consume every stage CBD.
   simd-address-families (027): manifest collects generated source/*.hs leftovers.
-  data-to-tag (039), proxy-void (042): consume all CBDs found in the output tree.
+  proxy-void (042): consumes all CBDs found in the output tree.
   fetch-add-int-array (045), atomic-int-arrays (046), shrink-bytearrays (047),
     mutvar (081): exact output-directory inventories reject unrelated CBDs.
     show-word-list (127), short-bytes-slices (129), unsafe-equality (134),

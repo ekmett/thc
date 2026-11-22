@@ -8,7 +8,6 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.nio.file.*;
-import java.security.MessageDigest;
 import java.util.*;
 import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
@@ -25,7 +24,11 @@ class DataToTagTest {
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", Boolean.toString(inlining)).build();
     }
-    private Map<String, Object> module(String stage) throws Exception { return CoreCbdFixtures.read(root.resolve("build/data-to-tag/" + stage + "/core/DataToTagAudit.cbd")); }
+    private Map<String, Object> module(String stage) throws Exception {
+        var module = CoreCbdFixtures.read(root.resolve("build/data-to-tag/" + stage + "/core/DataToTagAudit.cbd"));
+        assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", module.get("boundary"), stage);
+        return module;
+    }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
@@ -37,24 +40,49 @@ class DataToTagTest {
         assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getResults().getDepth());
         assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().retainedReferences());
     }
-    private Map<String, Object> evidence() throws Exception {
-        var manifest = object(Json.parse(Files.readString(root.resolve("build/data-to-tag/manifest.json"))));
-        for (var key : list("inputHashes", "artifactHashes")) for (var entry : object(manifest.get(key)).entrySet()) {
-            var actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(entry.getKey()))));
-            assertEquals(entry.getValue(), actual, "Stale dataToTag evidence: " + entry.getKey());
+    private static final List<String> ENTRIES = List.of("smallCase", "largeCase", "lazyCase", "pairCase", "unliftedCase", "forceCase", "wrappedCase");
+    private static final List<String> FRONTIERS = List.of("unknownFamily", "closureFamily", "newtypeFamily", "wrongSmallFamily", "barePrimitive");
+    private static final List<Long> INPUTS = inputs();
+    private static List<Long> inputs() {
+        var values = new TreeSet<>(List.of(Long.MIN_VALUE, Long.MIN_VALUE + 1, -(1L << 32), -4097L, 4097L, 1L << 32, Long.MAX_VALUE - 1, Long.MAX_VALUE));
+        for (long x = -18; x <= 18; x++) values.add(x);
+        return List.copyOf(values);
+    }
+    // Independent of GHC and THC: Java's truncating % matches remInt#, and long addition wraps like Int#.
+    private static long model(String name, long x) {
+        long remainder = x % 3;
+        long tag = switch (name) {
+            case "smallCase", "wrappedCase" -> remainder == 0 ? 0 : remainder == 1 ? 1 : 2;
+            case "largeCase" -> (x & 15) % 9;
+            case "lazyCase" -> 1;
+            case "pairCase", "forceCase" -> 0;
+            case "unliftedCase" -> x & 1;
+            default -> throw new AssertionError("Unknown dataToTag entry: " + name);
+        };
+        return x + tag + 1;
+    }
+    private Map<String, List<List<String>>> nativeRows() throws Exception {
+        var rows = new LinkedHashMap<String, List<List<String>>>();
+        for (var line : Files.readAllLines(root.resolve("build/data-to-tag/oracle.tsv"))) {
+            var row = Arrays.asList(line.split("\t", -1));
+            assertEquals(3, row.size(), line);
+            assertTrue(ENTRIES.contains(row.getFirst()), line);
+            assertEquals(model(row.getFirst(), Long.parseLong(row.get(1))), Long.parseLong(row.get(2)), "native/model " + line);
+            rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row);
         }
-        assertEquals(293L, manifest.get("nativeRows")); assertEquals(1L, manifest.get("nativeExceptionRows")); return manifest;
+        assertEquals(ENTRIES, List.copyOf(rows.keySet()));
+        for (var name : ENTRIES) {
+            // A negative forceCase input demands bottom; nativeFamilies checks that exception in the guest.
+            var domain = name.equals("forceCase") ? INPUTS.stream().filter(x -> x >= 0).toList() : INPUTS;
+            assertEquals(domain, rows.get(name).stream().map(row -> Long.parseLong(row.get(1))).toList(), name);
+        }
+        return rows;
     }
     @Test void nativeFamiliesWithInlining() throws Exception { nativeFamilies(true); }
     @Test void nativeFamiliesAcrossResidualCalls() throws Exception { nativeFamilies(false); }
     private void check(Value function, List<String> row, String label) { assertEquals(Long.parseLong(row.get(2)), function.execute(Long.parseLong(row.get(1))).asLong(), label + "/" + row.get(1)); }
     private void nativeFamilies(boolean inlining) throws Exception {
-        evidence();
-        var rows = new LinkedHashMap<String, List<List<String>>>();
-        for (var line : Files.readAllLines(root.resolve("build/data-to-tag/oracle.tsv"))) {
-            var row = Arrays.asList(line.split("\t", -1)); rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row);
-        }
-        assertEquals(293, rows.values().stream().mapToInt(List::size).sum());
+        var rows = nativeRows();
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) for (var entry : rows.entrySet())
             try (var context = context(inlining)) {
                 context.initialize("thc"); context.enter();
@@ -186,13 +214,12 @@ class DataToTagTest {
         }
     }
     @Test void genuineInvalidFamilyAndBarePrimitiveFrontiersStayRejected() throws Exception {
-        var manifest = evidence();
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var source = module(stage);
-                for (var name : expression(manifest.get("frontiers"))) {
+                for (var name : FRONTIERS) {
                     var entryId = source.get("unit") + ":" + source.get("module") + "." + name;
                     assertTrue(objects(source.get("bindings")).stream().anyMatch(binding -> entryId.equals(binding.get("id"))), entryId);
                     assertThrows(RuntimeException.class, () -> program(language, CoreModules.reachable(source, entryId), backend), stage + "/" + backend + "/" + name);

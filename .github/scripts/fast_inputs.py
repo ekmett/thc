@@ -59,7 +59,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/VectorByteArrayExpression.java",
                   "src/main/java/thc/runtime/VectorMemory.java")
 MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields array-slices atomic-address pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
-thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
+thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-array-extensions boxed-cas bytearray compare-byte-arrays double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 native-addresses native-malloc original-stack original-stdio-read original-errno original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices
@@ -506,6 +506,13 @@ BOXED_ARRAY_OUTPUTS = frozenset({
     *(f"build/boxed-arrays/native/{module}.{suffix}" for module in ("Main", "BoxedArrayAudit") for suffix in ("hi", "o")),
 })
 
+DATA_TO_TAG_OUTPUTS = frozenset({
+    *(f"build/data-to-tag/{stage}/core/DataToTagAudit.cbd" for stage in ("pre", "post")),
+    *(f"build/data-to-tag/{stage}/ghc/DataToTagAudit.{suffix}" for stage in ("pre", "post") for suffix in ("hi", "o")),
+    "build/data-to-tag/native/data-to-tag-oracle", "build/data-to-tag/oracle.tsv",
+    *(f"build/data-to-tag/native/{module}.{suffix}" for module in ("Main", "DataToTagAudit") for suffix in ("hi", "o")),
+})
+
 BASE_CORE_CBD_OUTPUTS = frozenset({
     *(f"build/core/{module}.cbd" for module in ("THC.Prim.Test", "Fixtures", "StrictFields", "SpeculationAudit",
         "RepresentationAudit", "SourceNotes", "CBVAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
@@ -529,6 +536,7 @@ REQUIRED = tuple(sorted({
     *SUM_RESULT_OUTPUTS,
     *FLOATING_TUPLE_OUTPUTS,
     *BOXED_ARRAY_OUTPUTS,
+    *DATA_TO_TAG_OUTPUTS,
     *RUBBISH_OUTPUTS,
     *PROXY_VOID_OUTPUTS,
     *WEAK_OUTPUTS,
@@ -578,7 +586,7 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/boxed-arrays/native/boxed-array-oracle", "build/simd/native/simd", "build/simd-int32x4/native/simd", "build/wide-char-address/native/oracle", "build/io-main-pap/native/io-main-pap-oracle", "build/mask-functions/native/oracle", "build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
+NATIVE_EXECUTABLES = frozenset({"build/boxed-arrays/native/boxed-array-oracle", "build/data-to-tag/native/data-to-tag-oracle", "build/simd/native/simd", "build/simd-int32x4/native/simd", "build/wide-char-address/native/oracle", "build/io-main-pap/native/io-main-pap-oracle", "build/mask-functions/native/oracle", "build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
     "build/floating-remainder/native/oracle",
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
@@ -1523,6 +1531,8 @@ def allowed_payload(name):
             *(f"build/sum-layout/native/{module}.{suffix}" for module in ("Main", "SumLayoutAudit") for suffix in ("hi", "o"))}
     if parts[1] == "boxed-arrays":
         return name in BOXED_ARRAY_OUTPUTS
+    if parts[1] == "data-to-tag":
+        return name in DATA_TO_TAG_OUTPUTS
     if parts[1] == "floating-tuple":
         return name in FLOATING_TUPLE_OUTPUTS
     if parts[1] == "sum-result":
@@ -1627,7 +1637,7 @@ def allowed_payload(name):
                 for stage in ("pre", "post")}:
         return True
     if name in {f"build/{family}/{stage}/core/{module}.cbd"
-                for family, fixture in (("address-fields", "AddressFieldAudit"), ("data-to-tag", "DataToTagAudit"))
+                for family, fixture in (("address-fields", "AddressFieldAudit"),)
                 for stage in ("pre", "post") for module in (fixture, "THC.InterfaceClosure")}:
         return True
     if parts[1] == "simd-capability-smoke":

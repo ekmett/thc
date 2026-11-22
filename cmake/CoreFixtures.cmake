@@ -239,6 +239,46 @@ add_custom_command(OUTPUT "${boxed_array_out}/oracle.tsv"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
 add_custom_target(fixture-boxed-arrays DEPENDS ${boxed_array_outputs} "${boxed_array_out}/oracle.tsv")
 
+# 039: saturated constructor-to-tag families and rejected family frontiers.
+# Each export writes only the DataToTagAudit CBD and its .hi/.o; the tracked
+# native driver emits its own bounded requests.
+set(data_to_tag_out "${PROJECT_SOURCE_DIR}/build/data-to-tag")
+set(data_to_tag_source "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/DataToTagAudit.hs")
+set(data_to_tag_outputs)
+foreach(stage pre post)
+  set(stage_options)
+  if(stage STREQUAL "post")
+    list(APPEND stage_options -fplugin-opt=THC.Plugin:post-tidy)
+  endif()
+  add_custom_command(OUTPUT "${data_to_tag_out}/${stage}/core/DataToTagAudit.cbd"
+    BYPRODUCTS "${data_to_tag_out}/${stage}/ghc/DataToTagAudit.hi" "${data_to_tag_out}/${stage}/ghc/DataToTagAudit.o"
+    COMMAND ${fixture_env} "THC_CORE_OUT=${data_to_tag_out}/${stage}/core" "THC_GHC_OUT=${data_to_tag_out}/${stage}/ghc"
+      "${PROJECT_SOURCE_DIR}/bin/export-core.sh" --plugin-manifest "${plugin_manifest}"
+      ${stage_options} "${data_to_tag_source}"
+    DEPENDS "${data_to_tag_source}"
+      ${plugin_outputs} ${toolchain_inputs} "${PROJECT_SOURCE_DIR}/bin/export-core.sh"
+      "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+  list(APPEND data_to_tag_outputs "${data_to_tag_out}/${stage}/core/DataToTagAudit.cbd")
+endforeach()
+set(data_to_tag_native "${data_to_tag_out}/native")
+add_custom_command(OUTPUT "${data_to_tag_native}/data-to-tag-oracle"
+  BYPRODUCTS "${data_to_tag_native}/Main.hi" "${data_to_tag_native}/Main.o"
+    "${data_to_tag_native}/DataToTagAudit.hi" "${data_to_tag_native}/DataToTagAudit.o"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${data_to_tag_native}"
+  COMMAND ${fixture_env} ${native_ghc} --make -O2 -fforce-recomp -dcore-lint -dstg-lint
+    "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler" -odir "${data_to_tag_native}" -hidir "${data_to_tag_native}"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/DataToTagAuditNative.hs" -o "${data_to_tag_native}/data-to-tag-oracle"
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/DataToTagAuditNative.hs"
+    "${data_to_tag_source}" ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_command(OUTPUT "${data_to_tag_out}/oracle.tsv"
+  COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=${data_to_tag_native}/data-to-tag-oracle" "-DOUTPUT=${data_to_tag_out}/oracle.tsv"
+    -P "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  DEPENDS "${data_to_tag_native}/data-to-tag-oracle" "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_target(fixture-data-to-tag DEPENDS ${data_to_tag_outputs} "${data_to_tag_out}/oracle.tsv")
+
 set(native_dir "${PROJECT_SOURCE_DIR}/build/native")
 set(native "${native_dir}/native-oracle")
 set(native_inputs "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/THC/Prim/Test.hs")

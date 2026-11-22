@@ -2289,13 +2289,11 @@
         "bin/test-simd-families.py"
       ]
     },
-    "bin/prepare-data-to-tag.py": {
+    "t/fixtures/compiler/DataToTagAuditNative.hs": {
       "junit": [
         "thc.runtime.DataToTagTest"
       ],
-      "python": [
-        "bin/test-core-data-tags.py"
-      ]
+      "python": []
     },
     "t/haskell-fixtures/ByteArrayFixtures.hs": {
       "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayNativeTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
