@@ -1377,6 +1377,11 @@ public final class Program implements ExecutableProgram {
             // Keep argument preparation and the actual local jump in this region.
             if (sameFrameCandidate(args.get(i), scope)) nodes[i] = new AstSameFrameArm(nodes[i]);
         }
+        if (nodes.length == 1 && target.getProofs()[0].isEvaluatedReference()) {
+            // A completed unary operand can be installed directly. There are
+            // no later arguments that need to see the previous formal.
+            return LocalJoinCall.unaryReference((thc.Language) language, target, nodes, codeMetrics());
+        }
         int[][] typedTemps = new int[nodes.length][];
         int[] temps = new int[nodes.length];
         for (int i = 0; i < nodes.length; i++) {
