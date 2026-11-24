@@ -48,7 +48,8 @@ public final class LocalJoinCall extends Expr {
             }
         }
     }
-    @Override public Object execute(VirtualFrame frame) { prepare(frame, 0); throw transfer(frame); }
+    LocalJoinJump prepareTransfer(VirtualFrame frame) { prepare(frame, 0); return transfer(frame); }
+    @Override public Object execute(VirtualFrame frame) { throw prepareTransfer(frame); }
     @ExplodeLoop private void prepare(VirtualFrame frame, int first) {
         for (int i = first; i < arguments.length; i++) {
             try {

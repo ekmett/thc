@@ -176,7 +176,7 @@ class Case extends Expr {
     }
     private Expr select(VirtualFrame frame) { return select(frame, false, null); }
 
-    private Expr interpretedBranch(VirtualFrame frame, int[] slots, int offset) {
+    final Expr interpretedBranch(VirtualFrame frame, int[] slots, int offset) {
         Case current = this;
         while (true) {
             Expr branch = current.select(frame, current.directDataScrutinee, current.prepareData(frame, slots, offset));

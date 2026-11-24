@@ -21,9 +21,10 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
         tuple = proof.isTypedTransport(); exactLong = proof.isLong(); exactFloat = proof.isFloat(); exactDouble = proof.isDouble();
         referenceKind = proof.getEvaluated() ? proof.getKind() : CoreKind.UNKNOWN;
     }
-    private void executeBody(VirtualFrame frame, Expr body) {
-        if (!delimited && !AstControl.captures(this)) { executeUninterrupted(frame, body); return; }
-        try { executeUninterrupted(frame, body); }
+    private void executeBody(VirtualFrame frame, Expr body) { executeBody(frame, body, false); }
+    private LocalJoinJump executeBody(VirtualFrame frame, Expr body, boolean directTransfer) {
+        if (!delimited && !AstControl.captures(this)) return executeUninterrupted(frame, body, directTransfer);
+        try { return executeUninterrupted(frame, body, directTransfer); }
         catch (AstCapture cut) { throw cut.append((saved, input) -> { saveResult(saved, input); return null; }); }
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
@@ -50,7 +51,12 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
             writeReferenceResult(frame, value);
         }
     }
-    private void executeUninterrupted(VirtualFrame frame, Expr body) {
+    private LocalJoinJump executeUninterrupted(VirtualFrame frame, Expr body, boolean directTransfer) {
+        if (directTransfer && CompilerDirectives.inInterpreter()) {
+            if (body.getClass() == Case.class)
+                body = ((Case) body).interpretedBranch(frame, tuple ? tupleSlots : null, 0);
+            if (body instanceof LocalJoinCall call) return call.prepareTransfer(frame);
+        }
         if (tuple) body.executeTuple(frame, tupleSlots, 0);
         else if (exactLong) FrameAccess.writeLong(frame, result, body.executeRequiredLong(frame));
         else if (exactFloat) FrameAccess.writeFloat(frame, result, body.executeRequiredFloat(frame));
@@ -59,6 +65,7 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
         else if (referenceKind == CoreKind.CLOSURE) writeReferenceResult(frame, body.executeRequiredClosure(frame));
         else if (referenceKind == CoreKind.ADDRESS) writeReferenceResult(frame, body.executeRequiredAddress(frame));
         else writeReferenceResult(frame, body.execute(frame));
+        return null;
     }
     private void writeReferenceResult(VirtualFrame frame, Object value) {
         // The lowering owner allocated Object storage; this says nothing about WHNF.
@@ -70,8 +77,10 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
         throw fault("Invalid local join selector");
     }
     void executeOnce(VirtualFrame frame) {
-        try { executeBody(frame, bodies[0]); }
-        catch (LocalJoinJump jump) {
+        LocalJoinJump jump;
+        try { jump = executeBody(frame, bodies[0], true); }
+        catch (LocalJoinJump thrown) { jump = thrown; }
+        if (jump != null) {
             if (jump.getTarget().getGroup() != group) throw jump;
             executeTarget(frame, jump.getTarget().getIndex());
         }
@@ -89,6 +98,12 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
                         executeSelected(saved, selected); return null;
                     });
                 }
+            }
+            if (CompilerDirectives.inInterpreter() && selected >= 0 && selected < bodies.length) {
+                LocalJoinJump jump = executeBody(frame, bodies[(int) selected], true);
+                if (jump == null) return false;
+                if (jump.getTarget().getGroup() != group) throw jump;
+                frame.setLong(selector, jump.getTarget().getIndex()); return true;
             }
             executeSelected(frame, selected); return false;
         } catch (LocalJoinJump jump) {
