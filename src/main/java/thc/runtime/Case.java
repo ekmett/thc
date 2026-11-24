@@ -140,7 +140,11 @@ class Case extends Expr {
     protected final void prepare(VirtualFrame frame, int[] destination, int offset) { prepareData(frame, destination, offset); }
     private DataValue prepareData(VirtualFrame frame, int[] destination, int offset) {
         try {
-            if (unusedBinder && directDataScrutinee) return scrutinee.evaluateDataWithSavedWrite(frame);
+            if (directDataScrutinee) {
+                DataValue value = scrutinee.evaluateDataWithSavedWrite(frame);
+                if (!unusedBinder) FrameAccess.writeObject(frame, binderSlot, value);
+                return value;
+            }
             scrutinee.write(frame);
             return null;
         }
@@ -191,7 +195,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
@@ -211,7 +215,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
@@ -231,7 +235,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
@@ -251,7 +255,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
@@ -271,7 +275,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
@@ -291,7 +295,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
@@ -311,7 +315,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
@@ -331,7 +335,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
@@ -351,7 +355,7 @@ class Case extends Expr {
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (unusedBinder && directDataScrutinee ? direct : dataScrutinee(frame)) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (directDataScrutinee ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) {
                 Expr body = selected(frame, alt, matched);
                 matched = null;
