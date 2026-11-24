@@ -44,6 +44,16 @@ public final class Evaluate extends Expr {
         if (proof.getEvaluated()) return value.execute(frame);
         return forceResult(frame, value.execute(frame));
     }
+    /** A reference demand needs the caller's capture policy only when its child suspends. */
+    private Object demandReference(VirtualFrame frame) {
+        Object original;
+        try { original = value.execute(frame); }
+        catch (AstCapture cut) {
+            if (!AstControl.captures(this)) throw cut;
+            throw appendForce(cut);
+        }
+        return forceResult(frame, original);
+    }
     private Object executeAsync(VirtualFrame frame) {
         Object original;
         try {
@@ -112,6 +122,11 @@ public final class Evaluate extends Expr {
     }
     @CompilationFinal private boolean genericClosure;
     @Override public Closure executeClosure(VirtualFrame frame) throws UnexpectedResultException {
+        CoreRepresentation proof = value.getRepresentation();
+        if (proof.getKind() == CoreKind.CLOSURE) {
+            if (!proof.getEvaluated()) return RuntimeTypesGen.expectClosure(demandReference(frame));
+            if (value instanceof LocalRead) return value.executeClosure(frame);
+        }
         if (AstControl.INSTANCE.captures(this)) return RuntimeTypesGen.expectClosure(executeAsync(frame));
         if (value.getRepresentation().getEvaluated() || value.getRepresentation().isLong()) return value.executeClosure(frame);
         if (value.getRepresentation().getKind() == CoreKind.CLOSURE || genericClosure)
@@ -125,6 +140,11 @@ public final class Evaluate extends Expr {
     }
     @CompilationFinal private boolean genericDataValue;
     @Override public DataValue executeDataValue(VirtualFrame frame) throws UnexpectedResultException {
+        CoreRepresentation proof = value.getRepresentation();
+        if (proof.getKind() == CoreKind.DATA) {
+            if (!proof.getEvaluated()) return RuntimeTypesGen.expectDataValue(demandReference(frame));
+            if (value instanceof LocalRead) return value.executeDataValue(frame);
+        }
         if (AstControl.INSTANCE.captures(this)) return RuntimeTypesGen.expectDataValue(executeAsync(frame));
         if (value.getRepresentation().getEvaluated() || value.getRepresentation().isLong()) return value.executeDataValue(frame);
         if (value.getRepresentation().getKind() == CoreKind.DATA || genericDataValue)
@@ -138,6 +158,11 @@ public final class Evaluate extends Expr {
     }
     @CompilationFinal private boolean genericAddress;
     @Override public ManagedAddress executeAddress(VirtualFrame frame) throws UnexpectedResultException {
+        CoreRepresentation proof = value.getRepresentation();
+        if (proof.getKind() == CoreKind.ADDRESS) {
+            if (!proof.getEvaluated()) return RuntimeTypesGen.expectManagedAddress(demandReference(frame));
+            if (value instanceof LocalRead) return value.executeAddress(frame);
+        }
         if (AstControl.INSTANCE.captures(this)) return RuntimeTypesGen.expectManagedAddress(executeAsync(frame));
         if (value.getRepresentation().getEvaluated() || value.getRepresentation().isLong()) return value.executeAddress(frame);
         if (value.getRepresentation().getKind() == CoreKind.ADDRESS || genericAddress)
