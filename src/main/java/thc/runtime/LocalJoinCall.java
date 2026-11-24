@@ -9,7 +9,8 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 public final class LocalJoinCall extends Expr {
     private final LocalJoinTarget target;
     @Children private Expr[] arguments;
-    @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] temporaries;
+    @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] destinations;
+    private final boolean directArgument;
     private final Metrics metrics;
     private final boolean stableScalars;
     @CompilerDirectives.CompilationFinal(dimensions = 2) private final int[][] typedTemporaries;
@@ -23,7 +24,15 @@ public final class LocalJoinCall extends Expr {
     }
     LocalJoinCall(thc.Language language, LocalJoinTarget target, Expr[] arguments, int[] temporaries, Metrics metrics,
                   int[][] typedTemporaries, boolean stableScalars) {
-        this.target = target; this.arguments = arguments; this.temporaries = temporaries; this.metrics = metrics; this.typedTemporaries = typedTemporaries;
+        this(language, target, arguments, temporaries, metrics, typedTemporaries, stableScalars, false);
+    }
+    static LocalJoinCall unaryReference(thc.Language language, LocalJoinTarget target, Expr[] arguments, Metrics metrics) {
+        return new LocalJoinCall(language, target, arguments, target.getSlots(), metrics, new int[1][], false, true);
+    }
+    private LocalJoinCall(thc.Language language, LocalJoinTarget target, Expr[] arguments, int[] destinations, Metrics metrics,
+                          int[][] typedTemporaries, boolean stableScalars, boolean directArgument) {
+        this.target = target; this.arguments = arguments; this.destinations = destinations;
+        this.metrics = metrics; this.typedTemporaries = typedTemporaries; this.directArgument = directArgument;
         this.stableScalars = stableScalars;
         CoreRepresentation proof = target.getResult();
         setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(),
@@ -46,13 +55,13 @@ public final class LocalJoinCall extends Expr {
                 if (typedCopies[i] != null) {
                     if (typedTemporaries[i] == null) throw fault("Missing typed join temporaries");
                     arguments[i].executeTuple(frame, typedTemporaries[i], 0);
-                } else if (target.getProofs()[i].isLong()) writeLong(frame, temporaries[i], arguments[i].executeRequiredLong(frame));
-                else if (target.getProofs()[i].isFloat()) writeFloat(frame, temporaries[i], arguments[i].executeRequiredFloat(frame));
-                else if (target.getProofs()[i].isDouble()) writeDouble(frame, temporaries[i], arguments[i].executeRequiredDouble(frame));
-                else if (referenceKinds[i] == CoreKind.DATA) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredDataValue(frame));
-                else if (referenceKinds[i] == CoreKind.CLOSURE) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredClosure(frame));
-                else if (referenceKinds[i] == CoreKind.ADDRESS) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredAddress(frame));
-                else FrameAccess.write(frame, temporaries[i], arguments[i].execute(frame));
+                } else if (target.getProofs()[i].isLong()) writeLong(frame, destinations[i], arguments[i].executeRequiredLong(frame));
+                else if (target.getProofs()[i].isFloat()) writeFloat(frame, destinations[i], arguments[i].executeRequiredFloat(frame));
+                else if (target.getProofs()[i].isDouble()) writeDouble(frame, destinations[i], arguments[i].executeRequiredDouble(frame));
+                else if (referenceKinds[i] == CoreKind.DATA) FrameAccess.write(frame, destinations[i], arguments[i].executeRequiredDataValue(frame));
+                else if (referenceKinds[i] == CoreKind.CLOSURE) FrameAccess.write(frame, destinations[i], arguments[i].executeRequiredClosure(frame));
+                else if (referenceKinds[i] == CoreKind.ADDRESS) FrameAccess.write(frame, destinations[i], arguments[i].executeRequiredAddress(frame));
+                else FrameAccess.write(frame, destinations[i], arguments[i].execute(frame));
             } catch (AstCapture cut) {
                 int index = i;
                 throw cut.append((saved, input) -> { saveArgument(saved, index, input); prepare(saved, index + 1); throw transfer(saved); });
@@ -68,44 +77,46 @@ public final class LocalJoinCall extends Expr {
         if (typedCopies[index] != null) return;
         if (target.getProofs()[index].isLong()) {
             if (!(value instanceof Long scalar)) throw fault("Expected primitive Long join argument");
-            writeLong(frame, temporaries[index], scalar);
+            writeLong(frame, destinations[index], scalar);
         } else if (target.getProofs()[index].isFloat()) {
             if (!(value instanceof Float scalar)) throw fault("Expected primitive Float join argument");
-            writeFloat(frame, temporaries[index], scalar);
+            writeFloat(frame, destinations[index], scalar);
         } else if (target.getProofs()[index].isDouble()) {
             if (!(value instanceof Double scalar)) throw fault("Expected primitive Double join argument");
-            writeDouble(frame, temporaries[index], scalar);
+            writeDouble(frame, destinations[index], scalar);
         } else {
             if (referenceKinds[index] == CoreKind.DATA && !(value instanceof DataValue)) throw fault("Expected constructor join argument");
             if (referenceKinds[index] == CoreKind.CLOSURE && !(value instanceof Closure)) throw fault("Expected closure join argument");
             if (referenceKinds[index] == CoreKind.ADDRESS && !(value instanceof ManagedAddress)) throw fault("Expected address join argument");
-            FrameAccess.write(frame, temporaries[index], value);
+            FrameAccess.write(frame, destinations[index], value);
         }
     }
-    @ExplodeLoop private LocalJoinJump transfer(VirtualFrame frame) {
+    private LocalJoinJump transfer(VirtualFrame frame) {
+        if (!directArgument) transferStaged(frame);
+        // Every argument has arrived, including after suspension.
+        target.clearBodySlots(frame);
+        Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
+        if (invocation.getEnabled()) invocation.incrementLocalJoinTransfers();
+        return target.getJump();
+    }
+    @ExplodeLoop private void transferStaged(VirtualFrame frame) {
         for (int i = 0; i < arguments.length; i++) {
             if (typedCopies[i] != null) {
                 if (target.getTypedSlots()[i] == null) throw fault("Missing typed join formals");
                 typedCopies[i].executeTuple(frame, target.getTypedSlots()[i], 0);
-            } else if (target.getProofs()[i].isLong()) writeLong(frame, target.getSlots()[i], frame.getLong(temporaries[i]));
-            else if (target.getProofs()[i].isFloat()) writeFloat(frame, target.getSlots()[i], frame.getFloat(temporaries[i]));
-            else if (target.getProofs()[i].isDouble()) writeDouble(frame, target.getSlots()[i], frame.getDouble(temporaries[i]));
+            } else if (target.getProofs()[i].isLong()) writeLong(frame, target.getSlots()[i], frame.getLong(destinations[i]));
+            else if (target.getProofs()[i].isFloat()) writeFloat(frame, target.getSlots()[i], frame.getFloat(destinations[i]));
+            else if (target.getProofs()[i].isDouble()) writeDouble(frame, target.getSlots()[i], frame.getDouble(destinations[i]));
             else if (referenceKinds[i] == CoreKind.DATA || referenceKinds[i] == CoreKind.CLOSURE || referenceKinds[i] == CoreKind.ADDRESS) {
-                Object value = frame.getObject(temporaries[i]);
+                Object value = frame.getObject(destinations[i]);
                 if (referenceKinds[i] == CoreKind.DATA && !(value instanceof DataValue)) throw fault("Expected constructor join argument");
                 if (referenceKinds[i] == CoreKind.CLOSURE && !(value instanceof Closure)) throw fault("Expected closure join argument");
                 if (referenceKinds[i] == CoreKind.ADDRESS && !(value instanceof ManagedAddress)) throw fault("Expected address join argument");
                 FrameAccess.write(frame, target.getSlots()[i], value);
-            } else FrameAccess.write(frame, target.getSlots()[i], FrameAccess.read(frame, temporaries[i]));
+            } else FrameAccess.write(frame, target.getSlots()[i], FrameAccess.read(frame, destinations[i]));
         }
-        for (int temporary : temporaries) if (temporary >= 0) frame.clear(temporary);
+        for (int temporary : destinations) if (temporary >= 0) frame.clear(temporary);
         for (int[] fields : typedTemporaries) if (fields != null) for (int field : fields) frame.clear(field);
-        // All arguments have arrived, including after suspension. Old body locals
-        // are dead at the jump; retaining them would carry boxed values around a loop.
-        target.clearBodySlots(frame);
-        Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
-        if (invocation.getEnabled()) invocation.incrementLocalJoinTransfers();
-        throw target.getJump();
     }
     // Program lowering proves both staging and formal lifetimes use the same scalar tag.
     private void writeLong(VirtualFrame frame, int slot, long value) {

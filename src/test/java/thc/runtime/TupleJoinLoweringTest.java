@@ -54,7 +54,7 @@ class TupleJoinLoweringTest {
                         return frame.getObject(formal);
                     }
                 };
-                var call = new LocalJoinCall(language, target, new Expr[]{operand}, null, metrics);
+                var call = LocalJoinCall.unaryReference(language, target, new Expr[]{operand}, metrics);
                 var region = new LocalJoinRegion(group, selector, result, new Expr[]{call, body}, proof, false, null, new int[0], true);
                 class Owner extends GuestRoot {
                     @Child private Expr expression = region;
