@@ -22,6 +22,50 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** A real blocked MVar cut, owned thunk, and continuation resumed on another Java thread. */
 class AstContinuationTest {
+    @Test void freezingTransfersPendingStepsWithoutSharingCaptureMutation() {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var root = new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) { return Unit.INSTANCE; }
+                };
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, root.getFrameDescriptor());
+                var resumed = new ArrayList<Integer>();
+                var discarded = new ArrayList<Integer>();
+                class Step implements AstResumeStep {
+                    final int id;
+                    Step(int id) { this.id = id; }
+                    @Override public Object resume(VirtualFrame frame, Object input) {
+                        resumed.add(id); return (Long) input + id;
+                    }
+                    @Override public void discard() { discarded.add(id); }
+                }
+                var capture = new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED).append(new Step(1));
+                var first = capture.freeze(root, frame);
+                capture.discard();
+                var pending = new ArrayDeque<AstResumeStep>(); pending.add(new Step(2));
+                capture.appendRemaining(pending); assertTrue(pending.isEmpty());
+                var second = capture.freeze(root, frame);
+                capture.append(new Step(3)); capture.discard();
+                assertEquals(List.of(3), discarded);
+                assertEquals(11L, first.continueWith(10L));
+                assertEquals(22L, second.continueWith(20L));
+                assertEquals(List.of(1, 2), resumed);
+                first.discard(); second.discard();
+                assertEquals(List.of(3), discarded);
+                assertThrows(RuntimeFault.class, () -> first.continueWith(10L));
+                assertEquals(30L, capture.freeze(root, frame).continueWith(30L));
+                var supplied = new ArrayList<AstResumeStep>(); supplied.add(new Step(4));
+                var copied = new AstContinuation(root, Unit.INSTANCE, MaskingState.UNMASKED, frame,
+                        supplied, StackAnnotations.current(root));
+                supplied.clear(); supplied.add(new Step(5));
+                assertEquals(44L, copied.continueWith(40L));
+                assertEquals(List.of(1, 2, 4), resumed);
+            } finally { context.leave(); }
+        }
+    }
     private static List<Object> list(Object... values) { return Arrays.asList(values); }
     private static Map<String, Object> map(Object... fields) { var result = new LinkedHashMap<String, Object>(); for (int i = 0; i < fields.length; i += 2) result.put((String) fields[i], fields[i + 1]); return result; }
     private final Map<String, Object> stateRep = map("kind", "void", "primReps", List.of(), "evaluated", true);
