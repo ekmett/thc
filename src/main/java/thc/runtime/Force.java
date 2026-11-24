@@ -685,7 +685,7 @@ public final class Force extends Node {
                 try {
                     RootCallTarget target = thunk.getTarget();
                     if (target == null) throw fault("Unevaluated thunk has no body");
-                    returned = calls.execute(this, target, thunk.getEnvironment(), metrics);
+                    returned = calls.execute(this, target, thunk.getEnvironment(), thunk.argument(), thunk.hasArgument(), metrics);
                 } catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail, metrics); }
             } else returned = resumeOwnedContinuation(continuation, resumeValue, metrics);
             if (returned instanceof TailYield || returned instanceof AstTailYield ||

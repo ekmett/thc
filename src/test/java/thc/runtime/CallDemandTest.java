@@ -76,6 +76,108 @@ class CallDemandTest {
             }
         } finally { if (previous == null) System.clearProperty(CALL_DEMANDS_PROPERTY); else System.setProperty(CALL_DEMANDS_PROPERTY, previous); }
     }
+    @Test void unaryThunkCaptureUsesItsExistingUpdateRoot() throws ReflectiveOperationException {
+        var identity = binding("identity", lambda(List.of(parameter("value", closure)), variable("value"), closure));
+        var application = apply(variable("identity"), List.of(variable("input")), List.of(true), 1, List.of(true));
+        application.set(6, map("rep", closure, "callDemand", map("arity", 1, "strictArgs", List.of(true))));
+        var maker = binding("maker", lambda(List.of(parameter("input", closure)),
+            local(List.of(binding("shared", application)), variable("shared")), closure));
+        eachBackend(List.of(identity, maker), (backend, program) -> {
+            Object expected = program.entryValue("identity"); var calls = new java.util.concurrent.atomic.AtomicInteger();
+            var argument = new Thunk(new com.oracle.truffle.api.nodes.RootNode(null) {
+                @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { calls.incrementAndGet(); return expected; }
+            }.getCallTarget(), null);
+            var produced = assertInstanceOf(Thunk.class, Calls.target(program.entryTarget("maker"), new Object[]{0L, argument}));
+            if (backend.equals("ast")) {
+                assertTrue(produced.hasArgument()); assertNotSame(program.entryTarget("identity"), produced.getTarget());
+                assertEquals(1, ((GuestRoot) produced.getTarget().getRootNode()).getEntryStrict().length);
+                assertSame(argument, produced.argument()); assertNull(produced.getEnvironment());
+            } else assertFalse(produced.hasArgument());
+            assertArrayEquals(new Object[]{argument}, ClosureInspection.image(produced).getPointers());
+            assertEquals(0, argument.getState()); assertEquals(0, produced.getState());
+            var driver = new com.oracle.truffle.api.nodes.RootNode(null) {
+                @Child private Force force = new Force(new Metrics(true));
+                @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { return force.execute(frame, produced); }
+            }.getCallTarget();
+            assertSame(expected, Calls.target(driver, new Object[0])); assertSame(expected, Calls.target(driver, new Object[0]));
+            assertEquals(1, calls.get()); assertEquals(2, produced.getState());
+            assertNull(produced.argument()); assertNull(produced.getEnvironment()); assertNull(produced.getTarget());
+        });
+    }
+    @Test void unaryThunkCaptureKeepsSourceAndResumesItsArgumentOnce() {
+        var identity = binding("identity", lambda(List.of(parameter("value", closure)), variable("value"), closure));
+        var application = apply(variable("identity"), List.of(variable("input")), List.of(true), 1, List.of(true));
+        application.set(6, map("rep", closure, "source", "call"));
+        var maker = binding("maker", lambda(List.of(parameter("input", closure)),
+            local(List.of(binding("shared", application)), variable("shared")), closure));
+        var demand = binding("demand", lambda(List.of(parameter("pending", closure)), list("case", variable("pending"),
+            "done", list(list("default", null, list(), integer(42))), map("rep", longProof, "binder", parameter("done", closure)))));
+        var module = map("bindings", List.of(identity, maker, demand), "sourceNotesEnabled", true,
+            "sourceFiles", List.of(map("id", "fixture", "path", "Thunk.hs", "content", "identity input")),
+            "sourceSpans", List.of(map("id", "call", "file", "fixture", "startLine", 1, "startColumn", 1,
+                "endLine", 1, "endColumn", 15, "charIndex", 0, "charLength", 14, "label", "shared")));
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, module, true);
+                Object expected = program.entryValue("identity"); int[] entries = {0};
+                var argument = new Thunk(new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public boolean getAsynchronousExceptions() { return true; }
+                    @Override public long bloom(com.oracle.truffle.api.frame.VirtualFrame frame) { return 0; }
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                        entries[0]++;
+                        return new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this))
+                            .append((saved, input) -> expected).freeze(this, frame.materialize());
+                    }
+                }.getCallTarget(), null);
+                var produced = assertInstanceOf(Thunk.class, Calls.target(program.entryTarget("maker"), new Object[]{0L, argument}));
+                assertTrue(produced.hasArgument());
+                var root = produced.getTarget().getRootNode();
+                assertEquals("identity input", root.getSourceSection().getCharacters().toString());
+                assertEquals(root.getSourceSection(), root.copy().getSourceSection());
+                var saved = assertInstanceOf(AstContinuation.class,
+                    Calls.target(program.entryTarget("demand"), new Object[]{0L, produced}));
+                assertEquals(5, produced.getState()); assertNull(produced.argument());
+                var resume = new com.oracle.truffle.api.nodes.RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false));
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { return force.execute(frame, produced); }
+                }.getCallTarget();
+                assertSame(expected, Calls.target(resume, new Object[0]));
+                assertEquals(42L, saved.continueWith(new ChildResume(expected, null)));
+                assertEquals(42L, Calls.target(program.entryTarget("demand"), new Object[]{0L, produced}));
+                assertEquals(1, entries[0]); assertEquals(2, produced.getState()); assertEquals(2, argument.getState());
+                assertArrayEquals(new Object[]{expected}, ClosureInspection.image(produced).getPointers());
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+            } finally { context.leave(); }
+        }
+    }
+    @Test void deepUnaryApplicationDemandsKeepBoundedUpdateStack() {
+        String previous = System.getProperty(CALL_DEMANDS_PROPERTY);
+        System.setProperty(CALL_DEMANDS_PROPERTY, "true");
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var identity = binding("identity", lambda(List.of(parameter("value", closure)), variable("value"), closure));
+                var application = apply(variable("identity"), List.of(variable("input")), List.of(true), 1, List.of(true));
+                application.set(6, map("rep", closure, "callDemand", map("arity", 1, "strictArgs", List.of(true))));
+                var maker = binding("maker", lambda(List.of(parameter("input", closure)),
+                    local(List.of(binding("shared", application)), variable("shared")), closure));
+                var program = new Program(language, map("bindings", List.of(identity, maker), "instrument", true), true);
+                Object expected = program.entryValue("identity"), chain = expected;
+                for (int i = 0; i < 2000; i++) chain = Calls.target(program.entryTarget("maker"), new Object[]{0L, chain});
+                Object value = chain;
+                var driver = new com.oracle.truffle.api.nodes.RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(true), true);
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { return force.execute(frame, value); }
+                }.getCallTarget();
+                assertSame(expected, Calls.target(driver, new Object[0]));
+            } finally { context.leave(); }
+        } finally {
+            if (previous == null) System.clearProperty(CALL_DEMANDS_PROPERTY); else System.setProperty(CALL_DEMANDS_PROPERTY, previous);
+        }
+    }
     @Test void callerDemandIsOptInAndDoesNotChangeAnAlreadyLoweredProgram() throws ReflectiveOperationException {
         var direct = binding("direct", lambda(List.of(parameter("input")), apply(variable("consumer"), List.of(delayedBox(variable("input")), variable("input")), List.of(true, false), 2, List.of(true, false))));
         eachBackend(List.of(consumer(), direct), null, (backend, p) -> {

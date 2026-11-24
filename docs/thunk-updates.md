@@ -8,6 +8,14 @@ continuation was captured. Supported async capture instead parks a continuation
 that a later owner can resume through the same update protocol. Blackhole
 detection and sharing remain unchanged.
 
+For an AST suspension applying a global to one lifted local data or closure
+reference, the thunk stores that reference directly and passes it as an ordinary
+formal to its owning update root. It retains the original application and WHNF
+demand, including saved argument writes and continuation capture. Other captures,
+recursive cells and reusable program code use the ordinary capture environment.
+Closure inspection exposes the direct reference without entering it; completion
+or suspension releases it through the same update protocol.
+
 Ownership transitions serialize on the thunk monitor. The owner writes the
 answer, failure or saved continuation before releasing its state; readers
 acquire that state before inspecting the payload. Nonforcing weak-key resolution

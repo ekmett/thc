@@ -11,15 +11,21 @@ final class Delay extends Expr {
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] captures;
     private final int programSlot;
+    private final int argumentSlot;
     Delay(RootCallTarget target, CaptureLayout captureLayout, int[] captures) {
         this(target, captureLayout, captures, -1);
     }
     Delay(RootCallTarget target, CaptureLayout captureLayout, int[] captures, int programSlot) {
         this.target = target; this.captureLayout = captureLayout; this.captures = captures;
-        this.programSlot = programSlot;
+        this.programSlot = programSlot; this.argumentSlot = -1;
+    }
+    Delay(RootCallTarget target, int argumentSlot) {
+        this.target = target; this.captureLayout = null; this.captures = new int[0];
+        this.programSlot = -1; this.argumentSlot = argumentSlot;
     }
     RootCallTarget target() { return target; }
     @Override public Thunk execute(VirtualFrame frame) {
+        if (argumentSlot >= 0) return Thunk.withArgument(target, FrameAccess.read(frame, argumentSlot));
         return new Thunk(target, captureLayout == null ? null : captureLayout.capture(frame, captures,
             programSlot < 0 ? null : Program.instance(frame, programSlot)));
     }

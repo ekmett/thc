@@ -15,16 +15,18 @@ import com.oracle.truffle.api.nodes.Node;
 /** Cache the target before forming fixed one-slot or two-slot thunk packets. */
 @ReportPolymorphism @GenerateInline @GenerateUncached
 public abstract class DispatchThunkTarget extends Node {
-    public abstract Object execute(Node inliningTarget, RootCallTarget target, CapturedFrame environment, Metrics metrics);
+    public abstract Object execute(Node inliningTarget, RootCallTarget target, CapturedFrame environment, Object argument, boolean hasArgument, Metrics metrics);
     @Specialization(guards = "target == cachedTarget", limit = "3")
-    protected Object direct(RootCallTarget target, CapturedFrame environment, Metrics metrics,
+    protected Object direct(RootCallTarget target, CapturedFrame environment, Object argument, boolean hasArgument, Metrics metrics,
             @Cached("target") RootCallTarget cachedTarget, @Cached("environment != null") boolean hasEnvironment,
             @Cached("createDirect(cachedTarget, metrics)") DirectCallNode call) {
+        if (hasArgument) return Calls.direct(call, new Object[] {0L, argument});
         return hasEnvironment ? Calls.direct(call, new Object[] {0L, environment}) : Calls.direct(call, new Object[] {0L});
     }
     @Specialization(replaces = "direct")
-    protected Object indirect(RootCallTarget target, CapturedFrame environment, Metrics metrics, @Cached("create()") IndirectCallNode call) {
+    protected Object indirect(RootCallTarget target, CapturedFrame environment, Object argument, boolean hasArgument, Metrics metrics, @Cached("create()") IndirectCallNode call) {
         if (metrics.getEnabled()) metrics.incrementIndirectCalls();
+        if (hasArgument) return Calls.indirect(call, target, new Object[] {0L, argument});
         return environment != null ? Calls.indirect(call, target, new Object[] {0L, environment}) : Calls.indirect(call, target, new Object[] {0L});
     }
     public static DirectCallNode createDirect(RootCallTarget target, Metrics metrics) {

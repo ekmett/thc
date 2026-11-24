@@ -56,6 +56,7 @@ public final class ClosureInspection {
                 descriptor = "thunk state " + thunk.getState(); tag = 3;
                 // Never wait for, enter or rethrow a thunk. Runtime metadata is not a guest pointer.
                 if (thunk.getState() == 2) field(payload, references, thunk.getValue(), true);
+                else if (thunk.hasArgument() && thunk.getTarget() != null) field(payload, references, thunk.argument(), true);
                 else captures(payload, references, thunk.getEnvironment());
             }
         } else if (value instanceof Integer number) { descriptor = "boxed Int32"; tag = 4; field(payload, references, number.longValue(), false); }

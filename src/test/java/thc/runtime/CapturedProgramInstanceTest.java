@@ -79,7 +79,7 @@ class CapturedProgramInstanceTest {
                         var layout = new CaptureLayout(language, new boolean[0]);
                         var thunk = new Thunk(target, layout.captureValues(new Object[0], owner));
                         var dispatch = DispatchThunkTargetNodeGen.create();
-                        assertEquals(expected, dispatch.execute(dispatch, thunk.getTarget(), thunk.getEnvironment(), new Metrics(true)));
+                        assertEquals(expected, dispatch.execute(dispatch, thunk.getTarget(), thunk.getEnvironment(), null, false, new Metrics(true)));
                         assertSame(owner, thunk.getEnvironment().getProgram());
                         assertEquals(0, thunk.getState(), "Transport alone must not update or force a thunk");
                     } finally { context.leave(); }

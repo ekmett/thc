@@ -17,7 +17,9 @@ public final class Thunk implements Lifted {
     }
     private RootCallTarget target;
     private final boolean asynchronousExceptions;
-    private CapturedFrame environment;
+    // Either selected captures or the single ordinary formal of an owning thunk root.
+    private Object payload;
+    private final boolean argumentPayload;
     // 0=unevaluated, 1=owned, 2=WHNF, 3=failure, 4=unsupported unwind, 5=parked.
     private volatile int state;
     private Object value;
@@ -27,8 +29,13 @@ public final class Thunk implements Lifted {
     java.util.ArrayList<Force.DemandWait> demandWaiters;
 
     public Thunk(RootCallTarget target, CapturedFrame environment) {
+        this(target, environment, false);
+    }
+    static Thunk withArgument(RootCallTarget target, Object argument) { return new Thunk(target, argument, true); }
+    private Thunk(RootCallTarget target, Object payload, boolean argumentPayload) {
         this.target = target;
-        this.environment = environment;
+        this.payload = payload;
+        this.argumentPayload = argumentPayload;
         // The target is cleared on completion or suspension; admission still needs its policy.
         asynchronousExceptions = target.getRootNode() instanceof GuestRoot root && root.getAsynchronousExceptions();
     }
@@ -42,8 +49,10 @@ public final class Thunk implements Lifted {
     public boolean getAsynchronousExceptions() { return asynchronousExceptions; }
     public RootCallTarget getTarget() { return target; }
     public void setTarget(RootCallTarget target) { this.target = target; }
-    public CapturedFrame getEnvironment() { return environment; }
-    public void setEnvironment(CapturedFrame environment) { this.environment = environment; }
+    public CapturedFrame getEnvironment() { return argumentPayload ? null : (CapturedFrame) payload; }
+    boolean hasArgument() { return argumentPayload; }
+    Object argument() { return argumentPayload ? payload : null; }
+    public void setEnvironment(CapturedFrame environment) { this.payload = environment; }
     /** Acquire the answer, failure or continuation published with this state. */
     public int getState() { return (int) STATE.getAcquire(this); }
     /** The owner holds the monitor and writes the payload before releasing state. */
@@ -56,7 +65,7 @@ public final class Thunk implements Lifted {
     @TruffleBoundary(transferToInterpreterOnException = false, allowInlining = true)
     void publishSuccess(Object result) {
         synchronized (this) {
-            value = result; target = null; environment = null;
+            value = result; target = null; payload = null;
             owner = null; setState(2); notifyUpdate();
         }
     }

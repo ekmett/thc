@@ -1071,6 +1071,27 @@ public final class Program implements ExecutableProgram {
         return proof.getEvaluated() && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble());
     }
     private Expr delay(List<Object> expr, Scope scope, String label) {
+        if (!reusableCode && "app".equals(expr.getFirst()) && expr.get(1) instanceof List<?> head &&
+                head.size() >= 2 && "var".equals(head.getFirst()) && !scope.locals.containsKey(head.get(1)) &&
+                globals.containsKey(head.get(1)) && expr.get(2) instanceof List<?> arguments && arguments.size() == 1 &&
+                arguments.getFirst() instanceof List<?> operand && operand.size() >= 2 && "var".equals(operand.getFirst()) &&
+                expr.get(3) instanceof List<?> flags && flags.size() == 1 && Boolean.TRUE.equals(flags.getFirst())) {
+            Local local = scope.locals.get(operand.get(1));
+            if (local != null && !local.cell && local.slot >= 0 &&
+                    List.of("BoxedRep (Just Lifted)").equals(local.proof.getPrimReps()) &&
+                    (local.proof.getKind() == CoreKind.DATA || local.proof.getKind() == CoreKind.CLOSURE)) {
+                var proof = Map.<String, Object>of("kind", local.proof.getKind() == CoreKind.DATA ? "data" : "closure",
+                    "evaluated", local.proof.getEvaluated(), "primReps", local.proof.getPrimReps());
+                var formal = Map.<String, Object>of("id", operand.get(1), "name", operand.get(1),
+                    "lifted", true, "coercion", false, "rep", proof);
+                FunctionSpec fn = function(label, List.of(formal), expr, scope, CoreRepresentations.expression(expr),
+                    new boolean[]{local.proof.getEvaluated()}, FunctionRootRole.FUNCTION, false, null, null, true);
+                TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
+                if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
+                return new Delay(fn.target, local.slot).proven(evaluated(CoreRepresentations.expression(expr), false))
+                    .located(sources.expression(expr, lowering().source));
+            }
+        }
         FunctionSpec fn = thunkFunction(label, List.of(), expr, scope);
         TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
         if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
