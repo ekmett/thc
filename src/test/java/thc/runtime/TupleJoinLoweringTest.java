@@ -26,6 +26,66 @@ class TupleJoinLoweringTest {
         var reps = new ArrayList<String>(); for (var component : components) reps.addAll(Objects.requireNonNull(component.getPrimReps()));
         return new CoreRepresentation(CoreKind.UNKNOWN, true, true, reps, Arrays.asList(components), null, null, null, null);
     }
+    @Test void unaryReferenceImagesKeepFormalWritesAndBodyClearsPrivateToEachInvocation() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var proof = new CoreRepresentation(CoreKind.DATA, true, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
+                var data = new DataLayout(language, "Payload", "Payload", new String[0]);
+                var original = data.create(new Object[0]); var first = data.create(new Object[0]); var second = data.create(new Object[0]);
+                var layout = new FrameLayout(); int formal = layout.bind("formal", FrameSlotKind.Object);
+                int scratch = layout.bind("dead body", FrameSlotKind.Object), selector = layout.bind("selector"), result = layout.bind("result", FrameSlotKind.Object);
+                var metrics = new Metrics(true); var group = new Object();
+                var target = new LocalJoinTarget(group, 1, new int[]{formal}, new CoreRepresentation[]{proof}, new boolean[]{true}, proof);
+                target.setBodySlots(scratch, scratch + 1);
+                int[] effects = {0, 0};
+                var operand = new Expr() {
+                    { setRepresentation(proof); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects[0]++; assertSame(original, frame.getObject(formal));
+                        throw new DelimitedCut(new PromptTag(Language.currentState()), null, null, SynchronousMasking.current(this), this);
+                    }
+                };
+                var body = new Expr() {
+                    { setRepresentation(proof); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects[1]++; assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(scratch));
+                        return frame.getObject(formal);
+                    }
+                };
+                var call = new LocalJoinCall(language, target, new Expr[]{operand}, null, metrics);
+                var region = new LocalJoinRegion(group, selector, result, new Expr[]{call, body}, proof, false, null, new int[0], true);
+                class Owner extends GuestRoot {
+                    @Child private Expr expression = region;
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    com.oracle.truffle.api.frame.MaterializedFrame captured;
+                    Owner() { super(language, layout.build()); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        frame.setObject(formal, original); frame.setObject(scratch, original); captured = frame.materialize();
+                        return expression.execute(frame);
+                    }
+                    Object resume(DelimitedStack image, Object value) {
+                        var action = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) { return value; }
+                        }.getCallTarget());
+                        return image.resume(site, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor()), action);
+                    }
+                }
+                var owner = new Owner();
+                var image = new DelimitedStack(assertThrows(DelimitedCut.class, () -> owner.getCallTarget().call(0L)), null);
+                assertSame(first, owner.resume(image, first)); assertSame(second, owner.resume(image, second));
+                assertThrows(RuntimeFault.class, () -> owner.resume(image, 9L));
+                assertSame(first, owner.resume(image, first));
+                assertArrayEquals(new int[]{1, 3}, effects);
+                assertEquals(3L, metrics.getLocalJoinTransfers());
+                assertSame(original, owner.captured.getObject(formal)); assertSame(original, owner.captured.getObject(scratch));
+                assertEquals(FrameSlotKind.Object, owner.getFrameDescriptor().getSlotKind(formal));
+            } finally { context.leave(); }
+        }
+    }
     @Test void tupleResultScratchIsClearedAfterCopyingUnlessTheDestinationAliasesIt() {
         try (var context = Context.newBuilder("thc").build()) {
             context.initialize("thc"); context.enter();

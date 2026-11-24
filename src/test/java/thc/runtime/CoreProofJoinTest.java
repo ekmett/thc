@@ -40,6 +40,86 @@ class CoreProofJoinTest {
     private Map<String, Object> bind(String id, List<Object> rhs, Integer join) { var result = map("id", id, "name", id, "lifted", true, "rep", closure, "expr", rhs); if (join != null) { result.put("joinValueArity", join); result.put("joinResultRep", longProof); } return result; }
     private List<Object> let(boolean recursive, List<Map<String, Object>> bindings, List<Object> body) { return list("let", recursive, bindings, body, meta()); }
     private List<Object> choose(List<Object> condition, List<Object> yes, List<Object> no) { return list("case", condition, "condition", list(list("lit", list("int", "1"), list(), yes), list("default", null, list(), no)), with(meta(), "binder", arg("condition"))); }
+    @ParameterizedTest @ValueSource(strings = {"data", "closure", "address"})
+    void unaryEvaluatedReferenceJoinStoresOnlyCompletedOperands(String kind) throws Exception {
+        boolean lifted = !kind.equals("address");
+        var proof = map("kind", kind, "primReps", list(lifted ? "BoxedRep (Just Lifted)" : "AddrRep"), "evaluated", true);
+        var formal = map("id", "value", "name", "value", "lifted", lifted, "rep", proof);
+        var join = with(bind("finish", list("lam", list(formal), list("var", "value", meta(proof)),
+                map("rep", closure, "resultRep", proof, "entryStrict", list(true))), 1), "joinResultRep", proof);
+        var operand = list("app", list("var", "pause", meta(closure)), list(n(1)), list(false), false, false, meta(proof));
+        var jump = list("app", list("var", "finish", meta(closure)), list(operand), list(lifted), false, false, meta(proof));
+        var body = list("let", false, list(join), jump, meta(proof));
+        var function = list("lam", list(map("id", "pause", "name", "pause", "lifted", true, "rep", closure)),
+                body, map("rep", closure, "resultRep", proof));
+        for (boolean prepared : new boolean[]{false, true}) try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var module = map("bindings", list(bind("entry", function)), "instrument", true);
+                var program = prepared ? Program.prepareCode(language, module, List.of("entry"), 1).newInstance(language)
+                        : new Program(language, module, true);
+                var target = program.entryTarget("entry"); var descriptor = target.getRootNode().getFrameDescriptor();
+                int formalSlot = -1;
+                for (int slot = 0; slot < descriptor.getNumberOfSlots(); slot++) {
+                    assertNotEquals("<join argument 0>", descriptor.getSlotName(slot), "Unary evaluated references need no parallel-move scratch");
+                    if ("value".equals(descriptor.getSlotName(slot))) formalSlot = slot;
+                }
+                assertTrue(formalSlot >= 0);
+                assertEquals(prepared || lifted ? FrameSlotKind.Object : FrameSlotKind.Illegal, descriptor.getSlotKind(formalSlot));
+                Object payload = switch (kind) {
+                    case "data" -> new DataLayout(language, "Payload", "Payload", new String[0]).create(new Object[0]);
+                    case "closure" -> new Closure(null, 0, new GuestRoot(language, new FrameLayout().build()) {
+                        @Override public long bloom(VirtualFrame frame) { return 0; }
+                        @Override public Object execute(VirtualFrame frame) { return 7L; }
+                    }.getCallTarget());
+                    default -> ManagedAddress.fromHex("41");
+                };
+                int[] effects = {0, 0}; boolean[] invalid = {false};
+                var pause = new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects[0]++;
+                        var request = threads.send(threads.currentIdentity(), "unary join pause");
+                        assertSame(request, GuestThreads.pollCurrent(this, false));
+                        return new AstCapture(request, SynchronousMasking.current(this))
+                                .append((saved, input) -> { effects[1]++; return invalid[0] ? 9L : payload; })
+                                .freeze(this, frame.materialize());
+                    }
+                };
+                var environment = ((Closure) program.entryValue("entry")).environment;
+                var closureOperand = new Closure(null, 1, pause.getCallTarget());
+                for (boolean wrong : new boolean[]{true, false}) {
+                    invalid[0] = wrong;
+                    var saved = assertInstanceOf(AstContinuation.class, Calls.target(target,
+                            environment == null ? new Object[]{0L, closureOperand} : new Object[]{0L, environment, closureOperand}));
+                    var field = AstContinuation.class.getDeclaredField("frame"); field.setAccessible(true);
+                    var frame = (com.oracle.truffle.api.frame.MaterializedFrame) field.get(saved);
+                    if (frame.isObject(formalSlot)) assertNull(frame.getObject(formalSlot));
+                    else assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(formalSlot));
+                    assertEquals(0L, program.diagnostics().get("localJoinTransfers"));
+                    saved.asyncRequest().acknowledge();
+                    var resume = new RootNode(language) {
+                        @Child private Force force = new Force(new Metrics(false), true);
+                        @Override public Object execute(VirtualFrame frame) { return force.drainStack(saved, null); }
+                    }.getCallTarget();
+                    if (wrong) {
+                        assertThrows(RuntimeFault.class, () -> resume.call());
+                        assertEquals(0L, program.diagnostics().get("localJoinTransfers"));
+                        if (frame.isObject(formalSlot)) assertNull(frame.getObject(formalSlot));
+                        else assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(formalSlot));
+                    } else {
+                        assertSame(payload, resume.call());
+                        assertSame(payload, frame.getObject(formalSlot));
+                        assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(formalSlot));
+                        assertEquals(1L, program.diagnostics().get("localJoinTransfers"));
+                    }
+                }
+                assertArrayEquals(new int[]{2, 2}, effects, "Suspended operands run once, including the failed carrier");
+            } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
     @Test void malformedVariableIdentifiersRejectBeforeInputSignatureLookup() {
         for (var id : Arrays.asList(null, 3L)) {
             var binding = bind("entry", lam(List.of("input"), app(list("var", id, meta(closure)), v("input"))));
