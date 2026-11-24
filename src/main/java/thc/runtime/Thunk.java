@@ -58,14 +58,17 @@ public final class Thunk implements Lifted {
     /** The owner holds the monitor and writes the payload before releasing state. */
     public void setState(int state) { STATE.setRelease(this, state); }
     public Object getValue() { return value; }
-    public void setValue(Object value) { this.value = value; }
+    public void setValue(Object value) {
+        AstContinuation.invalidateSpillPath(this.value);
+        this.value = value;
+    }
     public Thread getOwner() { return owner; }
     public void setOwner(Thread owner) { this.owner = owner; }
     /** Publish a completed evaluation and release its owned inputs atomically. */
     @TruffleBoundary(transferToInterpreterOnException = false, allowInlining = true)
     void publishSuccess(Object result) {
         synchronized (this) {
-            value = result; target = null; payload = null;
+            setValue(result); target = null; payload = null;
             owner = null; setState(2); notifyUpdate();
         }
     }

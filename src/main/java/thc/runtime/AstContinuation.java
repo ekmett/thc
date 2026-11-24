@@ -13,6 +13,25 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 public final class AstContinuation implements SavedGuestContinuation {
     private final GuestRoot sourceRoot;
     private Object yielded;
+    // All current AST edges from this parent to the same stack cut share this flag.
+    // It holds no frame, owner or wait. Replacing any retained edge invalidates it.
+    private static final class SpillPath { volatile boolean valid = true; }
+    private final SpillPath spillPath;
+    private static SpillPath spillPath(Object yielded) {
+        if (yielded == AstStackSpill.INSTANCE) return new SpillPath();
+        Object child;
+        if (yielded instanceof ThunkSuspended cut && cut.getThunk().getState() == 5)
+            child = cut.getThunk().getValue();
+        else if (yielded instanceof CallSegmentSuspended cut && cut.getSegment().getState() == 5)
+            child = cut.getSegment().getValue();
+        else return null;
+        return child instanceof AstContinuation saved ? saved.spillPath : null;
+    }
+    boolean hasWaitFreeSpillPath() { return spillPath != null && spillPath.valid; }
+    static void invalidateSpillPath(Object previous) {
+        if (previous instanceof AstContinuation saved && saved.spillPath != null)
+            saved.spillPath.valid = false;
+    }
     private final MaskingState logicalMask;
     private final MaterializedFrame frame;
     private final ArrayDeque<AstResumeStep> steps;
@@ -33,6 +52,7 @@ public final class AstContinuation implements SavedGuestContinuation {
     AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
                     ArrayDeque<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
         this.sourceRoot = root; this.yielded = yielded; this.logicalMask = mask; this.frame = frame;
+        this.spillPath = spillPath(yielded);
         this.steps = steps; this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
         this.transaction = thc.Language.currentState(root).stm.currentTransaction();
     }

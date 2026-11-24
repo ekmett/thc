@@ -57,7 +57,10 @@ public final class CallSegment {
     public int getState() { return state; }
     public void setState(int state) { this.state = state; }
     public Object getValue() { return value; }
-    public void setValue(Object value) { this.value = value; }
+    public void setValue(Object value) {
+        AstContinuation.invalidateSpillPath(this.value);
+        this.value = value;
+    }
     public Thread getOwner() { return owner; }
     public void setOwner(Thread owner) { this.owner = owner; }
     public Object getMonitor() { return monitor; }

@@ -765,6 +765,46 @@ class SavedGuestContinuationTest {
         }
     }
 
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void replacingAStackSpillDependencyRetainsTheNewWaitOnPublication(boolean replaceThunk) {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads();
+            threads.enterCurrent(null, true, true, null);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var owner = new GuestRoot(language, new FrameLayout().build()) {
+                    AstContinuation returned;
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) { return returned; }
+                };
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor());
+                var leaf = new AstContinuation(owner, AstStackSpill.INSTANCE, MaskingState.UNMASKED, frame,
+                    List.of(), StackAnnotationState.EMPTY);
+                var shared = parked(owner.getCallTarget(), leaf);
+                var middle = new AstContinuation(owner, new ThunkSuspended(shared), MaskingState.UNMASKED, frame,
+                    List.of(), StackAnnotationState.EMPTY);
+                var segment = new CallSegment(middle);
+                owner.returned = new AstContinuation(owner, new CallSegmentSuspended(segment), MaskingState.UNMASKED,
+                    frame, List.of(), StackAnnotationState.EMPTY);
+                var wait = new PendingWait(new PendingWait.Operation() {
+                    public Object resume() { return fail("Replaced child must remain parked"); }
+                    public boolean cancel() { return true; }
+                    public boolean ready() { return false; }
+                    public GuestThreadStatus status() { return GuestThreadStatus.MVAR; }
+                }, threads.pollState(Thread.currentThread()).getCurrent(), MaskingState.UNMASKED, owner);
+                var replacement = new Saved(owner, wait, input -> fail("Waiter resumed during publication"));
+                if (replaceThunk) shared.setValue(replacement);
+                else segment.setValue(replacement);
+                var parent = new Thunk(owner.getCallTarget(), null);
+                assertThrows(ThunkSuspended.class, () -> new Driver(language).force(parent));
+                assertEquals(5, parent.getState());
+                wait.abandon();
+                assertEquals(3, parent.getState(), "The terminal wait must settle its retained parent");
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
     @Test void releasedForeignWaitDoesNotRescanEveryReplacementSuffix() throws Exception {
         try (var context = Main.executionContext(false);
              var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
