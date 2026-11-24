@@ -417,21 +417,26 @@ class CaseBinderLifetimeTest {
     }
 
     private static final class MatchedArm extends Expr {
-        private final int slot, add;
+        private final int slot, add, binder;
         private final boolean integer;
         private final int[] compiled;
-        MatchedArm(int slot, int add, boolean integer, int[] compiled) {
-            this.slot = slot; this.add = add; this.integer = integer; this.compiled = compiled;
+        MatchedArm(int slot, int add, boolean integer, int[] compiled, int binder) {
+            this.slot = slot; this.add = add; this.binder = binder; this.integer = integer; this.compiled = compiled;
             setRepresentation(new CoreRepresentation(CoreKind.LONG, true, true,
                 List.of(integer ? "Int16Rep" : "IntRep")));
         }
         @Override public Object execute(VirtualFrame frame) { throw new AssertionError("typed arm used generic dispatch"); }
         private long value(VirtualFrame frame) {
+            if (binder >= 0) checkDataBinder(FrameAccess.read(frame, binder), frame.getArguments()[1]);
             if (CompilerDirectives.inCompiledCode()) compiled[0]++;
             return slot < 0 ? add : frame.getLong(slot) + add;
         }
         @Override public long executeLong(VirtualFrame frame) { if (integer) throw new AssertionError(); return value(frame); }
         @Override public int executeInt(VirtualFrame frame) { if (!integer) throw new AssertionError(); return (int) value(frame); }
+    }
+    @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+    private static void checkDataBinder(Object actual, Object expected) {
+        assertSame(expected, actual, "Used DATA binder retains the exact scrutinee");
     }
     private static final class MatchedCaseRoot extends GuestRoot {
         @Child private Case body;
@@ -460,7 +465,8 @@ class CaseBinderLifetimeTest {
                 var left = new DataLayout(language, "left", "left", new String[]{"IntRep"});
                 var right = new DataLayout(language, "right", "right", new String[]{"IntRep"});
                 var other = new DataLayout(language, "other", "other", new String[]{});
-                for (boolean typed : new boolean[]{false, true}) for (boolean integer : new boolean[]{false, true}) {
+                for (boolean typed : new boolean[]{false, true}) for (boolean integer : new boolean[]{false, true})
+                        for (boolean used : new boolean[]{false, true}) {
                     var layout = new FrameLayout(); int binder = layout.bind("whole", FrameSlotKind.Object);
                     int field = layout.bind("field", FrameSlotKind.Long); int[] compiled = {0};
                     var proof = new CoreRepresentation(CoreKind.DATA, true, true);
@@ -469,12 +475,13 @@ class CaseBinderLifetimeTest {
                         @Override public Object execute(VirtualFrame frame) { return frame.getArguments()[1]; }
                     };
                     Alternative[] arms = {
-                        new Alternative(Alternative.DATA_ALTERNATIVE, left, new int[]{field}, new MatchedArm(field, 1, integer, compiled), new int[0][], false),
-                        new Alternative(Alternative.DATA_ALTERNATIVE, right, new int[]{field}, new MatchedArm(field, 2, integer, compiled), new int[0][], false),
-                        new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], new MatchedArm(-1, -1, integer, compiled), new int[0][], false)};
+                        new Alternative(Alternative.DATA_ALTERNATIVE, left, new int[]{field}, new MatchedArm(field, 1, integer, compiled, used ? binder : -1), new int[0][], false),
+                        new Alternative(Alternative.DATA_ALTERNATIVE, right, new int[]{field}, new MatchedArm(field, 2, integer, compiled, used ? binder : -1), new int[0][], false),
+                        new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], new MatchedArm(-1, -1, integer, compiled, used ? binder : -1), new int[0][], false)};
                     Case selection = typed ? new DataCase(input, binder, arms, new Metrics(false), proof, false)
                         : new Case(input, binder, arms, new Metrics(false));
-                    var target = new MatchedCaseRoot(language, layout.build(), selection.discardUnusedBinder(), integer).getCallTarget();
+                    if (!used) selection.discardUnusedBinder();
+                    var target = new MatchedCaseRoot(language, layout.build(), selection, integer).getCallTarget();
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                     Object[] values = {left.createLong(40), right.createLong(40), other.create(new Object[0])};
@@ -491,14 +498,15 @@ class CaseBinderLifetimeTest {
         }
     }
 
-    @Test void unusedDataBinderDirectAndCapturedPathsKeepOneEvaluation() {
+    @Test void dataBindersDirectAndCapturedPathsKeepOneEvaluation() {
         try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.Compilation", "false").build()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var data = new DataLayout(language, "captured", "captured", new String[]{"IntRep"});
-                for (int mode = 0; mode < 3; mode++) {
+                var value = data.createLong(42);
+                for (boolean used : new boolean[]{false, true}) for (int mode = 0; mode < 3; mode++) {
                     final int operation = mode; int[] calls = {0}, bodies = {0};
                     var layout = new FrameLayout(); int binder = layout.bind("dead", FrameSlotKind.Object);
                     int field = layout.bind("field", FrameSlotKind.Long);
@@ -517,14 +525,16 @@ class CaseBinderLifetimeTest {
                         { setRepresentation(new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"))); }
                         @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
                         @Override public long executeLong(VirtualFrame frame) {
-                            assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(binder)); bodies[0]++;
+                            assertEquals((used ? FrameSlotKind.Object : FrameSlotKind.Illegal).tag, frame.getTag(binder));
+                            if (used) assertSame(value, FrameAccess.read(frame, binder));
+                            bodies[0]++;
                             return frame.getLong(field);
                         }
                     };
                     var arm = new Alternative(Alternative.DATA_ALTERNATIVE, data, new int[]{field}, body, new int[0][], false);
-                    var selection = new Case(input, binder, new Alternative[]{arm}, new Metrics(false), proof, true).discardUnusedBinder();
+                    var selection = new Case(input, binder, new Alternative[]{arm}, new Metrics(false), proof, true);
+                    if (!used) selection.discardUnusedBinder();
                     var root = new MatchedCaseRoot(language, layout.build(), selection, false);
-                    var value = data.createLong(42);
                     if (mode == 0) assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L, value}));
                     else if (mode == 1) {
                         var saved = assertInstanceOf(AstContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L, value}));
