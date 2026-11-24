@@ -12,7 +12,10 @@ public final class CarrierLocal<T> extends ThreadLocal<T> {
         private T value;
         public Cell(T value) { this.value = value; }
         public T getValue() { return value; }
-        public void setValue(T value) { this.value = value; }
+        public void setValue(T value) {
+            // Resuming a guest frame often reinstalls the same carrier state.
+            if (this.value != value) this.value = value;
+        }
     }
     private final T initial;
     private final WeakHashMap<Thread, WeakReference<Cell<T>>> cells = new WeakHashMap<>();
@@ -26,7 +29,7 @@ public final class CarrierLocal<T> extends ThreadLocal<T> {
     }
     public Cell<T> cell$org_intelligence_thc(Thread thread) { return cell(thread); }
     @TruffleBoundary @Override public T get() { return current.get().value; }
-    @TruffleBoundary @Override public void set(T value) { current.get().value = value; }
+    @TruffleBoundary @Override public void set(T value) { current.get().setValue(value); }
     @TruffleBoundary @Override public void remove() {
         synchronized (this) {
             WeakReference<Cell<T>> reference = cells.get(Thread.currentThread());

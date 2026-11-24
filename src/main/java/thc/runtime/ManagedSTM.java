@@ -109,7 +109,9 @@ public final class ManagedSTM implements AutoCloseable {
         lock.lock(); try { live(); var tx = new Transaction(); restore(tx); return tx; } finally { lock.unlock(); }
     }
     @TruffleBoundary void restore(Transaction tx) {
-        if (tx == null) current.remove();
+        if (tx == null) {
+            if (!unused.isValid()) current.remove();
+        }
         else { unused.invalidate(); current.set(tx); }
     }
     /** Only private one-shot continuations retain this association; external cuts abandon their log. */

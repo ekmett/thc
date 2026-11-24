@@ -19,7 +19,7 @@ public final class StackAnnotations {
         CoreProfileAction.validate(arguments.subList(1, arguments.size()), flags.subList(1, flags.size()), result);
     }
     public static StackAnnotationState current(Node node) { return LANGUAGES.get(node).getThreadAnnotations().get().getValue(); }
-    @TruffleBoundary public static void set(Node node, StackAnnotationState state) { Language.currentState(node).getStackAnnotations().set(state); }
+    @TruffleBoundary public static void set(Node node, StackAnnotationState state) { LANGUAGES.get(node).getThreadAnnotations().get().setValue(state); }
     public static StackAnnotationState enter(Node node, Object annotation) {
         StackAnnotationState prior = current(node); set(node, prior.push(annotation)); return prior;
     }

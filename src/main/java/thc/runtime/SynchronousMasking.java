@@ -10,5 +10,5 @@ public final class SynchronousMasking {
     private static final LanguageReference<Language> LANGUAGES = LanguageReference.create(Language.class);
     private SynchronousMasking() {}
     public static MaskingState current(Node node) { return LANGUAGES.get(node).getThreadMaskingState().get().getValue(); }
-    @TruffleBoundary public static void set(Node node, MaskingState state) { Language.currentState(node).getMaskingState().set(state); }
+    @TruffleBoundary public static void set(Node node, MaskingState state) { LANGUAGES.get(node).getThreadMaskingState().get().setValue(state); }
 }
