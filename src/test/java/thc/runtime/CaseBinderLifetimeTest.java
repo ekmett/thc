@@ -42,6 +42,9 @@ class CaseBinderLifetimeTest {
         var alternatives = defaults ? List.of(fallback) : List.of(node("lit", node("int", "0"), List.of(), body));
         var expression = node("case", variable("input"), "seen", alternatives,
                 Map.of("rep", LONG, "binder", binder("seen")));
+        return entryModule(expression);
+    }
+    private static Map<String, Object> entryModule(List<Object> expression) {
         return Map.of("bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true,
                 "rep", CLOSURE, "expr", node("lam", List.of(binder("input")), expression,
                         Map.of("rep", CLOSURE, "resultRep", LONG)))));
@@ -235,9 +238,15 @@ class CaseBinderLifetimeTest {
             context.initialize("thc"); context.enter();
             try {
                 Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new Program(language, module(used, true), true);
+                var value = used ? variable("seen") : node("lit", "int", "42", Map.of("rep", LONG));
+                var inner = node("case", variable("input"), "seen", List.of(node("default", null, List.of(), value)),
+                        Map.of("rep", LONG, "binder", binder("seen")));
+                var outer = node("case", variable("input"), "outer", List.of(node("default", null, List.of(), inner)),
+                        Map.of("rep", LONG, "binder", binder("outer")));
+                var program = new Program(language, entryModule(outer), true);
                 var target = program.entryTarget("entry");
-                var selection = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class).getFirst();
+                var first = NodeUtil.findFirstNodeInstance(target.getRootNode(), Case.class);
+                var selection = assertInstanceOf(Case.class, first.alternatives[0].getBody());
                 int[] entries = new int[1], observations = new int[3];
                 var scrutinee = scrutinee(selection);
                 Expr interrupted = new Expr() {

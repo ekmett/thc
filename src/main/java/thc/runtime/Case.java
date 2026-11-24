@@ -174,13 +174,25 @@ class Case extends Expr {
             }
         });
     }
-    private Expr select(VirtualFrame frame) {
+    private Expr select(VirtualFrame frame) { return select(frame, false, null); }
+
+    private Expr interpretedBranch(VirtualFrame frame, int[] slots, int offset) {
+        Case current = this;
+        while (true) {
+            Expr branch = current.select(frame, current.directDataScrutinee, current.prepareData(frame, slots, offset));
+            // A wrapper or a specialized case retains its own typed entry.
+            if (branch.getClass() != Case.class) return branch;
+            current = (Case) branch;
+        }
+    }
+
+    private Expr select(VirtualFrame frame, boolean useDirect, DataValue direct) {
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            Object matched = alt.getKind() == DATA_ALTERNATIVE ? dataScrutinee(frame) : null;
+            Object matched = alt.getKind() == DATA_ALTERNATIVE ? (useDirect ? direct : dataScrutinee(frame)) : null;
             if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) return selected(frame, alt, matched);
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
@@ -189,6 +201,7 @@ class Case extends Expr {
     protected Object dataScrutinee(VirtualFrame frame) { return frame.isObject(binderSlot) ? frame.getObject(binderSlot) : null; }
     protected boolean matches(VirtualFrame frame, Alternative alternative) { return alternative.matches(frame, binderSlot); }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, null, 0).execute(frame);
         DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
@@ -209,6 +222,7 @@ class Case extends Expr {
         return body.execute(frame);
     }
     @ExplodeLoop @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, null, 0).executeInt(frame);
         DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
@@ -229,6 +243,7 @@ class Case extends Expr {
         return body.executeInt(frame);
     }
     @ExplodeLoop @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, null, 0).executeLong(frame);
         DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
@@ -249,6 +264,7 @@ class Case extends Expr {
         return body.executeLong(frame);
     }
     @ExplodeLoop @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, null, 0).executeFloat(frame);
         DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
@@ -269,6 +285,7 @@ class Case extends Expr {
         return body.executeFloat(frame);
     }
     @ExplodeLoop @Override public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, null, 0).executeDouble(frame);
         DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
@@ -289,6 +306,7 @@ class Case extends Expr {
         return body.executeDouble(frame);
     }
     @ExplodeLoop @Override public Closure executeClosure(VirtualFrame frame) throws UnexpectedResultException {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, null, 0).executeClosure(frame);
         DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
@@ -309,6 +327,7 @@ class Case extends Expr {
         return body.executeClosure(frame);
     }
     @ExplodeLoop @Override public DataValue executeDataValue(VirtualFrame frame) throws UnexpectedResultException {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, null, 0).executeDataValue(frame);
         DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
@@ -329,6 +348,7 @@ class Case extends Expr {
         return body.executeDataValue(frame);
     }
     @ExplodeLoop @Override public ManagedAddress executeAddress(VirtualFrame frame) throws UnexpectedResultException {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, null, 0).executeAddress(frame);
         DataValue direct = prepareData(frame, null, 0);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
@@ -349,6 +369,7 @@ class Case extends Expr {
         return body.executeAddress(frame);
     }
     @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+        if (CompilerDirectives.inInterpreter()) return interpretedBranch(frame, slots, offset).executeTuple(frame, slots, offset);
         DataValue direct = prepareData(frame, slots, offset);
         int choice = literalIndex == null ? -1 : literalChoice(frame);
         Alternative fallback = null;
