@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.Test;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,8 +33,11 @@ class CaseBinderLifetimeTest {
             .filter(node -> node.getParent() instanceof LocalBinding && node.getParent().getParent() == selection)
             .findFirst().orElseThrow();
     }
-    private static Map<String, Object> module(boolean used, boolean defaults) {
+    private static Map<String, Object> module(boolean used, boolean defaults) { return module(used, defaults, false); }
+    private static Map<String, Object> module(boolean used, boolean defaults, boolean deadScratch) {
         var body = used ? variable("seen") : node("lit", "int", "42", Map.of("rep", LONG));
+        if (deadScratch) body = node("case", node("lit", "int", "0", Map.of("rep", LONG)), "scratch",
+            List.of(node("default", null, List.of(), body)), Map.of("rep", LONG, "binder", binder("scratch")));
         var fallback = node("default", null, List.of(), body);
         var alternatives = defaults ? List.of(fallback) : List.of(node("lit", node("int", "0"), List.of(), body));
         var expression = node("case", variable("input"), "seen", alternatives,
@@ -124,12 +128,32 @@ class CaseBinderLifetimeTest {
     }
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
-    void onlyDeadCaseBinderStartsClearedAtFreshCompiledEntry(boolean used) throws Exception {
+    void descriptorClearsStillRejectLiveInputAliases(boolean captureAlias) {
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = FrameLayout.forProgramBody();
+                int argument = layout.bind("argument", FrameSlotKind.Object);
+                int capture = layout.bind("capture", FrameSlotKind.Object);
+                layout.clearInitially(captureAlias ? capture : argument);
+                var root = new FunctionRoot(language, layout.build(), "scratch validation",
+                        new CaptureLayout(language, new boolean[]{false}), new int[]{capture},
+                        new int[]{argument}, new int[]{0}, new Literal(42L), new Metrics(false));
+                assertTrue(layout.usesIllegalDefault());
+                assertThrows(IllegalArgumentException.class, () ->
+                        root.configureInitialClears(layout.firstLocalSlot(), layout.initialClears(), layout.usesIllegalDefault()));
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @CsvSource({"false, false", "true, false", "true, true"})
+    void freshCompiledEntryInitializesScratchWithoutChangingLiveBinderValues(boolean used, boolean deadScratch) throws Exception {
         try (var context = executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new Program(language, module(used, true), false);
+                var program = new Program(language, module(used, true, deadScratch), false);
                 var target = program.entryTarget("entry");
                 var selection = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class).getFirst();
                 var scrutinee = scrutinee(selection);
@@ -139,7 +163,7 @@ class CaseBinderLifetimeTest {
                     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
                     @Override public long executeLong(VirtualFrame frame) {
                         observations[0]++;
-                        if (frame.getTag(selection.binderSlot) == (used ? FrameSlotKind.Object.tag : FrameSlotKind.Illegal.tag)) observations[1]++;
+                        if (frame.getTag(selection.binderSlot) == (used && !deadScratch ? FrameSlotKind.Object.tag : FrameSlotKind.Illegal.tag)) observations[1]++;
                         if (CompilerDirectives.inCompiledCode()) observations[2]++;
                         return value.executeRequiredLong(frame);
                     }
