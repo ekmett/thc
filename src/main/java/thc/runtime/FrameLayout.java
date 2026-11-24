@@ -17,10 +17,12 @@ public final class FrameLayout {
         final FrameDescriptor.Builder builder = FrameDescriptor.newBuilder();
         final List<FrameSlotKind> kinds = new ArrayList<>();
         final LinkedHashSet<Integer> initialClears = new LinkedHashSet<>();
+        final boolean reserveTailSlots;
         final int firstLocalSlot;
         int cursor;
 
         Allocation(boolean reserveTailSlots) {
+            this.reserveTailSlots = reserveTailSlots;
             bind("<TCO Bloom Filter>", FrameSlotKind.Long);
             if (reserveTailSlots) {
                 bind("<TCO Result>", FrameSlotKind.Object);
@@ -67,6 +69,7 @@ public final class FrameLayout {
         }
     }
     int[] initialClears() { return allocation.initialClears.stream().mapToInt(Integer::intValue).toArray(); }
+    boolean usesIllegalDefault() { return !allocation.reserveTailSlots && !allocation.initialClears.isEmpty(); }
     /** Storage for a completed scalar or a physical tuple leaf, not a WHNF certificate. */
     public static FrameSlotKind carrierKind(CoreRepresentation proof) {
         if (proof.isInt()) return FrameSlotKind.Int;
@@ -95,5 +98,9 @@ public final class FrameLayout {
     int nextSlot() { return allocation.cursor; }
     /** Move between mutually exclusive case alternatives or local-join bodies. */
     void alternativeSlot(int slot) { allocation.cursor = slot; }
-    public FrameDescriptor build() { return allocation.builder.build(); }
+    public FrameDescriptor build() {
+        // Fresh lowered bodies write live locals before reading them.
+        if (usesIllegalDefault()) allocation.builder.defaultValueIllegal();
+        return allocation.builder.build();
+    }
 }
