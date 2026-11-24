@@ -222,6 +222,35 @@ class TypedExecutionTest {
             } finally { context.leave(); }
         }
     }
+    @Test void suspendedDataDemandForcesTheReturnedThunkOnlyInACapturingRoot() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var constructor = new DataLayout(language, "unit", "unit", new String[0]);
+                var value = constructor.create(new Object[0]);
+                for (boolean captures : new boolean[]{false, true}) {
+                    int[] executions = {0}, demands = {0};
+                    var operand = new Expr() {
+                        @Override public Object execute(VirtualFrame frame) {
+                            executions[0]++;
+                            throw new AstCapture(AstStackSpill.INSTANCE, MaskingState.UNMASKED);
+                        }
+                    }.proven(new CoreRepresentation(CoreKind.DATA, false, true, null, null, null, null, null, null));
+                    var evaluation = new Evaluate(operand, new Metrics(false));
+                    var root = evaluationOwner(language, evaluation, captures);
+                    var frame = Truffle.getRuntime().createVirtualFrame(new Object[]{0L}, root.getFrameDescriptor());
+                    var thunk = new Thunk(new RootNode(null) {
+                        @Override public Object execute(VirtualFrame unused) { demands[0]++; return value; }
+                    }.getCallTarget(), null);
+                    var cut = assertThrows(AstCapture.class, () -> evaluation.executeDataValue(frame));
+                    assertSame(captures ? value : thunk, cut.freeze(root, frame.materialize()).continueWith(thunk));
+                    assertEquals(captures ? 1 : 0, demands[0]);
+                    assertEquals(1, executions[0]);
+                }
+            } finally { context.leave(); }
+        }
+    }
     private static FunctionRoot evaluationOwner(Language language, Evaluate evaluation, boolean captures) {
         var root = new FunctionRoot(language, new FrameLayout().build(), "generic evaluated demand", null,
             new int[0], new int[0], new int[0], evaluation, new Metrics(false), new CoreRepresentation[0],
