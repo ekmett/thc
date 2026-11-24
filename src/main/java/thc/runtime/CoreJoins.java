@@ -4,7 +4,7 @@ package thc.runtime;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -68,68 +68,94 @@ public final class CoreJoins {
         if (joins == null) return;
         var arities = new LinkedHashMap<String, Integer>();
         for (var join : joins) arities.put(join.id(), join.parameters().size());
+        var validator = new Validator(arities);
         for (var join : joins) {
-            var shadowed = new LinkedHashSet<String>(recursive ? Set.of() : arities.keySet());
-            addParameters(shadowed, join.parameters());
-            visit(join.body(), true, shadowed, arities);
+            int mark = validator.mark();
+            if (!recursive) for (var id : arities.keySet()) validator.bind(id);
+            validator.bindParameters(join.parameters());
+            validator.visit(join.body(), true);
+            validator.restore(mark);
         }
-        visit(body, true, Set.of(), arities);
+        validator.visit(body, true);
     }
 
     private static Object first(List<?> values) { return values.isEmpty() ? null : values.getFirst(); }
-    private static void addParameters(Set<String> ids, List<Map<String, Object>> parameters) {
-        for (var parameter : parameters) ids.add((String) parameter.get("id"));
-    }
-    private static boolean isJoin(String id, Set<String> shadowed, Map<String, Integer> arities) {
-        return arities.containsKey(id) && !shadowed.contains(id);
-    }
-    private static void visit(List<?> expr, boolean tail, Set<String> shadowed, Map<String, Integer> arities) {
-        var inlined = CoreStateApplications.inline(expr);
-        if (inlined != null) { visit(inlined, tail, shadowed, arities); return; }
-        if (!(first(expr) instanceof String tag)) return;
-        switch (tag) {
-            case "var" -> {
-                var id = (String) expr.get(1);
-                if (isJoin(id, shadowed, arities) && (!tail || arities.get(id) != 0))
-                    throw new RuntimeFault("Local join escapes or is not exactly saturated: " + id);
-            }
-            case "app" -> {
-                var function = (List<?>) expr.get(1);
-                var args = (List<List<?>>) expr.get(2);
-                var id = "var".equals(first(function)) ? (String) function.get(1) : null;
-                if (id != null && isJoin(id, shadowed, arities)) {
-                    if (!tail || args.size() != arities.get(id))
-                        throw new RuntimeFault("Local join must be exactly saturated in tail position: " + id);
-                } else visit(function, false, shadowed, arities);
-                for (var arg : args) visit(arg, false, shadowed, arities);
-            }
-            case "lam" -> {
-                var scope = new LinkedHashSet<>(shadowed);
-                addParameters(scope, (List<Map<String, Object>>) expr.get(1));
-                visit((List<?>) expr.get(2), false, scope, arities);
-            }
-            case "let" -> {
-                var nested = (List<Map<String, Object>>) expr.get(2);
-                var ids = new LinkedHashSet<String>();
-                addParameters(ids, nested);
-                var bodyScope = new LinkedHashSet<>(shadowed); bodyScope.addAll(ids);
-                Set<String> rhsScope = Boolean.TRUE.equals(expr.get(1)) ? bodyScope : shadowed;
-                var joins = definitions(nested);
-                if (joins != null) for (var join : joins) {
-                    var scope = new LinkedHashSet<>(rhsScope); addParameters(scope, join.parameters());
-                    visit(join.body(), tail, scope, arities);
-                } else for (var binding : nested) visit((List<?>) binding.get("expr"), false, rhsScope, arities);
-                visit((List<?>) expr.get(3), tail, bodyScope, arities);
-            }
-            case "case" -> {
-                visit((List<?>) expr.get(1), false, shadowed, arities);
-                for (var alternative : (List<List<?>>) expr.get(3)) {
-                    var scope = new LinkedHashSet<>(shadowed);
-                    scope.add((String) expr.get(2)); scope.addAll((List<String>) alternative.get(2));
-                    visit((List<?>) alternative.get(3), tail, scope, arities);
+
+    /** Only shadowing of this group's joins affects its validation. Keep one
+     * lexical stack instead of copying all enclosing binders at each node. */
+    private static final class Validator {
+        private final Map<String, Integer> arities;
+        private final Set<String> shadowed = new HashSet<>();
+        private final ArrayList<String> scope = new ArrayList<>();
+
+        Validator(Map<String, Integer> arities) { this.arities = arities; }
+        private int mark() { return scope.size(); }
+        private void bind(String id) {
+            if (arities.containsKey(id) && shadowed.add(id)) scope.add(id);
+        }
+        private void bindParameters(List<Map<String, Object>> parameters) {
+            for (var parameter : parameters) bind((String) parameter.get("id"));
+        }
+        private void restore(int mark) {
+            while (scope.size() > mark) shadowed.remove(scope.removeLast());
+        }
+        private boolean isJoin(String id) { return arities.containsKey(id) && !shadowed.contains(id); }
+        private void visit(List<?> expr, boolean tail) {
+            var inlined = CoreStateApplications.inline(expr);
+            if (inlined != null) { visit(inlined, tail); return; }
+            if (!(first(expr) instanceof String tag)) return;
+            switch (tag) {
+                case "var" -> {
+                    var id = (String) expr.get(1);
+                    if (isJoin(id) && (!tail || arities.get(id) != 0))
+                        throw new RuntimeFault("Local join escapes or is not exactly saturated: " + id);
                 }
+                case "app" -> {
+                    var function = (List<?>) expr.get(1);
+                    var args = (List<List<?>>) expr.get(2);
+                    var id = "var".equals(first(function)) ? (String) function.get(1) : null;
+                    if (id != null && isJoin(id)) {
+                        if (!tail || args.size() != arities.get(id))
+                            throw new RuntimeFault("Local join must be exactly saturated in tail position: " + id);
+                    } else visit(function, false);
+                    for (var arg : args) visit(arg, false);
+                }
+                case "lam" -> {
+                    int mark = mark();
+                    bindParameters((List<Map<String, Object>>) expr.get(1));
+                    visit((List<?>) expr.get(2), false);
+                    restore(mark);
+                }
+                case "let" -> {
+                    var nested = (List<Map<String, Object>>) expr.get(2);
+                    int mark = mark();
+                    boolean recursive = Boolean.TRUE.equals(expr.get(1));
+                    if (recursive) bindParameters(nested);
+                    var joins = definitions(nested);
+                    if (joins != null) for (var join : joins) {
+                        int rhsMark = mark();
+                        bindParameters(join.parameters());
+                        visit(join.body(), tail);
+                        restore(rhsMark);
+                    } else for (var binding : nested) visit((List<?>) binding.get("expr"), false);
+                    if (!recursive) bindParameters(nested);
+                    visit((List<?>) expr.get(3), tail);
+                    restore(mark);
+                }
+                case "case" -> {
+                    visit((List<?>) expr.get(1), false);
+                    int mark = mark();
+                    bind((String) expr.get(2));
+                    for (var alternative : (List<List<?>>) expr.get(3)) {
+                        int alternativeMark = mark();
+                        for (var id : (List<String>) alternative.get(2)) bind(id);
+                        visit((List<?>) alternative.get(3), tail);
+                        restore(alternativeMark);
+                    }
+                    restore(mark);
+                }
+                default -> {}
             }
-            default -> {}
         }
     }
 }

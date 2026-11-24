@@ -40,6 +40,40 @@ class CoreProofJoinTest {
     private Map<String, Object> bind(String id, List<Object> rhs, Integer join) { var result = map("id", id, "name", id, "lifted", true, "rep", closure, "expr", rhs); if (join != null) { result.put("joinValueArity", join); result.put("joinResultRep", longProof); } return result; }
     private List<Object> let(boolean recursive, List<Map<String, Object>> bindings, List<Object> body) { return list("let", recursive, bindings, body, meta()); }
     private List<Object> choose(List<Object> condition, List<Object> yes, List<Object> no) { return list("case", condition, "condition", list(list("lit", list("int", "1"), list(), yes), list("default", null, list(), no)), with(meta(), "binder", arg("condition"))); }
+    @Test void joinValidationRestoresRepeatedShadowingAndSiblingScopes() {
+        var joins = List.of(bind("finish", lam(List.of("value"), v("value")), 1));
+        var shadowed = lam(List.of("finish"), app(v("ordinary"),
+                lam(List.of("finish"), v("finish")), v("finish")));
+        assertDoesNotThrow(() -> CoreJoins.validate(joins, shadowed, false));
+        assertThrows(RuntimeFault.class, () -> CoreJoins.validate(joins,
+                app(v("ordinary"), shadowed, v("finish")), false));
+        var alternatives = list("case", n(0), "scrutinee", list(
+                list("default", null, list("finish"), v("finish")),
+                list("default", null, list(), v("finish"))), meta());
+        assertThrows(RuntimeFault.class, () -> CoreJoins.validate(joins, alternatives, false));
+        alternatives.set(2, "finish");
+        assertDoesNotThrow(() -> CoreJoins.validate(joins, alternatives, false));
+        alternatives.set(1, v("finish"));
+        assertThrows(RuntimeFault.class, () -> CoreJoins.validate(joins, alternatives, false));
+    }
+    @Test void joinValidationKeepsRecursiveAndNonrecursiveRhsScopesDistinct() {
+        var joins = List.of(bind("finish", lam(List.of("value"), v("value")), 1));
+        var bindings = List.of(bind("finish", v("finish")));
+        assertDoesNotThrow(() -> CoreJoins.validate(joins, let(true, bindings, v("finish")), false));
+        assertThrows(RuntimeFault.class, () -> CoreJoins.validate(joins, let(false, bindings, v("finish")), false));
+        var self = List.of(bind("finish", lam(List.of("value"), v("finish")), 1));
+        assertDoesNotThrow(() -> CoreJoins.validate(self, call("finish", n(1)), false));
+        assertThrows(RuntimeFault.class, () -> CoreJoins.validate(self, call("finish", n(1)), true));
+    }
+    @Test void joinValidationRestoresParametersBetweenNestedJoinBodies() {
+        var joins = List.of(bind("finish", lam(List.of("value"), v("value")), 1));
+        var nested = List.of(bind("first", lam(List.of("finish"), v("finish")), 1),
+                bind("second", lam(List.of("value"), v("finish")), 1));
+        assertThrows(RuntimeFault.class, () -> CoreJoins.validate(joins,
+                let(true, nested, call("first", n(1))), false));
+        var valid = List.of(nested.getFirst(), bind("second", lam(List.of("value"), call("finish", v("value"))), 1));
+        assertDoesNotThrow(() -> CoreJoins.validate(joins, let(true, valid, call("first", n(1))), false));
+    }
     @Test void malformedVariableIdentifiersRejectBeforeInputSignatureLookup() {
         for (var id : Arrays.asList(null, 3L)) {
             var binding = bind("entry", lam(List.of("input"), app(list("var", id, meta(closure)), v("input"))));
