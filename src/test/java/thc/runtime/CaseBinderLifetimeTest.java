@@ -109,6 +109,61 @@ class CaseBinderLifetimeTest {
         }
     }
 
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void nestedScrutineesAndArmsReuseOnlyDeadCaseStorage(boolean captured) {
+        var answer = node("lit", "int", "42", Map.of("rep", LONG));
+        var inner = node("case", variable("input"), "inner", List.of(
+            node("default", null, List.of(), answer)), Map.of("rep", LONG, "binder", binder("inner")));
+        var arm = node("case", variable("input"), "arm", List.of(
+            node("default", null, List.of(), variable("live"))), Map.of("rep", LONG, "binder", binder("arm")));
+        var middle = node("case", inner, "middle", List.of(
+            node("lit", node("int", "42"), List.of(), arm)), Map.of("rep", LONG, "binder", binder("middle")));
+        var outer = node("case", variable("input"), "live", List.of(
+            node("default", null, List.of(), middle)), Map.of("rep", LONG, "binder", binder("live")));
+        var entry = node("lam", List.of(binder("input")), outer,
+            Map.of("rep", CLOSURE, "resultRep", LONG));
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var demand = new CoreDemandBindings(id -> false, id -> null, id -> null,
+                    (id, binding) -> { throw new AssertionError(id); }, false, id -> false);
+                var target = new Program(language, Map.of("bindings", List.of(Map.of("id", "entry", "name", "entry",
+                    "lifted", true, "rep", CLOSURE, "expr", entry)), "demandBindings", demand,
+                    "captureDelimited", captured), false).entryTarget("entry");
+                assertEquals(17L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 17L}));
+                var cases = NodeUtil.findAllNodeInstances(target.getRootNode(), Case.class);
+                assertEquals(4, cases.size());
+                assertEquals(1, cases.stream().skip(1).map(c -> c.binderSlot).distinct().count());
+                assertNotEquals(cases.getFirst().binderSlot, cases.get(1).binderSlot);
+                if (captured) {
+                    var input = scrutinee(cases.get(2));
+                    var interrupted = new Expr() {
+                        @Override public Object execute(VirtualFrame frame) {
+                            throw new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                                SynchronousMasking.current(this), this);
+                        }
+                    };
+                    interrupted.setRepresentation(input.getRepresentation()); input.replace(interrupted);
+                    var cut = assertThrows(DelimitedCut.class, () ->
+                        ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 17L}));
+                    var image = new DelimitedStack(cut, null);
+                    var action = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                        @Override public long bloom(VirtualFrame frame) { return 0; }
+                        @Override public Object execute(VirtualFrame frame) { return 7L; }
+                    }.getCallTarget());
+                    var driver = new GuestRoot(language, new FrameLayout().build()) {
+                        @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                        @Override public long bloom(VirtualFrame frame) { return 0; }
+                        @Override public Object execute(VirtualFrame frame) { return image.resume(site, frame.materialize(), action); }
+                    }.getCallTarget();
+                    assertEquals(17L, Calls.target(driver, new Object[]{0L}));
+                    assertEquals(17L, Calls.target(driver, new Object[]{0L}));
+                }
+            } finally { context.leave(); }
+        }
+    }
+
     private static List<Object> capturedScalar(String name, int value, boolean nested) {
         var result = node("app", node("prim", "+#"), List.of(variable("outer"), variable(name)),
             List.of(false, false), false, false, Map.of("rep", LONG));
@@ -239,6 +294,8 @@ class CaseBinderLifetimeTest {
             try {
                 Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var value = used ? variable("seen") : node("lit", "int", "42", Map.of("rep", LONG));
+                if (!used) value = node("case", variable("input"), "scratch",
+                        List.of(node("default", null, List.of(), value)), Map.of("rep", LONG, "binder", binder("scratch")));
                 var inner = node("case", variable("input"), "seen", List.of(node("default", null, List.of(), value)),
                         Map.of("rep", LONG, "binder", binder("seen")));
                 var outer = node("case", variable("input"), "outer", List.of(node("default", null, List.of(), inner)),

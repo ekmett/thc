@@ -6,6 +6,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,7 @@ public final class FrameLayout {
         final FrameDescriptor.Builder builder = FrameDescriptor.newBuilder();
         final List<FrameSlotKind> kinds = new ArrayList<>();
         final LinkedHashSet<Integer> initialClears = new LinkedHashSet<>();
+        final Map<FrameSlotKind, Integer> caseScratch = new EnumMap<>(FrameSlotKind.class);
         final boolean reserveTailSlots;
         final int firstLocalSlot;
         int cursor;
@@ -37,7 +39,7 @@ public final class FrameLayout {
                 // Unproved carriers and uniquely named scratch slots stay fresh.
                 cursor = kinds.size();
             } else {
-                while (cursor < kinds.size() && kinds.get(cursor) != kind) cursor++;
+                while (cursor < kinds.size() && (kinds.get(cursor) != kind || caseScratch.containsValue(cursor))) cursor++;
             }
             if (cursor == kinds.size()) {
                 builder.addSlot(kind, name, null);
@@ -83,6 +85,19 @@ public final class FrameLayout {
     }
     /** Allocation-time storage, unaffected by widening in later activations. */
     boolean referenceSlot(int slot) { return allocation.kinds.get(slot) == FrameSlotKind.Object; }
+    /** An unused case binder lives only between its completed scrutinee and arm entry.
+     * Reserve these slots across allocation rewinds: fields and live locals must never alias them. */
+    int unusedCaseSlot(FrameSlotKind kind) {
+        if (kind == FrameSlotKind.Illegal) throw new IllegalArgumentException("Unproved case carrier");
+        Integer existing = allocation.caseScratch.get(kind);
+        if (existing != null) return existing;
+        int slot = allocation.kinds.size();
+        allocation.builder.addSlot(kind, "<unused case " + kind + ">", null);
+        allocation.kinds.add(kind);
+        allocation.caseScratch.put(kind, slot);
+        allocation.cursor = slot + 1;
+        return slot;
+    }
     public int bind(String name) { return bind(name, FrameSlotKind.Illegal); }
     public int bind(String name, FrameSlotKind kind) {
         int slot = allocation.bind(name, kind);

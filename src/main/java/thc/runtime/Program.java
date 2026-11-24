@@ -1795,9 +1795,18 @@ public final class Program implements ExecutableProgram {
         if (binderProof.isSum()) return compileSumCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isTuple()) return compileTupleCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isVector()) return compileVectorCase(expr, scrutinee, binderProof, local, tail);
-        int binder = local.bind((String) expr.get(2), !binderProof.getPresent() || binderProof.isLong(), binderProof,
-            false, null, null, FrameLayout.carrierKind(binderProof)).slot;
         List<List<Object>> rawAlternatives = (List<List<Object>>) expr.get(3);
+        boolean unusedBinder = true;
+        for (List<Object> alt : rawAlternatives)
+            if (coreFreeVariables((List<Object>) alt.get(3)).contains(expr.get(2))) { unusedBinder = false; break; }
+        FrameSlotKind binderKind = FrameLayout.carrierKind(binderProof);
+        int binder;
+        if (unusedBinder && binderKind != FrameSlotKind.Illegal) {
+            binder = local.layout.unusedCaseSlot(binderKind);
+            local.bindSlot((String) expr.get(2), new Local(binder, !binderProof.getPresent() || binderProof.isLong(),
+                binderProof, false, null, null, null));
+        } else binder = local.bind((String) expr.get(2), !binderProof.getPresent() || binderProof.isLong(), binderProof,
+            false, null, null, binderKind).slot;
         boolean substantialSiblings = substantialSiblings(rawAlternatives);
         Alternative[] alternatives = new Alternative[rawAlternatives.size()];
         List<CoreRepresentation> results = new ArrayList<>();
@@ -1898,8 +1907,7 @@ public final class Program implements ExecutableProgram {
             case GENERIC -> new Case(scrutinee, binder, alternatives, codeMetrics(), null, delimited);
         };
         selection.prepareLiteralIndex(binderProof);
-        for (List<Object> alt : rawAlternatives)
-            if (coreFreeVariables((List<Object>) alt.get(3)).contains(expr.get(2))) return selection;
+        if (!unusedBinder) return selection;
         scope.layout.clearInitially(binder);
         return selection.discardUnusedBinder();
     }
