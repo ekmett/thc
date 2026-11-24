@@ -27,8 +27,13 @@ public final class AstContinuation implements SavedGuestContinuation {
     }
     public AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
                            List<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
+        this(root, yielded, mask, frame, new ArrayDeque<>(steps), annotations, rootEntrySpill, tailSpill);
+    }
+    /** Transfer an unpublished capture's queue; the caller must detach its reference. */
+    AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
+                    ArrayDeque<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
         this.sourceRoot = root; this.yielded = yielded; this.logicalMask = mask; this.frame = frame;
-        this.steps = new ArrayDeque<>(steps); this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
+        this.steps = steps; this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
         this.transaction = thc.Language.currentState(root).stm.currentTransaction();
     }
     @Override public GuestRoot getSourceRoot() { return sourceRoot; }
