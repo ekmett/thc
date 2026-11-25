@@ -13,9 +13,12 @@ public final class AstContinuations {
     private AstContinuations() {}
     /** Pending work belongs to this invocation; consumed prefixes are no longer roots. */
     public static Object resumeAstSteps(VirtualFrame frame, ArrayDeque<AstResumeStep> steps, Object input) {
-        return resumeAstSteps(frame, (Queue<AstResumeStep>) steps, input);
+        return resumeAstSteps(frame, steps, input, null);
     }
     static Object resumeAstSteps(VirtualFrame frame, Queue<AstResumeStep> steps, Object input) {
+        return resumeAstSteps(frame, steps, input, null);
+    }
+    static Object resumeAstSteps(VirtualFrame frame, Queue<AstResumeStep> steps, Object input, LocalJoinRepeater join) {
         Object answer = input;
         Throwable primary = null;
         try {
@@ -23,8 +26,19 @@ public final class AstContinuations {
                 // Do not retain the recipe around its instantiated scope: it still
                 // owns the immutable prefix needed by other delimited invocations.
                 AstResumeStep step = steps.remove().forInvocation();
-                try { answer = step.resume(frame, answer); }
-                catch (AstCapture cut) { throw cut.appendRemaining(steps); }
+                try {
+                    if (join != null && step instanceof Case selection && steps.size() == 1 && steps.peek() == join) {
+                        Expr branch = selection.resumedJoinBranch(frame);
+                        if (branch instanceof LocalJoinCall call) {
+                            LocalJoinJump transfer = call.prepareTransfer(frame);
+                            // Preparing the jump can itself suspend. Its result writer stays
+                            // pending until all arguments have arrived.
+                            steps.remove();
+                            return transfer;
+                        }
+                        answer = branch.execute(frame);
+                    } else answer = step.resume(frame, answer);
+                } catch (AstCapture cut) { throw cut.appendRemaining(steps); }
                 catch (DelimitedCut cut) {
                     // The interrupted operation has already recorded its own remainder.
                     if (!steps.isEmpty()) cut.append(frame, new Suffix(List.copyOf(steps)));
@@ -32,7 +46,9 @@ public final class AstContinuations {
                     throw cut;
                 }
             }
-            return answer;
+            // A region reads its ordinary result from its own frame slot. Only a
+            // prepared lexical transfer is returned to that caller.
+            return join == null ? answer : null;
         } catch (RuntimeException | Error failure) {
             primary = failure;
             throw failure;
