@@ -331,6 +331,8 @@ launcher stderr contains no metrics report. The scalar `--compile` diagnostic re
 counters to verify its first installed call. Embedded callers choose instrumentation
 through the load APIs and can read the `diagnostics` member directly.
 
+The launcher uses a single compilation tier by default. Set
+`-Dpolyglot.engine.MultiTier=true` to enable both Truffle compilation tiers.
 The launcher chooses Truffle's compiler pool, single-tier threshold (10 000),
 compilation timeout (30 s) and graph budget (`compiler.MaximumGraalGraphSize`,
 64 000). An explicit `polyglot.` system property overrides each, for example
