@@ -194,6 +194,7 @@ class StockGraphRecoveryTest {
             try (var context = thc.Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), thc.ContextProfile.LAUNCHER)
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "2")
+                    .option("compiler.MaximumGraalGraphSize", "1000")
                     .build()) {
                 context.initialize("thc"); context.enter();
                 var runtime = (OptimizedTruffleRuntime) Truffle.getRuntime();
@@ -213,7 +214,7 @@ class StockGraphRecoveryTest {
                                 boolean bailout, boolean permanent, int tier, java.util.function.Supplier<String> stack) {
                             if (failed == target) {
                                 assertTrue(GraphRecovery.graphTooBig(reason, bailout, permanent));
-                                assertTrue(reason.endsWith("Limit: 1000."), "launcher must use the small speculative budget");
+                                assertTrue(reason.endsWith("Limit: 1000."), "recovery control must use its requested graph budget");
                                 failures.incrementAndGet();
                             }
                         }
