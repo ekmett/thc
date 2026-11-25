@@ -66,6 +66,42 @@ class AstContinuationTest {
             } finally { context.leave(); }
         }
     }
+    @Test void completedChildDemandChecksThePublishedValueAndForcesAThunkUnderTheSavedMask() {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = new FrameLayout(); int slot = layout.bind("operand");
+                var root = new GuestRoot(language, layout.build()) {
+                    @Child Evaluate demand = new Evaluate(new LocalRead(slot, false), new Metrics(false));
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) { return SynchronousMasking.current(this); }
+                };
+                var target = root.getCallTarget();
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, root.getFrameDescriptor());
+                var child = new Thunk(target, null);
+                var mask = MaskingState.MASKED_INTERRUPTIBLE;
+                var ambient = SynchronousMasking.current(root);
+                java.util.function.Supplier<AstContinuation> capture = () -> {
+                    SynchronousMasking.set(root, mask);
+                    try { return AstControl.captureChild(root, new ThunkSuspended(child)).append(root.demand).freeze(root, frame); }
+                    finally { SynchronousMasking.set(root, ambient); }
+                };
+                Object published = new Object(); child.publishSuccess(published);
+                var succeeded = new ChildResume(published, null);
+                assertSame(published, capture.get().continueWith(succeeded)); assertNull(succeeded.getValue());
+                var unrelated = new ChildResume(new Object(), null);
+                assertTrue(assertThrows(RuntimeFault.class, () -> capture.get().continueWith(unrelated)).getMessage().contains("lost its completed update"));
+                assertNotNull(unrelated.getValue());
+                var failure = new RuntimeFault("guest failure"); var failed = new ChildResume(null, failure);
+                assertSame(failure, assertThrows(RuntimeFault.class, () -> capture.get().continueWith(failed))); assertNull(failed.getFailure());
+                var delayed = new Thunk(target, null); child.publishSuccess(delayed); frame.setObject(slot, delayed);
+                assertSame(mask, capture.get().continueWith(new ChildResume(delayed, null)));
+                assertSame(mask, frame.getObject(slot)); assertSame(mask, delayed.getValue());
+                assertSame(ambient, SynchronousMasking.current(root));
+            } finally { context.leave(); }
+        }
+    }
     private static List<Object> list(Object... values) { return Arrays.asList(values); }
     private static Map<String, Object> map(Object... fields) { var result = new LinkedHashMap<String, Object>(); for (int i = 0; i < fields.length; i += 2) result.put((String) fields[i], fields[i + 1]); return result; }
     private final Map<String, Object> stateRep = map("kind", "void", "primReps", List.of(), "evaluated", true);

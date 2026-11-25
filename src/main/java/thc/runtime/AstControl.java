@@ -24,10 +24,11 @@ public final class AstControl {
         return owner instanceof GhcBCORoot ||
             owner instanceof FunctionRoot root && root.getCapturesContinuations$org_intelligence_thc();
     }
-    private static final class ResumeChild implements AstResumeStep {
+    static final class ResumeChild implements AstResumeStep {
         private final Object child;
         private final Node node;
         ResumeChild(Object child, Node node) { this.child = child; this.node = node; }
+        boolean completedWith(Object value) { return completedChild(child, value); }
         @Override public Object resume(VirtualFrame frame, Object input) { return resumeChild(child, node, input, this); }
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
@@ -57,10 +58,12 @@ public final class AstControl {
         }
         if (!(input instanceof ChildResume resumed)) throw fault("AST child continuation requires ChildResume");
         if (resumed.getFailure() != null) throw resumed.takeFailure();
-        boolean valid = child instanceof Thunk thunk && thunk.getState() == 2 && thunk.getValue() == resumed.getValue() ||
-            child instanceof CallSegment segment && segment.getState() == 2 && segment.getValue() == resumed.getValue();
-        if (!valid) throw fault("AST child continuation lost its completed update");
+        if (!completedChild(child, resumed.getValue())) throw fault("AST child continuation lost its completed update");
         return resumed.takeValue();
+    }
+    private static boolean completedChild(Object child, Object value) {
+        return child instanceof Thunk thunk && thunk.getState() == 2 && thunk.getValue() == value ||
+            child instanceof CallSegment segment && segment.getState() == 2 && segment.getValue() == value;
     }
     private static final class RetryForce implements AstResumeStep {
         private final Node node;
