@@ -792,13 +792,19 @@ public final class FunctionRoot extends GuestRoot {
         }
         if (hasSelfTail) return loop.execute(frame);
         if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function self-loop node");
+        // Finish the first transfer before entering the long-running loop. Its
+        // exception and argument packet can otherwise retain a consumed list prefix.
+        Object result = firstLap(frame, repeating);
+        return result == AstSelfCall.INSTANCE ? loop.execute(frame) : result;
+    }
+    private Object firstLap(VirtualFrame frame, SelfRepeater repeating) {
         try { return repeating.once(frame); }
         catch (AstSelfCall ignored) {
             tailCallProfile.enter();
             if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
-            return loop.execute(frame);
+            return AstSelfCall.INSTANCE;
         } catch (HandoffTailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
@@ -806,7 +812,7 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreHandoff(frame, tail.getArguments(), false, null);
-            return loop.execute(frame);
+            return AstSelfCall.INSTANCE;
         } catch (TailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
@@ -814,7 +820,7 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreTail(frame, tail);
-            return loop.execute(frame);
+            return AstSelfCall.INSTANCE;
         }
     }
     @Override public SourceSection getSourceSection() { return coreSourceLocation == null ? null : coreSourceLocation.getSection(); }
