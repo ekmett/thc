@@ -2787,6 +2787,27 @@ public final class Program implements ExecutableProgram {
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);
             int[] vectorSlots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<vector call result ", tupleProof) : null;
+            AstSelfLayout self = scope.self;
+            boolean scalarOwner = !reusableCode && tail && self != null && self.getInputLayout() == null &&
+                self.getArity() == nodes.length && nodes.length != 0 && tupleProof.isTuple() && !tupleProof.getComponents().isEmpty() &&
+                tupleProof.getComponents().stream().allMatch(CoreRepresentation::isLong);
+            for (Expr argument : nodes) scalarOwner &= argument.getRepresentation().isLong() && argument.getRepresentation().getEvaluated();
+            if (scalarOwner) {
+                int callee = scope.layout.bind("<tuple self function>", FrameSlotKind.Object);
+                int[] arguments = new int[nodes.length];
+                int[] temporaries = new int[nodes.length + 1];
+                LocalBinding[] prepared = new LocalBinding[nodes.length + 1];
+                temporaries[0] = callee;
+                prepared[0] = new LocalBinding(callee, new ScalarTupleTailCall.Callee(function, codeMetrics()), false);
+                for (int i = 0; i < nodes.length; i++) {
+                    arguments[i] = scope.layout.bind("<tuple self argument " + i + ">", FrameSlotKind.Long);
+                    temporaries[i + 1] = arguments[i];
+                    prepared[i + 1] = new LocalBinding(arguments[i], nodes[i], true);
+                }
+                scope.layout.clearInitially(temporaries);
+                return new AstOperands(prepared, temporaries,
+                    new ScalarTupleTailCall(self, callee, arguments, shape, codeMetrics()));
+            }
             return new TupleApplication((thc.Language) language, shape, function, nodes, tail, codeMetrics(), vectorSlots);
         }
         AstSelfLayout self = scope.self;

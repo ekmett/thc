@@ -1,0 +1,305 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+package thc.runtime;
+
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import java.util.*;
+import org.junit.jupiter.api.Test;
+import thc.Language;
+import static org.junit.jupiter.api.Assertions.*;
+import static thc.Main.executionContext;
+
+class ScalarTupleTailCallTest {
+    private static List<Object> list(Object... values) { return Arrays.asList(values); }
+    private static Map<String,Object> map(Object... pairs) {
+        var result = new LinkedHashMap<String,Object>();
+        for (int i=0;i<pairs.length;i+=2) result.put((String)pairs[i],pairs[i+1]);
+        return result;
+    }
+    private final Map<String,Object> scalar = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
+    private final Map<String,Object> closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+    private final Map<String,Object> tuple = map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(scalar, scalar),
+        "primReps", list("IntRep", "IntRep"), "evaluated", true);
+    private List<Object> variable(String id) { return list("var", id, map("rep", scalar)); }
+    private List<Object> literal(long n) { return list("lit", "int", Long.toString(n), map("rep", scalar)); }
+    private Map<String,Object> parameter(String id) { return map("id", id, "name", id, "lifted", false, "rep", scalar); }
+    private List<Object> apply(List<Object> function, List<List<Object>> args, Map<String,Object> result) {
+        return list("app", function, args, Collections.nCopies(args.size(), false), false, false, map("rep", result));
+    }
+    private List<Object> primitive(String name, List<Object> a, List<Object> b) { return apply(list("prim", name), List.of(a,b), scalar); }
+    private List<Object> pack(List<Object> a, List<Object> b) { return apply(list("con", "T2", 2), List.of(a,b), tuple); }
+    private Map<String,Object> binding(String id, List<Object> body) {
+        var args = List.of(parameter("n"), parameter("x"), parameter("y"), parameter("count"));
+        return map("id", id, "name", id, "lifted", true, "rep", closure,
+            "expr", list("lam", args, body, map("rep", closure, "resultRep", tuple)));
+    }
+    private Map<String,Object> module(boolean self) {
+        var next = apply(list("var", self ? "worker" : "other", map("rep", closure)), List.of(
+            primitive("-#", variable("n"), literal(1)), variable("y"),
+            primitive("+#", variable("x"), literal(1)), primitive("+#", variable("count"), literal(1))), tuple);
+        var body = list("case", variable("n"), "seen", list(
+            list("lit", list("int", "0"), list(), pack(variable("x"), variable("count"))),
+            list("default", null, list(), next)), map("rep", tuple, "binder", parameter("seen")));
+        return map("instrument", true, "constructors", list(map("id", "T2", "name", "T2", "kind", "unboxed-tuple", "arity", 2)),
+            "bindings", list(binding("worker", body), binding("other", pack(variable("x"), variable("count")))));
+    }
+    private long[] result(GuestRoot root, Object answer) {
+        var shape = root.getTupleResult(); var owned = TupleResults.ownedTupleResult(answer, shape);
+        return new long[]{shape.getLayout().getLong(owned, 0), shape.getLayout().getLong(owned, 1)};
+    }
+    private long[] invoke(ExecutableProgram program, long n, long x, long y) {
+        Closure function = (Closure) program.entryValue("worker");
+        return result((GuestRoot) function.target.getRootNode(), Calls.target(function.target, new Object[]{0L,n,x,y,0L}));
+    }
+    private long[] expected(long n, long x, long y) {
+        for (long i=0;i<n;i++) { long next=y; y=x+1; x=next; }
+        return new long[]{x,n};
+    }
+    @FunctionalInterface interface Action { void run(Language language) throws Exception; }
+    private void entered(Action action) throws Exception {
+        try (var context=executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); }
+            finally { context.leave(); }
+        }
+    }
+    @Test void parallelScalarInputsAndTupleResultMatchIndependentModelOnBothBackends() throws Exception {
+        entered(language -> {
+            for (boolean ast : List.of(true,false)) {
+                ExecutableProgram program=ast?new Program(language,module(true)):new BytecodeProgram(language,module(true));
+                var root=(GuestRoot)program.entryTarget("worker").getRootNode();
+                if(ast)assertNotNull(NodeUtil.findFirstNodeInstance(root,ScalarTupleTailCall.class));
+                for(long n:new long[]{0,1,2,9,100})assertArrayEquals(expected(n,Long.MIN_VALUE,Long.MAX_VALUE),invoke(program,n,Long.MIN_VALUE,Long.MAX_VALUE));
+                if(ast) {
+                    assertEquals(0L,program.diagnostics().get("tailBounces"));
+                    assertTrue(NodeUtil.findAllNodeInstances(root,TupleDispatch.class).isEmpty(),"Unused fallback stays cold");
+                }
+            }
+        });
+    }
+    @Test void nonselfTargetKeepsOrdinaryTupleDispatchAndResultDestination() throws Exception {
+        entered(language -> {
+            var program=new Program(language,module(false));
+            var root=program.entryTarget("worker").getRootNode();
+            assertNotNull(NodeUtil.findFirstNodeInstance(root,ScalarTupleTailCall.class));
+            for(int i=0;i<3;i++)assertArrayEquals(new long[]{19,1},invoke(program,1,7,19));
+            assertFalse(NodeUtil.findAllNodeInstances(root,TupleDispatch.class).isEmpty());
+        });
+    }
+    @Test void savedTypedPreparationResumesWithoutBoxedArgumentEntriesOrReplay() throws Exception {
+        entered(language -> {
+            var program=new Program(language,module(true));
+            Closure function=(Closure)program.entryValue("worker");
+            var root=(FunctionRoot)function.target.getRootNode();
+            var transfer=NodeUtil.findFirstNodeInstance(root,ScalarTupleTailCall.class);
+            var owner=(AstOperands)transfer.getParent();
+            var bindings=new ArrayList<LocalBinding>();
+            for(var child:owner.getChildren())if(child instanceof LocalBinding binding)bindings.add(binding);
+            Expr value=(Expr)bindings.get(1).getChildren().iterator().next();
+            class CutSecond extends Expr {
+                @Child private Expr delegate;
+                int typed, generic; MaterializedFrame last;
+                CutSecond(Expr delegate){this.delegate=delegate;setRepresentation(delegate.getRepresentation());}
+                @Override public Object execute(VirtualFrame frame){generic++;return delegate.execute(frame);}
+                @Override public long executeLong(VirtualFrame frame)throws UnexpectedResultException {
+                    typed++;last=frame.materialize();
+                    if(typed==2)throw new AstCapture(Unit.INSTANCE,SynchronousMasking.current(this));
+                    return delegate.executeLong(frame);
+                }
+            }
+            var cut=new CutSecond(value);value.replace(cut);
+            var saved=assertInstanceOf(AstContinuation.class,Calls.target(function.target,new Object[]{0L,3L,7L,19L,0L}));
+            assertEquals(2,cut.typed);assertEquals(0,cut.generic);
+            assertArrayEquals(expected(3,7,19),result(root,saved.continueWith(1L)));
+            assertEquals(3,cut.typed);assertEquals(0,cut.generic);
+            for(int slot=0;slot<root.getFrameDescriptor().getNumberOfSlots();slot++)
+                if(String.valueOf(root.getFrameDescriptor().getSlotName(slot)).startsWith("<tuple self "))
+                    assertEquals(FrameSlotKind.Illegal.tag,cut.last.getTag(slot));
+            assertThrows(RuntimeFault.class,()->saved.continueWith(1L));
+        });
+    }
+    @Test void savedFunctionPreparationRetainsClosureValidationAndDoesNotReplay() throws Exception {
+        entered(language -> {
+            for (boolean valid : List.of(true, false)) {
+                var program = new Program(language, module(true));
+                Closure function = (Closure) program.entryValue("worker");
+                var root = (FunctionRoot) function.target.getRootNode();
+                var transfer = NodeUtil.findFirstNodeInstance(root, ScalarTupleTailCall.class);
+                var owner = (AstOperands) transfer.getParent();
+                LocalBinding first = (LocalBinding) owner.getChildren().iterator().next();
+                Expr checked = (Expr) first.getChildren().iterator().next();
+                Expr demanded = (Expr) checked.getChildren().iterator().next();
+                Expr original = (Expr) demanded.getChildren().iterator().next();
+                class CutFunction extends Expr {
+                    @Child private Expr delegate;
+                    int entries;
+                    CutFunction(Expr delegate) { this.delegate = delegate; setRepresentation(delegate.getRepresentation()); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        entries++;
+                        if (entries == 2) throw new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this));
+                        return delegate.execute(frame);
+                    }
+                    @Override public Closure executeClosure(VirtualFrame frame) throws UnexpectedResultException {
+                        return RuntimeTypesGen.expectClosure(execute(frame));
+                    }
+                }
+                var allBindings = new ArrayList<LocalBinding>();
+                for (var child : owner.getChildren()) if (child instanceof LocalBinding binding) allBindings.add(binding);
+                Expr operand = (Expr) allBindings.get(1).getChildren().iterator().next();
+                class CountOperand extends Expr {
+                    @Child private Expr delegate;
+                    int entries;
+                    CountOperand(Expr delegate) { this.delegate = delegate; setRepresentation(delegate.getRepresentation()); }
+                    @Override public Object execute(VirtualFrame frame) { return delegate.execute(frame); }
+                    @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
+                        entries++; return delegate.executeLong(frame);
+                    }
+                }
+                var counter = new CountOperand(operand); operand.replace(counter);
+                var capture = new CutFunction(original); original.replace(capture);
+                var saved = assertInstanceOf(AstContinuation.class,
+                    Calls.target(function.target, new Object[]{0L, 3L, 7L, 19L, 0L}));
+                assertEquals(2, capture.entries);
+                if (valid) assertArrayEquals(expected(3, 7, 19), result(root, saved.continueWith(function)));
+                else assertEquals("Application of a non-function", assertThrows(RuntimeFault.class, () -> saved.continueWith(7L)).getMessage());
+                assertEquals(valid ? 3 : 2, capture.entries);
+                assertEquals(valid ? 3 : 1, counter.entries, "Invalid saved callee must fail before later operands run");
+            }
+        });
+    }
+
+    @Test void typedTupleOwnerResumesSameDelimitedImageTwice() throws Exception {
+        entered(language -> {
+            var proof = CoreRepresentations.parse(scalar);
+            var resultProof = CoreRepresentations.parse(tuple);
+            var shape = new TupleShape(resultProof, language);
+            var slots = new FrameLayout();
+            int n = slots.bind("n"), x = slots.bind("x"), y = slots.bind("y"), count = slots.bind("count");
+            int calleeSlot = slots.bind("callee"), seen = slots.bind("seen");
+            int[] arguments = {n, x, y, count};
+            int[] scratch = {slots.bind("next n"), slots.bind("next x"), slots.bind("next y"), slots.bind("next count")};
+            int[] owned = {calleeSlot, scratch[0], scratch[1], scratch[2], scratch[3]};
+            int[] output = {slots.bind("out x"), slots.bind("out count")};
+            var metrics = new Metrics(true);
+            Closure[] functionHolder = {null};
+            Expr callee = new Expr() {
+                { setRepresentation(CoreRepresentations.parse(closure)); }
+                @Override public Object execute(VirtualFrame frame) { return functionHolder[0]; }
+            };
+            var layout = new AstSelfLayout(null, new int[0], arguments,
+                new CoreRepresentation[]{proof, proof, proof, proof}, new boolean[4]);
+            var transfer = new ScalarTupleTailCall(layout, calleeSlot, scratch, shape, metrics);
+            Expr nextN = new Primitive("-#", new Expr[]{new LocalRead(n, false).proven(proof), new Literal(1L)});
+            var prepared = new AstOperands(new LocalBinding[]{new LocalBinding(calleeSlot, callee, false),
+                new LocalBinding(scratch[0], nextN, true),
+                new LocalBinding(scratch[1], new LocalRead(y, false).proven(proof), true),
+                new LocalBinding(scratch[2], new Primitive("+#", new Expr[]{new LocalRead(x, false).proven(proof), new Literal(1L)}), true),
+                new LocalBinding(scratch[3], new Primitive("+#", new Expr[]{new LocalRead(count, false).proven(proof), new Literal(1L)}), true)}, owned, transfer);
+            var body = new Case(new LocalRead(n, false).proven(proof), seen, new Alternative[]{
+                new Alternative(Alternative.LITERAL_ALTERNATIVE, 0L, new int[0], new TupleConstruct(shape,
+                    new Expr[]{new LocalRead(x, false).proven(proof), new LocalRead(count, false).proven(proof)})),
+                new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], prepared)}, metrics, proof, true);
+            var root = new FunctionRoot(language, slots.build(), "active typed tuple loop", null, new int[0], arguments,
+                new int[]{0, 1, 2, 3}, body, metrics, new CoreRepresentation[]{proof, proof, proof, proof}, resultProof,
+                null, new boolean[4], null, shape, output, null, true, new int[0][], true, FunctionRootRole.FUNCTION, false);
+            root.configureEagerAsyncPolls(false);
+            Closure function = new Closure(null, 4, root.getCallTarget()); functionHolder[0] = function;
+            root.getCallTarget();
+            var owner = (AstOperands) transfer.getParent();
+            var bindings = new ArrayList<LocalBinding>();
+            for (var child : owner.getChildren()) if (child instanceof LocalBinding binding) bindings.add(binding);
+            Expr original = (Expr) bindings.get(1).getChildren().iterator().next();
+            class CutSecond extends Expr {
+                @Child private Expr delegate;
+                int typed, generic;
+                MaterializedFrame saved;
+                CutSecond(Expr delegate) { this.delegate = delegate; setRepresentation(delegate.getRepresentation()); }
+                @Override public Object execute(VirtualFrame frame) { generic++; return delegate.execute(frame); }
+                @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
+                    typed++;
+                    if (typed == 2) {
+                        saved = frame.materialize();
+                        throw new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                            SynchronousMasking.current(this), this);
+                    }
+                    return delegate.executeLong(frame);
+                }
+            }
+            var capture = new CutSecond(original); original.replace(capture);
+            var cut = assertThrows(DelimitedCut.class,
+                () -> Calls.target(function.target, new Object[]{0L, 3L, 7L, 19L, 0L}));
+            var copies = new ArrayList<MaterializedFrame>();
+            cut.append(capture.saved, (saved, input, ambient, outer) -> {
+                Object answer = input.get(); copies.add(saved);
+                for (int slot : owned) assertEquals(FrameSlotKind.Illegal.tag, saved.getTag(slot));
+                return answer;
+            });
+            var image = new DelimitedStack(cut, null);
+            class Owner extends GuestRoot {
+                @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                long value;
+                Owner() { super(language, new FrameLayout().build()); }
+                @Override public long bloom(VirtualFrame frame) { return 0L; }
+                @Override public Object execute(VirtualFrame frame) { return value; }
+                Object resume(long input) {
+                    value = input;
+                    return image.resume(site, com.oracle.truffle.api.Truffle.getRuntime().createMaterializedFrame(
+                        new Object[]{0L}, getFrameDescriptor()), new Closure(null, 1, getCallTarget()));
+                }
+            }
+            var continuationOwner = new Owner(); continuationOwner.getCallTarget();
+            assertArrayEquals(new long[]{8, 2}, result(root, continuationOwner.resume(0L)));
+            assertArrayEquals(new long[]{20, 3}, result(root, continuationOwner.resume(1L)));
+            assertEquals(3, capture.typed); assertEquals(0, capture.generic);
+            assertEquals(2, copies.size()); assertNotSame(copies.get(0), copies.get(1));
+            assertNotSame(capture.saved, copies.get(0)); assertNotSame(capture.saved, copies.get(1));
+        });
+    }
+
+    @Test void uninstrumentedFirstCompiledCallExecutesInstalledTupleBody() throws Exception {
+        entered(language -> {
+            var input=module(true);input.put("instrument",false);
+            var program=new Program(language,input);var target=program.entryTarget("worker");
+            var terminal=NodeUtil.findFirstNodeInstance(target.getRootNode(),TupleConstruct.class);
+            class Installed extends Expr {
+                @Child private Expr delegate;
+                boolean compiled;
+                Installed(Expr delegate){this.delegate=delegate;setRepresentation(delegate.getRepresentation());}
+                @Override public Object execute(VirtualFrame frame){return delegate.execute(frame);}
+                @Override public void prepareTuple(int[] slots,int offset){delegate.prepareTuple(slots,offset);}
+                @Override public Object executeTuple(VirtualFrame frame,int[] slots,int offset){
+                    compiled=com.oracle.truffle.api.CompilerDirectives.inCompiledCode();
+                    return delegate.executeTuple(frame,slots,offset);
+                }
+            }
+            var seen=new Installed(terminal);terminal.replace(seen);
+            assertArrayEquals(expected(2,7,19),invoke(program,2,7,19));
+            target.getClass().getMethod("compile",boolean.class).invoke(target,true);
+            target.getClass().getMethod("waitForCompilation").invoke(target);
+            assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target));
+            seen.compiled=false;
+            assertArrayEquals(expected(9,Long.MIN_VALUE,Long.MAX_VALUE),invoke(program,9,Long.MIN_VALUE,Long.MAX_VALUE));
+            assertTrue(seen.compiled,"The first installed call must execute its typed terminal body in compiled code");
+            assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target));
+        });
+    }
+
+    @Test void firstCompiledCallKeepsWideParallelValues() throws Exception {
+        entered(language -> {
+            var program=new Program(language,module(true));var target=program.entryTarget("worker");
+            assertArrayEquals(expected(2,7,19),invoke(program,2,7,19));
+            target.getClass().getMethod("compile",boolean.class).invoke(target,true);
+            target.getClass().getMethod("waitForCompilation").invoke(target);
+            assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target));
+            long before=((Number)program.diagnostics().get("compiledEntries")).longValue();
+            assertArrayEquals(expected(9,Long.MIN_VALUE,Long.MAX_VALUE),invoke(program,9,Long.MIN_VALUE,Long.MAX_VALUE));
+            assertTrue(((Number)program.diagnostics().get("compiledEntries")).longValue()>before);
+            assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target));
+        });
+    }
+}
