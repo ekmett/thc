@@ -7,6 +7,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
 
@@ -15,7 +16,9 @@ public final class AstControl {
     public static final AstControl INSTANCE = new AstControl();
     private AstControl() {}
     public static boolean enabled(Node node) {
-        var owner = node.getRootNode();
+        return enabledRoot(node.getRootNode());
+    }
+    static boolean enabledRoot(RootNode owner) {
         return owner instanceof GhcBCORoot ||
             owner instanceof FunctionRoot root && root.getEnableAsync$org_intelligence_thc();
     }

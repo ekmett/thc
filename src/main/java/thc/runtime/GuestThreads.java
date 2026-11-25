@@ -8,6 +8,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.ThreadLocalAction;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -918,17 +919,24 @@ public final class GuestThreads {
     }
     /** Java-callable poll for bytecode roots; it never delivers from a wake action. */
     public static AsyncRequest pollCurrent(Node node, boolean interruptible) {
-        if (!ordinaryPollEnabled(node)) return null;
+        return pollCurrent(node, node == null ? null : node.getRootNode(), interruptible);
+    }
+    /** The caller resolved this owner for its admission check in the same poll. */
+    static AsyncRequest pollCurrent(Node node, RootNode owner, boolean interruptible) {
+        if (!ordinaryPollEnabled(node, owner)) return null;
         checkpointCurrent(node);
-        if (ordinaryMailboxUnpublished(node)) return null;
+        if (ordinaryMailboxUnpublished(node, owner)) return null;
         return pollMandatoryCurrentWithoutYield(node, interruptible);
     }
     /** Only ordinary polls speculate. Calls and their capture handlers never do. */
     public static boolean ordinaryPollEnabled(Node node) {
-        if (node == null || !(node.getRootNode() instanceof GuestRoot root) || root.getEagerAsyncPolls()) return true;
-        var owner = Language.currentState(node);
+        return ordinaryPollEnabled(node, node == null ? null : node.getRootNode());
+    }
+    private static boolean ordinaryPollEnabled(Node node, RootNode owner) {
+        if (!(owner instanceof GuestRoot root) || root.getEagerAsyncPolls()) return true;
+        var context = Language.currentState(node);
         return root instanceof FunctionRoot function && function.usesRuntimeAsyncAdmission() ?
-            owner.isGuestConcurrencyAdmitted() : !owner.getSingleGuestOriginAssumption().isValid();
+            context.isGuestConcurrencyAdmitted() : !context.getSingleGuestOriginAssumption().isValid();
     }
     /** Self throwTo is synchronous even while the single-origin assumption is valid. */
     public static AsyncRequest pollMandatoryCurrent(Node node, boolean interruptible) {
@@ -941,13 +949,14 @@ public final class GuestThreads {
     }
     /** Used under commit/owner locks; scheduling yield happens before acquiring them. */
     public static AsyncRequest pollCurrentWithoutYield(Node node, boolean interruptible) {
-        if (!ordinaryPollEnabled(node)) return null;
-        if (ordinaryMailboxUnpublished(node)) return null;
+        RootNode owner = node == null ? null : node.getRootNode();
+        if (!ordinaryPollEnabled(node, owner)) return null;
+        if (ordinaryMailboxUnpublished(node, owner)) return null;
         return pollMandatoryCurrentWithoutYield(node, interruptible);
     }
-    private static boolean ordinaryMailboxUnpublished(Node node) {
+    private static boolean ordinaryMailboxUnpublished(Node node, RootNode owner) {
         // Eager delivery and prepared roots retain polling without this speculation.
-        if (node != null && node.getRootNode() instanceof GuestRoot root &&
+        if (owner instanceof GuestRoot root &&
                 (root.getEagerAsyncPolls() || root instanceof FunctionRoot function && function.usesRuntimeAsyncAdmission())) return false;
         return current(node).noAsyncRequestPublished.isValid();
     }

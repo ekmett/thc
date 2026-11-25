@@ -89,8 +89,9 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
         try {
             long selected = frame.getLong(selector);
             boolean enteredCompiled = CompilerDirectives.inCompiledCode();
-            if (AstControl.enabled(this)) {
-                AsyncRequest request = GuestThreads.pollCurrent(this, false);
+            RootNode owner = getRootNode();
+            if (AstControl.enabledRoot(owner)) {
+                AsyncRequest request = GuestThreads.pollCurrent(this, owner, false);
                 if (request != null) {
                     request.compiledCapture = enteredCompiled;
                     throw new AstCapture(request, SynchronousMasking.current(this)).append((saved, input) -> {
