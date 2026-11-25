@@ -1901,7 +1901,8 @@ public final class Program implements ExecutableProgram {
                         if (meta == null || !Boolean.FALSE.equals(meta.get("lifted"))) throw new UnsupportedCore("Vector constructor binder must be unlifted");
                         int[] lanes = {child.layout.bind(id + " constructor vector", FrameSlotKind.Object)};
                         vectorFields[physical] = lanes;
-                        slots.add(child.bindTuple(id, proof, lanes).slot);
+                        child.bindTuple(id, proof, lanes);
+                        slots.add(lanes[0]);
                     } else slots.add(child.bind(id, layout != null && layout.isLong(physical), proof,
                         false, null, null, FrameLayout.carrierKind(proof)).slot);
                 }
