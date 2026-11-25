@@ -43,9 +43,11 @@ The callee copies the fields into its own typed locals and releases the input
 before guest continuation. Input and result storage have independent ownership;
 an outstanding result cannot be overwritten by preparing the next call.
 Once a typed tail call has staged every operand, the AST can clear reference
-locals passed directly as arguments. At a function's entry tuple case it can
-also clear passed formals that no alternative reads. An interrupted operand
-keeps those locals available until staging finishes.
+locals passed directly as arguments. A tuple-result call scrutinized by an
+entry case or a case in function tail position can also release reference
+slots passed directly or copied into delayed arguments. The caller retains
+every physical slot needed by a case alternative or an enclosing join.
+An interrupted operand keeps its sources available until staging finishes.
 After packing the last exact typed call, AST dispatch clears its private operand
 scratch before entering the callee. Pending strict forcing and intermediate
 overapplication calls keep that scratch available for their remaining reads.

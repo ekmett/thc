@@ -20,6 +20,9 @@ captures by physical slot across the enclosing groups. The jump clears dead
 slots after copying its arguments. A conditional entry can do this on the arms
 that jump into the group. Transfers to a sibling in the same group release
 the source's disjoint scalar reference formals after copying its arguments.
+When a join body opens by scrutinizing a reference formal, case selection
+restores the fields first. It can then clear the formal for any selected arm
+that has no further use for it or an alias.
 
 Fixture-free controls in `TupleJoinLoweringTest` and `EmptyArgumentRuntimeTest`
 cover result scratch cleanup, an aliased destination, evaluated nonempty tuple
