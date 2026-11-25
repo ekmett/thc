@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.FrameSlotKind;
@@ -65,9 +66,11 @@ final class Alternative extends Node {
         boolean matches = layout(frame).matches(value);
         return matchProfile == null ? matches : matchProfile.profile(matches);
     }
-    boolean matchesLong(long value) {
+    boolean matchesLong(VirtualFrame frame, long value) {
         boolean matches = value == (long) (Long) this.value;
-        return matchProfile == null ? matches : matchProfile.profile(matches);
+        if (matchProfile == null) return matches;
+        finishLoopExitInInterpreter(frame, matches);
+        return matchProfile.profile(matches);
     }
     boolean matches(VirtualFrame frame, int slot) {
         boolean matches = switch (kind) {
@@ -75,7 +78,19 @@ final class Alternative extends Node {
             case LITERAL_ALTERNATIVE -> matchesLiteral(frame, slot);
             default -> false;
         };
-        return matchProfile == null ? matches : matchProfile.profile(matches);
+        if (matchProfile == null) return matches;
+        finishLoopExitInInterpreter(frame, matches);
+        return matchProfile.profile(matches);
+    }
+    private void finishLoopExitInInterpreter(VirtualFrame frame, boolean matches) {
+        // A self loop in OSR uses a borrowed frame. Its first tuple return can
+        // train the literal match without invalidating the installed backedge.
+        if (CompilerDirectives.inCompiledCode() &&
+                !CompilerDirectives.isPartialEvaluationConstant(frame.getFrameDescriptor()) &&
+                matches && kind == LITERAL_ALTERNATIVE &&
+                getParent() instanceof Case selection && selection.getParent() instanceof FunctionBody &&
+                (body instanceof TupleConstruct || body instanceof AstOperands operands && operands.constructsTuple()))
+            CompilerDirectives.transferToInterpreter();
     }
     private boolean matchesLiteral(VirtualFrame frame, int slot) {
         // Case preparation initializes the binder; sibling widening still needs activation tags.

@@ -59,6 +59,16 @@ cleanup. The index retains no nodes, frames or context values. This commoning
 bounds label search, not arm-body graph growth: compiled body dispatch still
 contains the original arms and index comparisons.
 
+At a function's top-level case, a profiled literal arm that constructs a tuple
+can finish in the interpreter when the compiled loop receives a frame with a
+dynamic descriptor. Truffle passes the parent frame this way on stack
+replacement (OSR). The transfer happens after the successful comparison and
+before the profile sees the match. The first return trains the profile while
+the installed self loop stays valid. Later invocations of that OSR target also
+finish the matching exit in the interpreter. Whole-function compilation with a
+constant descriptor keeps its normal compiled return. Both paths run the same
+tuple constructor, including staged operands and continuation handling.
+
 ## Deferred default-arm extraction
 
 The separate internal `Program` constructor option `deferDefaultArm` keeps an

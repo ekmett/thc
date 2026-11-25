@@ -19,6 +19,7 @@ public final class AstOperands extends Expr {
         this.operands = operands; this.temporaries = temporaries; this.body = body;
         setRepresentation(body.getRepresentation());
     }
+    boolean constructsTuple() { return body instanceof TupleConstruct; }
     @ExplodeLoop @Override public boolean needsCallState() {
         if (getCoreSourceLocation() != null) return true;
         for (LocalBinding operand : operands) if (operand.needsCallState()) return true;

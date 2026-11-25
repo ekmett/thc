@@ -7,7 +7,9 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.runtime.OptimizedOSRLoopNode;
 import java.util.*;
+import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -85,6 +87,30 @@ class ScalarTupleTailCallTest {
                 }
             }
         });
+    }
+    @Test void firstTupleReturnKeepsTheInstalledSelfLoop() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.OSRCompilationThreshold", "1024").build()) {
+            context.initialize("thc");
+            context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var input = module(true);
+                input.put("instrument", false);
+                var program = new Program(language, input);
+                var root = program.entryTarget("worker").getRootNode();
+                var self = NodeUtil.findFirstNodeInstance(root, SelfRepeater.class);
+                var loop = (OptimizedOSRLoopNode) self.getParent();
+                // The first long activation reaches OSR before the tuple return has ever run.
+                assertArrayEquals(expected(4096, 7, 19), invoke(program, 4096, 7, 19));
+                var osr = loop.getCompiledOSRLoop();
+                assertNotNull(osr);
+                assertTrue(osr.isValidLastTier(), "First tuple return must preserve the installed self loop");
+                assertArrayEquals(expected(4097, 19, 7), invoke(program, 4097, 19, 7));
+                assertTrue(osr.isValidLastTier());
+            } finally { context.leave(); }
+        }
     }
     @Test void nonselfTargetKeepsOrdinaryTupleDispatchAndResultDestination() throws Exception {
         entered(language -> {
