@@ -56,7 +56,7 @@ public final class TupleApplication extends Expr {
             return;
         }
         destinationSlots = slots; destinationOffset = offset;
-        dispatch = new TupleDispatch(new AstTupleDestination(shape, slots, offset), null, arguments.length, tail, inputLayout);
+        dispatch = new TupleDispatch(new AstTupleDestination(shape, slots, offset), null, arguments.length, tail, inputLayout).ownAstArgumentScratch();
     }
     @Override public Object execute(VirtualFrame frame) {
         VectorLayout layout = vector;
@@ -120,7 +120,7 @@ public final class TupleApplication extends Expr {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             child = atomic((Callable<TupleDispatch>) () -> {
                 if (dispatch == null) {
-                    TupleDispatch inserted = insert(new TupleDispatch(new AstTupleDestination(shape, slots, offset), metrics, arguments.length, tail, inputLayout));
+                    TupleDispatch inserted = insert(new TupleDispatch(new AstTupleDestination(shape, slots, offset), metrics, arguments.length, tail, inputLayout).ownAstArgumentScratch());
                     destinationSlots = slots; destinationOffset = offset; dispatch = inserted;
                 }
                 return dispatch;

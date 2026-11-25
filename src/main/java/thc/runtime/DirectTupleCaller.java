@@ -13,6 +13,7 @@ final class DirectTupleCaller extends Node {
     private final TupleDestination destination;
     private final int argsSize;
     private final boolean tail;
+    private final boolean ownsPacket;
     private final ArgumentLayout inputLayout;
     private final RootCallTarget target;
     private final int arity, prefixSize, prefixCount;
@@ -26,10 +27,11 @@ final class DirectTupleCaller extends Node {
     @Child private DirectCallerNode scalar;
     @Child private TupleDispatch rest;
     @Child private Force force;
-    DirectTupleCaller(TupleDestination destination, Metrics metrics, int argsSize, boolean tail, Closure function, ArgumentLayout inputLayout) {
+    DirectTupleCaller(TupleDestination destination, Metrics metrics, int argsSize, boolean tail, Closure function, ArgumentLayout inputLayout, boolean ownsScratch) {
         this.destination = destination; this.argsSize = argsSize; this.tail = tail; this.inputLayout = inputLayout;
         target = function.target; arity = function.arity; prefixSize = function.supplied.length; prefixCount = function.suppliedCount;
         formalLayout = target.getRootNode() instanceof GuestRoot root ? root.getInputLayout() : null;
+        ownsPacket = ownsScratch && !tail && arity == argsSize && target.getRootNode() instanceof FunctionRoot root && root.consumesOrdinaryArguments();
         hasEnvironment = function.environment != null;
         entry = new EntryArguments(target, metrics, new boolean[0], prefixCount);
         call = DirectCallNode.create(target); tailCheck = new TailCheck(metrics); bounce = new TupleBounce(destination, metrics);
@@ -55,6 +57,7 @@ final class DirectTupleCaller extends Node {
         if (hasEnvironment) packet[1] = function.environment;
         System.arraycopy(function.supplied, 0, packet, skip, prefixSize);
         System.arraycopy(arguments, 0, packet, skip + prefixSize, physicalCount);
+        if (ownsPacket) Arrays.fill(arguments, null);
         if (arity < argsSize) {
             DirectCallerNode scalarCall = scalar;
             if (scalarCall == null) throw fault("Missing tuple overapplication scalar caller");
@@ -93,7 +96,7 @@ final class DirectTupleCaller extends Node {
                 tailCheck.check(frame, target, packet);
                 destination.consume(frame, this, Calls.direct(call, packet), resultShape);
             } else {
-                packet[0] = 0L;
+                packet[0] = ownsPacket ? FunctionRoot.OWNED_ZERO_BLOOM : 0L;
                 try { destination.consume(frame, this, Calls.direct(call, packet), resultShape); }
                 catch (TailCall transfer) { bounce.execute(frame, transfer); }
             }

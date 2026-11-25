@@ -907,6 +907,9 @@ public final class Program implements ExecutableProgram {
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
             delimited, role, outlineCaseArms || deferDefaultArm,
             scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
+        if (initializedBody == null && initialization == null && role == FunctionRootRole.FUNCTION &&
+                handoff == null && inputProofs.stream().anyMatch(CoreRepresentation::hasBoxedPointer))
+            root.enableOwnedOrdinaryArguments();
         // Same-frame regions deliberately expose the running activation to side roots.
         // Keep their frame identity even before any graph-budget extraction occurs.
         root.configureInitialFrameCopy(!delimited &&

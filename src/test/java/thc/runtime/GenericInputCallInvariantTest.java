@@ -20,6 +20,48 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
 
 class GenericInputCallInvariantTest {
+    @Test void privateAstIngressReleasesItsPacketAndBorrowedIngressRetainsItsArguments() {
+        try (var context = executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = new FrameLayout();
+                int formal = layout.bind("formal", com.oracle.truffle.api.frame.FrameSlotKind.Object);
+                var saved = new com.oracle.truffle.api.frame.MaterializedFrame[1];
+                var body = new Expr() {
+                    @Override public Object execute(VirtualFrame frame) {
+                        saved[0] = frame.materialize();
+                        return frame.getObject(formal);
+                    }
+                };
+                var metrics = new Metrics(true);
+                var root = new FunctionRoot(language, layout.build(), "reference worker", null, new int[0],
+                    new int[]{formal}, new int[]{0}, body, metrics, new CoreRepresentation[]{CoreRepresentation.UNKNOWN},
+                    body.getRepresentation(), null, new boolean[]{false}, null, null, new int[0], null,
+                    false, new int[0][], false, FunctionRootRole.FUNCTION, false);
+                root.enableOwnedOrdinaryArguments();
+                var closure = new Closure(null, 1, root.getCallTarget());
+                var value = new Object();
+                Object[] borrowed = {0L, value};
+                assertSame(value, Calls.target(closure.target, borrowed));
+                assertSame(value, borrowed[1]);
+                assertSame(value, saved[0].getArguments()[1]);
+
+                var caller = new GuestRoot(language, new FrameLayout().build()) {
+                    @Child private Application call = new Application(new Literal(closure),
+                        new Expr[]{new Literal(value)}, false, metrics);
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) { return call.execute(frame); }
+                };
+                assertSame(value, Calls.target(caller.getCallTarget(), new Object[]{0L}));
+                assertEquals(0L, saved[0].getArguments()[0]);
+                assertNull(saved[0].getArguments()[1]);
+                assertSame(value, saved[0].getObject(formal));
+                assertSame(value, borrowed[1]);
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void delimitedTypedOverapplicationRetainsArgumentsAndWritesItsFreshAggregateResult() {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build();
              var context = Context.newBuilder("thc").engine(engine).build()) {

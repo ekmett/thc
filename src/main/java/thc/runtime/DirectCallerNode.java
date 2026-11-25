@@ -37,16 +37,20 @@ public final class DirectCallerNode extends Node {
         return call(frame, arguments, tailCall, null);
     }
     public Object call(VirtualFrame frame, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
+        return prepare(frame, arguments, tailCall, tupleResult, false);
+    }
+    Object callOwned(VirtualFrame frame, Object[] arguments) { return prepare(frame, arguments, false, null, true); }
+    private Object prepare(VirtualFrame frame, Object[] arguments, boolean tailCall, TupleShape tupleResult, boolean owned) {
         if (leadingCaseReturn != null && CompilerDirectives.inCompiledCode()) {
             try { leadingCaseReturn.forceArguments(frame, arguments); }
-            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult)); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult, false)); }
         } else if (AstControl.captures(this)) {
             try { entryArguments.executeCaptured(frame, arguments); }
-            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult)); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult, false)); }
         } else entryArguments.execute(frame, arguments);
-        return callEntered(frame, arguments, tailCall, tupleResult);
+        return callEntered(frame, arguments, tailCall, tupleResult, owned);
     }
-    private Object callEntered(VirtualFrame frame, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
+    private Object callEntered(VirtualFrame frame, Object[] arguments, boolean tailCall, TupleShape tupleResult, boolean owned) {
         if (leadingCaseReturn != null) { Object result = leadingCaseReturn.execute(arguments); if (result != null) return result; }
         Object result;
         if (tailCall) {
@@ -58,7 +62,7 @@ public final class DirectCallerNode extends Node {
             }
         } else {
             try {
-                arguments[0] = 0L;
+                arguments[0] = owned ? FunctionRoot.OWNED_ZERO_BLOOM : 0L;
                 DirectCallNode entry = nonTailEntry();
                 result = handoff != null ? handoff.call(frame, arguments, entry, false) : Calls.direct(entry, arguments);
                 normalProfile.enter();

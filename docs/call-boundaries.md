@@ -30,6 +30,15 @@ Tuple, sum and vector inputs and results use their own
 [dense scalar handoff](handoff-slabs.md) supplies reusable storage and entry
 snapshots for eligible AST direct calls, independently of those aggregate paths.
 
+An exact, non-tail AST application can transfer its private operand scratch
+into a fresh ordinary packet for a lowered Core function with reference
+formals. The private header represents zero inherited ancestry. Once the
+callee has restored its live locals, it restores the ordinary bloom header
+and clears the consumed payload entries, preserving any capture environment.
+A saved guest frame retains its live slots. External calls with borrowed
+arrays keep their argument values. If strict argument preparation suspends,
+the resumed call keeps its packet available for replay.
+
 A caller-local outgoing array is not automatically reusable. Truffle frames can
 retain their arguments, including after materialization, so a later overwrite
 could alter a retained earlier frame. A conditional argument-profile copy is

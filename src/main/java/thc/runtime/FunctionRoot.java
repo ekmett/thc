@@ -58,6 +58,11 @@ public final class FunctionRoot extends GuestRoot {
         catch (RuntimeException | Error failure) { throw failure; }
         catch (Throwable impossible) { throw CompilerDirectives.shouldNotReachHere(impossible); }
     }
+    // Only an exact, non-tail AST application with fresh private transport can issue this header.
+    static final Object OWNED_ZERO_BLOOM = new Object();
+    @CompilationFinal private boolean consumesOrdinaryArguments;
+    void enableOwnedOrdinaryArguments() { consumesOrdinaryArguments = true; }
+    boolean consumesOrdinaryArguments() { return consumesOrdinaryArguments && getTypedInput() == null; }
     private final String label;
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] environmentSlots;
@@ -681,11 +686,16 @@ public final class FunctionRoot extends GuestRoot {
             state.setPending(null);
             restoreHandoff(frame, input, true, state);
         } else {
+            Object[] arguments = frame.getArguments();
+            boolean owned = consumesOrdinaryArguments && arguments.length != 0 && arguments[0] == OWNED_ZERO_BLOOM;
+            if (owned) arguments[0] = 0L;
             if (entry != null) entry.initializeOrdinary(frame);
             // Delimited roots retain ancestry eagerly for their independently saved frames.
             deferredBloom = !needsCallState && !enableDelimited;
             if (!deferredBloom) initializeBloom(frame);
-            buildFrame(frame.getArguments(), frame);
+            buildFrame(arguments, frame);
+            // Saved guest frames own their live slots. The private packet was only ingress transport.
+            if (owned) Arrays.fill(arguments, captureLayout == null ? 1 : 2, arguments.length, null);
         }
         if (metrics == null) {
             // Cached-code launchers fail closed on interpreter fallback. The check folds
