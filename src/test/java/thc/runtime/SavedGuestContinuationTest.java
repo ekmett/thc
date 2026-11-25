@@ -160,7 +160,7 @@ class SavedGuestContinuationTest {
                     .append((saved, value) -> (Integer) value * 2)
                     .append((saved, value) -> (Integer) value - 3)
                     .append((saved, value) -> (Integer) value * 4);
-                capture.enclose(steps -> (saved, input) -> AstContinuations.resumeAstSteps(saved, steps, input));
+                capture.enclose((AstCapture.LexicalScope) AstContinuations::resumeAstSteps);
                 capture.enclose(steps -> (saved, input) -> {
                     var recipe = steps.remove();
                     var first = new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED).append(recipe).freeze(owner, frame);
@@ -265,7 +265,7 @@ class SavedGuestContinuationTest {
             .append((frame, input) -> Unit.INSTANCE)
             .append((frame, input) -> { assertSame(Unit.INSTANCE, input); return observeReleasedChild(observation); });
         for (int i = 0; i < scopes; i++)
-            cut.enclose(steps -> (frame, input) -> AstContinuations.resumeAstSteps(frame, steps, input));
+            cut.enclose((AstCapture.LexicalScope) AstContinuations::resumeAstSteps);
         return cut.freeze(owner, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor()));
     }
     @ParameterizedTest @ValueSource(ints = {0, 1, 2})
