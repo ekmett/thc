@@ -8,7 +8,8 @@ import com.oracle.truffle.api.nodes.*;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import com.oracle.truffle.api.Truffle;
 import java.util.ArrayDeque;
-public final class LocalJoinRegion extends Expr {
+import java.util.function.Function;
+public final class LocalJoinRegion extends Expr implements Function<ArrayDeque<AstResumeStep>, AstResumeStep> {
     private final Object group;
     private final int selector, result;
     private final TupleShape tuple;
@@ -37,12 +38,17 @@ public final class LocalJoinRegion extends Expr {
     private void run(VirtualFrame frame, int[] slots, int offset) {
         if (!delimited && !AstControl.captures(this)) { runUninterrupted(frame); return; }
         try { runUninterrupted(frame); }
-        catch (AstCapture cut) { throw cut.enclose(steps -> new ResumeAsyncRegion(this, steps, slots, offset)); }
+        catch (AstCapture cut) { throw capture(cut, slots, offset); }
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
             throw cut.append(frame, new ResumeRegion(this, slots, offset));
         }
     }
+    private AstCapture capture(AstCapture cut, int[] slots, int offset) {
+        return slots == null ? cut.enclose(this) : cut.enclose(steps -> new ResumeAsyncRegion(this, steps, slots, offset));
+    }
+    /** Ordinary scalar invocations need only the region and their private pending steps. */
+    @Override public AstResumeStep apply(ArrayDeque<AstResumeStep> steps) { return new ResumeAsyncRegion(this, steps, null, 0); }
     private static final class ResumeAsyncRegion implements AstResumeStep {
         private final LocalJoinRegion region;
         private final ArrayDeque<AstResumeStep> steps;
@@ -58,7 +64,7 @@ public final class LocalJoinRegion extends Expr {
                     if (once != null) once.executeTarget(frame, jump.getTarget().getIndex());
                     else { FrameAccess.writeLong(frame, region.selector, jump.getTarget().getIndex()); region.loop.execute(frame); }
                 }
-            } catch (AstCapture cut) { throw cut.enclose(remaining -> new ResumeAsyncRegion(region, remaining, slots, offset)); }
+            } catch (AstCapture cut) { throw region.capture(cut, slots, offset); }
             catch (DelimitedCut cut) { throw cut.append(frame, new ResumeRegion(region, slots, offset)); }
             return slots == null ? region.resultValue(frame) : region.finishTuple(frame, slots, offset);
         }
@@ -80,7 +86,7 @@ public final class LocalJoinRegion extends Expr {
                 LocalJoinRepeater once = region.single;
                 if (once != null) once.executeTarget(frame, jump.getTarget().getIndex());
                 else { FrameAccess.writeLong(frame, region.selector, jump.getTarget().getIndex()); region.loop.execute(frame); }
-            } catch (AstCapture cut) { throw cut.enclose(steps -> new ResumeAsyncRegion(region, steps, slots, offset)); }
+            } catch (AstCapture cut) { throw region.capture(cut, slots, offset); }
             catch (DelimitedCut cut) { throw cut.append(frame, this); }
             return finishFrame(frame);
         }
