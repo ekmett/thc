@@ -9,7 +9,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 /** A shared lazy update cell; state publishes the answer and ownership release. */
-public final class Thunk implements Lifted {
+public final class Thunk implements Lifted, AstControl.ResumeChild {
     private static final VarHandle STATE;
     static {
         try { STATE = MethodHandles.lookup().findVarHandle(Thunk.class, "state", int.class); }
