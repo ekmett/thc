@@ -29,7 +29,7 @@ class NativeContextTest {
     }
 
     @Test void explicitPolyglotPropertiesOverrideLauncherCompilerDefaults() {
-        for (var option : new String[] {"engine.SingleTierCompilationThreshold",
+        for (var option : new String[] {"engine.MultiTier", "engine.SingleTierCompilationThreshold",
                 "compiler.CompilationTimeout", "compiler.MaximumGraalGraphSize"}) {
             var key = "polyglot." + option;
             var previous = System.getProperty(key);

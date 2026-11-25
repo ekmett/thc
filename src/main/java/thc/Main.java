@@ -33,11 +33,11 @@ public final class Main {
         }
         if (profile == ContextProfile.NATIVE) return builder;
         builder.allowExperimentalOptions(true)
-            .option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw");
         if (profile == ContextProfile.SYNCHRONOUS_TEST)
-            return builder.option("engine.BackgroundCompilation", "false");
+            return builder.option("engine.MultiTier", "false").option("engine.BackgroundCompilation", "false");
         return builder.allowEnvironmentAccess(EnvironmentAccess.INHERIT)
+            .option("engine.MultiTier", System.getProperty("polyglot.engine.MultiTier", "false"))
             .option("engine.CompilationFailureAction", System.getProperty("polyglot.engine.CompilationFailureAction", "Print"))
             .option("engine.CompilerThreads", System.getProperty("polyglot.engine.CompilerThreads", LAUNCHER_COMPILER_THREADS))
             .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
