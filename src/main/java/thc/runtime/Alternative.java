@@ -39,6 +39,9 @@ final class Alternative extends Node {
         // A singleton still checks its match. Do not store the uncached sentinel:
         // NodeUtil clones it, losing the identity guard around its disabled counters.
         matchProfile = profileChoice ? CountingConditionProfile.create() : null;
+        // A lazy traversal can first reach the terminating constructor after compilation.
+        if (matchProfile != null && kind == DATA_ALTERNATIVE && value instanceof DataLayout layout && layout.getArity() == 0)
+            matchProfile.disable();
     }
     void prepareOutlinedComparison(Expr scrutinee) {
         if (matchProfile != null && kind == LITERAL_ALTERNATIVE && Long.valueOf(1L).equals(value) &&
