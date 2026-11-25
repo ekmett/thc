@@ -8,8 +8,7 @@ import com.oracle.truffle.api.nodes.*;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import com.oracle.truffle.api.Truffle;
 import java.util.ArrayDeque;
-import java.util.function.Function;
-public final class LocalJoinRegion extends Expr implements Function<ArrayDeque<AstResumeStep>, AstResumeStep> {
+public final class LocalJoinRegion extends Expr implements AstCapture.LexicalScope {
     private final Object group;
     private final int selector, result;
     private final TupleShape tuple;
@@ -45,34 +44,33 @@ public final class LocalJoinRegion extends Expr implements Function<ArrayDeque<A
         }
     }
     private AstCapture capture(AstCapture cut, int[] slots, int offset) {
-        return slots == null ? cut.enclose(this) : cut.enclose(steps -> new ResumeAsyncRegion(this, steps, slots, offset));
+        if (slots == null) return cut.enclose(this);
+        return cut.enclose(steps -> (frame, input) -> resumeRegion(frame, steps, input, slots, offset));
     }
-    /** Ordinary scalar invocations need only the region and their private pending steps. */
-    @Override public AstResumeStep apply(ArrayDeque<AstResumeStep> steps) { return new ResumeAsyncRegion(this, steps, null, 0); }
-    private static final class ResumeAsyncRegion implements AstResumeStep {
-        private final LocalJoinRegion region;
-        private final ArrayDeque<AstResumeStep> steps;
-        private final int[] slots;
-        private final int offset;
-        ResumeAsyncRegion(LocalJoinRegion region, ArrayDeque<AstResumeStep> steps, int[] slots, int offset) { this.region = region; this.steps = steps; this.slots = slots; this.offset = offset; }
-        @Override public Object resume(VirtualFrame frame, Object input) {
+    /** Bind a supplied scalar queue to this lexical region. */
+    @Override public AstResumeStep apply(ArrayDeque<AstResumeStep> steps) {
+        return AstCapture.LexicalScope.super.apply(steps);
+    }
+    @Override public Object resumeOwned(VirtualFrame frame, ArrayDeque<AstResumeStep> steps, Object input) {
+        return resumeRegion(frame, steps, input, null, 0);
+    }
+    private Object resumeRegion(VirtualFrame frame, ArrayDeque<AstResumeStep> steps, Object input, int[] slots, int offset) {
+        try {
+            LocalJoinRepeater direct = slots == null && tuple == null ? single : null;
+            LocalJoinJump jump;
             try {
-                LocalJoinRepeater direct = slots == null && region.tuple == null ? region.single : null;
-                LocalJoinJump jump;
-                try {
-                    Object result = AstContinuations.resumeAstSteps(frame, steps, input, direct);
-                    jump = direct == null ? null : (LocalJoinJump) result;
-                } catch (LocalJoinJump thrown) { jump = thrown; }
-                if (jump != null) {
-                    if (jump.getTarget().getGroup() != region.group) throw jump;
-                    LocalJoinRepeater once = region.single;
-                    if (once != null) once.executeTarget(frame, jump.getTarget().getIndex());
-                    else { FrameAccess.writeLong(frame, region.selector, jump.getTarget().getIndex()); region.loop.execute(frame); }
-                }
-            } catch (AstCapture cut) { throw region.capture(cut, slots, offset); }
-            catch (DelimitedCut cut) { throw cut.append(frame, new ResumeRegion(region, slots, offset)); }
-            return slots == null ? region.resultValue(frame) : region.finishTuple(frame, slots, offset);
-        }
+                Object result = AstContinuations.resumeAstSteps(frame, steps, input, direct);
+                jump = direct == null ? null : (LocalJoinJump) result;
+            } catch (LocalJoinJump thrown) { jump = thrown; }
+            if (jump != null) {
+                if (jump.getTarget().getGroup() != group) throw jump;
+                LocalJoinRepeater once = single;
+                if (once != null) once.executeTarget(frame, jump.getTarget().getIndex());
+                else { FrameAccess.writeLong(frame, selector, jump.getTarget().getIndex()); loop.execute(frame); }
+            }
+        } catch (AstCapture cut) { throw capture(cut, slots, offset); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new ResumeRegion(this, slots, offset)); }
+        return slots == null ? resultValue(frame) : finishTuple(frame, slots, offset);
     }
     private void runUninterrupted(VirtualFrame frame) {
         LocalJoinRepeater once = single;

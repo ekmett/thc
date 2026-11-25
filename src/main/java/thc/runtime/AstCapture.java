@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import java.util.ArrayDeque;
 import java.util.Collection;
@@ -77,6 +78,14 @@ public final class AstCapture extends ControlFlowException {
         freshlyEnclosed = true;
         return this;
     }
+    /** A lexical owner can enter an invocation with its already private pending queue. */
+    @FunctionalInterface
+    interface LexicalScope extends Function<ArrayDeque<AstResumeStep>, AstResumeStep> {
+        Object resumeOwned(VirtualFrame frame, ArrayDeque<AstResumeStep> steps, Object input);
+        @Override default AstResumeStep apply(ArrayDeque<AstResumeStep> steps) {
+            return (frame, input) -> resumeOwned(frame, steps, input);
+        }
+    }
     private static final class ScopeRecipe implements AstResumeStep {
         private final Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper;
         private final Collection<AstResumeStep> steps;
@@ -87,8 +96,13 @@ public final class AstCapture extends ControlFlowException {
         private ArrayDeque<AstResumeStep> invocationSteps() {
             return oneShot && steps instanceof ArrayDeque<AstResumeStep> owned ? owned : new ArrayDeque<>(steps);
         }
-        @Override public AstResumeStep forInvocation() { return wrapper.apply(invocationSteps()); }
-        @Override public Object resume(com.oracle.truffle.api.frame.VirtualFrame frame, Object input) {
+        @Override public AstResumeStep forInvocation() {
+            if (oneShot && steps instanceof ArrayDeque<?> && wrapper instanceof LexicalScope) return this;
+            return wrapper.apply(invocationSteps());
+        }
+        @Override public Object resume(VirtualFrame frame, Object input) {
+            if (oneShot && steps instanceof ArrayDeque<AstResumeStep> owned && wrapper instanceof LexicalScope scope)
+                return scope.resumeOwned(frame, owned, input);
             throw new IllegalStateException("Captured scope recipe must be instantiated before resumption");
         }
         @Override public void discard() { AstContinuations.discardSteps(invocationSteps()); }
