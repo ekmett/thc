@@ -15,7 +15,7 @@ import java.util.Objects;
 import static thc.runtime.Alternative.*;
 import static thc.runtime.RuntimeFault.fault;
 
-class Case extends Expr {
+class Case extends Expr implements AstResumeStep {
     protected final int binderSlot;
     @Children protected Alternative[] alternatives;
     @Child private LocalBinding scrutinee;
@@ -167,12 +167,23 @@ class Case extends Expr {
     /** Construct the saved selection only at the capture boundary that owns it. */
     @TruffleBoundary(transferToInterpreterOnException = false)
     private AstCapture appendCapture(AstCapture cut, int[] destination, int offset) {
-        return scrutinee.appendWrite(cut).append(new AstResumeStep() {
+        if (destination == null) return cut.append(this);
+        return cut.append(new AstResumeStep() {
             @Override public Object resume(VirtualFrame frame, Object input) {
-                Expr branch = select(frame);
-                return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
+                return resumeBranch(frame, input).executeTuple(frame, destination, offset);
             }
         });
+    }
+    private Expr resumeBranch(VirtualFrame frame, Object input) {
+        scrutinee.resumeWrite(frame, input);
+        return select(frame);
+    }
+    @Override public Object resume(VirtualFrame frame, Object input) { return resumeBranch(frame, input).execute(frame); }
+    /** Install the saved scrutinee before following ordinary unwrapped case branches. */
+    final Expr resumedJoinBranch(VirtualFrame frame, Object input) {
+        Expr branch = resumeBranch(frame, input);
+        return branch.getClass() == Case.class && CompilerDirectives.inInterpreter() ?
+            ((Case) branch).interpretedBranch(frame, null, 0) : branch;
     }
     private Expr select(VirtualFrame frame) { return select(frame, false, null); }
 

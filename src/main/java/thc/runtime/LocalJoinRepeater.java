@@ -6,7 +6,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.*;
 import static thc.runtime.RuntimeServiceStatus.fault;
-final class LocalJoinRepeater extends Node implements RepeatingNode {
+final class LocalJoinRepeater extends Node implements RepeatingNode, AstResumeStep {
     private final Object group;
     private final int selector, result;
     @Children private Expr[] bodies;
@@ -25,7 +25,7 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
     private LocalJoinJump executeBody(VirtualFrame frame, Expr body, boolean directTransfer) {
         if (!delimited && !AstControl.captures(this)) return executeUninterrupted(frame, body, directTransfer);
         try { return executeUninterrupted(frame, body, directTransfer); }
-        catch (AstCapture cut) { throw cut.append((saved, input) -> { saveResult(saved, input); return null; }); }
+        catch (AstCapture cut) { throw cut.append(this); }
         catch (DelimitedCut cut) {
             if (!delimited) throw cut;
             throw cut.append(frame, (saved, input, ambient, outerMask) -> {
@@ -33,6 +33,8 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
             });
         }
     }
+    /** Finish the suspended body in this invocation's result slots. */
+    @Override public Object resume(VirtualFrame frame, Object input) { saveResult(frame, input); return null; }
     private void saveResult(VirtualFrame frame, Object value) {
         if (tuple) return;
         if (exactLong) {
