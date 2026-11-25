@@ -7,7 +7,8 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import java.util.List;
 import java.util.ArrayDeque;
 import java.util.Queue;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 /** One owned activation; ordinary AST calls neither allocate this nor materialize frames. */
@@ -40,7 +41,12 @@ public final class AstContinuation implements SavedGuestContinuation {
     private final boolean rootEntrySpill;
     private final ManagedSTM.Transaction transaction;
     private boolean tailSpill;
-    private final AtomicBoolean claimed = new AtomicBoolean();
+    private static final VarHandle CLAIMED;
+    static {
+        try { CLAIMED = MethodHandles.lookup().findVarHandle(AstContinuation.class, "claimed", boolean.class); }
+        catch (ReflectiveOperationException failure) { throw new ExceptionInInitializerError(failure); }
+    }
+    private volatile boolean claimed;
     public AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
                            List<AstResumeStep> steps, StackAnnotationState annotations) {
         this(root, yielded, mask, frame, steps, annotations, false, false);
@@ -63,24 +69,24 @@ public final class AstContinuation implements SavedGuestContinuation {
     public boolean getRootEntrySpill() { return rootEntrySpill; }
     public boolean getTailSpill() { return tailSpill; }
     public void certifyTailEntry() {
-        if (!rootEntrySpill || claimed.get()) throw new IllegalStateException("Check failed.");
+        if (!rootEntrySpill || claimed) throw new IllegalStateException("Check failed.");
         tailSpill = true;
     }
     public void rebaseTailBloom(long liveOwners) {
-        if (!tailSpill || claimed.get()) throw new IllegalStateException("Check failed.");
+        if (!tailSpill || claimed) throw new IllegalStateException("Check failed.");
         frame.setLong(FrameLayout.BLOOM_FILTER, ((FunctionRoot) sourceRoot).entryBloom(liveOwners));
     }
     @Override @TruffleBoundary public void discard() {
         if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);
-        if (!claimed.compareAndSet(false, true)) return;
+        if (!CLAIMED.compareAndSet(this, false, true)) return;
         yielded = null;
         AstContinuations.discardSteps(steps);
     }
     @Override @TruffleBoundary public Object continueWith(Object input) {
         if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);
-        if (!claimed.compareAndSet(false, true)) throw fault("AST continuation was already resumed");
+        if (!CLAIMED.compareAndSet(this, false, true)) throw fault("AST continuation was already resumed");
         yielded = null;
         // A terminal child delivery transfers its checked update. A following
         // demand has no work when the value is already in weak head normal form.
