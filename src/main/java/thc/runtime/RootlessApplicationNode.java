@@ -72,8 +72,14 @@ final class RootlessApplicationNode extends Node {
         return new Continuation(this, force, request, metrics,
             new CallSegmentSuspended(child, null, saved.asyncRequest(), saved.stackSpill()), false);
     }
+    private Object checkResult(ExactThunkApplication request, Object value) {
+        CoreKind result = ((GuestRoot) request.plan.owner().getRootNode()).getScalarResultProof().getKind();
+        if (result == CoreKind.DATA && !(value instanceof DataValue)) throw fault("Expected constructor value");
+        if (result == CoreKind.CLOSURE && !(value instanceof Closure)) throw fault("Application of a non-function");
+        return value;
+    }
     private Object demand(Force force, ExactThunkApplication request, Metrics metrics, Object answer) {
-        try { return force.exactApplicationValue(answer, metrics); }
+        try { return checkResult(request, force.exactApplicationValue(answer, metrics)); }
         catch (ThunkSuspended cut) { return new Continuation(this, force, request, metrics, cut, true); }
     }
 
@@ -142,7 +148,7 @@ final class RootlessApplicationNode extends Node {
                     ((CallSegment) child).getState() == 2 && ((CallSegment) child).getValue() == value;
                 if (!complete) throw fault("Application thunk lost its completed child update");
                 value = result.takeValue();
-                return demanded ? value : operation.demand(force, current, metrics, value);
+                return demanded ? operation.checkResult(current, value) : operation.demand(force, current, metrics, value);
             } finally {
                 stm.restore(outerTransaction); SynchronousMasking.set(operation, ambient);
                 StackAnnotations.set(operation, outerAnnotations);

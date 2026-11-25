@@ -1116,7 +1116,10 @@ public final class Program implements ExecutableProgram {
                     new boolean[1], FunctionRootRole.FUNCTION, false, null, null, true);
                 TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
                 if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
-                if (local.proof.getKind() == CoreKind.DATA && CoreRepresentations.expression((List<Object>) head).getKind() == CoreKind.CLOSURE &&
+                CoreKind resultKind = CoreRepresentations.expression(expr).getKind();
+                if (local.proof.getKind() == CoreKind.DATA &&
+                        (resultKind == CoreKind.DATA || resultKind == CoreKind.CLOSURE || resultKind == CoreKind.UNKNOWN) &&
+                        CoreRepresentations.expression((List<Object>) head).getKind() == CoreKind.CLOSURE &&
                         CoreRepresentations.expression((List<Object>) head).getEvaluated())
                     return new DelayExactApplication(fn.target, required(globals, (String) head.get(1)),
                         thc.Language.currentState(), local.slot, scope.layout.referenceSlot(local.slot))

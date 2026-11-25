@@ -22,6 +22,35 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** A real blocked MVar cut, owned thunk, and continuation resumed on another Java thread. */
 class AstContinuationTest {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void exactApplicationThunkKeepsTheOwningResultCarrierCheck(boolean parked) {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, rootlessModule(), false, false);
+                var effects = new AtomicInteger();
+                var invalid = new Thunk(new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects.incrementAndGet();
+                        if (parked) return new AstCapture(AstStackSpill.INSTANCE, MaskingState.UNMASKED)
+                            .append((saved, input) -> 17L).freeze(this, frame.materialize());
+                        return 17L;
+                    }
+                }.getCallTarget(), null);
+                var shared = rootlessShared(program, invalid); assertNotNull(shared.exactApplication());
+                var driver = new ForceRoot(language, shared).getCallTarget();
+                if (parked) {
+                    assertSame(shared, assertThrows(ThunkSuspended.class, () -> Calls.target(driver, new Object[]{0L})).getThunk());
+                    assertEquals(5, shared.getState()); assertInstanceOf(RootlessApplicationNode.Continuation.class, shared.getValue());
+                }
+                var failure = assertThrows(RuntimeFault.class, () -> Calls.target(driver, new Object[]{0L}));
+                assertEquals("Expected constructor value", failure.getMessage());
+                assertSame(failure, assertThrows(RuntimeFault.class, () -> Calls.target(driver, new Object[]{0L})));
+                assertEquals(1, effects.get()); assertEquals(3, shared.getState()); assertEquals(2, invalid.getState());
+            } finally { context.leave(); }
+        }
+    }
     @Test void exactApplicationFallbackRetainsContextOwnershipWhileItsHeadIsCold() {
         try (var engine = org.graalvm.polyglot.Engine.create();
              var first = Context.newBuilder("thc").engine(engine).build();
@@ -225,18 +254,44 @@ class AstContinuationTest {
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, rootlessModule(), false, false) :
                     new BytecodeProgram(language, rootlessModule(), null, false);
                 var leaf = new DataLayout(language, "RootlessLeaf", "RootlessLeaf", new String[0]).create(new Object[0]);
-                var effects = new AtomicInteger();
+                var effects = new AtomicInteger(); var compiledArgument = new AtomicInteger();
                 var input = new Thunk(new RootNode(language) {
-                    @Override public Object execute(VirtualFrame frame) { effects.incrementAndGet(); return leaf; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects.incrementAndGet();
+                        if (CompilerDirectives.inCompiledCode()) compiledArgument.incrementAndGet();
+                        return leaf;
+                    }
                 }.getCallTarget(), null);
                 var creation = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("entry");
+                var compiledCreation = new AtomicInteger();
+                if (backend.equals("ast")) {
+                    var selected = com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(creation.getRootNode(), DelayExactApplication.class);
+                    assertNotNull(selected);
+                    var probe = new Expr() {
+                        @Child private Expr child = selected;
+                        @Override public Object execute(VirtualFrame frame) {
+                            Object result = child.execute(frame);
+                            if (CompilerDirectives.inCompiledCode()) compiledCreation.incrementAndGet();
+                            return result;
+                        }
+                    };
+                    probe.setRepresentation(selected.getRepresentation());
+                    selected.replace(probe);
+                }
+                var callee = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("identity");
+                callee.compile(true); callee.waitForCompilation(); assertTrue(callee.isValidLastTier());
+                var argumentTarget = (com.oracle.truffle.runtime.OptimizedCallTarget) input.getTarget();
+                argumentTarget.compile(true); argumentTarget.waitForCompilation(); assertTrue(argumentTarget.isValidLastTier());
                 creation.compile(true); creation.waitForCompilation(); assertTrue(creation.isValidLastTier());
                 long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                 var shared = rootlessShared(program, input);
                 assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,
                     "First installed entry must create the real delayed application without warmup");
                 assertEquals(0, effects.get());
-                if (backend.equals("ast")) assertNotNull(shared.exactApplication(), "Real lowerer must admit this exact delayed application");
+                if (backend.equals("ast")) {
+                    assertEquals(1, compiledCreation.get(), "The actual first creation, including its return, must stay compiled");
+                    assertNotNull(shared.exactApplication(), "Real lowerer must admit this exact delayed application");
+                }
                 else assertNull(shared.exactApplication());
                 var compiled = new AtomicInteger();
                 var force = new RootNode(language) {
@@ -252,6 +307,8 @@ class AstContinuationTest {
                 installed.compile(true); installed.waitForCompilation(); assertTrue(installed.isValidLastTier());
                 assertSame(leaf, Calls.target(force, new Object[]{shared}));
                 assertEquals(2, compiled.get(), "First force must enter and return through installed code");
+                assertEquals(1, compiledArgument.get(), "The first delayed operand must execute its installed body");
+                assertTrue(callee.isValidLastTier()); assertTrue(argumentTarget.isValidLastTier());
                 assertSame(leaf, Calls.target(force, new Object[]{shared})); assertEquals(1, effects.get());
                 assertEquals(2, shared.getState()); assertNull(shared.getTarget()); assertNull(shared.exactApplication());
             } finally { context.leave(); }
