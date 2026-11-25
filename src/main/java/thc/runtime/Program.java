@@ -2789,6 +2789,10 @@ public final class Program implements ExecutableProgram {
         boolean[] constructorStrict = "con".equals(fn.get(0)) && ((Number) fn.get(2)).intValue() == args.size()
             ? strictConstructorFields((String) fn.get(1), args.size()) : null;
         DataLayout layout = constructorStrict != null ? dataLayout((String) fn.get(1)) : null;
+        boolean referencePair = lowering().operands != null && !reusableCode && layout != null &&
+            args.size() == 2 && !layout.getHasAggregateFields() && layout.getArity() == 2 &&
+            layout.compactPointer(0) && layout.compactPointer(1);
+        if (referencePair) lowering().operands = null;
         boolean[] entryStrict = null;
         if ("lam".equals(fn.get(0))) entryStrict = CoreEntries.lambda(fn);
         else if ("var".equals(fn.get(0))) {
@@ -2812,6 +2816,7 @@ public final class Program implements ExecutableProgram {
             for (Expr node : nodes) CoreRepresentations.requireScalar(node.getRepresentation(), "argument");
             return primitive((String) fn.get(1), nodes, CoreExceptionPayload.validate(expr));
         }
+        if (referencePair) return new ReferencePairConstruct(layout, nodes[0], nodes[1]);
         if (constructorStrict != null) {
             DataLayout target = dataLayout((String) fn.get(1));
             return reusableCode ? new Construct(target.reusableStorage(), scope.programSlot, required(constructorIndices, target.getId()), nodes, constructorVectorSlots(target, scope.layout)) :

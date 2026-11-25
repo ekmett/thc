@@ -737,6 +737,56 @@ class DelimitedContinuationsTest {
             for (String name : List.of("catch#", "maskAsyncExceptions#", "maskUninterruptible#", "unmaskAsyncExceptions#")) { var node = new DelimitedIOBoundary(name, shape, operands.get(), language, new Metrics(false)); assertEquals(name + " requires a tuple destination", assertThrows(RuntimeFault.class, () -> node.execute(frame)).getMessage()); }
         } finally { context.leave(); } }
     }
+    @ParameterizedTest @ValueSource(ints = {0, 1})
+    void resumedReferencePairBuildsEachResultFromItsOwnFieldValues(int interrupted) {
+        try (var context = Context.newBuilder("thc").build()) {
+            context.initialize("thc");
+            context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var layout = new DataLayout(language, "Pair", "Pair", new String[]{"LiftedRep", "LiftedRep"});
+                Object[] values = {new Object(), new Object()};
+                int[] reads = new int[2];
+                class Field extends Expr {
+                    final int index;
+                    Field(int index) { this.index = index; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        reads[index]++;
+                        if (index == interrupted) throw new DelimitedCut(new PromptTag(Language.currentState()),
+                            null, null, SynchronousMasking.current(this), this);
+                        return values[index];
+                    }
+                }
+                class Owner extends GuestRoot {
+                    @Child private ReferencePairConstruct pair = new ReferencePairConstruct(layout, new Field(0), new Field(1));
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    Object next;
+                    Owner() { super(language, new FrameLayout().build()); configureEntry(new boolean[]{false}, false); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) { return next; }
+                    DataValue resume(DelimitedStack image, Object value) {
+                        next = value;
+                        var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor());
+                        return (DataValue) image.resume(site, frame, new Closure(null, 1, getCallTarget()));
+                    }
+                }
+                var root = new Owner();
+                root.getCallTarget();
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[]{0L}, root.getFrameDescriptor());
+                var cut = assertThrows(DelimitedCut.class, () -> root.pair.execute(frame));
+                var image = new DelimitedStack(cut, null);
+                Object a = new Object(), b = new Object();
+                var first = root.resume(image, a);
+                var second = root.resume(image, b);
+                assertNotSame(first, second);
+                assertSame(a, layout.read(first, interrupted));
+                assertSame(b, layout.read(second, interrupted));
+                assertSame(values[1 - interrupted], layout.read(first, 1 - interrupted));
+                assertSame(values[1 - interrupted], layout.read(second, 1 - interrupted));
+                assertArrayEquals(new int[]{1, interrupted == 0 ? 2 : 1}, reads);
+            } finally { context.leave(); }
+        }
+    }
     private CoreRepresentation tuple(CoreRepresentation... fields) { var reps = new ArrayList<String>(); for (var field : fields) reps.addAll(Objects.requireNonNull(field.getPrimReps())); return new CoreRepresentation(CoreKind.UNKNOWN, false, false, reps, Arrays.asList(fields), null, null, null, null); }
     @Test void continuationLoweringRejectsWrongCarrierAndTupleContracts() {
         var state = new CoreRepresentation(CoreKind.VOID, false, false, List.of(), null, null, null, null, null); var tag = new CoreRepresentation(CoreKind.OBJECT, false, false, List.of("BoxedRep (Just Unlifted)"), null, null, null, null, null); var closure = new CoreRepresentation(CoreKind.CLOSURE, false, false, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null); var integer = new CoreRepresentation(CoreKind.LONG, false, false, List.of("IntRep"), null, null, null, null, null);
