@@ -52,6 +52,7 @@ public final class TupleBounce extends Node {
             } catch (TailCall transfer) { next = transfer; }
             catch (DelimitedCut cut) {
                 if (!DelimitedControl.enabled(this)) throw cut;
+                CompilerDirectives.transferToInterpreter();
                 throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this, root.getTupleResult());
             }
         }

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
@@ -102,6 +103,7 @@ final class DirectTupleCaller extends Node {
             }
         } catch (DelimitedCut cut) {
             if (!DelimitedControl.enabled(this)) throw cut;
+            CompilerDirectives.transferToInterpreter();
             throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this, resultShape);
         }
     }
