@@ -69,6 +69,19 @@ class LocalJoinGraphBudgetTest {
                 "bindings", List.of(Map.of("id", "entry", "name", "entry", "source", "body", "lifted", true,
                 "rep", CLOSURE, "expr", lambda(List.of("count", "key"), body))));
     }
+    static Map<String,Object> returningModule() {
+        var join = Map.<String,Object>of("id", "sum", "name", "sum", "lifted", true, "rep", CLOSURE,
+                "expr", lambda(List.of("left", "right"), primitive("+#", variable("left"), variable("right"))),
+                "joinValueArity", 2, "joinResultRep", LONG);
+        var entry = apply(node("var", "sum", Map.of("rep", CLOSURE)), List.of(variable("count"), integer(10)));
+        var body = primitive("+#", node("let", false, List.of(join), entry, Map.of("rep", LONG)), integer(17));
+        return Map.of("instrument", true,
+                "sourceFiles", List.of(Map.of("id", "control", "path", "ReturningJoin.hs")),
+                "sourceSpans", List.of(Map.of("id", "body", "file", "control", "startLine", 1,
+                        "startColumn", 1, "endLine", 1, "endColumn", 2)),
+                "bindings", List.of(Map.of("id", "entry", "name", "entry", "source", "body", "lifted", true,
+                        "rep", CLOSURE, "expr", lambda(List.of("count"), body))));
+    }
     private static Context context(String failureAction) {
         return Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")

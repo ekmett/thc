@@ -17,10 +17,16 @@ public final class LocalBinding extends Node {
     @Child private Expr value;
     @CompilationFinal(dimensions = 1) private final int[] typedSlots;
     private final boolean exactLong;
+    private final boolean objectSlot;
     private final CoreKind referenceKind;
     @CompilationFinal private boolean generic;
     public LocalBinding(int slot, Expr value, boolean preferLong) { this(slot, value, preferLong, null); }
     public LocalBinding(int slot, Expr value, boolean preferLong, int[] typedSlots) {
+        this(slot, value, preferLong, typedSlots, false);
+    }
+    /** The lowering owner allocated Object storage, independent of demand or value shape. */
+    LocalBinding(int slot, Expr value, boolean preferLong, int[] typedSlots, boolean objectSlot) {
+        this.objectSlot = objectSlot;
         this.slot = slot; this.value = value; this.typedSlots = typedSlots;
         if (typedSlots != null) value.prepareTuple(typedSlots, 0);
         CoreRepresentation proof = value.getRepresentation();
@@ -63,11 +69,15 @@ public final class LocalBinding extends Node {
         return cut.append(this::resumeWrite);
     }
     private Object resumeWrite(VirtualFrame frame, Object input) {
-        if (typedSlots == null) FrameAccess.write(frame, slot, input);
+        if (typedSlots == null) {
+            if (objectSlot) frame.setObject(slot, input);
+            else FrameAccess.write(frame, slot, input);
+        }
         return thc.runtime.Unit.INSTANCE;
     }
     private void writeValue(VirtualFrame frame) {
         if (typedSlots != null) { value.executeTuple(frame, typedSlots, 0); return; }
+        if (objectSlot) { frame.setObject(slot, evaluate(frame)); return; }
         if (value.getRepresentation().isInt()) { FrameAccess.INSTANCE.writeInt(frame, slot, value.executeRequiredInt(frame)); return; }
         if (exactLong) {
             long result = value.executeRequiredLong(frame);
