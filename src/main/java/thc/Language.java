@@ -397,7 +397,8 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
             () -> { if (context.windowsNativeIo != null) context.windowsNativeIo.close(); },
             context.packageCbits::close, context.foreignRoots::close, context.savedTermios::close,
             context.stm::close, context.threads::close, context.capturedAsyncRequests::close,
-            context.files::dispose, context.stdio::dispose, context.rtsFileLocks::dispose,
+            context.files::dispose, () -> { if (context.nativeFiles != null) context.nativeFiles.close(); },
+            context.stdio::dispose, context.rtsFileLocks::dispose,
             context.stackSnapshots::dispose, context.weaks::close, context.stableNames::close,
             context.stablePointers::close, context.nativeAddresses::close, context.nativeAllocations::close);
         for (var program : context.coreUnitPrograms) failure = closeOwners(failure, program::close);

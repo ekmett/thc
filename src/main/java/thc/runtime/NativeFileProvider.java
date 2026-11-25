@@ -97,8 +97,8 @@ public final class NativeFileProvider implements Closeable {
                 if (state.getNativeFiles() != null) throw new IllegalStateException("Check failed.");
                 filesystem.startNativeDirectory();
                 var provider = new NativeFileProvider(state.getEnv(), state.getThreads(), filesystem.getDirectoryOwner());
-                state.getFiles().installNative(provider, endpoints);
                 state.setNativeFiles(provider);
+                state.getFiles().installNative(provider, endpoints);
                 if (profile == ContextProfile.LAUNCHER) state.getSignals().authorizeLauncher();
             } finally { context.leave(); }
             return context;
@@ -133,7 +133,6 @@ public final class NativeFileProvider implements Closeable {
             long expected = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0);
             if (statSize != expected) throw fault("Native file provider/stat image ABI mismatch");
             termiosSize = (int) interop.asLong(interop.execute(interop.readMember(library, "thc_file_termios_size")));
-            env.registerOnDispose(this);
         } catch (Throwable failure) { throw propagate(failure); }
     }
     public NativeDirectoryStreams getDirectoryStreams() { return directoryStreams; }
