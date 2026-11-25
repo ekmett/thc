@@ -28,7 +28,7 @@ public final class AstContinuations {
                 AstResumeStep step = steps.remove().forInvocation();
                 try {
                     if (join != null && step instanceof Case selection && steps.size() == 1 && steps.peek() == join) {
-                        Expr branch = selection.resumedJoinBranch(frame);
+                        Expr branch = selection.resumedJoinBranch(frame, answer);
                         if (branch instanceof LocalJoinCall call) {
                             LocalJoinJump transfer = call.prepareTransfer(frame);
                             // Preparing the jump can itself suspend. Its result writer stays

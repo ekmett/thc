@@ -58,7 +58,7 @@ public final class LocalBinding extends Node {
     @TruffleBoundary AstCapture appendWrite(AstCapture cut) {
         return cut.append(this::resumeWrite);
     }
-    private Object resumeWrite(VirtualFrame frame, Object input) {
+    Object resumeWrite(VirtualFrame frame, Object input) {
         if (typedSlots == null) {
             if (objectSlot) frame.setObject(slot, input);
             else FrameAccess.write(frame, slot, input);
