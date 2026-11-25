@@ -108,6 +108,20 @@ class ScalarTupleTailCallTest {
             }
         });
     }
+    @Test void missingFormalLongProofKeepsOrdinaryTupleLowering() throws Exception {
+        entered(language -> {
+            var input = module(true);
+            @SuppressWarnings("unchecked") var definitions = (List<Map<String, Object>>) input.get("bindings");
+            @SuppressWarnings("unchecked") var lambda = (List<Object>) definitions.getFirst().get("expr");
+            @SuppressWarnings("unchecked") var parameters = (List<Map<String, Object>>) lambda.get(1);
+            parameters.get(1).put("rep", map("kind", "unknown", "evaluated", false));
+            var program = new Program(language, input);
+            var root = program.entryTarget("worker").getRootNode();
+            assertNull(NodeUtil.findFirstNodeInstance(root, ScalarTupleTailCall.class));
+            assertNotNull(NodeUtil.findFirstNodeInstance(root, TupleApplication.class));
+            assertArrayEquals(expected(9, Long.MIN_VALUE, Long.MAX_VALUE), invoke(program, 9, Long.MIN_VALUE, Long.MAX_VALUE));
+        });
+    }
     @Test void savedTypedPreparationResumesWithoutBoxedArgumentEntriesOrReplay() throws Exception {
         entered(language -> {
             var program=new Program(language,module(true));

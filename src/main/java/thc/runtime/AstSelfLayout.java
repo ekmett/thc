@@ -35,8 +35,20 @@ public final class AstSelfLayout {
     public boolean[] getEntryStrict() { return entryStrict; }
     public ArgumentLayout getInputLayout() { return inputLayout; }
 
-    @ExplodeLoop public RuntimeException transfer(VirtualFrame frame, Closure function, int[] temporaries) {
-        // Temporaries cannot alias lexical slots; captures cannot overwrite a pending operand.
+    /** Typed preparation can retain a boxed Long after a sibling widens the descriptor. */
+    static long readLongArgument(VirtualFrame frame, int slot) {
+        if (frame.isLong(slot)) return frame.getLong(slot);
+        Object value = frame.getObject(slot);
+        if (value instanceof Long number) return number;
+        throw fault("Expected primitive Long argument");
+    }
+    /** The scalar tuple owner establishes both the formal and temporary Long carriers. */
+    boolean hasLongArguments() {
+        if (argumentProofs.length != argumentSlots.length) return false;
+        for (CoreRepresentation proof : argumentProofs) if (!proof.isLong()) return false;
+        return true;
+    }
+    @ExplodeLoop private void restoreEnvironment(VirtualFrame frame, Closure function) {
         if (captureLayout != null) {
             CapturedFrame environment = function.environment;
             if (environment == null) throw fault("Invalid captured frame");
@@ -46,6 +58,19 @@ public final class AstSelfLayout {
                 else captureLayout.restoreVector(environment, i, frame, lanes, 0);
             }
         }
+    }
+    @ExplodeLoop RuntimeException transferLongArguments(VirtualFrame frame, Closure function, int[] temporaries) {
+        restoreEnvironment(frame, function);
+        for (int i = 0; i < argumentSlots.length; i++) {
+            if (argumentSlots[i] >= 0)
+                FrameAccess.writeLong(frame, argumentSlots[i], readLongArgument(frame, temporaries[i]));
+        }
+        for (int source : temporaries) frame.clear(source);
+        throw AstSelfCall.INSTANCE;
+    }
+    @ExplodeLoop public RuntimeException transfer(VirtualFrame frame, Closure function, int[] temporaries) {
+        // Temporaries cannot alias lexical slots; captures cannot overwrite a pending operand.
+        restoreEnvironment(frame, function);
         for (int i = 0; i < argumentSlots.length; i++) {
             int destination = argumentSlots[i];
             if (i < argumentProofs.length && argumentProofs[i].getKind() == CoreKind.VOID)

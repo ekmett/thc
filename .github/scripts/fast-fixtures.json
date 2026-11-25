@@ -24,6 +24,8 @@
     "thc.WindowsDistributionTest"
   ],
   "fixtureFreeJunit": [
+    "thc.runtime.ScalarTupleTailCallTest",
+    "thc.runtime.ScalarTupleTemporaryTest",
     "thc.runtime.OriginalProcessIdentityTest",
     "thc.runtime.ForkHostFailureTest",
     "thc.runtime.LoomSignalProcessTest",

@@ -2789,7 +2789,7 @@ public final class Program implements ExecutableProgram {
             int[] vectorSlots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<vector call result ", tupleProof) : null;
             AstSelfLayout self = scope.self;
             boolean scalarOwner = !reusableCode && tail && self != null && self.getInputLayout() == null &&
-                self.getArity() == nodes.length && nodes.length != 0 && tupleProof.isTuple() && !tupleProof.getComponents().isEmpty() &&
+                self.getArity() == nodes.length && self.hasLongArguments() && nodes.length != 0 && tupleProof.isTuple() && !tupleProof.getComponents().isEmpty() &&
                 tupleProof.getComponents().stream().allMatch(CoreRepresentation::isLong);
             for (Expr argument : nodes) scalarOwner &= argument.getRepresentation().isLong() && argument.getRepresentation().getEvaluated();
             if (scalarOwner) {

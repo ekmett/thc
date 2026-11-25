@@ -46,12 +46,12 @@ final class ScalarTupleTailCall extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) { throw fault("Tuple value requires a destination"); }
     @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        Closure function = Applications.requireClosure(FrameAccess.read(frame, functionSlot));
+        Closure function = Applications.requireClosure(frame.getObject(functionSlot));
         try {
             if (getRootNode() instanceof FunctionRoot root && root.getRole$org_intelligence_thc() == FunctionRootRole.FUNCTION &&
                 function.arity == arguments.length && function.suppliedCount == 0 && function.supplied.length == 0 &&
                 selfTarget.matches(function.target))
-                throw layout.transfer(frame, function, arguments);
+                throw layout.transferLongArguments(frame, function, arguments);
             Object[] values = boxedArguments(frame);
             TupleDispatch dispatch = fallback;
             if (dispatch == null) {
@@ -77,7 +77,7 @@ final class ScalarTupleTailCall extends Expr {
     }
     @ExplodeLoop private Object[] boxedArguments(VirtualFrame frame) {
         Object[] values = new Object[arguments.length];
-        for (int i = 0; i < arguments.length; i++) values[i] = FrameAccess.read(frame, arguments[i]);
+        for (int i = 0; i < arguments.length; i++) values[i] = AstSelfLayout.readLongArgument(frame, arguments[i]);
         return values;
     }
 }
