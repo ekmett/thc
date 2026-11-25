@@ -23,7 +23,8 @@ public final class DirectCallerNode extends Node {
     public DirectCallerNode(RootCallTarget target, Metrics metrics, boolean[] knownEvaluated) { this(target, metrics, knownEvaluated, 0); }
     public DirectCallerNode(RootCallTarget target, Metrics metrics, boolean[] knownEvaluated, int prefixSize) {
         this.target = target; this.metrics = metrics;
-        entryArguments = new EntryArguments(target, metrics, knownEvaluated, prefixSize);
+        var strict = new EntryArguments(target, metrics, knownEvaluated, prefixSize);
+        if (!strict.isEmpty()) entryArguments = strict;
         GuestRoot root = target.getRootNode() instanceof GuestRoot guest ? guest : null;
         if (root != null && root.getLeadingCaseReturn() != null)
             leadingCaseReturn = new LeadingCaseReturnNode(root, metrics, knownEvaluated, prefixSize);
@@ -44,6 +45,8 @@ public final class DirectCallerNode extends Node {
         if (leadingCaseReturn != null && CompilerDirectives.inCompiledCode()) {
             try { leadingCaseReturn.forceArguments(frame, arguments); }
             catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult, false)); }
+        } else if (entryArguments == null) {
+            return callEntered(frame, arguments, tailCall, tupleResult, owned);
         } else if (AstControl.captures(this)) {
             try { entryArguments.executeCaptured(frame, arguments); }
             catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult, false)); }
