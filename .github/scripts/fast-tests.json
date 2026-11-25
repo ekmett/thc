@@ -1294,6 +1294,10 @@
     }
   },
   "owners": {
+    "src/vm/README.md": {"junit": [], "python": ["src/vm/t/test-release-runtime.py"]},
+    "src/vm/tools/build_graal.py": {"junit": [], "python": ["src/vm/t/test-release-runtime.py"]},
+    "src/vm/tools/fetch_sources.py": {"junit": [], "python": ["src/vm/t/test-release-runtime.py"]},
+    "src/vm/tools/build_runtime.py": {"junit": [], "python": ["src/vm/t/test-release-runtime.py"]},
     "src/test/java/thc/runtime/AstInstrumentationTest.java": {"junit": ["thc.runtime.AstInstrumentationTest"], "python": []},
 
     "bin/run.sh": {"junit": ["thc.LauncherDiagnosticsTest"], "python": []},

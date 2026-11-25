@@ -8,7 +8,37 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
+import urllib.error
+import urllib.parse
 import urllib.request
+
+
+def report_http_failure(label, pin, path, error):
+    """Identify a failed pinned input without logging bodies or URL credentials."""
+    receipt = {'label': label, 'revision': pin['commit'], 'path': path,
+               'status': error.code}
+    for name, url in (('url', error.url), ('redirect', error.headers.get('Location'))):
+        if url:
+            try:
+                if name == 'redirect':
+                    url = urllib.parse.urljoin(error.url, url)
+                parts = urllib.parse.urlsplit(url)
+                host = parts.hostname or ''
+                if ':' in host:
+                    host = '[' + host + ']'
+                if parts.port:
+                    host += ':' + str(parts.port)
+                receipt[name] = urllib.parse.urlunsplit(
+                    (parts.scheme, host, parts.path, '', ''))[:2048]
+            except ValueError:
+                pass  # Malformed diagnostic metadata must not replace HTTPError.
+    for name in ('Retry-After', 'X-Request-ID', 'X-GitHub-Request-ID',
+                 'X-Amz-Request-ID', 'CF-Ray'):
+        value = error.headers.get(name)
+        if value:
+            receipt[name.lower()] = value[:512]
+    print('THC source fetch failure ' + json.dumps(receipt), file=sys.stderr, flush=True)
 
 
 def main():
@@ -61,8 +91,12 @@ def main():
         if dest.exists():
             data = dest.read_bytes()
         else:
-            with urllib.request.urlopen(url, timeout=30) as response:
-                data = response.read()
+            try:
+                with urllib.request.urlopen(url, timeout=30) as response:
+                    data = response.read()
+            except urllib.error.HTTPError as error:
+                report_http_failure(label, pin, path, error)
+                raise
         if hashlib.sha256(data).hexdigest() != pin["sha256"][path]:
             raise RuntimeError(f"Source hash mismatch: {label}/{path}")
         if not dest.exists():
