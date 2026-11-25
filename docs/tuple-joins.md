@@ -14,6 +14,11 @@ no function-call packet or tuple result carrier and borrow no handoff slab.
 Actual logical shape, arity, levity and carrier checks remain in place; matching
 register counts alone do not establish matching tuples.
 
+On a root-tail AST join with no enclosing join targets, a direct initial jump
+can release scalar reference locals unused by every join body. The jump clears
+those slots after copying its arguments. A conditional entry can do this on the
+arms that jump into the group. Loop backedges carry no such release.
+
 Fixture-free controls in `TupleJoinLoweringTest` and `EmptyArgumentRuntimeTest`
 cover result scratch cleanup, an aliased destination, evaluated nonempty tuple
 capture through a zero-arity join, and recursive lexical shadowing. They preserve

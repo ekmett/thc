@@ -83,24 +83,27 @@ class CoreProofJoinTest {
                 map("rep", closure, "resultRep", proof, "entryStrict", list(true))), 1), "joinResultRep", proof);
         var operand = list("app", list("var", "pause", meta(closure)), list(n(1)), list(false), false, false, meta(proof));
         var jump = list("app", list("var", "finish", meta(closure)), list(operand), list(lifted), false, false, meta(proof));
-        var body = list("let", false, list(join), jump, meta(proof));
-        var function = list("lam", list(map("id", "pause", "name", "pause", "lifted", true, "rep", closure)),
-                body, map("rep", closure, "resultRep", proof));
         for (boolean prepared : new boolean[]{false, true}) try (var context = executionContext()) {
             context.initialize("thc"); context.enter();
             var threads = Language.currentState().getThreads(); threads.enterCurrent();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var conditional = list("case", n(0), "selector", list(list("default", null, list(), jump)),
+                    with(meta(proof), "binder", arg("selector")));
+                var body = list("let", false, list(join), prepared ? conditional : jump, meta(proof));
+                var function = list("lam", list(map("id", "pause", "name", "pause", "lifted", true, "rep", closure)),
+                    body, map("rep", closure, "resultRep", proof));
                 var module = map("bindings", list(bind("entry", function)), "instrument", true);
                 var program = prepared ? Program.prepareCode(language, module, List.of("entry"), 1).newInstance(language)
                         : new Program(language, module, true);
                 var target = program.entryTarget("entry"); var descriptor = target.getRootNode().getFrameDescriptor();
-                int formalSlot = -1;
+                int formalSlot = -1, pauseSlot = -1;
                 for (int slot = 0; slot < descriptor.getNumberOfSlots(); slot++) {
                     assertNotEquals("<join argument 0>", descriptor.getSlotName(slot), "Unary evaluated references need no parallel-move scratch");
                     if ("value".equals(descriptor.getSlotName(slot))) formalSlot = slot;
+                    if ("pause".equals(descriptor.getSlotName(slot))) pauseSlot = slot;
                 }
-                assertTrue(formalSlot >= 0);
+                assertTrue(formalSlot >= 0 && pauseSlot >= 0);
                 assertEquals(prepared || lifted ? FrameSlotKind.Object : FrameSlotKind.Illegal, descriptor.getSlotKind(formalSlot));
                 Object payload = switch (kind) {
                     case "data" -> new DataLayout(language, "Payload", "Payload", new String[0]).create(new Object[0]);
@@ -130,6 +133,7 @@ class CoreProofJoinTest {
                             environment == null ? new Object[]{0L, closureOperand} : new Object[]{0L, environment, closureOperand}));
                     var field = AstContinuation.class.getDeclaredField("frame"); field.setAccessible(true);
                     var frame = (com.oracle.truffle.api.frame.MaterializedFrame) field.get(saved);
+                    assertSame(closureOperand, frame.getObject(pauseSlot));
                     if (frame.isObject(formalSlot)) assertNull(frame.getObject(formalSlot));
                     else assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(formalSlot));
                     assertEquals(0L, program.diagnostics().get("localJoinTransfers"));
@@ -141,11 +145,13 @@ class CoreProofJoinTest {
                     if (wrong) {
                         assertThrows(RuntimeFault.class, () -> resume.call());
                         assertEquals(0L, program.diagnostics().get("localJoinTransfers"));
+                        assertSame(closureOperand, frame.getObject(pauseSlot));
                         if (frame.isObject(formalSlot)) assertNull(frame.getObject(formalSlot));
                         else assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(formalSlot));
                     } else {
                         assertSame(payload, resume.call());
                         assertSame(payload, frame.getObject(formalSlot));
+                        assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(pauseSlot));
                         assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(formalSlot));
                         assertEquals(1L, program.diagnostics().get("localJoinTransfers"));
                     }
@@ -492,6 +498,26 @@ class CoreProofJoinTest {
         var inner = let(false, List.of(bind("finish", lam(List.of("inner"), call("finish", prim("+#", v("inner"), n(5)))), 1)), call("finish", v("input")));
         var outer = let(false, List.of(bind("finish", lam(List.of("outer"), prim("+#", v("outer"), n(7))), 1)), inner);
         program(prim("+#", outer, n(11)), p -> { assertBranchRegions(p.entryTarget("entry").getRootNode(), 2); for (int i = 0; i < 30; i++) assertEquals((long) i + 23, run(p, i)); compile(p); for (long input : new long[]{Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_001L}) assertEquals(input + 23, run(p, input)); assertEquals(66L, count(p, "localJoinTransfers")); assertEquals(0L, count(p, "tailBounces")); });
+    }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void tailJoinKeepsReferencesNeededByItsOwnOrEnclosingBodies(boolean enclosing) {
+        var ref = map("kind", "object", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+        var held = list("var", "held", meta(ref));
+        var finish = with(bind("finish", held, 0), "joinResultRep", ref);
+        var middle = with(bind("middle", list("var", "finish", meta(ref)), 0), "joinResultRep", ref);
+        var nested = list("let", false, list(middle), list("var", "middle", meta(ref)), meta(ref));
+        var expression = list("let", false, list(finish), enclosing ? nested : list("var", "finish", meta(ref)), meta(ref));
+        var entry = bind("entry", list("lam", list(map("id", "held", "lifted", true, "rep", ref)), expression,
+            map("rep", closure, "resultRep", ref)));
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var target = new Program(language, map("bindings", list(entry))).entryTarget("entry");
+                var marker = new Object();
+                assertSame(marker, Calls.target(target, new Object[]{0L, marker}));
+            } finally { context.leave(); }
+        }
     }
     @Test void recursivePrimitiveJoinUsesParallelMovesAndReturnsToNonTailContinuation() throws ReflectiveOperationException {
         var step = choose(prim("<=#", v("n"), n(0)), prim("-#", v("a"), v("b")), call("loop", prim("-#", v("n"), n(1)), v("b"), v("a")));

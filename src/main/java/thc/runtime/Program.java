@@ -1465,6 +1465,9 @@ public final class Program implements ExecutableProgram {
         boolean recursive = Boolean.TRUE.equals(expr.get(1));
         Set<String> shadowed = new LinkedHashSet<>();
         if (recursive) for (CoreJoinDefinition definition : definitions) shadowed.add(definition.getId());
+        // An enclosing jump can still read slots absent from the current group's
+        // free variables. Restrict release to the root's tail with no such targets.
+        Set<Integer> liveOuterSlots = tail && outer.joins.isEmpty() && !outer.locals.isEmpty() ? new LinkedHashSet<>() : null;
         for (CoreJoinDefinition definition : definitions) {
             for (Map<String, Object> parameter : definition.getParameters()) {
                 CoreRepresentation proof = CoreRepresentations.binder(parameter);
@@ -1484,7 +1487,12 @@ public final class Program implements ExecutableProgram {
                     boolean invalid = slots.length != ArgumentLayout.leaves(captured.proof).size();
                     if (!invalid) for (int slot : slots) if (slot < 0) { invalid = true; break; }
                     if (invalid) throw new RuntimeFault("Typed join capture disagrees with its physical slots");
-                } else CoreRepresentations.requireScalar(captured.proof, "join capture");
+                    // Keep every leaf behind a live aggregate alias.
+                    if (liveOuterSlots != null) for (int slot : slots) liveOuterSlots.add(slot);
+                } else {
+                    CoreRepresentations.requireScalar(captured.proof, "join capture");
+                    if (liveOuterSlots != null) liveOuterSlots.add(captured.slot);
+                }
             }
         }
         CoreJoins.validate((List<Map<String, Object>>) expr.get(2), (List<Object>) expr.get(3), recursive);
@@ -1538,6 +1546,15 @@ public final class Program implements ExecutableProgram {
         // follow it, so a join transfer clears only completed entry/body locals.
         int firstBodySlot = local.layout.nextSlot();
         Expr entry = compile((List<Object>) expr.get(3), local, tail);
+        if (liveOuterSlots != null && (entry instanceof LocalJoinCall || entry instanceof Case)) {
+            Set<Integer> dead = new LinkedHashSet<>();
+            for (Local captured : outer.locals.values()) {
+                int slot = captured.slot;
+                if (slot >= 0 && !captured.cell && outer.layout.referenceSlot(slot) && !liveOuterSlots.contains(slot))
+                    dead.add(slot);
+            }
+            if (!dead.isEmpty()) releaseJoinEntrySlots(entry, identity, dead.stream().mapToInt(Integer::intValue).toArray());
+        }
         int bodySlotLimit = local.layout.nextSlot();
         List<Expr> bodies = new ArrayList<>();
         for (int i = 0; i < definitions.size(); i++) {
@@ -1571,6 +1588,11 @@ public final class Program implements ExecutableProgram {
         return new LocalJoinRegion(identity, selector, resultSlot,
             nodes, result, recursive, tuple, tupleSlots, delimited,
             tuple == null && local.layout.referenceSlot(resultSlot));
+    }
+    private static void releaseJoinEntrySlots(Expr edge, Object group, int[] slots) {
+        if (edge instanceof LocalJoinCall jump) jump.releaseOuterSlotsOnEntry(group, slots);
+        else if (edge instanceof Case selection)
+            for (Alternative alternative : selection.alternatives) releaseJoinEntrySlots(alternative.getBody(), group, slots);
     }
     private DataLayout dataLayout(String id) {
         try (var ownership = preparationLock.acquire()) {
