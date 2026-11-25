@@ -37,6 +37,14 @@ final class Primitive extends Expr {
             }
         }
     }
+    boolean producesComparisonFlag() {
+        return switch (operation) {
+            case "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#",
+                 "<#", "ltWord#", "ltChar#", "<=#", "leWord#", "leChar#",
+                 ">#", "gtWord#", "gtChar#", ">=#", "geWord#", "geChar#" -> true;
+            default -> false;
+        };
+    }
     static int arity(String name) {
         return switch (Scalar64Primitives.scalar64PrimitiveOperation(name)) {
             case "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#",

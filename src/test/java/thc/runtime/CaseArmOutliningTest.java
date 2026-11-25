@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -15,6 +18,7 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
 import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
@@ -56,6 +60,60 @@ public class CaseArmOutliningTest {
     private void released(Language language) {
         var state = language.getHandoffState().get(); assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
         assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getResults().retainedReferences());
+    }
+
+    private Expr input(CoreKind kind) {
+        return new Expr() {
+            @Override public Object execute(VirtualFrame frame) { return ((Object[]) frame.getArguments()[0])[0]; }
+        }.proven(new CoreRepresentation(kind, true, true));
+    }
+    private void firstCaseChange(Language language, Expr scrutinee, Alternative arm,
+                                 Object initial, Object changed, boolean retained) throws Exception {
+        var descriptor = FrameDescriptor.newBuilder();
+        int slot = descriptor.addSlot(arm.getKind() == Alternative.DATA_ALTERNATIVE ? FrameSlotKind.Object : FrameSlotKind.Long, "case", null);
+        var other = new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], new Literal(3L));
+        var alternatives = new Alternative[]{arm, other};
+        var metrics = new Metrics(false);
+        Expr selected = arm.getKind() == Alternative.DATA_ALTERNATIVE
+            ? new DataCase(scrutinee, slot, alternatives, metrics, scrutinee.getRepresentation(), false)
+            : new LongCase(scrutinee, slot, alternatives, metrics, scrutinee.getRepresentation(), false);
+        var enteredCompiled = new AtomicBoolean();
+        var target = new RootNode(language, descriptor.build()) {
+            @Child private Expr choice = selected;
+            @Override public Object execute(VirtualFrame frame) {
+                if (CompilerDirectives.inCompiledCode()) enteredCompiled.set(true);
+                return choice.execute(frame);
+            }
+        }.getCallTarget();
+        // Keep the call target's argument-class profile stable across distinct constructor representations.
+        Object[] input = {initial};
+        assertEquals(3L, target.call((Object) input));
+        compile(target);
+        input[0] = changed;
+        assertEquals(7L, target.call((Object) input));
+        assertTrue(enteredCompiled.get(), "the first new match entered installed code");
+        assertEquals(retained, target.getClass().getMethod("isValidLastTier").invoke(target));
+    }
+
+    @Test public void firstUnseenNullaryMatchKeepsCaseCompiled() throws Exception {
+        withLanguage(language -> {
+            var end = new DataLayout(language, "End", "End", new String[0]);
+            var item = new DataLayout(language, "Item", "Item", new String[]{"IntRep"});
+            firstCaseChange(language, input(CoreKind.DATA),
+                new Alternative(Alternative.DATA_ALTERNATIVE, end, new int[0], new Literal(7L)),
+                item.create(new Object[]{3L}), end.create(new Object[0]), true);
+        });
+    }
+
+    @Test public void firstUnseenOutlinedComparisonKeepsCaseCompiled() throws Exception {
+        withLanguage(language -> {
+            for (String operation : List.of(">=#", "+#")) {
+                var condition = new Primitive(operation, new Expr[]{input(CoreKind.LONG), new Literal(0L)});
+                var arm = new Alternative(Alternative.LITERAL_ALTERNATIVE, 1L, new int[0],
+                    new AstSameFrameArm(new Literal(7L)));
+                firstCaseChange(language, condition, arm, -1L, 1L, operation.equals(">=#"));
+            }
+        });
     }
 
     @Test @SuppressWarnings("unchecked")
