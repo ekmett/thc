@@ -803,20 +803,21 @@ public final class FunctionRoot extends GuestRoot {
             }
         }
         if (hasSelfTail) return loop.execute(frame);
-        if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function self-loop node");
-        // Finish the first transfer before entering the long-running loop. Its
-        // exception and argument packet can otherwise retain a consumed list prefix.
-        Object result = firstLap(frame, repeating);
-        return result == AstSelfCall.INSTANCE ? loop.execute(frame) : result;
+        try { return firstBody(frame); }
+        catch (AstSelfCall ignored) {
+            // The payload-bearing transfer handler has unwound. Only this
+            // payload-free singleton remains live while the loop executes.
+        }
+        return loop.execute(frame);
     }
-    private Object firstLap(VirtualFrame frame, SelfRepeater repeating) {
+    private Object firstBody(VirtualFrame frame) {
+        if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function self-loop node");
         try { return repeating.once(frame); }
         catch (AstSelfCall ignored) {
             tailCallProfile.enter();
             if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
-            return AstSelfCall.INSTANCE;
         } catch (HandoffTailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
@@ -824,7 +825,6 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreHandoff(frame, tail.getArguments(), false, null);
-            return AstSelfCall.INSTANCE;
         } catch (TailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
@@ -832,8 +832,8 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreTail(frame, tail);
-            return AstSelfCall.INSTANCE;
         }
+        throw AstSelfCall.INSTANCE;
     }
     @Override public SourceSection getSourceSection() { return coreSourceLocation == null ? null : coreSourceLocation.getSection(); }
     public List<CoreSourceNote> getCoreSourceNotes() { return coreSourceLocation == null ? List.of() : coreSourceLocation.getNotes(); }
