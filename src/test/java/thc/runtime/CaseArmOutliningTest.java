@@ -370,7 +370,10 @@ public class CaseArmOutliningTest {
         Map<String, Object> pair = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", false, "primReps", List.of("BoxedRep (Just Lifted)"), "components", List.of(state, data));
         Map<String, Object> result = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", true, "primReps", List.of("IntRep"), "components", List.of(state, wide));
         var tuple = List.of("app", List.of("con", "Result", 2), List.of(List.of("void", Map.of("rep", state)), variable("x")), List.of(false, false), false, false, Map.of("rep", result));
-        Map<String, Object> module = Map.of("bindings", List.of(binding("entry", lambda(List.of(parameter("prefix", mvar), parameter("blocked", mvar), parameter("x")),
+        var blockedException = Map.of("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+            "type", "SomeException", "lifted", true, "arity", 0, "rep", data,
+            "expr", variable(CoreBlockedExceptions.MVAR, data));
+        Map<String, Object> module = Map.of("bindings", List.of(blockedException, binding("entry", lambda(List.of(parameter("prefix", mvar), parameter("blocked", mvar), parameter("x")),
             afterTake("prefix", afterTake("blocked", tuple, mvar, state, data, pair, result), mvar, state, data, pair, result), result))),
             "constructors", List.of(Map.of("id", "Pair", "kind", "unboxed-tuple", "arity", 2), Map.of("id", "Result", "kind", "unboxed-tuple", "arity", 2)));
         try (var context = executionContext()) {
