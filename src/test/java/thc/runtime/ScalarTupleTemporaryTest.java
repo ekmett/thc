@@ -38,7 +38,7 @@ class ScalarTupleTemporaryTest {
                 var layout = new AstSelfLayout(null, new int[0], new int[]{formal}, new CoreRepresentation[]{proof}, new boolean[]{false});
                 class Transfer extends RootNode {
                     boolean compiled;
-                    final int[] temporaries = {temporary};
+                    @CompilerDirectives.CompilationFinal(dimensions = 1) final int[] temporaries = {temporary};
                     Transfer() { super(null, builder.build()); }
                     @Override public Object execute(VirtualFrame frame) {
                         long value = (long) frame.getArguments()[0];

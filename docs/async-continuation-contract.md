@@ -91,8 +91,12 @@ selected or default arm clears the unused binder before entering its body.
 Calls preserve already evaluated arguments,
 pending strict forces and typed destinations. Typed argument loans are released
 after their values have entered the callee frame; saved tuple results use owned
-storage. Operand temporaries remain live across a cut and clear when the saved
-expression completes. `catch#`, masks, annotations and `keepAlive#` retain their lexical
+storage. Sequenced operand temporaries remain live across a cut and clear when
+the saved expression completes. AST tail calls with evaluated Long inputs and a
+Long tuple result keep their callee in a Java local and prepare parallel moves
+in primitive slots. A cut saves the callee and completed Long prefix before
+clearing those slots. Each resumption restores its prefix and evaluates the
+remaining inputs once. `catch#`, masks, annotations and `keepAlive#` retain their lexical
 handler or cleanup scope around resumed child steps. Recursive local joins poll
 before executing the next selected body.
 

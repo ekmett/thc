@@ -272,7 +272,8 @@ class ScalarTupleTailCallTest {
             var continuationOwner = new Owner(); continuationOwner.getCallTarget();
             assertArrayEquals(new long[]{20, 1}, result(root, continuationOwner.resume(0L)));
             assertArrayEquals(new long[]{20, 2}, result(root, continuationOwner.resume(1L)));
-            assertEquals(3, capture.typed); assertEquals(0, capture.generic);
+            // Two evaluations precede capture, then each image runs the remaining iteration once.
+            assertEquals(4, capture.typed); assertEquals(0, capture.generic);
             assertEquals(2, copies.size()); assertNotSame(copies.get(0), copies.get(1));
             assertNotSame(capture.saved, copies.get(0)); assertNotSame(capture.saved, copies.get(1));
         });
