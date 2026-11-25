@@ -892,7 +892,8 @@ public final class Program implements ExecutableProgram {
                 ownRoot.configureCoreIdentity(CoreFunctionIdentity.from(sourceModule, initialization));
         }
         HandoffEntry handoff = null;
-        if (!reusableCode && (inputLayout == null || !inputLayout.getRequiresTyped())) {
+        // Force enters private thunk targets with an ordinary packet that it owns.
+        if (!thunkDemand && !reusableCode && (inputLayout == null || !inputLayout.getRequiresTyped())) {
             List<CoreRepresentation> declared = new ArrayList<>();
             for (Map<String, Object> arg : args) declared.add(CoreRepresentations.binder(arg));
             handoff = HandoffEntry.create(language, scope.layout, declared, resultProof, captures != null);
@@ -909,7 +910,7 @@ public final class Program implements ExecutableProgram {
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
             delimited, role, outlineCaseArms || deferDefaultArm,
             scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
-        if (!metrics.getEnabled() && initializedBody == null && initialization == null && role == FunctionRootRole.FUNCTION &&
+        if (!thunkDemand && !metrics.getEnabled() && initializedBody == null && initialization == null && role == FunctionRootRole.FUNCTION &&
                 handoff == null && inputProofs.stream().anyMatch(CoreRepresentation::hasBoxedPointer))
             root.enableOwnedOrdinaryArguments();
         // Same-frame regions deliberately expose the running activation to side roots.
