@@ -525,8 +525,8 @@ public final class Program implements ExecutableProgram {
         Set<Integer> joinCaptureSlots = Set.of();
         LocalJoinTarget joinBodyTarget;
         AstSelfLayout self;
-        List<Object> releasingTupleCall;
-        int[] releasedFormals;
+        List<Object> entryExpression;
+        List<Object> tupleCallContinuation;
         int programSlot = -1;
         final List<Object> deferredExpression;
         final List<DeferredArm> deferredArms;
@@ -888,7 +888,7 @@ public final class Program implements ExecutableProgram {
         }
         if (role == FunctionRootRole.FUNCTION) scope.self = new AstSelfLayout(captures, environmentSlots,
             allArgumentSlots, allArgumentProofs, entryStrict.clone(), inputLayout, environmentVectorSlots);
-        if (initializedBody == null && initialization == null) prepareEntryFormalRelease(expression, args, scope);
+        if (initializedBody == null && initialization == null) scope.entryExpression = expression;
         Expr body = initializedBody != null ? initializedBody : initialization == null ? compile(expression, scope, bodyTail) : initializer(initialization, scope);
         // This target is entered only by an existing demand on a thunk. Finish
         // that demand inside its resumable update scope, not at function returns.
@@ -967,27 +967,39 @@ public final class Program implements ExecutableProgram {
         }
         return slots.stream().mapToInt(Integer::intValue).toArray();
     }
-    /** The entry case owns the entire remaining continuation of these formals. */
-    private void prepareEntryFormalRelease(List<Object> expression, List<Map<String, Object>> formals, Scope scope) {
-        if (!"case".equals(expression.getFirst())) return;
-        var call = (List<Object>) expression.get(1);
-        if (!"app".equals(call.getFirst()) || !CoreRepresentations.expression(call).isTuple()) return;
-        Set<String> live = new LinkedHashSet<>();
-        for (var alternative : (List<List<Object>>) expression.get(3))
-            live.addAll(coreFreeVariables((List<Object>) alternative.get(3)));
-        Set<String> passed = new LinkedHashSet<>();
-        for (var argument : (List<List<Object>>) call.get(2))
-            if ("var".equals(argument.getFirst())) passed.add((String) argument.get(1));
-        List<Integer> dead = new ArrayList<>();
-        for (var formal : formals) {
-            String id = (String) formal.get("id");
-            Local local = scope.locals.get(id);
-            if (passed.contains(id) && !live.contains(id) && local != null && !local.cell &&
-                    local.tupleSlots == null && local.slot >= 0 && scope.layout.referenceSlot(local.slot))
+    private static int[] tupleCaseOperandReferences(List<Object> call, List<List<Object>> arguments,
+                                                    Expr[] operands, Scope scope) {
+        List<Object> continuation = scope.tupleCallContinuation;
+        if (continuation == null || continuation.get(1) != call) return ArgumentLayout.EMPTY_TUPLE_SLOTS;
+        Set<Integer> dead = new LinkedHashSet<>();
+        Set<Integer> captured = new LinkedHashSet<>();
+        for (int i = 0; i < operands.length; i++) {
+            var argument = arguments.get(i);
+            Local local = "var".equals(argument.getFirst()) ? scope.locals.get(argument.get(1)) : null;
+            if (local != null && !local.cell && local.slot >= 0 && scope.layout.referenceSlot(local.slot))
                 dead.add(local.slot);
+            if (operands[i] instanceof Delay delay) delay.collectCaptureSlots(captured);
         }
-        scope.releasingTupleCall = call;
-        scope.releasedFormals = ints(dead);
+        if (!captured.isEmpty()) for (Local local : scope.locals.values()) {
+            if (!local.cell && local.slot >= 0 && captured.contains(local.slot) &&
+                    (local.proof.hasBoxedPointer() || scope.layout.referenceSlot(local.slot)))
+                dead.add(local.slot);
+            if (local.tupleSlots != null) for (int lane : local.tupleSlots)
+                if (lane >= 0 && captured.contains(lane) && scope.layout.referenceSlot(lane)) dead.add(lane);
+        }
+        if (dead.isEmpty()) return ArgumentLayout.EMPTY_TUPLE_SLOTS;
+        // All possible continuations run in this frame, including enclosing
+        // joins that an arm can reach without mentioning their captures.
+        dead.removeAll(scope.joinCaptureSlots);
+        for (var alternative : (List<List<Object>>) continuation.get(3)) {
+            for (String free : coreFreeVariables((List<Object>) alternative.get(3))) {
+                Local local = scope.locals.get(free);
+                if (local == null) continue;
+                dead.remove(local.slot);
+                if (local.tupleSlots != null) for (int lane : local.tupleSlots) dead.remove(lane);
+            }
+        }
+        return dead.stream().mapToInt(Integer::intValue).toArray();
     }
     private boolean returningSideCandidate(List<Object> expression, Scope scope) {
         if (!enableAsync || outlineCaseArms || deferDefaultArm ||
@@ -1903,7 +1915,13 @@ public final class Program implements ExecutableProgram {
         var vectorRead = CoreVectorMemory.readCase(expr, constructors);
         if (vectorRead != null) return compileVectorReadCase(vectorRead, scope, tail);
         List<Object> scrutineeExpr = (List<Object>) expr.get(1);
-        Expr scrutinee = compile(scrutineeExpr, scope, false);
+        Expr scrutinee;
+        if ((tail || expr == scope.entryExpression) && "app".equals(scrutineeExpr.getFirst())) {
+            List<Object> previous = scope.tupleCallContinuation;
+            scope.tupleCallContinuation = expr;
+            try { scrutinee = compile(scrutineeExpr, scope, false); }
+            finally { scope.tupleCallContinuation = previous; }
+        } else scrutinee = compile(scrutineeExpr, scope, false);
         Scope local = scope.child();
         if ("var".equals(scrutineeExpr.get(0))) {
             String id = (String) scrutineeExpr.get(1);
@@ -2915,7 +2933,7 @@ public final class Program implements ExecutableProgram {
         ArgumentLayout input = ArgumentLayout.fromProofs(loweredProofs(nodes));
         if (input != null && input.getRequiresTyped()) {
             int[] dead = tail ? tailOperandReferences(args, scope) :
-                expr == scope.releasingTupleCall ? scope.releasedFormals : new int[0];
+                tupleProof.isTuple() ? tupleCaseOperandReferences(expr, args, nodes, scope) : ArgumentLayout.EMPTY_TUPLE_SLOTS;
             return new AstTypedApplication(function, nodes, scope.layout, tail, codeMetrics(),
                 tupleProof.isTypedTransport() ? new TupleShape(tupleProof, (thc.Language) language) : null,
                 !reusableCode && tail && scope.self != null &&
@@ -2931,7 +2949,7 @@ public final class Program implements ExecutableProgram {
             for (Expr argument : nodes) scalarOwner &= argument.getRepresentation().isLong() && argument.getRepresentation().getEvaluated();
             if (scalarOwner) return new ScalarTupleTailCall(self, function, nodes, scope.layout, shape, codeMetrics());
             return new TupleApplication((thc.Language) language, shape, function, nodes, tail, codeMetrics(), vectorSlots,
-                expr == scope.releasingTupleCall ? scope.releasedFormals : new int[0]);
+                tupleProof.isTuple() ? tupleCaseOperandReferences(expr, args, nodes, scope) : ArgumentLayout.EMPTY_TUPLE_SLOTS);
         }
         AstSelfLayout self = scope.self;
         boolean emptyTuple = false;

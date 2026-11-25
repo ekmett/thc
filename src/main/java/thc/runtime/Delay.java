@@ -5,6 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import java.util.Set;
 
 final class Delay extends Expr {
     private final RootCallTarget target;
@@ -26,6 +27,10 @@ final class Delay extends Expr {
         this.programSlot = -1; this.argumentSlot = argumentSlot;
     }
     RootCallTarget target() { return target; }
+    void collectCaptureSlots(Set<Integer> slots) {
+        if (argumentSlot >= 0) slots.add(argumentSlot);
+        for (int capture : captures) slots.add(capture);
+    }
     @Override public Thunk execute(VirtualFrame frame) {
         if (argumentSlot >= 0) return Thunk.withArgument(target, referenceArgument ? frame.getObject(argumentSlot) : FrameAccess.read(frame, argumentSlot));
         return new Thunk(target, captureLayout == null ? null : captureLayout.capture(frame, captures,
