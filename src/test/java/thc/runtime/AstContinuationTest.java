@@ -134,6 +134,19 @@ class AstContinuationTest {
                 Object published = new Object(); child.publishSuccess(published);
                 var succeeded = new ChildResume(published, null);
                 assertSame(published, capture.get().continueWith(succeeded)); assertNull(succeeded.getValue());
+                var other = new Thunk(target, null);
+                var otherValue = new Object();
+                other.publishSuccess(otherValue);
+                var marker = new ThunkSuspended(child);
+                for (boolean publicList : new boolean[]{false, true}) {
+                    java.util.function.Supplier<AstContinuation> distinctOwner = () -> publicList
+                        ? new AstContinuation(root, marker, mask, frame, List.of(other, root.demand), StackAnnotations.current(root))
+                        : new AstCapture(marker, mask).append(other).append(root.demand).freeze(root, frame);
+                    var wrong = new ChildResume(published, null);
+                    assertThrows(RuntimeFault.class, () -> distinctOwner.get().continueWith(wrong));
+                    assertSame(published, wrong.getValue());
+                    assertSame(otherValue, distinctOwner.get().continueWith(new ChildResume(otherValue, null)));
+                }
                 var unrelated = new ChildResume(new Object(), null);
                 assertTrue(assertThrows(RuntimeFault.class, () -> capture.get().continueWith(unrelated)).getMessage().contains("lost its completed update"));
                 assertNotNull(unrelated.getValue());

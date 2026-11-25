@@ -5,8 +5,6 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import java.util.List;
-import java.util.ArrayDeque;
-import java.util.Queue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import static thc.runtime.RuntimeServiceStatus.fault;
@@ -36,7 +34,8 @@ public final class AstContinuation implements SavedGuestContinuation {
     }
     private final MaskingState logicalMask;
     private final MaterializedFrame frame;
-    private final Queue<AstResumeStep> steps;
+    private Object pending;
+    private final boolean childDemand;
     private final StackAnnotationState annotations;
     private final boolean rootEntrySpill;
     private final ManagedSTM.Transaction transaction;
@@ -53,14 +52,23 @@ public final class AstContinuation implements SavedGuestContinuation {
     }
     public AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
                            List<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
-        this(root, yielded, mask, frame, new ArrayDeque<>(steps), annotations, rootEntrySpill, tailSpill);
+        this(root, yielded, mask, frame, new AstCapture.Steps(steps), false, annotations, rootEntrySpill, tailSpill);
     }
-    /** Transfer an unpublished capture's queue; the caller must detach its reference. */
+    /** Accept pending work from an unpublished capture or a private copy of the supplied list. */
     AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
-                    Queue<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
+                    Object pending, boolean childDemand, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
         this.sourceRoot = root; this.yielded = yielded; this.logicalMask = mask; this.frame = frame;
         this.spillPath = spillPath(yielded);
-        this.steps = steps; this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
+        if (pending instanceof AstCapture.Steps copied) {
+            if (copied.size() <= 1) pending = copied.peek();
+            else if (copied.size() == 2 && AstCapture.isChildDemand(yielded, copied.peek(), copied.peekLast())) {
+                pending = copied.peekLast();
+                childDemand = true;
+            }
+        }
+        this.pending = pending;
+        this.childDemand = childDemand;
+        this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
         this.transaction = thc.Language.currentState(root).stm.currentTransaction();
     }
     @Override public GuestRoot getSourceRoot() { return sourceRoot; }
@@ -80,23 +88,26 @@ public final class AstContinuation implements SavedGuestContinuation {
         if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);
         if (!CLAIMED.compareAndSet(this, false, true)) return;
+        if (childDemand) pending = AstCapture.expandDemand(yielded, pending);
         yielded = null;
-        AstContinuations.discardSteps(steps);
+        AstCapture.discardPending(takePending());
+    }
+    private boolean completedWith(Object value) {
+        if (childDemand) return !(value instanceof Thunk) && AstCapture.yieldedChild(yielded).completedWith(value);
+        return pending instanceof AstControl.ResumeChild child && child.completedWith(value);
     }
     @Override @TruffleBoundary public Object continueWith(Object input) {
         if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);
         if (!CLAIMED.compareAndSet(this, false, true)) throw fault("AST continuation was already resumed");
-        yielded = null;
         // A terminal child delivery transfers its checked update. A following
         // demand has no work when the value is already in weak head normal form.
-        if (input instanceof ChildResume completed && completed.getFailure() == null &&
-                steps.peek() instanceof AstControl.ResumeChild child &&
-                (steps.size() == 1 || AstCapture.hasTrailingDemandPair(steps) &&
-                    !(completed.getValue() instanceof Thunk)) && child.completedWith(completed.getValue())) {
-            steps.clear();
+        if (input instanceof ChildResume completed && completed.getFailure() == null && completedWith(completed.getValue())) {
+            yielded = pending = null;
             return completed.takeValue();
         }
+        if (childDemand) pending = AstCapture.expandDemand(yielded, pending);
+        yielded = null;
         MaskingState ambient = SynchronousMasking.current(sourceRoot);
         StackAnnotationState ambientAnnotations = StackAnnotations.current(sourceRoot);
         AstStackScope stack = AstStacks.astStackScope(sourceRoot);
@@ -127,9 +138,17 @@ public final class AstContinuation implements SavedGuestContinuation {
             stm.restore(ambientTransaction);
         }
     }
+    private Object takePending() {
+        var owned = pending;
+        pending = null;
+        return owned;
+    }
     private Object resumeSteps(Object input) {
-        try { return AstContinuations.resumeAstSteps(frame, steps, input); }
-        catch (AstSelfCall self) {
+        try {
+            if (pending instanceof AstCapture.Steps)
+                return AstContinuations.resumeAstSteps(frame, (AstCapture.Steps) takePending(), input);
+            return pending == null ? input : ((AstResumeStep) takePending()).forInvocation().resume(frame, input);
+        } catch (AstSelfCall self) {
             if (sourceRoot instanceof FunctionRoot root) return root.resumeSelf(frame);
             throw self;
         }

@@ -5,10 +5,8 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.ControlFlowException;
-import java.util.AbstractQueue;
 import java.util.ArrayDeque;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.List;
@@ -19,81 +17,64 @@ public final class AstCapture extends ControlFlowException {
     private final Object yielded;
     private final MaskingState logicalMask;
     private final StackAnnotationState annotations = StackAnnotations.current(null);
-    /** One capture owns this queue until freeze transfers it to its one-shot activation. */
-    private static final class Steps extends AbstractQueue<AstResumeStep> {
-        private AstResumeStep first;
-        private AstResumeStep second;
-        private ArrayDeque<AstResumeStep> many;
-        @Override public boolean offer(AstResumeStep step) {
-            Objects.requireNonNull(step);
-            if (many != null) return many.offer(step);
-            if (first == null) first = step;
-            else if (second == null) second = step;
-            else {
-                many = new ArrayDeque<>(4);
-                many.add(first);
-                many.add(second);
-                many.add(step);
-                first = second = null;
-            }
-            return true;
-        }
-        @Override public AstResumeStep poll() {
-            if (many != null) return many.poll();
-            AstResumeStep step = first;
-            first = second;
-            second = null;
-            return step;
-        }
-        @Override public AstResumeStep peek() { return many != null ? many.peek() : first; }
-        @Override public int size() { return many != null ? many.size() : second != null ? 2 : first != null ? 1 : 0; }
-        List<AstResumeStep> snapshot() {
-            if (many != null) return List.copyOf(many);
-            if (second != null) return List.of(first, second);
-            return first != null ? List.of(first) : List.of();
-        }
-        /** A scope takes exclusive ownership of its accumulated work. Its recipe
-         * keeps that work read-only across independent delimited invocations. */
-        Collection<AstResumeStep> takeScope() {
-            if (many != null) {
-                var owned = many;
-                many = null;
-                return owned;
-            }
-            var owned = snapshot();
-            first = second = null;
-            return owned;
-        }
-        @Override public Iterator<AstResumeStep> iterator() {
-            return many != null ? many.iterator() : snapshot().iterator();
+    /** Pending work is empty, a single step, or this owned queue. A terminal
+     * child demand can recover its first step from the exact suspension marker. */
+    static final class Steps extends ArrayDeque<AstResumeStep> {
+        Steps() { super(4); }
+        Steps(Collection<AstResumeStep> supplied) { super(supplied); }
+    }
+    private Object pending;
+    private boolean childDemand;
+    private boolean freshlyEnclosed;
+
+    static AstControl.ResumeChild yieldedChild(Object yielded) {
+        if (yielded instanceof ThunkSuspended suspended) return suspended.getThunk();
+        if (yielded instanceof CallSegmentSuspended suspended) return suspended.getSegment();
+        return null;
+    }
+    static boolean isChildDemand(Object yielded, Object first, AstResumeStep second) {
+        return second instanceof Evaluate && first instanceof AstControl.ResumeChild && first == yieldedChild(yielded);
+    }
+    static Steps expandDemand(Object yielded, Object demand) {
+        var owned = new Steps();
+        owned.add(yieldedChild(yielded));
+        owned.add((Evaluate) demand);
+        return owned;
+    }
+    private void addStep(AstResumeStep step) {
+        Objects.requireNonNull(step);
+        freshlyEnclosed = false;
+        if (pending == null) pending = step;
+        else if (pending instanceof Steps many) many.add(step);
+        else if (isChildDemand(yielded, pending, step)) {
+            pending = step;
+            childDemand = true;
+        } else {
+            var many = childDemand ? expandDemand(yielded, pending) : new Steps();
+            if (!childDemand) many.add((AstResumeStep) pending);
+            many.add(step);
+            pending = many;
+            childDemand = false;
         }
     }
-    static boolean hasTrailingDemandPair(Queue<AstResumeStep> steps) {
-        if (steps.size() != 2) return false;
-        if (steps instanceof Steps capture)
-            return (capture.many == null ? capture.second : capture.many.peekLast()) instanceof Evaluate;
-        return steps instanceof ArrayDeque<?> deque && deque.peekLast() instanceof Evaluate;
-    }
-    private Steps steps;
-    // Only a scope newly created by this capture can transfer its private queue.
-    // Appended steps can also contain recipes borrowed from a delimited image.
-    private ScopeRecipe freshScope;
-    private Steps pendingSteps() {
-        if (steps == null) steps = new Steps();
-        return steps;
+    private Collection<AstResumeStep> scopeSteps() {
+        if (pending instanceof Steps many) return many;
+        if (childDemand) return List.of(yieldedChild(yielded), (Evaluate) pending);
+        return pending == null ? List.of() : List.of((AstResumeStep) pending);
     }
     @TruffleBoundary public AstCapture(Object yielded, MaskingState logicalMask) { this.yielded = yielded; this.logicalMask = logicalMask; }
     public Object getYielded() { return yielded; }
     public MaskingState getLogicalMask() { return logicalMask; }
     @TruffleBoundary public AstCapture append(AstResumeStep step) {
-        pendingSteps().add(step); freshScope = null; return this;
+        addStep(step);
+        return this;
     }
 
     /** Keep the lexical exception/cleanup scope around the saved child work. */
     @TruffleBoundary public AstCapture enclose(Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper) {
-        var steps = pendingSteps();
-        freshScope = new ScopeRecipe(wrapper, steps.takeScope());
-        steps.add(freshScope);
+        pending = new ScopeRecipe(wrapper, scopeSteps());
+        childDemand = false;
+        freshlyEnclosed = true;
         return this;
     }
     private static final class ScopeRecipe implements AstResumeStep {
@@ -120,36 +101,41 @@ public final class AstCapture extends ControlFlowException {
             case null, default -> null;
         };
     }
+    static void discardPending(Object pending) {
+        if (pending instanceof Steps many) AstContinuations.discardSteps(many);
+        else if (pending instanceof AstResumeStep step) step.discard();
+    }
     /** A catch handling this cut owns terminal retirement of its pending steps. */
     @TruffleBoundary public void discard() {
-        freshScope = null;
-        if (steps != null) AstContinuations.discardSteps(steps);
+        Object owned = childDemand ? expandDemand(yielded, pending) : pending;
+        clearPending();
+        discardPending(owned);
     }
     public AstContinuation freeze(GuestRoot root, MaterializedFrame frame) { return freeze(root, frame, false); }
     @TruffleBoundary public AstContinuation freeze(GuestRoot root, MaterializedFrame frame, boolean rootEntrySpill) {
         var saved = new AstContinuation(root, yielded instanceof AstPendingTail tail ? tail.publish() : yielded,
-            logicalMask, frame, pendingSteps(), annotations, rootEntrySpill, yielded instanceof AstPendingTail);
-        if (freshScope != null) {
+            logicalMask, frame, pending, childDemand, annotations, rootEntrySpill, yielded instanceof AstPendingTail);
+        if (freshlyEnclosed) {
             // The sole, newly enclosed recipe has never been exposed. The saved
             // activation's claim admits exactly one invocation or one discard.
-            freshScope.oneShot = true;
-            freshScope = null;
+            ((ScopeRecipe) pending).oneShot = true;
         }
         // The saved activation now owns the queue. Reusing or discarding this
         // capture must not mutate its steps, including during nested recapture.
-        steps = null;
+        clearPending();
         return saved;
+    }
+    private void clearPending() {
+        pending = null;
+        childDemand = false;
+        freshlyEnclosed = false;
     }
     @TruffleBoundary public AstCapture appendRemaining(ArrayDeque<AstResumeStep> pending) { return appendRemaining((Queue<AstResumeStep>) pending); }
     AstCapture appendRemaining(Queue<AstResumeStep> pending) {
-        if (!pending.isEmpty()) {
-            pendingSteps().addAll(pending);
-            freshScope = null;
-        }
-        pending.clear();
+        while (!pending.isEmpty()) addStep(pending.remove());
         return this;
     }
     public AstPendingTail pendingTail() {
-        return yielded instanceof AstPendingTail tail && steps != null && steps.size() == 1 && steps.peek() == tail ? tail : null;
+        return yielded instanceof AstPendingTail tail && pending == tail ? tail : null;
     }
 }

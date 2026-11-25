@@ -213,9 +213,42 @@ class SavedGuestContinuationTest {
             boolean collected = collect(observation.produced);
             assertTrue(witness.refersTo(null), "Independent dead key must establish collector progress");
             assertTrue(liveReference.refersTo(live), "A Java-held key must remain live");
-            assertTrue(collected, "A discarded child result must die during the unrelated suffix");
+            assertTrue(collected, "A consumed child result must be collectible");
             return Unit.INSTANCE;
         } finally { Reference.reachabilityFence(live); }
+    }
+    private static AstContinuation finishChildActivation(Language language, LifetimeObservation observation,
+                                                         boolean demand, boolean discard) {
+        var owner = new GuestRoot(language, new FrameLayout().build()) {
+            @Child Evaluate force = new Evaluate(new Literal(Unit.INSTANCE), new Metrics(false));
+            @Override public long bloom(VirtualFrame frame) { return 0L; }
+            @Override public Object execute(VirtualFrame frame) { return force.execute(frame); }
+        };
+        var child = new Thunk(owner.getCallTarget(), null);
+        var payload = new Object();
+        child.publishSuccess(payload);
+        observation.produced = new WeakReference<>(payload);
+        var capture = AstControl.captureChild(owner, new ThunkSuspended(child));
+        if (demand) capture.append(owner.force);
+        var saved = capture.freeze(owner, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor()));
+        if (discard) saved.discard();
+        else assertSame(payload, saved.continueWith(new ChildResume(payload, null)));
+        return saved;
+    }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void retainedTerminalActivationReleasesItsCompletedChild(boolean demand) {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean discard : new boolean[]{false, true}) {
+                    var observation = new LifetimeObservation();
+                    var alias = finishChildActivation(language, observation, demand, discard);
+                    try { observeReleasedChild(observation); }
+                    finally { Reference.reachabilityFence(alias); }
+                }
+            } finally { context.leave(); }
+        }
     }
     private static AstContinuation lifetimeActivation(Language language, LifetimeObservation observation, int scopes) {
         var owner = new LifetimeOwner(language);
