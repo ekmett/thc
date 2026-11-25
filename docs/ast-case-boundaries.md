@@ -97,7 +97,7 @@ provokes the compiler's actual budget failure.
 
 ## Fresh-entry recovery
 
-The launcher uses a 1,000-node speculative graph budget and disables diagnostic
+The launcher uses a 64,000-node speculative graph budget and disables diagnostic
 recompilation. Every actual compilation failure retires its physical target,
 including a transient bailout. Its original reason and flags remain in the
 context-owned receipt; a later success does not erase a failure. Shared prepared
