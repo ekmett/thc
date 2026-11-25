@@ -1565,6 +1565,7 @@ public final class Program implements ExecutableProgram {
             Scope bodyScope = bodyScopes.get(i);
             bodies.add(withSource(sources.binding(definition.getBinding(), lowering().source), () -> {
                 Expr node = compile(definition.getBody(), bodyScope, tail);
+                if (node instanceof Case selection) releaseJoinCaseFormal(definition, bodyScope, selection);
                 node.setRepresentation(node.getRepresentation().refine(evaluated(definition.getResult(), false)));
                 // This transport adds no source event; the original body keeps its probes.
                 return returningSideCandidate(definition.getBody(), bodyScope) ? new AstSameFrameArm(node, false) : node;
@@ -1589,6 +1590,34 @@ public final class Program implements ExecutableProgram {
             nodes, result, recursive, tuple, tupleSlots, delimited,
             tuple == null && local.layout.referenceSlot(resultSlot));
     }
+    private static void releaseJoinCaseFormal(CoreJoinDefinition definition, Scope scope, Case selection) {
+        List<Object> body = definition.getBody();
+        if (!"case".equals(body.getFirst())) return;
+        List<?> scrutinee = (List<?>) body.get(1);
+        if (!"var".equals(scrutinee.getFirst())) return;
+        Object id = scrutinee.get(1);
+        if (definition.getParameters().stream().noneMatch(parameter -> id.equals(parameter.get("id")))) return;
+        Local formal = scope.locals.get(id);
+        if (formal == null || formal.cell || formal.slot < 0 ||
+                !(formal.proof.hasBoxedPointer() || scope.layout.referenceSlot(formal.slot))) return;
+
+        // Only the owning body can read this formal. A later jump back to
+        // it writes every formal before reentry. Nested joins in an arm are
+        // included in that arm's free-variable scan.
+        List<List<Object>> alternatives = (List<List<Object>>) body.get(3);
+        for (int i = 0; i < alternatives.size(); i++) {
+            boolean live = false;
+            for (String free : coreFreeVariables((List<Object>) alternatives.get(i).get(3))) {
+                Local local = scope.locals.get(free);
+                if (local == null) continue;
+                live = local.slot == formal.slot;
+                if (local.tupleSlots != null) for (int lane : local.tupleSlots) live |= lane == formal.slot;
+                if (live) break;
+            }
+            if (!live) selection.alternatives[i].discardDeadReference(formal.slot);
+        }
+    }
+
     private static void releaseJoinEntrySlots(Expr edge, Object group, int[] slots) {
         if (edge instanceof LocalJoinCall jump) jump.releaseOuterSlotsOnEntry(group, slots);
         else if (edge instanceof Case selection)
@@ -1962,7 +1991,7 @@ public final class Program implements ExecutableProgram {
                     scope.programSlot, required(constructorIndices, layout.getId())) :
                 new Alternative(tag, value, fieldSlots, body, vectorFields, !reusableCode && alternatives.length > 1);
             child.layout.clearInitially(dead);
-            alternatives[a].discardUnusedFields(dead);
+            alternatives[a].discardDeadReferences(dead);
             results.add(body.getRepresentation()); kinds.add(tag);
             allLong &= tag != LITERAL_ALTERNATIVE || value instanceof Long;
             anyAggregate |= body.getRepresentation().isAggregate();

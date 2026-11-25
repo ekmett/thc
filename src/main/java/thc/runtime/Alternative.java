@@ -47,8 +47,12 @@ final class Alternative extends Node {
     public void setBody(Expr body) { this.body = body; }
     public int[][] getVectorFields() { return vectorFields; }
     /** Assigned by lowering before this alternative is adopted. */
-    void discardUnusedFields(int[] slots) { deadReferences = slots; }
-    @ExplodeLoop void releaseUnusedFields(VirtualFrame frame) {
+    void discardDeadReferences(int[] slots) { deadReferences = slots; }
+    void discardDeadReference(int slot) {
+        deadReferences = java.util.Arrays.copyOf(deadReferences, deadReferences.length + 1);
+        deadReferences[deadReferences.length - 1] = slot;
+    }
+    @ExplodeLoop void releaseDeadReferences(VirtualFrame frame) {
         for (int slot : deadReferences) frame.clear(slot);
     }
     DataLayout layout(VirtualFrame frame) {
