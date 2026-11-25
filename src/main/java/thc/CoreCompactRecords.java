@@ -332,15 +332,15 @@ public final class CoreCompactRecords {
         int tag = cursor.readByte();
         require(tag <= 9, "Invalid compact Core expression tag: " + tag);
         var metadata = meta(cursor, origin);
-        List<Object> fields = switch (tag) {
-            case 0 -> values("var", id(cursor));
-            case 1 -> values("prim", text(cursor));
-            case 2 -> { var result = values("lit"); result.addAll(literal(cursor)); yield result; }
-            case 3 -> values("lam", list(cursor, () -> binder(cursor)), expression(cursor));
-            case 4 -> values("con", text(cursor), cursor.unsigned());
+        return switch (tag) {
+            case 0 -> values("var", id(cursor), metadata);
+            case 1 -> values("prim", text(cursor), metadata);
+            case 2 -> { var result = literal(cursor); yield values("lit", result.getFirst(), result.getLast(), metadata); }
+            case 3 -> values("lam", list(cursor, () -> binder(cursor)), expression(cursor), metadata);
+            case 4 -> values("con", text(cursor), cursor.unsigned(), metadata);
             case 5 -> values("app", expression(cursor), list(cursor, () -> expression(cursor)),
-                    list(cursor, () -> element(cursor, cursor::readBoolean)), cursor.readBoolean(), cursor.readBoolean());
-            case 6 -> values("let", cursor.readBoolean(), list(cursor, () -> binding(cursor)), expression(cursor));
+                    list(cursor, () -> element(cursor, cursor::readBoolean)), cursor.readBoolean(), cursor.readBoolean(), metadata);
+            case 6 -> values("let", cursor.readBoolean(), list(cursor, () -> binding(cursor)), expression(cursor), metadata);
             case 7 -> {
                 var scrutinee = expression(cursor);
                 String binderId = ordinal(cursor);
@@ -349,14 +349,12 @@ public final class CoreCompactRecords {
                     require(Objects.equals(binder.get("id"), binderId), "Compact case binder identity disagrees");
                     return binder;
                 });
-                yield values("case", scrutinee, binderId, list(cursor, () -> alternative(cursor)));
+                yield values("case", scrutinee, binderId, list(cursor, () -> alternative(cursor)), metadata);
             }
-            case 8 -> values("void");
-            case 9 -> values("unsupported", text(cursor));
+            case 8 -> values("void", metadata);
+            case 9 -> values("unsupported", text(cursor), metadata);
             default -> throw error("Invalid compact Core expression tag: " + tag);
         };
-        fields.add(metadata);
-        return fields;
     }
     private List<Object> alternative(CoreCompactCursor cursor) throws Throwable {
         int tag = cursor.readByte();
@@ -756,7 +754,11 @@ public final class CoreCompactRecords {
         for (int i = 0; i < entries.length; i += 2) result.put((String) entries[i], entries[i + 1]);
         return result;
     }
-    private static ArrayList<Object> values(Object... values) { return new ArrayList<>(Arrays.asList(values)); }
+    private static List<Object> values(Object... values) {
+        var result = new ArrayList<Object>(values.length);
+        Collections.addAll(result, values);
+        return result;
+    }
     private static void require(boolean condition, String message) { if (!condition) throw new IllegalArgumentException(message); }
     private static IllegalStateException error(String message) { return new IllegalStateException(message); }
     @SuppressWarnings("unchecked") private static <T,E extends Throwable> T rethrow(Throwable failure) throws E { throw (E) failure; }
