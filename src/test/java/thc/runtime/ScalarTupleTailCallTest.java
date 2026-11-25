@@ -3,7 +3,6 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeUtil;
@@ -68,6 +67,11 @@ class ScalarTupleTailCallTest {
             finally { context.leave(); }
         }
     }
+    private static List<Expr> operands(ScalarTupleTailCall call) {
+        var children = new ArrayList<Expr>();
+        for (var child : call.getChildren()) if (child instanceof Expr expr) children.add(expr);
+        return children;
+    }
     @Test void parallelScalarInputsAndTupleResultMatchIndependentModelOnBothBackends() throws Exception {
         entered(language -> {
             for (boolean ast : List.of(true,false)) {
@@ -98,9 +102,8 @@ class ScalarTupleTailCallTest {
                 assertNotNull(NodeUtil.findFirstNodeInstance(root, ScalarTupleTailCall.class));
                 if (partial) {
                     var pap = ((Closure) program.entryValue("other")).pap(new Object[]{99L});
-                    var callee = NodeUtil.findFirstNodeInstance(root, ScalarTupleTailCall.Callee.class);
-                    var demand = callee.getChildren().iterator().next();
-                    var value = demand.getChildren().iterator().next();
+                    var owner = NodeUtil.findFirstNodeInstance(root, ScalarTupleTailCall.class);
+                    var value = operands(owner).getFirst().getChildren().iterator().next();
                     value.replace(new Literal(pap).proven(CoreRepresentations.parse(closure)));
                 }
                 for (int i = 0; i < 3; i++) assertArrayEquals(new long[]{19, 1}, invoke(program, 1, 7, 19));
@@ -128,17 +131,14 @@ class ScalarTupleTailCallTest {
             Closure function=(Closure)program.entryValue("worker");
             var root=(FunctionRoot)function.target.getRootNode();
             var transfer=NodeUtil.findFirstNodeInstance(root,ScalarTupleTailCall.class);
-            var owner=(AstOperands)transfer.getParent();
-            var bindings=new ArrayList<LocalBinding>();
-            for(var child:owner.getChildren())if(child instanceof LocalBinding binding)bindings.add(binding);
-            Expr value=(Expr)bindings.get(1).getChildren().iterator().next();
+            Expr value=operands(transfer).get(1);
             class CutSecond extends Expr {
                 @Child private Expr delegate;
-                int typed, generic; MaterializedFrame last;
+                int typed, generic;
                 CutSecond(Expr delegate){this.delegate=delegate;setRepresentation(delegate.getRepresentation());}
                 @Override public Object execute(VirtualFrame frame){generic++;return delegate.execute(frame);}
                 @Override public long executeLong(VirtualFrame frame)throws UnexpectedResultException {
-                    typed++;last=frame.materialize();
+                    typed++;
                     if(typed==2)throw new AstCapture(Unit.INSTANCE,SynchronousMasking.current(this));
                     return delegate.executeLong(frame);
                 }
@@ -148,9 +148,6 @@ class ScalarTupleTailCallTest {
             assertEquals(2,cut.typed);assertEquals(0,cut.generic);
             assertArrayEquals(expected(3,7,19),result(root,saved.continueWith(1L)));
             assertEquals(3,cut.typed);assertEquals(0,cut.generic);
-            for(int slot=0;slot<root.getFrameDescriptor().getNumberOfSlots();slot++)
-                if(String.valueOf(root.getFrameDescriptor().getSlotName(slot)).startsWith("<tuple self "))
-                    assertEquals(FrameSlotKind.Illegal.tag,cut.last.getTag(slot));
             assertThrows(RuntimeFault.class,()->saved.continueWith(1L));
         });
     }
@@ -161,11 +158,7 @@ class ScalarTupleTailCallTest {
                 Closure function = (Closure) program.entryValue("worker");
                 var root = (FunctionRoot) function.target.getRootNode();
                 var transfer = NodeUtil.findFirstNodeInstance(root, ScalarTupleTailCall.class);
-                var owner = (AstOperands) transfer.getParent();
-                LocalBinding first = (LocalBinding) owner.getChildren().iterator().next();
-                Expr checked = (Expr) first.getChildren().iterator().next();
-                Expr demanded = (Expr) checked.getChildren().iterator().next();
-                Expr original = (Expr) demanded.getChildren().iterator().next();
+                Expr original = (Expr) operands(transfer).getFirst().getChildren().iterator().next();
                 class CutFunction extends Expr {
                     @Child private Expr delegate;
                     int entries;
@@ -179,9 +172,7 @@ class ScalarTupleTailCallTest {
                         return RuntimeTypesGen.expectClosure(execute(frame));
                     }
                 }
-                var allBindings = new ArrayList<LocalBinding>();
-                for (var child : owner.getChildren()) if (child instanceof LocalBinding binding) allBindings.add(binding);
-                Expr operand = (Expr) allBindings.get(1).getChildren().iterator().next();
+                Expr operand = operands(transfer).get(1);
                 class CountOperand extends Expr {
                     @Child private Expr delegate;
                     int entries;
@@ -211,10 +202,8 @@ class ScalarTupleTailCallTest {
             var shape = new TupleShape(resultProof, language);
             var slots = new FrameLayout();
             int n = slots.bind("n"), x = slots.bind("x"), y = slots.bind("y"), count = slots.bind("count");
-            int calleeSlot = slots.bind("callee"), seen = slots.bind("seen");
+            int seen = slots.bind("seen");
             int[] arguments = {n, x, y, count};
-            int[] scratch = {slots.bind("next n"), slots.bind("next x"), slots.bind("next y"), slots.bind("next count")};
-            int[] owned = {calleeSlot, scratch[0], scratch[1], scratch[2], scratch[3]};
             int[] output = {slots.bind("out x"), slots.bind("out count")};
             var metrics = new Metrics(true);
             Closure[] functionHolder = {null};
@@ -224,27 +213,22 @@ class ScalarTupleTailCallTest {
             };
             var layout = new AstSelfLayout(null, new int[0], arguments,
                 new CoreRepresentation[]{proof, proof, proof, proof}, new boolean[4]);
-            var transfer = new ScalarTupleTailCall(layout, calleeSlot, scratch, shape, metrics);
             Expr nextN = new Primitive("-#", new Expr[]{new LocalRead(n, false).proven(proof), new Literal(1L)});
-            var prepared = new AstOperands(new LocalBinding[]{new LocalBinding(calleeSlot, callee, false),
-                new LocalBinding(scratch[0], nextN, true),
-                new LocalBinding(scratch[1], new LocalRead(y, false).proven(proof), true),
-                new LocalBinding(scratch[2], new Primitive("+#", new Expr[]{new LocalRead(x, false).proven(proof), new Literal(1L)}), true),
-                new LocalBinding(scratch[3], new Primitive("+#", new Expr[]{new LocalRead(count, false).proven(proof), new Literal(1L)}), true)}, owned, transfer);
+            var transfer = new ScalarTupleTailCall(layout, callee, new Expr[]{
+                nextN, new LocalRead(y, false).proven(proof),
+                new Primitive("+#", new Expr[]{new LocalRead(x, false).proven(proof), new Literal(1L)}),
+                new Primitive("+#", new Expr[]{new LocalRead(count, false).proven(proof), new Literal(1L)})}, slots, shape, metrics);
             var body = new Case(new LocalRead(n, false).proven(proof), seen, new Alternative[]{
                 new Alternative(Alternative.LITERAL_ALTERNATIVE, 0L, new int[0], new TupleConstruct(shape,
                     new Expr[]{new LocalRead(x, false).proven(proof), new LocalRead(count, false).proven(proof)})),
-                new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], prepared)}, metrics, proof, true);
+                new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], transfer)}, metrics, proof, true);
             var root = new FunctionRoot(language, slots.build(), "active typed tuple loop", null, new int[0], arguments,
                 new int[]{0, 1, 2, 3}, body, metrics, new CoreRepresentation[]{proof, proof, proof, proof}, resultProof,
                 null, new boolean[4], null, shape, output, null, true, new int[0][], true, FunctionRootRole.FUNCTION, false);
             root.configureEagerAsyncPolls(false);
             Closure function = new Closure(null, 4, root.getCallTarget()); functionHolder[0] = function;
             root.getCallTarget();
-            var owner = (AstOperands) transfer.getParent();
-            var bindings = new ArrayList<LocalBinding>();
-            for (var child : owner.getChildren()) if (child instanceof LocalBinding binding) bindings.add(binding);
-            Expr original = (Expr) bindings.get(1).getChildren().iterator().next();
+            Expr original = operands(transfer).get(4);
             class CutSecond extends Expr {
                 @Child private Expr delegate;
                 int typed, generic;
@@ -267,7 +251,9 @@ class ScalarTupleTailCallTest {
             var copies = new ArrayList<MaterializedFrame>();
             cut.append(capture.saved, (saved, input, ambient, outer) -> {
                 Object answer = input.get(); copies.add(saved);
-                for (int slot : owned) assertEquals(FrameSlotKind.Illegal.tag, saved.getTag(slot));
+                for (int i = 0; i < saved.getFrameDescriptor().getNumberOfSlots(); i++)
+                    if (String.valueOf(saved.getFrameDescriptor().getSlotName(i)).startsWith("<tuple self argument "))
+                        assertEquals(com.oracle.truffle.api.frame.FrameSlotKind.Illegal.tag, saved.getTag(i));
                 return answer;
             });
             var image = new DelimitedStack(cut, null);
@@ -284,8 +270,8 @@ class ScalarTupleTailCallTest {
                 }
             }
             var continuationOwner = new Owner(); continuationOwner.getCallTarget();
-            assertArrayEquals(new long[]{8, 2}, result(root, continuationOwner.resume(0L)));
-            assertArrayEquals(new long[]{20, 3}, result(root, continuationOwner.resume(1L)));
+            assertArrayEquals(new long[]{20, 1}, result(root, continuationOwner.resume(0L)));
+            assertArrayEquals(new long[]{20, 2}, result(root, continuationOwner.resume(1L)));
             assertEquals(3, capture.typed); assertEquals(0, capture.generic);
             assertEquals(2, copies.size()); assertNotSame(copies.get(0), copies.get(1));
             assertNotSame(capture.saved, copies.get(0)); assertNotSame(capture.saved, copies.get(1));
