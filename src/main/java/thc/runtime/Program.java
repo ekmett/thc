@@ -602,7 +602,7 @@ public final class Program implements ExecutableProgram {
             if (reusableCode && kind == FrameSlotKind.Illegal) kind = FrameSlotKind.Object;
             int slot = layout.bind("<async operand " + bindings.size() + ">", kind);
             temporaries.add(slot);
-            bindings.add(new LocalBinding(slot, value, proof.isLong()));
+            bindings.add(new LocalBinding(slot, value, proof.isLong(), null, layout.referenceSlot(slot)));
             return new LocalRead(slot, false, layout.referenceSlot(slot) ? FrameSlotKind.Object : null).proven(proof);
         }
         Expr finish(Expr body) {
@@ -940,8 +940,8 @@ public final class Program implements ExecutableProgram {
         if (reusableCode) codeTargets.add(target);
         return new FunctionSpec(target, captures, captureSources);
     }
-    private boolean sameFrameCandidate(List<Object> expression, Scope scope) {
-        if (!enableAsync || outlineCaseArms || deferDefaultArm || scope.joins.isEmpty() ||
+    private boolean returningSideCandidate(List<Object> expression, Scope scope) {
+        if (!enableAsync || outlineCaseArms || deferDefaultArm ||
                 !Arrays.asList("app", "case", "let").contains(expression.getFirst())) return false;
         for (String free : coreFreeVariables(expression))
             if (scope.joins.containsKey(free)) return false;
@@ -988,7 +988,7 @@ public final class Program implements ExecutableProgram {
         return size;
     }
     private Expr caseArm(List<Object> expression, Scope scope, boolean tail, int alternativeCount, boolean substantialSiblings) {
-        if (sameFrameCandidate(expression, scope)) {
+        if (!scope.joins.isEmpty() && returningSideCandidate(expression, scope)) {
             OperandBuilder operands = lowering().operands;
             lowering().operands = null;
             try { return new AstSameFrameArm(compile(expression, scope, tail)); }
@@ -1088,7 +1088,7 @@ public final class Program implements ExecutableProgram {
                     new boolean[]{local.proof.getEvaluated()}, FunctionRootRole.FUNCTION, false, null, null, true);
                 TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
                 if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
-                return new Delay(fn.target, local.slot).proven(evaluated(CoreRepresentations.expression(expr), false))
+                return new Delay(fn.target, local.slot, scope.layout.referenceSlot(local.slot)).proven(evaluated(CoreRepresentations.expression(expr), false))
                     .located(sources.expression(expr, lowering().source));
             }
         }
@@ -1396,7 +1396,7 @@ public final class Program implements ExecutableProgram {
             CoreRepresentations.requireJoinArgument(target.getProofs()[i], nodes[i].getRepresentation());
             // The returning argument may be larger than any one nested case arm.
             // Keep argument preparation and the actual local jump in this region.
-            if (sameFrameCandidate(args.get(i), scope)) nodes[i] = new AstSameFrameArm(nodes[i]);
+            if (!scope.joins.isEmpty() && returningSideCandidate(args.get(i), scope)) nodes[i] = new AstSameFrameArm(nodes[i]);
         }
         if (nodes.length == 1 && target.getProofs()[0].isEvaluatedReference()) {
             // A completed unary operand can be installed directly. There are
@@ -1507,7 +1507,8 @@ public final class Program implements ExecutableProgram {
             bodies.add(withSource(sources.binding(definition.getBinding(), lowering().source), () -> {
                 Expr node = compile(definition.getBody(), bodyScope, tail);
                 node.setRepresentation(node.getRepresentation().refine(evaluated(definition.getResult(), false)));
-                return node;
+                // This transport adds no source event; the original body keeps its probes.
+                return returningSideCandidate(definition.getBody(), bodyScope) ? new AstSameFrameArm(node, false) : node;
             }));
             bodySlotLimit = Math.max(bodySlotLimit, local.layout.nextSlot());
         }

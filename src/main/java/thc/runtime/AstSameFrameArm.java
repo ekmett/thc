@@ -16,7 +16,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 
-/** Initially inline, then a finite graph-budget boundary around a returning case arm.
+/** Initially inline, then a finite graph-budget boundary around a returning region.
  * The body remains adopted by its original function: capture, Bloom, joins and
  * instance lookup keep the same owner and the exact same activation frame. */
 final class AstSameFrameArm extends Expr implements ReplaceObserver {
@@ -27,12 +27,17 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     @CompilationFinal(dimensions = 1) private volatile RootCallTarget[] targets;
     private volatile long sideGeneration;
     private boolean copiedExtraction;
+    private final boolean instrumentable;
 
-    AstSameFrameArm(Expr body) {
+    AstSameFrameArm(Expr body) { this(body, true); }
+    AstSameFrameArm(Expr body, boolean instrumentable) {
+        this.instrumentable = instrumentable;
         this.body = body;
         setRepresentation(body.getRepresentation());
         setCoreSourceLocation(body.getCoreSourceLocation());
     }
+
+    @Override public boolean isInstrumentable() { return instrumentable && super.isInstrumentable(); }
 
     /** A real failure extracts one remaining region; already separated bodies
      * do not contribute to this compilation's candidate search. */

@@ -106,6 +106,149 @@ class SameFrameCaseTest {
             } finally { context.leave(); }
         }
     }
+    @Test void returningJoinCompilesColdAndKeepsOriginalSourceEvents() throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000")
+                .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.DiagnoseFailure", "false")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, LocalJoinGraphBudgetTest.returningModule(), true);
+                var owner = (OptimizedCallTarget) program.entryTarget("entry");
+                var arm = NodeUtil.findAllNodeInstances(owner.getRootNode(), AstSameFrameArm.class).stream()
+                        .filter(candidate -> candidate.getParent() instanceof LocalJoinRepeater).findFirst().orElseThrow();
+                assertFalse(arm.isInstrumentable(), "the transport must not add a source event");
+                var bodyField = AstSameFrameArm.class.getDeclaredField("body"); bodyField.setAccessible(true);
+                var body = (Expr) bodyField.get(arm);
+                assertTrue(body.isInstrumentable());
+                assertNotNull(body.getSourceSection());
+                assertEquals(body.getSourceSection(), arm.getSourceSection());
+                var state = new State();
+                var observed = new Expr() {
+                    @Child private Expr original = body;
+                    @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                    @Override public long executeLong(VirtualFrame frame) {
+                        observeBorrowedJoin(state, CompilerDirectives.inCompiledCode());
+                        return original.executeRequiredLong(frame);
+                    }
+                }.proven(body.getRepresentation());
+                body.replace(observed);
+                assertTrue(AstSameFrameArm.extract(arm));
+                var side = (OptimizedCallTarget) targets(arm)[2];
+                owner.prepareForAOT();
+                compile(side);
+                assertFalse(owner.wasExecuted()); assertFalse(side.wasExecuted());
+                long address = side.getCodeAddress();
+                long installations = side.getSuccessfulCompilationCount();
+                assertEquals(42L, Calls.target(owner, new Object[]{0L, 15L}));
+                assertEquals(1, state.effects); assertEquals(1, state.compiled);
+                assertTrue(side.isValidLastTier());
+                assertEquals(address, side.getCodeAddress());
+                assertEquals(installations, side.getSuccessfulCompilationCount());
+                var events = new java.util.concurrent.atomic.AtomicInteger();
+                var attachment = context.getEngine().getInstruments().get("thc-activation-test")
+                        .lookup(AstInstrumentationTest.Attachment.class);
+                var listener = attachment.attachStatements(body.getSourceSection().getSource(),
+                        new com.oracle.truffle.api.instrumentation.ExecutionEventListener() {
+                    @Override public void onEnter(com.oracle.truffle.api.instrumentation.EventContext event, VirtualFrame frame) {
+                        if (event.getInstrumentedNode() != body) return;
+                        events.incrementAndGet();
+                    }
+                    @Override public void onReturnValue(com.oracle.truffle.api.instrumentation.EventContext event,
+                            VirtualFrame frame, Object result) {}
+                    @Override public void onReturnExceptional(com.oracle.truffle.api.instrumentation.EventContext event,
+                            VirtualFrame frame, Throwable failure) {}
+                });
+                try {
+                    assertEquals(42L, Calls.target(owner, new Object[]{0L, 15L}));
+                    assertEquals(1, events.get(), "attachment observes the original body exactly once");
+                    assertEquals(2, state.effects);
+                } finally { listener.dispose(); }
+            } finally { context.leave(); }
+        }
+    }
+    private static final class OwnedObjectRoot extends ContextRoot {
+        @Child private LocalBinding binding;
+        OwnedObjectRoot(Language language, State state, boolean data) {
+            super(language, FrameDescriptor.newBuilder().build());
+            Expr value = new Expr() {
+                @Override public Object execute(VirtualFrame frame) {
+                    observeBorrowedJoin(state, CompilerDirectives.inCompiledCode());
+                    return frame.getArguments()[0];
+                }
+            };
+            if (data) value.proven(new CoreRepresentation(CoreKind.DATA, true, true, java.util.List.of("BoxedRep (Just Lifted)")));
+            binding = new LocalBinding(0, value, false, null, true);
+        }
+        @Override protected ExecutionSignature prepareForAOT() { return ExecutionSignature.GENERIC; }
+        @Override public Object execute(VirtualFrame frame) {
+            binding.write((MaterializedFrame) frame.getArguments()[0]);
+            return 42L;
+        }
+    }
+    @Test void ownedObjectOperandFirstCompiledWritePreservesNullAndBoxIdentity() throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000")
+                .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.MaximumGraalGraphSize", "1000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (Object value : new Object[]{null, Long.valueOf(5000), new Object()}) {
+                    var state = new State(); var root = new OwnedObjectRoot(language, state, false);
+                    var target = (OptimizedCallTarget) root.getCallTarget(); compile(target);
+                    assertEquals(0, state.effects); assertFalse(target.wasExecuted());
+                    var builder = FrameDescriptor.newBuilder().defaultValueIllegal();
+                    builder.addSlot(FrameSlotKind.Object, "owned operand", null);
+                    var borrowed = Truffle.getRuntime().createMaterializedFrame(new Object[]{value}, builder.build());
+                    assertEquals(FrameSlotKind.Illegal.tag, borrowed.getTag(0));
+                    assertEquals(42L, Calls.target(target, new Object[]{borrowed}));
+                    assertEquals(1, state.effects); assertEquals(1, state.compiled);
+                    assertSame(value, borrowed.getObject(0)); assertTrue(target.isValidLastTier());
+                }
+                var state = new State(); var root = new OwnedObjectRoot(language, state, true);
+                var target = (OptimizedCallTarget) root.getCallTarget(); compile(target);
+                var builder = FrameDescriptor.newBuilder().defaultValueIllegal();
+                builder.addSlot(FrameSlotKind.Object, "owned data", null);
+                var borrowed = Truffle.getRuntime().createMaterializedFrame(new Object[]{new Object()}, builder.build());
+                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{borrowed}));
+                assertEquals(1, state.effects); assertEquals(FrameSlotKind.Illegal.tag, borrowed.getTag(0));
+            } finally { context.leave(); }
+        }
+    }
+    @Test void ownedObjectOperandFirstSavedWriteDoesNotReplayItsChild() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var builder = FrameDescriptor.newBuilder().defaultValueIllegal();
+                builder.addSlot(FrameSlotKind.Object, "owned operand", null);
+                var effects = new java.util.concurrent.atomic.AtomicInteger();
+                var root = new GuestRoot(language, builder.build()) {
+                    @Child private LocalBinding binding = new LocalBinding(0, new Expr() {
+                        @Override public Object execute(VirtualFrame frame) {
+                            effects.incrementAndGet(); throw new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED);
+                        }
+                    }, false, null, true);
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        try { binding.write(frame); throw new AssertionError("missing cut"); }
+                        catch (AstCapture cut) {
+                            assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(0));
+                            return cut.append((saved, input) -> saved.getObject(0)).freeze(this, frame.materialize());
+                        }
+                    }
+                };
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                assertEquals(1, effects.get()); assertNull(saved.continueWith(null)); assertEquals(1, effects.get());
+            } finally { context.leave(); }
+        }
+    }
+
     private static final class ScratchValue extends Expr {
         private final State state;
         ScratchValue(State state) {
