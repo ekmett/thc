@@ -100,6 +100,7 @@ class Case extends Expr implements AstResumeStep {
         var kinds = new HashSet<CoreKind>();
         boolean evaluated = true, present = alternatives.length != 0, references = alternatives.length != 0;
         for (Alternative alternative : alternatives) {
+            alternative.prepareOutlinedComparison(scrutinee);
             CoreRepresentation proof = alternative.getBody().getRepresentation();
             proofs.add(proof); kinds.add(proof.getKind());
             evaluated &= proof.getEvaluated(); present &= proof.getPresent();

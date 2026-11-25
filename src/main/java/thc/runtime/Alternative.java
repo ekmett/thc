@@ -40,6 +40,11 @@ final class Alternative extends Node {
         // NodeUtil clones it, losing the identity guard around its disabled counters.
         matchProfile = profileChoice ? CountingConditionProfile.create() : null;
     }
+    void prepareOutlinedComparison(Expr scrutinee) {
+        if (matchProfile != null && kind == LITERAL_ALTERNATIVE && Long.valueOf(1L).equals(value) &&
+                body instanceof AstSameFrameArm && scrutinee instanceof Primitive primitive && primitive.producesComparisonFlag())
+            matchProfile.disable();
+    }
     public int getKind() { return kind; }
     public Object getValue() { return value; }
     public int[] getFields() { return fields; }
