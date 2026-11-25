@@ -8,7 +8,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 /** Typed execution widens per kind and consumes each evaluated result once. */
-public final class Evaluate extends Expr {
+public final class Evaluate extends Expr implements AstResumeStep {
     // Evaluation/forcing is typed transport, not another source statement.
     @Override public boolean isInstrumentable() { return false; }
     @Child private Expr value;
@@ -55,7 +55,7 @@ public final class Evaluate extends Expr {
         try { original = value.execute(frame); }
         catch (AstCapture cut) {
             if (!AstControl.captures(this)) throw cut;
-            throw appendForce(cut);
+            throw cut.append(this);
         }
         return forceResult(frame, original);
     }
@@ -73,16 +73,12 @@ public final class Evaluate extends Expr {
             else original = value.execute(frame);
         } catch (AstCapture cut) {
             if (value.getRepresentation().getEvaluated()) throw cut;
-            throw appendForce(cut);
+            throw cut.append(this);
         }
         return value.getRepresentation().getEvaluated() ? original : forceResult(frame, original);
     }
-    @CompilerDirectives.TruffleBoundary
-    private AstCapture appendForce(AstCapture cut) {
-        return cut.append(new AstResumeStep() {
-            @Override public Object resume(VirtualFrame frame, Object input) { return forceResult(frame, input); }
-        });
-    }
+    /** A saved force uses this demand site and the resuming invocation's frame. */
+    @Override public Object resume(VirtualFrame frame, Object input) { return forceResult(frame, input); }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
         if (AstControl.INSTANCE.captures(this)) return RuntimeTypesGen.expectInteger(executeAsync(frame));
         if (value.getRepresentation().getEvaluated() || value.getRepresentation().isInt()) return value.executeInt(frame);
