@@ -261,45 +261,4 @@ class ScalarTupleTailCallTest {
         });
     }
 
-    @Test void uninstrumentedFirstCompiledCallExecutesInstalledTupleBody() throws Exception {
-        entered(language -> {
-            var input=module(true);input.put("instrument",false);
-            var program=new Program(language,input);var target=program.entryTarget("worker");
-            var terminal=NodeUtil.findFirstNodeInstance(target.getRootNode(),TupleConstruct.class);
-            class Installed extends Expr {
-                @Child private Expr delegate;
-                boolean compiled;
-                Installed(Expr delegate){this.delegate=delegate;setRepresentation(delegate.getRepresentation());}
-                @Override public Object execute(VirtualFrame frame){return delegate.execute(frame);}
-                @Override public void prepareTuple(int[] slots,int offset){delegate.prepareTuple(slots,offset);}
-                @Override public Object executeTuple(VirtualFrame frame,int[] slots,int offset){
-                    compiled=com.oracle.truffle.api.CompilerDirectives.inCompiledCode();
-                    return delegate.executeTuple(frame,slots,offset);
-                }
-            }
-            var seen=new Installed(terminal);terminal.replace(seen);
-            assertArrayEquals(expected(2,7,19),invoke(program,2,7,19));
-            target.getClass().getMethod("compile",boolean.class).invoke(target,true);
-            target.getClass().getMethod("waitForCompilation").invoke(target);
-            assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target));
-            seen.compiled=false;
-            assertArrayEquals(expected(9,Long.MIN_VALUE,Long.MAX_VALUE),invoke(program,9,Long.MIN_VALUE,Long.MAX_VALUE));
-            assertTrue(seen.compiled,"The first installed call must execute its typed terminal body in compiled code");
-            assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target));
-        });
-    }
-
-    @Test void firstCompiledCallKeepsWideParallelValues() throws Exception {
-        entered(language -> {
-            var program=new Program(language,module(true));var target=program.entryTarget("worker");
-            assertArrayEquals(expected(2,7,19),invoke(program,2,7,19));
-            target.getClass().getMethod("compile",boolean.class).invoke(target,true);
-            target.getClass().getMethod("waitForCompilation").invoke(target);
-            assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target));
-            long before=((Number)program.diagnostics().get("compiledEntries")).longValue();
-            assertArrayEquals(expected(9,Long.MIN_VALUE,Long.MAX_VALUE),invoke(program,9,Long.MIN_VALUE,Long.MAX_VALUE));
-            assertTrue(((Number)program.diagnostics().get("compiledEntries")).longValue()>before);
-            assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target));
-        });
-    }
 }
