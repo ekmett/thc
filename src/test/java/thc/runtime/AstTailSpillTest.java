@@ -33,7 +33,7 @@ class AstTailSpillTest {
     @Test void referenceLoopKeepsMaskCleanupAndNonTailSuffixOnce() throws Exception { chain(true, 16, false, false, false, false, CoreKind.DATA, true, true); }
     @Test void referenceSharedUpdateKeepsItsOriginalObject() throws Exception { chain(false, -1, false, true, false, false, CoreKind.CLOSURE, true, true); }
     @Test void referenceCatchKeepsLazyExceptionAndAddressOwnership() throws Exception { chain(false, 16, false, false, false, true, CoreKind.ADDRESS, true, true); }
-    @Test void lazyReferenceResultKeepsOrdinaryForceCompletion() throws Exception { chain(false, -1, false, false, false, false, CoreKind.DATA, false, false); }
+    @Test void lazyReferenceResultSurvivesSpillingUntilExplicitDemand() throws Exception { chain(false, -1, false, false, false, false, CoreKind.DATA, false, false); }
     @Test void unknownObjectResultKeepsOrdinaryCompletion() throws Exception { chain(false, -1, false, false, false, false, CoreKind.OBJECT, true, false); }
     private void checkRequestedStackSize() {
         String expected = System.getProperty("thc.test.stackKiB"); if (expected != null) assertEquals(expected, ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class).getVMOption("ThreadStackSize").getValue(), "Observe the actual bounded test JVM, not argument order");
@@ -77,7 +77,7 @@ class AstTailSpillTest {
         try (var context = builder.build()) { context.initialize("thc"); context.enter(); try {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var metrics = new Metrics(true); var proof = kind == CoreKind.LONG ? this.proof : new CoreRepresentation(kind, evaluated, true, List.of(kind == CoreKind.ADDRESS ? "AddrRep" : "BoxedRep (Just Lifted)"), null, null, null, null, null);
             int count = 1024, laps = compiled || !compact ? 1 : 20; int[] prefixes = new int[count];
-            class Counts { int iterations, finished, cleanups, catches, outerPrefixes, outerSuffixes; }
+            class Counts { int iterations, finished, cleanups, catches, outerPrefixes, outerSuffixes, resultForces; }
             var counts = new Counts(); var payload = new Thunk(new RootNode(language) { @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("Exception payload was forced"); } }.getCallTarget(), null); byte[] bytes = {11, 37, 59};
             Object expected = switch (kind) {
                 case DATA, OBJECT -> new DataLayout(language, "TailBox", "TailBox", new String[]{"LiftedRep"}).create(new Object[]{payload});
@@ -85,7 +85,7 @@ class AstTailSpillTest {
                 case ADDRESS -> ManagedAddress.fromByteArray(bytes).plus(1);
                 default -> 73L;
             };
-            var resultThunk = evaluated ? null : new Thunk(new RootNode(language) { @Override public Object execute(VirtualFrame frame) { return expected; } }.getCallTarget(), null);
+            var resultThunk = evaluated ? null : new Thunk(new RootNode(language) { @Override public Object execute(VirtualFrame frame) { counts.resultForces++; return expected; } }.getCallTarget(), null);
             java.util.function.Consumer<Object> checkAnswer = answer -> { if (kind == CoreKind.LONG) assertEquals(nonTail ? 77L : 73L, answer); else assertSame(expected, answer, "No copying, forcing, or carrier substitution at a tail return"); };
             FunctionRoot[] owner = new FunctionRoot[1]; RootCallTarget next = null;
             for (int i = count - 1; i >= 0; i--) { final int index = i; var following = next;
@@ -125,14 +125,27 @@ class AstTailSpillTest {
             if (compiled) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target); }
             long beforeCompiled = metrics.getCompiledEntries();
             if (shared) { var thunk = new Thunk(target, null); var force = new RootNode(language) { @Child private Force force = new Force(metrics); @Override public Object execute(VirtualFrame frame) { return force.execute(frame, thunk); } }.getCallTarget(); for (int i = 0; i < 2; i++) { if (failure) assertThrows(GuestException.class, () -> Calls.target(force, new Object[0])); else checkAnswer.accept(Calls.target(force, new Object[0])); } assertEquals(failure ? 3 : 2, thunk.getState()); assertNull(thunk.getOwner()); }
-            else checkAnswer.accept(Calls.target(target, new Object[]{0L}));
+            else {
+                Object returned = Calls.target(target, new Object[]{0L});
+                if (resultThunk != null) {
+                    assertSame(resultThunk, returned); assertEquals(0, resultThunk.getState()); assertEquals(0, counts.resultForces);
+                    var demand = new RootNode(language) {
+                        @Child private Force force = new Force(metrics);
+                        @Override public Object execute(VirtualFrame frame) { return force.execute(frame, frame.getArguments()[0]); }
+                    }.getCallTarget();
+                    checkAnswer.accept(Calls.target(demand, new Object[]{returned}));
+                    assertEquals(2, resultThunk.getState()); assertSame(expected, resultThunk.getValue());
+                    checkAnswer.accept(Calls.target(demand, new Object[]{returned}));
+                    assertEquals(1, counts.resultForces, "Repeated demand shares the original thunk update");
+                } else checkAnswer.accept(returned);
+            }
             if (compiled) { assertEquals(beforeCompiled + 1, metrics.getCompiledEntries(), "The first invocation entered the installed root"); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "No settling invocation or compilation retry is allowed"); }
             assertEquals(laps, counts.iterations); boolean allOnce = true; for (int prefix : prefixes) if (prefix != laps) { allOnce = false; break; } assertTrue(allOnce, "Every side prefix executes exactly once per real loop iteration");
             if (compact) { assertTrue(scope.getCompactedFrames() > count * laps - 128 * laps); assertEquals(1L, scope.getTailAnchors(), "One saved-suffix catcher, not one wrapper per spill/lap"); assertTrue(scope.getMaxParkedSpillParents() <= 2, "Identity sides are omitted before publication; only the real cleanup/non-tail parent may park"); }
             else { assertEquals(0L, scope.getCompactedFrames()); assertEquals(0L, scope.getTailAnchors()); }
             assertEquals(0L, metrics.getTrampolineIterations()); assertEquals(nonTail ? 1 : 0, counts.outerPrefixes); assertEquals(nonTail ? 1 : 0, counts.outerSuffixes); assertEquals(cleanup >= 0 ? laps : 0, counts.cleanups); assertEquals(caught ? 1 : 0, counts.catches); assertEquals(0, payload.getState(), "Catch/update transport never enters the exception payload");
             if (expected instanceof DataValue value) assertSame(payload, value.getLayout().read(value, 0)); if (expected instanceof ManagedAddress address) { bytes[1] = 83; assertEquals(83L, address.readWord8(0), "The exact address retains its original backing and offset"); }
-            if (resultThunk != null) assertEquals(2, resultThunk.getState(), "Lazy results still run their required force"); assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(owner[0])); assertNull(scope.getTailAnchor()); assertEquals(0, scope.getDepth()); assertFalse(scope.getDriving()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+            assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(owner[0])); assertNull(scope.getTailAnchor()); assertEquals(0, scope.getDepth()); assertFalse(scope.getDriving()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
         } finally { context.leave(); } }
     }
 }
