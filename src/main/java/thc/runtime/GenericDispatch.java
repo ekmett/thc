@@ -98,10 +98,9 @@ public abstract class GenericDispatch extends Node {
         int physicalCount = ArgumentLayout.offset(layout, offset + count) - physicalOffset;
         boolean hasEnvironment = function.environment != null;
         int skip = hasEnvironment ? 2 : 1;
-        Object[] packet = new Object[skip + function.supplied.length + physicalCount];
+        Object[] packet = Applications.appendWithHeader(skip, function.supplied, function.supplied.length,
+            arguments, physicalOffset, physicalCount);
         if (hasEnvironment) packet[1] = function.environment;
-        System.arraycopy(function.supplied, 0, packet, skip, function.supplied.length);
-        System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.length, physicalCount);
         return packet;
     }
     private static DelimitedCut captureOverapplication(VirtualFrame frame, Node node, DelimitedCut cut, Object[] arguments,

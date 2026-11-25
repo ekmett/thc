@@ -12,10 +12,11 @@ public final class Applications {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new RuntimeFault("Application of a non-function");
     }
-    static Object[] appendWithHeader(int skip, Object[] prefix, int prefixSize, Object[] arguments, int count) {
+    static Object[] appendWithHeader(int skip, Object[] prefix, int prefixSize, Object[] arguments, int offset, int count) {
         Object[] packet = new Object[skip + prefixSize + count];
         if (prefixSize != 0) System.arraycopy(prefix, 0, packet, skip, prefixSize);
-        System.arraycopy(arguments, 0, packet, skip + prefixSize, count);
+        if (count == 1) packet[skip + prefixSize] = arguments[offset];
+        else System.arraycopy(arguments, offset, packet, skip + prefixSize, count);
         return packet;
     }
 }
