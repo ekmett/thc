@@ -93,26 +93,33 @@ public final class TupleApplication extends Expr {
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame resumed, Object input) {
-                    return executeArguments(resumed, slots, offset, Applications.requireClosure(input), new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
+                    return executeArguments(resumed, slots, offset, Applications.requireClosure(input), new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0, 0);
                 }
             });
         } catch (DelimitedCut cut) {
             throw cut.append(frame, (saved, input, ambient, outer) -> executeArguments(saved, slots, offset,
-                Applications.requireClosure(input.get()), new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0));
+                Applications.requireClosure(input.get()), new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0, 0));
         }
-        return executeArguments(frame, slots, offset, closure, new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
+        boolean packet = inputLayout == null && closure.arity == arguments.length &&
+            closure.supplied.length == 0 && closure.suppliedCount == 0 &&
+            closure.typedSupplied == null && closure.target.getRootNode() instanceof GuestRoot root &&
+            root.getTypedInput() == null && root.getInputLayout() == null;
+        int header = packet ? closure.environment == null ? 1 : 2 : 0;
+        Object[] values = new Object[ArgumentLayout.width(inputLayout, arguments.length) + header];
+        if (header == 2) values[1] = closure.environment;
+        return executeArguments(frame, slots, offset, closure, values, 0, header);
     }
-    @ExplodeLoop private Object executeArguments(VirtualFrame frame, int[] slots, int offset, Closure closure, Object[] values, int start) {
+    @ExplodeLoop private Object executeArguments(VirtualFrame frame, int[] slots, int offset, Closure closure, Object[] values, int start, int header) {
         for (int index = start; index < arguments.length; index++) {
             try {
                 if (inputLayout != null && inputLayout.isEmpty(index)) arguments[index].executeTuple(frame, ArgumentLayout.EMPTY_TUPLE_SLOTS, 0);
-                else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame);
+                else values[ArgumentLayout.offset(inputLayout, index) + header] = arguments[index].execute(frame);
             } catch (AstCapture cut) {
                 int savedIndex = index;
-                throw cut.append((saved, input) -> resumeArgument(saved, slots, offset, closure, values, savedIndex, input));
+                throw cut.append((saved, input) -> resumeArgument(saved, slots, offset, closure, values, savedIndex, input, header));
             } catch (DelimitedCut cut) {
                 int savedIndex = index;
-                throw cut.append(frame, (saved, input, ambient, outer) -> resumeArgument(saved, slots, offset, closure, values, savedIndex, input.get()));
+                throw cut.append(frame, (saved, input, ambient, outer) -> resumeArgument(saved, slots, offset, closure, values, savedIndex, input.get(), header));
             }
         }
         TupleDispatch child = dispatch;
@@ -130,12 +137,12 @@ public final class TupleApplication extends Expr {
         // Every operand, including repeated reads of a formal, is now in the packet.
         // Resumed operands reach this same point with their own completed prefix.
         for (int slot : releasedFormals) frame.clear(slot);
-        child.execute(frame, closure, values);
+        child.execute(frame, closure, values, header != 0);
         return null;
     }
-    private Object resumeArgument(VirtualFrame frame, int[] slots, int offset, Closure closure, Object[] prefix, int index, Object input) {
+    private Object resumeArgument(VirtualFrame frame, int[] slots, int offset, Closure closure, Object[] prefix, int index, Object input, int header) {
         Object[] values = prefix.clone(); // Per-invocation transport scratch; guest references remain shared.
-        if (inputLayout == null || !inputLayout.isEmpty(index)) values[ArgumentLayout.offset(inputLayout, index)] = input;
-        return executeArguments(frame, slots, offset, closure, values, index + 1);
+        if (inputLayout == null || !inputLayout.isEmpty(index)) values[ArgumentLayout.offset(inputLayout, index) + header] = input;
+        return executeArguments(frame, slots, offset, closure, values, index + 1, header);
     }
 }

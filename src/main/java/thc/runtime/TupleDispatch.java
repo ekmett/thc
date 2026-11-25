@@ -33,15 +33,23 @@ public final class TupleDispatch extends Node {
         else generic = new GenericTupleCaller(destination, metrics, tail, argsSize, inputLayout);
     }
     public void execute(VirtualFrame frame, Closure function, Object[] arguments) {
-        try { executeCall(frame, function, arguments); }
+        execute(frame, function, arguments, false);
+    }
+    // A saturated scalar call can fill its final entry packet while evaluating operands.
+    void execute(VirtualFrame frame, Closure function, Object[] arguments, boolean packet) {
+        try { executeCall(frame, function, arguments, packet); }
         catch (DelimitedCut cut) {
             if (!DelimitedControl.enabled(this)) throw cut;
             CompilerDirectives.transferToInterpreter();
             throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this);
         }
     }
-    @ExplodeLoop private void executeCall(VirtualFrame frame, Closure function, Object[] arguments) {
-        if (metrics == null) { typed.execute(frame, function, arguments); return; }
+    @ExplodeLoop private void executeCall(VirtualFrame frame, Closure function, Object[] arguments, boolean packet) {
+        if (metrics == null) {
+            if (packet) typed.executeEntryPacket(frame, function, arguments);
+            else typed.execute(frame, function, arguments);
+            return;
+        }
         if (function.target.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) {
             InputDispatch child = typed;
             if (child == null) {
@@ -55,7 +63,7 @@ public final class TupleDispatch extends Node {
             return;
         }
         for (DirectTupleCaller caller : direct) if (caller.matches(function)) {
-            caller.execute(frame, function, arguments); return;
+            caller.execute(frame, function, arguments, packet); return;
         }
         if (!megamorphic) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -72,8 +80,8 @@ public final class TupleDispatch extends Node {
                 megamorphic = true;
                 return null;
             });
-            if (caller != null) { caller.execute(frame, function, arguments); return; }
+            if (caller != null) { caller.execute(frame, function, arguments, packet); return; }
         }
-        generic.execute(frame, function, arguments);
+        generic.execute(frame, function, arguments, 0, packet);
     }
 }

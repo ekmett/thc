@@ -33,7 +33,13 @@ public final class GenericInputCall extends Node {
         if (destination != null) tupleBounce = new TupleBounce(destination, metrics);
     }
     public Object execute(VirtualFrame frame, Closure initial, Object[] values) { return execute(frame, initial, values, start); }
+    Object executeEntryPacket(VirtualFrame frame, Closure function, Object[] packet) {
+        return execute(frame, function, packet, start, true);
+    }
     public Object execute(VirtualFrame frame, Closure initial, Object[] values, int initialOffset) {
+        return execute(frame, initial, values, initialOffset, false);
+    }
+    private Object execute(VirtualFrame frame, Closure initial, Object[] values, int initialOffset, boolean entryPacket) {
         Metrics metrics = this.metrics != null ? this.metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
         Closure function = initial;
         int offset = initialOffset;
@@ -67,7 +73,7 @@ public final class GenericInputCall extends Node {
             try {
                 Object answer;
                 try {
-                    if (input == null) answer = legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity, count + start), isTail, resultShape);
+                    if (input == null) answer = legacy.call(frame, target, entryPacket ? values : scalarPacket(frame, this, function, source, values, offset, function.arity, count + start), isTail, resultShape);
                     else {
                         answer = invokeTyped(frame, function, values, offset, input, strict, overrides, prepared, isTail, metrics);
                     }

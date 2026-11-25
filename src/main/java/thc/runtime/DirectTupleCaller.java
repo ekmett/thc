@@ -49,15 +49,17 @@ final class DirectTupleCaller extends Node {
         return function.target == target && function.arity == arity && function.supplied.length == prefixSize &&
             function.suppliedCount == prefixCount && (function.environment != null) == hasEnvironment;
     }
-    void execute(VirtualFrame frame, Closure function, Object[] arguments) {
+    void execute(VirtualFrame frame, Closure function, Object[] arguments, boolean entryPacket) {
         ArgumentLayout.validate(formalLayout, prefixCount, inputLayout, 0, arity);
         int physicalCount = ArgumentLayout.width(inputLayout, arity);
         int skip = hasEnvironment ? 2 : 1;
-        Object[] packet = new Object[skip + prefixSize + physicalCount];
-        if (hasEnvironment) packet[1] = function.environment;
-        System.arraycopy(function.supplied, 0, packet, skip, prefixSize);
-        System.arraycopy(arguments, 0, packet, skip + prefixSize, physicalCount);
-        if (ownsPacket) Arrays.fill(arguments, null);
+        Object[] packet = entryPacket ? arguments : new Object[skip + prefixSize + physicalCount];
+        if (!entryPacket) {
+            if (hasEnvironment) packet[1] = function.environment;
+            System.arraycopy(function.supplied, 0, packet, skip, prefixSize);
+            System.arraycopy(arguments, 0, packet, skip + prefixSize, physicalCount);
+            if (ownsPacket) Arrays.fill(arguments, null);
+        }
         if (arity < argsSize) {
             DirectCallerNode scalarCall = scalar;
             if (scalarCall == null) throw fault("Missing tuple overapplication scalar caller");

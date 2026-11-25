@@ -130,6 +130,53 @@ class TupleCompletionTest {
         assertEquals(0, language.getHandoffState().get().getResults().getDepth());
         assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
     }
+    @Test void ownedEntryPacketReachesDirectAndGenericTupleTargetsWithoutCopy() throws Exception {
+        withLanguage(language -> {
+            var shape = shape(language); var slots = new Slots();
+            Object[][] expected = {null}; Object marker = new Object();
+            var captures = new CaptureLayout(language, new boolean[]{true}, new boolean[]{true});
+            var environment = captures.captureValues(new Object[]{7L});
+            var caller = new RootNode(language, slots.layout.build()) {
+                @Child private TupleDispatch dispatch = new TupleDispatch(new AstTupleDestination(shape, slots.fields, 0),
+                    new Metrics(false), 2, false);
+                @Child private GenericInputCall generic = new GenericInputCall(new ScalarArrayInputSource(null), 2, false,
+                    new Metrics(false), new AstTupleDestination(shape, slots.fields, 0), 0, true);
+                @Override public Object execute(VirtualFrame frame) {
+                    Object[] packet = (Object[]) frame.getArguments()[1];
+                    if ((Boolean) frame.getArguments()[2]) generic.executeEntryPacket(frame, (Closure) frame.getArguments()[0], packet);
+                    else dispatch.execute(frame, (Closure) frame.getArguments()[0], packet, true);
+                    assertSame(marker, frame.getObject(slots.fields[1]));
+                    return frame.getLong(slots.fields[0]);
+                }
+            }.getCallTarget();
+            var targets = new ArrayList<Closure>();
+            for (int i = 0; i < 5; i++) {
+                boolean captured = (i & 1) != 0;
+                var target = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false, false}, captured); configureTupleResult(shape); }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertSame(expected[0], frame.getArguments());
+                        assertEquals(0L, frame.getArguments()[0]);
+                        int header = captured ? 2 : 1;
+                        if (captured) assertEquals(7L, captures.readLong((CapturedFrame) frame.getArguments()[1], 0));
+                        var result = shape.getLayout().create();
+                        shape.getLayout().setLong(result, 0, (Long) frame.getArguments()[header] + 17L);
+                        shape.getLayout().setObject(result, 1, frame.getArguments()[header + 1]);
+                        return result;
+                    }
+                };
+                targets.add(new Closure(captured ? environment : null, 2, target.getCallTarget()));
+            }
+            // Overflow the three-target PIC, then revisit the original direct targets.
+            for (boolean generic : new boolean[]{false, true}) for (int pass = 0; pass < 2; pass++) for (int i = 0; i < targets.size(); i++) {
+                expected[0] = targets.get(i).environment == null ? new Object[]{null, (long) i, marker} :
+                    new Object[]{null, environment, (long) i, marker};
+                assertEquals(i + 17L, caller.call(targets.get(i), expected[0], generic));
+                released(language);
+            }
+        });
+    }
     @Test void ownedResultsKeepDynamicWidthsAndExactFieldsInCompiledCode() throws Exception {
         withLanguage(language -> {
             var leaves = new ArrayList<CoreRepresentation>();

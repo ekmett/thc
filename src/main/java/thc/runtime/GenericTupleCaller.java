@@ -30,6 +30,9 @@ final class GenericTupleCaller extends Node {
     }
     void execute(VirtualFrame frame, Closure initial, Object[] arguments) { execute(frame, initial, arguments, 0); }
     void execute(VirtualFrame frame, Closure initial, Object[] arguments, int initialOffset) {
+        execute(frame, initial, arguments, initialOffset, false);
+    }
+    void execute(VirtualFrame frame, Closure initial, Object[] arguments, int initialOffset, boolean entryPacket) {
         Closure function = initial;
         int offset = initialOffset;
         while (true) {
@@ -46,10 +49,12 @@ final class GenericTupleCaller extends Node {
             if (exact && !root.hasTupleResult(destination.getShape())) throw fault("Tuple call target result shape mismatch");
             if (!exact && root.getTupleResult() != null) throw fault("Cannot overapply an unboxed tuple");
             int skip = function.environment == null ? 1 : 2;
-            Object[] packet = new Object[skip + function.supplied.length + physicalCount];
-            if (function.environment != null) packet[1] = function.environment;
-            System.arraycopy(function.supplied, 0, packet, skip, function.supplied.length);
-            System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.length, physicalCount);
+            Object[] packet = entryPacket ? arguments : new Object[skip + function.supplied.length + physicalCount];
+            if (!entryPacket) {
+                if (function.environment != null) packet[1] = function.environment;
+                System.arraycopy(function.supplied, 0, packet, skip, function.supplied.length);
+                System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.length, physicalCount);
+            }
             if (!exact) {
                 if (AstControl.captures(this)) {
                     int next = offset + count;

@@ -29,6 +29,9 @@ public final class InputDispatch extends Node {
         this.coldGeneric = coldGeneric;
         generic = new GenericInputCall(source, count, tail, metrics, destination, start, coldGeneric || metrics == null);
     }
+    Object executeEntryPacket(VirtualFrame frame, Closure function, Object[] packet) {
+        return generic.executeEntryPacket(frame, function, packet);
+    }
     public Object execute(VirtualFrame frame, Closure function) { return execute(frame, function, null); }
     @ExplodeLoop public Object execute(VirtualFrame frame, Closure function, Object[] values) {
         // An untouched host entry keeps its cold fallback without training a PIC in installed code.
