@@ -75,6 +75,9 @@ public final class AstCapture extends ControlFlowException {
         return steps instanceof ArrayDeque<?> deque && deque.peekLast() instanceof Evaluate;
     }
     private Steps steps;
+    // Only a scope newly created by this capture can transfer its private queue.
+    // Appended steps can also contain recipes borrowed from a delimited image.
+    private ScopeRecipe freshScope;
     private Steps pendingSteps() {
         if (steps == null) steps = new Steps();
         return steps;
@@ -82,22 +85,32 @@ public final class AstCapture extends ControlFlowException {
     @TruffleBoundary public AstCapture(Object yielded, MaskingState logicalMask) { this.yielded = yielded; this.logicalMask = logicalMask; }
     public Object getYielded() { return yielded; }
     public MaskingState getLogicalMask() { return logicalMask; }
-    @TruffleBoundary public AstCapture append(AstResumeStep step) { pendingSteps().add(step); return this; }
+    @TruffleBoundary public AstCapture append(AstResumeStep step) {
+        pendingSteps().add(step); freshScope = null; return this;
+    }
 
     /** Keep the lexical exception/cleanup scope around the saved child work. */
     @TruffleBoundary public AstCapture enclose(Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper) {
         var steps = pendingSteps();
-        AstResumeStep scope = new ScopeRecipe(wrapper, steps.takeScope());
-        steps.add(scope);
+        freshScope = new ScopeRecipe(wrapper, steps.takeScope());
+        steps.add(freshScope);
         return this;
     }
-    private record ScopeRecipe(Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper,
-                               Collection<AstResumeStep> steps) implements AstResumeStep {
-        @Override public AstResumeStep forInvocation() { return wrapper.apply(new ArrayDeque<>(steps)); }
+    private static final class ScopeRecipe implements AstResumeStep {
+        private final Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper;
+        private final Collection<AstResumeStep> steps;
+        private boolean oneShot;
+        ScopeRecipe(Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper, Collection<AstResumeStep> steps) {
+            this.wrapper = wrapper; this.steps = steps;
+        }
+        private ArrayDeque<AstResumeStep> invocationSteps() {
+            return oneShot && steps instanceof ArrayDeque<AstResumeStep> owned ? owned : new ArrayDeque<>(steps);
+        }
+        @Override public AstResumeStep forInvocation() { return wrapper.apply(invocationSteps()); }
         @Override public Object resume(com.oracle.truffle.api.frame.VirtualFrame frame, Object input) {
             throw new IllegalStateException("Captured scope recipe must be instantiated before resumption");
         }
-        @Override public void discard() { AstContinuations.discardSteps(new ArrayDeque<>(steps)); }
+        @Override public void discard() { AstContinuations.discardSteps(invocationSteps()); }
     }
     public AsyncRequest asyncRequest() {
         return switch (yielded) {
@@ -108,11 +121,20 @@ public final class AstCapture extends ControlFlowException {
         };
     }
     /** A catch handling this cut owns terminal retirement of its pending steps. */
-    @TruffleBoundary public void discard() { if (steps != null) AstContinuations.discardSteps(steps); }
+    @TruffleBoundary public void discard() {
+        freshScope = null;
+        if (steps != null) AstContinuations.discardSteps(steps);
+    }
     public AstContinuation freeze(GuestRoot root, MaterializedFrame frame) { return freeze(root, frame, false); }
     @TruffleBoundary public AstContinuation freeze(GuestRoot root, MaterializedFrame frame, boolean rootEntrySpill) {
         var saved = new AstContinuation(root, yielded instanceof AstPendingTail tail ? tail.publish() : yielded,
             logicalMask, frame, pendingSteps(), annotations, rootEntrySpill, yielded instanceof AstPendingTail);
+        if (freshScope != null) {
+            // The sole, newly enclosed recipe has never been exposed. The saved
+            // activation's claim admits exactly one invocation or one discard.
+            freshScope.oneShot = true;
+            freshScope = null;
+        }
         // The saved activation now owns the queue. Reusing or discarding this
         // capture must not mutate its steps, including during nested recapture.
         steps = null;
@@ -120,7 +142,10 @@ public final class AstCapture extends ControlFlowException {
     }
     @TruffleBoundary public AstCapture appendRemaining(ArrayDeque<AstResumeStep> pending) { return appendRemaining((Queue<AstResumeStep>) pending); }
     AstCapture appendRemaining(Queue<AstResumeStep> pending) {
-        if (!pending.isEmpty()) pendingSteps().addAll(pending);
+        if (!pending.isEmpty()) {
+            pendingSteps().addAll(pending);
+            freshScope = null;
+        }
         pending.clear();
         return this;
     }
