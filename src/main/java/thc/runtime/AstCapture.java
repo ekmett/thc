@@ -55,6 +55,12 @@ public final class AstCapture extends ControlFlowException {
             return many != null ? many.iterator() : snapshot().iterator();
         }
     }
+    static boolean hasTrailingDemandPair(Queue<AstResumeStep> steps) {
+        if (steps.size() != 2) return false;
+        if (steps instanceof Steps capture)
+            return (capture.many == null ? capture.second : capture.many.peekLast()) instanceof Evaluate;
+        return steps instanceof ArrayDeque<?> deque && deque.peekLast() instanceof Evaluate;
+    }
     private Steps steps;
     private Steps pendingSteps() {
         if (steps == null) steps = new Steps();

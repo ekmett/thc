@@ -86,7 +86,7 @@ public final class AstContinuation implements SavedGuestContinuation {
         // demand has no work when the value is already in weak head normal form.
         if (input instanceof ChildResume completed && completed.getFailure() == null &&
                 steps.peek() instanceof AstControl.ResumeChild child &&
-                (steps.size() == 1 || steps.size() == 2 && steps.peekLast() instanceof Evaluate &&
+                (steps.size() == 1 || AstCapture.hasTrailingDemandPair(steps) &&
                     !(completed.getValue() instanceof Thunk)) && child.completedWith(completed.getValue())) {
             steps.clear();
             return completed.takeValue();
