@@ -266,6 +266,7 @@
     "thc.runtime.SumInputLayoutTest",
     "thc.runtime.TailCallFrameTest",
     "thc.runtime.TruffleStringExceptionTest",
+    "thc.runtime.ScalarTupleTailCallTest",
     "thc.runtime.TupleCompletionTest",
     "thc.runtime.TupleJoinLoweringTest",
     "thc.runtime.TypedCaseTest",
