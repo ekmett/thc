@@ -1914,12 +1914,17 @@ public final class Program implements ExecutableProgram {
                 default -> throw new RuntimeFault("Invalid Core alternative kind " + kind);
             };
             Expr body = caseArm((List<Object>) alt.get(3), child, tail, alternatives.length, substantialSiblings);
-            alternatives[a] = reusableCode && layout != null ?
-                new Alternative(tag, layout.reusableStorage(), ints(slots), body, vectorFields, false,
-                    scope.programSlot, required(constructorIndices, layout.getId())) :
-                new Alternative(tag, value, ints(slots), body, vectorFields, !reusableCode && alternatives.length > 1);
+            int[] fieldSlots = ints(slots);
             int[] dead = CoreFreeVariables.unusedConstructorReferences(alt, layout);
-            for (int i = 0; i < dead.length; i++) dead[i] = slots.get(dead[i]);
+            for (int i = 0; i < dead.length; i++) {
+                int field = dead[i];
+                dead[i] = fieldSlots[field];
+                fieldSlots[field] = Alternative.UNUSED_FIELD;
+            }
+            alternatives[a] = reusableCode && layout != null ?
+                new Alternative(tag, layout.reusableStorage(), fieldSlots, body, vectorFields, false,
+                    scope.programSlot, required(constructorIndices, layout.getId())) :
+                new Alternative(tag, value, fieldSlots, body, vectorFields, !reusableCode && alternatives.length > 1);
             child.layout.clearInitially(dead);
             alternatives[a].discardUnusedFields(dead);
             results.add(body.getRepresentation()); kinds.add(tag);
