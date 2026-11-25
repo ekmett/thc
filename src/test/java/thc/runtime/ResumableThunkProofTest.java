@@ -112,12 +112,16 @@ class ResumableThunkProofTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var lock = new PreparationLock(); var answer = new Object(); var evaluations = new AtomicInteger(); var publications = new AtomicInteger();
+                var started = new CountDownLatch(1); var release = new CountDownLatch(1);
                 var root = new GuestRoot(language, com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build()) {
                     @Override public long bloom(VirtualFrame frame) { return 0; }
                     @Override public Object execute(VirtualFrame frame) {
                         assertFalse(lock.isHeldByCurrentThread());
                         assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(this));
-                        evaluations.incrementAndGet(); return answer;
+                        evaluations.incrementAndGet(); started.countDown();
+                        try { if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("initializer still blocked"); }
+                        catch (InterruptedException interrupted) { throw new AssertionError(interrupted); }
+                        return answer;
                     }
                 };
                 SynchronousMasking.set(root, MaskingState.MASKED_INTERRUPTIBLE);
@@ -128,7 +132,26 @@ class ResumableThunkProofTest {
                 cell.prepareCode(); cell.prepareCode();
                 assertEquals(1, preparations.get());
                 assertNull(cell.peek()); assertEquals(0, evaluations.get()); assertEquals(0, publications.get());
-                assertSame(answer, cell.read()); assertSame(answer, cell.read());
+                var threads = Language.currentState().getThreads();
+                var waiter = new java.util.concurrent.CompletableFuture<GuestThreadId>();
+                try (var pool = Executors.newFixedThreadPool(2)) {
+                    var first = pool.submit(() -> entered(context, cell::read));
+                    assertTrue(started.await(5, TimeUnit.SECONDS));
+                    var second = pool.submit(() -> entered(context, () -> {
+                        threads.enterCurrent();
+                        try { waiter.complete(threads.currentIdentity()); return cell.read(); }
+                        finally { threads.leaveCurrent(); }
+                    }));
+                    try {
+                        var identity = waiter.get(5, TimeUnit.SECONDS);
+                        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                        while (threads.status(identity) != GuestThreadStatus.BLACK_HOLE && !second.isDone() && System.nanoTime() < deadline)
+                            Thread.sleep(1);
+                        assertEquals(GuestThreadStatus.BLACK_HOLE, threads.status(identity));
+                    } finally { release.countDown(); }
+                    assertSame(answer, first.get(5, TimeUnit.SECONDS)); assertSame(answer, second.get(5, TimeUnit.SECONDS));
+                }
+                assertSame(answer, cell.read());
                 assertSame(answer, cell.peek()); assertEquals(1, evaluations.get()); assertEquals(1, publications.get());
             } finally { context.leave(); }
         }
