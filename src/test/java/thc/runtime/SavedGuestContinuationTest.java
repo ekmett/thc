@@ -130,6 +130,8 @@ class SavedGuestContinuationTest {
                         var steps = new ArrayDeque<AstResumeStep>();
                         steps.add((saved, input) -> { throw new AstCapture(AstStackSpill.INSTANCE, MaskingState.UNMASKED); });
                         steps.add(ownedMemory(arena));
+                        steps.add((saved, value) -> (Integer) value + 1);
+                        steps.add((saved, value) -> (Integer) value + 2);
                         var cut = assertThrows(AstCapture.class, () -> AstContinuations.resumeAstSteps(frame, steps, Unit.INSTANCE));
                         assertTrue(arena.scope().isAlive(), "Recapture discarded transferred work");
                         cut.enclose(pending -> (saved, input) -> AstContinuations.resumeAstSteps(saved, pending, input));
@@ -139,10 +141,35 @@ class SavedGuestContinuationTest {
                         if (discard) {
                             saved.discard(); saved.discard();
                             assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
-                        } else assertEquals(123, saved.continueWith(Unit.INSTANCE));
+                        } else assertEquals(126, saved.continueWith(Unit.INSTANCE));
                         assertFalse(arena.scope().isAlive(), "Terminal scope retained its native resource");
                     } finally { if (arena.scope().isAlive()) arena.close(); }
                 }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void nestedScopeReplaysIndependentlyAfterItsRecipeIsTransferredToTwoCallers() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var owner = new LifetimeOwner(language);
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor());
+                var capture = new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED)
+                    .append((saved, value) -> (Integer) value + 1)
+                    .append((saved, value) -> (Integer) value * 2)
+                    .append((saved, value) -> (Integer) value - 3)
+                    .append((saved, value) -> (Integer) value * 4);
+                capture.enclose(steps -> (saved, input) -> AstContinuations.resumeAstSteps(saved, steps, input));
+                capture.enclose(steps -> (saved, input) -> {
+                    var recipe = steps.remove();
+                    var first = new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED).append(recipe).freeze(owner, frame);
+                    var siblings = new ArrayDeque<>(List.of(recipe));
+                    var second = new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED).appendRemaining(siblings).freeze(owner, frame);
+                    assertEquals(76, first.continueWith(10));
+                    return second.continueWith(20);
+                });
+                assertEquals(156, capture.freeze(owner, frame).continueWith(Unit.INSTANCE));
             } finally { context.leave(); }
         }
     }
@@ -208,7 +235,7 @@ class SavedGuestContinuationTest {
             cut.enclose(steps -> (frame, input) -> AstContinuations.resumeAstSteps(frame, steps, input));
         return cut.freeze(owner, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor()));
     }
-    @ParameterizedTest @ValueSource(ints = {0, 2})
+    @ParameterizedTest @ValueSource(ints = {0, 1, 2})
     void consumedChildDoesNotOwnItsDiscardedResultDuringSuffix(int scopes) {
         try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();
