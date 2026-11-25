@@ -91,6 +91,13 @@ class CoreProofJoinTest {
                 var conditional = list("case", n(0), "selector", list(list("default", null, list(), jump)),
                     with(meta(proof), "binder", arg("selector")));
                 var body = list("let", false, list(join), prepared ? conditional : jump, meta(proof));
+                if (prepared) {
+                    var outsideFormal = with(formal, "id", "outsideValue", "name", "outsideValue");
+                    var outside = with(bind("outside", list("lam", list(outsideFormal),
+                        list("var", "outsideValue", meta(proof)), map("rep", closure, "resultRep", proof)), 1),
+                        "joinResultRep", proof);
+                    body = list("let", false, list(outside), body, meta(proof));
+                }
                 var function = list("lam", list(map("id", "pause", "name", "pause", "lifted", true, "rep", closure)),
                     body, map("rep", closure, "resultRep", proof));
                 var module = map("bindings", list(bind("entry", function)), "instrument", true);
@@ -505,7 +512,9 @@ class CoreProofJoinTest {
         var held = list("var", "held", meta(ref));
         var finish = with(bind("finish", held, 0), "joinResultRep", ref);
         var middle = with(bind("middle", list("var", "finish", meta(ref)), 0), "joinResultRep", ref);
-        var nested = list("let", false, list(middle), list("var", "middle", meta(ref)), meta(ref));
+        var start = with(bind("start", list("var", "middle", meta(ref)), 0), "joinResultRep", ref);
+        var inner = list("let", false, list(start), list("var", "start", meta(ref)), meta(ref));
+        var nested = list("let", false, list(middle), inner, meta(ref));
         var expression = list("let", false, list(finish), enclosing ? nested : list("var", "finish", meta(ref)), meta(ref));
         var entry = bind("entry", list("lam", list(map("id", "held", "lifted", true, "rep", ref)), expression,
             map("rep", closure, "resultRep", ref)));

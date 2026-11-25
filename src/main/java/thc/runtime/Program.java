@@ -522,6 +522,7 @@ public final class Program implements ExecutableProgram {
         final FrameLayout layout;
         final Map<String, Local> locals;
         final Map<String, LocalJoinTarget> joins;
+        Set<Integer> joinCaptureSlots = Set.of();
         AstSelfLayout self;
         List<Object> releasingTupleCall;
         int[] releasedFormals;
@@ -538,8 +539,12 @@ public final class Program implements ExecutableProgram {
             this.layout = layout; this.locals = locals; this.joins = joins; this.self = self;
             this.deferredExpression = deferredExpression; this.deferredArms = deferredArms;
         }
-        Scope child() { return new Scope(layout.scope(), new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), self,
-            deferredExpression, deferredArms).withProgramSlot(programSlot); }
+        Scope child() {
+            Scope child = new Scope(layout.scope(), new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), self,
+                deferredExpression, deferredArms).withProgramSlot(programSlot);
+            child.joinCaptureSlots = joinCaptureSlots;
+            return child;
+        }
         Scope withProgramSlot(int slot) { programSlot = slot; return this; }
         Local bind(String id, boolean primitive, CoreRepresentation proof) {
             return bind(id, primitive, proof, false, null, null, FrameSlotKind.Illegal);
@@ -1465,9 +1470,7 @@ public final class Program implements ExecutableProgram {
         boolean recursive = Boolean.TRUE.equals(expr.get(1));
         Set<String> shadowed = new LinkedHashSet<>();
         if (recursive) for (CoreJoinDefinition definition : definitions) shadowed.add(definition.getId());
-        // An enclosing jump can still read slots absent from the current group's
-        // free variables. Restrict release to the root's tail with no such targets.
-        Set<Integer> liveOuterSlots = tail && outer.joins.isEmpty() && !outer.locals.isEmpty() ? new LinkedHashSet<>() : null;
+        Set<Integer> capturedSlots = new LinkedHashSet<>();
         for (CoreJoinDefinition definition : definitions) {
             for (Map<String, Object> parameter : definition.getParameters()) {
                 CoreRepresentation proof = CoreRepresentations.binder(parameter);
@@ -1488,16 +1491,23 @@ public final class Program implements ExecutableProgram {
                     if (!invalid) for (int slot : slots) if (slot < 0) { invalid = true; break; }
                     if (invalid) throw new RuntimeFault("Typed join capture disagrees with its physical slots");
                     // Keep every leaf behind a live aggregate alias.
-                    if (liveOuterSlots != null) for (int slot : slots) liveOuterSlots.add(slot);
+                    for (int slot : slots) capturedSlots.add(slot);
                 } else {
                     CoreRepresentations.requireScalar(captured.proof, "join capture");
-                    if (liveOuterSlots != null) liveOuterSlots.add(captured.slot);
+                    if (captured.slot >= 0) capturedSlots.add(captured.slot);
                 }
             }
         }
         CoreJoins.validate((List<Map<String, Object>>) expr.get(2), (List<Object>) expr.get(3), recursive);
         Object identity = new Object();
         Scope local = outer.child();
+        // Resolve captures in the defining scope. A nested jump can reach any
+        // enclosing group through another join, even when its name is shadowed.
+        if (!capturedSlots.isEmpty()) {
+            Set<Integer> enclosing = new LinkedHashSet<>(outer.joinCaptureSlots);
+            enclosing.addAll(capturedSlots);
+            local.joinCaptureSlots = enclosing;
+        }
         List<boolean[]> entryContracts = new ArrayList<>();
         for (CoreJoinDefinition definition : definitions) entryContracts.add(CoreEntries.join(definition));
         List<Scope> bodyScopes = new ArrayList<>();
@@ -1546,11 +1556,12 @@ public final class Program implements ExecutableProgram {
         // follow it, so a join transfer clears only completed entry/body locals.
         int firstBodySlot = local.layout.nextSlot();
         Expr entry = compile((List<Object>) expr.get(3), local, tail);
-        if (liveOuterSlots != null && (entry instanceof LocalJoinCall || entry instanceof Case)) {
+        if (tail && (entry instanceof LocalJoinCall || entry instanceof Case)) {
             Set<Integer> dead = new LinkedHashSet<>();
             for (Local captured : outer.locals.values()) {
                 int slot = captured.slot;
-                if (slot >= 0 && !captured.cell && outer.layout.referenceSlot(slot) && !liveOuterSlots.contains(slot))
+                if (slot >= 0 && !captured.cell && outer.layout.referenceSlot(slot) &&
+                        !local.joinCaptureSlots.contains(slot))
                     dead.add(slot);
             }
             if (!dead.isEmpty()) releaseJoinEntrySlots(entry, identity, dead.stream().mapToInt(Integer::intValue).toArray());
