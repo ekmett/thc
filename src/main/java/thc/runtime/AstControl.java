@@ -24,17 +24,16 @@ public final class AstControl {
         return owner instanceof GhcBCORoot ||
             owner instanceof FunctionRoot root && root.getCapturesContinuations$org_intelligence_thc();
     }
-    static final class ResumeChild implements AstResumeStep {
-        private final Object child;
-        private final Node node;
-        ResumeChild(Object child, Node node) { this.child = child; this.node = node; }
-        boolean completedWith(Object value) { return completedChild(child, value); }
-        @Override public Object resume(VirtualFrame frame, Object input) { return resumeChild(child, node, input, this); }
+    /** The settled update is the identity that the caller must validate on resume.
+     * Logical mask and tail-anchor state belong to the currently entered carrier. */
+    sealed interface ResumeChild extends AstResumeStep permits Thunk, CallSegment {
+        default boolean completedWith(Object value) { return completedChild(this, value); }
+        @Override default Object resume(VirtualFrame frame, Object input) { return resumeChild(this, null, input, this); }
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureChild(Node node, ThunkSuspended suspended) {
         return new AstCapture(suspended, SynchronousMasking.current(node))
-            .append(new ResumeChild(suspended.getThunk(), node));
+            .append(suspended.getThunk());
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureForce(Node node, Force force, Object value, PendingWait wait) {
@@ -44,7 +43,7 @@ public final class AstControl {
     @TruffleBoundary(transferToInterpreterOnException = false)
     static AstCapture captureChild(Node node, CallSegmentSuspended suspended) {
         return new AstCapture(suspended, SynchronousMasking.current(node))
-            .append(new ResumeChild(suspended.getSegment(), node));
+            .append(suspended.getSegment());
     }
     public static Object resumeChild(Object child, Node node, Object input, AstResumeStep step) {
         if (input instanceof TailCall tail && AstTailAnchor.accepts(AstStacks.astStackScope(node).getTailAnchor(), tail)) throw tail;
@@ -160,6 +159,6 @@ public final class AstControl {
         MaskingState parkedMask = saved.getYielded() instanceof CallSegmentSuspended suspended ? suspended.getParkedActiveMask() : null;
         CallSegment segment = new CallSegment(saved.getIdentity(), parkedMask != null ? parkedMask : callerMask, callerMask, shape, false, false);
         CallSegmentSuspended suspended = new CallSegmentSuspended(segment, null, saved.asyncRequest(), saved.stackSpill());
-        return new AstCapture(suspended, callerMask).append(new ResumeChild(segment, node));
+        return new AstCapture(suspended, callerMask).append(segment);
     }
 }

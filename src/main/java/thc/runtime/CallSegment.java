@@ -3,7 +3,7 @@
 package thc.runtime;
 
 /** A cold, one-shot continuation whose answer may itself remain lazy. */
-public final class CallSegment {
+public final class CallSegment implements AstControl.ResumeChild {
     private MaskingState logicalMask;
     private MaskingState callerMask;
     private boolean initialEntry;
