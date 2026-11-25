@@ -793,9 +793,12 @@ class SavedGuestContinuationTest {
                     public boolean ready() { return false; }
                     public GuestThreadStatus status() { return GuestThreadStatus.MVAR; }
                 }, threads.pollState(Thread.currentThread()).getCurrent(), MaskingState.UNMASKED, owner);
+                var wrapper = new Saved(owner, owner.returned, input -> fail("Inspection resumed the outer continuation"));
+                assertNull(PendingWait.of(wrapper));
                 var replacement = new Saved(owner, wait, input -> fail("Waiter resumed during publication"));
                 if (replaceThunk) shared.setValue(replacement);
                 else segment.setValue(replacement);
+                assertSame(wait, PendingWait.of(wrapper), "A replaced dependency invalidates the nested spill path");
                 var parent = new Thunk(owner.getCallTarget(), null);
                 assertThrows(ThunkSuspended.class, () -> new Driver(language).force(parent));
                 assertEquals(5, parent.getState());
