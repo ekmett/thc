@@ -22,6 +22,67 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** A real blocked MVar cut, owned thunk, and continuation resumed on another Java thread. */
 class AstContinuationTest {
+    @Test void ordinaryThunkArgumentsEnterTheFirstCompiledForceCall() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var target = new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        return (Long) frame.getArguments()[1] + (Long) frame.getArguments()[2];
+                    }
+                }.getCallTarget();
+                var compiledEntries = new AtomicInteger();
+                var driver = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false));
+                    @Override public Object execute(VirtualFrame frame) {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries.incrementAndGet();
+                        return force.execute(frame, frame.getArguments()[0]);
+                    }
+                }.getCallTarget();
+                for (int i = 0; i < 40; i++) assertEquals(3_000_000_017L + i,
+                    Calls.target(driver, new Object[]{Thunk.withArguments(target, new Object[]{0L, 3_000_000_000L + i, 17L})}));
+                var optimized = (com.oracle.truffle.runtime.OptimizedCallTarget) driver;
+                optimized.compile(true);
+                assertTrue(optimized.isValidLastTier());
+                int before = compiledEntries.get();
+                assertEquals(Long.MIN_VALUE + 17L,
+                    Calls.target(driver, new Object[]{Thunk.withArguments(target, new Object[]{0L, Long.MIN_VALUE, 17L})}));
+                assertTrue(compiledEntries.get() > before, "The first installed call must enter compiled execution");
+            } finally { context.leave(); }
+        }
+    }
+    @Test void ordinaryThunkArgumentsSurviveParkingAndRetireAfterOneSharedUpdate() {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var effects = new AtomicInteger();
+                var target = new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects.incrementAndGet();
+                        return new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED)
+                            .append((saved, input) -> (Long) saved.getArguments()[1] + (Long) saved.getArguments()[2])
+                            .freeze(this, frame.materialize());
+                    }
+                }.getCallTarget();
+                var thunk = Thunk.withArguments(target, new Object[]{0L, 3_000_000_000L, 17L});
+                var driver = new ForceRoot(language, thunk).getCallTarget();
+                assertSame(thunk, assertThrows(ThunkSuspended.class, () -> Calls.target(driver, new Object[]{0L})).getThunk());
+                assertEquals(5, thunk.getState());
+                assertNull(thunk.arguments(), "The parked activation owns its saved ordinary arguments");
+                for (int i = 0; i < 3; i++) assertEquals(3_000_000_017L, Calls.target(driver, new Object[]{0L}));
+                assertEquals(1, effects.get());
+                assertEquals(2, thunk.getState());
+                assertNull(thunk.getTarget());
+                assertNull(thunk.arguments());
+            } finally { context.leave(); }
+        }
+    }
     @Test void freezingTransfersPendingStepsWithoutSharingCaptureMutation() {
         try (var context = Context.create("thc")) {
             context.initialize("thc"); context.enter();

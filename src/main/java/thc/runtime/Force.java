@@ -28,6 +28,7 @@ public final class Force extends Node {
     private final Metrics metrics;
     private final boolean asyncMode;
     @Child private DispatchThunkTarget calls;
+    @Child private DispatchCallTarget argumentCalls;
     @Child private TailCallLoop trampoline;
     private final BranchProfile tailCallProfile = BranchProfile.create();
     private final BranchProfile resumeProfile = BranchProfile.create();
@@ -38,6 +39,7 @@ public final class Force extends Node {
     public Force(Metrics metrics, boolean asyncMode) {
         this.metrics = metrics; this.asyncMode = asyncMode;
         calls = DispatchThunkTargetNodeGen.create();
+        argumentCalls = DispatchCallTargetNodeGen.create();
         trampoline = new TailCallLoop(metrics);
     }
     public Object execute(VirtualFrame frame, Object value) {
@@ -685,7 +687,9 @@ public final class Force extends Node {
                 try {
                     RootCallTarget target = thunk.getTarget();
                     if (target == null) throw fault("Unevaluated thunk has no body");
-                    returned = calls.execute(this, target, thunk.getEnvironment(), thunk.argument(), thunk.hasArgument(), metrics);
+                    Object[] arguments = thunk.arguments();
+                    returned = arguments != null ? argumentCalls.execute(this, target, arguments, metrics)
+                        : calls.execute(this, target, thunk.getEnvironment(), thunk.argument(), thunk.hasArgument(), metrics);
                 } catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail, metrics); }
             } else returned = resumeOwnedContinuation(continuation, resumeValue, metrics);
             if (returned instanceof TailYield || returned instanceof AstTailYield ||

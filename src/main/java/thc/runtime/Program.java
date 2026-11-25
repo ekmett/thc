@@ -1101,22 +1101,38 @@ public final class Program implements ExecutableProgram {
     private Expr delay(List<Object> expr, Scope scope, String label) {
         if (!reusableCode && "app".equals(expr.getFirst()) && expr.get(1) instanceof List<?> head &&
                 head.size() >= 2 && "var".equals(head.getFirst()) && !scope.locals.containsKey(head.get(1)) &&
-                globals.containsKey(head.get(1)) && expr.get(2) instanceof List<?> arguments && arguments.size() == 1 &&
-                arguments.getFirst() instanceof List<?> operand && operand.size() >= 2 && "var".equals(operand.getFirst()) &&
-                expr.get(3) instanceof List<?> flags && flags.size() == 1 && Boolean.TRUE.equals(flags.getFirst())) {
-            Local local = scope.locals.get(operand.get(1));
-            if (local != null && !local.cell && local.slot >= 0 &&
-                    List.of("BoxedRep (Just Lifted)").equals(local.proof.getPrimReps()) &&
-                    (local.proof.getKind() == CoreKind.DATA || local.proof.getKind() == CoreKind.CLOSURE)) {
+                globals.containsKey(head.get(1)) && expr.get(2) instanceof List<?> arguments &&
+                (arguments.size() == 1 || arguments.size() == 2) && expr.get(3) instanceof List<?> flags &&
+                flags.size() == arguments.size() && flags.stream().allMatch(Boolean.TRUE::equals)) {
+            var locals = new ArrayList<Local>();
+            var formals = new ArrayList<Map<String, Object>>();
+            var ids = new HashSet<Object>();
+            for (Object value : arguments) {
+                if (!(value instanceof List<?> operand) || operand.size() < 2 || !"var".equals(operand.getFirst()) ||
+                        !ids.add(operand.get(1))) break;
+                Local local = scope.locals.get(operand.get(1));
+                if (local == null || local.cell || local.slot < 0 ||
+                        !List.of("BoxedRep (Just Lifted)").equals(local.proof.getPrimReps()) ||
+                        local.proof.getKind() != CoreKind.DATA && local.proof.getKind() != CoreKind.CLOSURE) break;
                 var proof = Map.<String, Object>of("kind", local.proof.getKind() == CoreKind.DATA ? "data" : "closure",
                     "evaluated", local.proof.getEvaluated(), "primReps", local.proof.getPrimReps());
-                var formal = Map.<String, Object>of("id", operand.get(1), "name", operand.get(1),
-                    "lifted", true, "coercion", false, "rep", proof);
-                FunctionSpec fn = function(label, List.of(formal), expr, scope, CoreRepresentations.expression(expr),
-                    new boolean[]{local.proof.getEvaluated()}, FunctionRootRole.FUNCTION, false, null, null, true);
+                formals.add(Map.of("id", operand.get(1), "name", operand.get(1),
+                    "lifted", true, "coercion", false, "rep", proof));
+                locals.add(local);
+            }
+            if (locals.size() == arguments.size()) {
+                boolean[] evaluated = new boolean[locals.size()];
+                for (int i = 0; i < evaluated.length; i++) evaluated[i] = locals.get(i).proof.getEvaluated();
+                FunctionSpec fn = function(label, formals, expr, scope, CoreRepresentations.expression(expr),
+                    evaluated, FunctionRootRole.FUNCTION, false, null, null, true);
                 TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
                 if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
-                return new Delay(fn.target, local.slot, scope.layout.referenceSlot(local.slot)).proven(evaluated(CoreRepresentations.expression(expr), false))
+                Local first = locals.getFirst();
+                Delay delay = locals.size() == 1
+                    ? new Delay(fn.target, first.slot, scope.layout.referenceSlot(first.slot))
+                    : new Delay(fn.target, first.slot, scope.layout.referenceSlot(first.slot),
+                        locals.get(1).slot, scope.layout.referenceSlot(locals.get(1).slot));
+                return delay.proven(evaluated(CoreRepresentations.expression(expr), false))
                     .located(sources.expression(expr, lowering().source));
             }
         }

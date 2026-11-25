@@ -17,9 +17,10 @@ public final class Thunk implements Lifted {
     }
     private RootCallTarget target;
     private final boolean asynchronousExceptions;
-    // Either selected captures or the single ordinary formal of an owning thunk root.
+    // Selected captures, one ordinary formal, or a private ordinary argument packet.
     private Object payload;
-    private final boolean argumentPayload;
+    // 0=captures, 1=single formal, 2=ordinary packet.
+    private final byte payloadKind;
     // 0=unevaluated, 1=owned, 2=WHNF, 3=failure, 4=unsupported unwind, 5=parked.
     private volatile int state;
     private Object value;
@@ -29,13 +30,15 @@ public final class Thunk implements Lifted {
     java.util.ArrayList<Force.DemandWait> demandWaiters;
 
     public Thunk(RootCallTarget target, CapturedFrame environment) {
-        this(target, environment, false);
+        this(target, environment, (byte) 0);
     }
-    static Thunk withArgument(RootCallTarget target, Object argument) { return new Thunk(target, argument, true); }
-    private Thunk(RootCallTarget target, Object payload, boolean argumentPayload) {
+    static Thunk withArgument(RootCallTarget target, Object argument) { return new Thunk(target, argument, (byte) 1); }
+    /** The thunk takes ownership of this fresh ordinary packet until entry or retirement. */
+    static Thunk withArguments(RootCallTarget target, Object[] arguments) { return new Thunk(target, arguments, (byte) 2); }
+    private Thunk(RootCallTarget target, Object payload, byte payloadKind) {
         this.target = target;
         this.payload = payload;
-        this.argumentPayload = argumentPayload;
+        this.payloadKind = payloadKind;
         // The target is cleared on completion or suspension; admission still needs its policy.
         asynchronousExceptions = target.getRootNode() instanceof GuestRoot root && root.getAsynchronousExceptions();
     }
@@ -49,9 +52,10 @@ public final class Thunk implements Lifted {
     public boolean getAsynchronousExceptions() { return asynchronousExceptions; }
     public RootCallTarget getTarget() { return target; }
     public void setTarget(RootCallTarget target) { this.target = target; }
-    public CapturedFrame getEnvironment() { return argumentPayload ? null : (CapturedFrame) payload; }
-    boolean hasArgument() { return argumentPayload; }
-    Object argument() { return argumentPayload ? payload : null; }
+    public CapturedFrame getEnvironment() { return payloadKind == 0 ? (CapturedFrame) payload : null; }
+    boolean hasArgument() { return payloadKind == 1; }
+    Object argument() { return payloadKind == 1 ? payload : null; }
+    Object[] arguments() { return payloadKind == 2 ? (Object[]) payload : null; }
     public void setEnvironment(CapturedFrame environment) { this.payload = environment; }
     /** Acquire the answer, failure or continuation published with this state. */
     public int getState() { return (int) STATE.getAcquire(this); }

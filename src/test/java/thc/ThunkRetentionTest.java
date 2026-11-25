@@ -8,6 +8,8 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import thc.runtime.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreExecutionTestSupport.*;
@@ -102,6 +104,69 @@ class ThunkRetentionTest {
         assertEquals(1, innerEvaluations[0]); assertEquals(1, outerEvaluations[0]); assertEquals(2L, metrics.getThunkEvaluations()); assertEquals(5L, metrics.getThunkHits());
         for (var thunk : list(inner, outer)) { assertEquals(2, thunk.getState()); assertFalse(thunk.getValue() instanceof Thunk); assertReleased(thunk); }
     }); }
+    @ParameterizedTest @ValueSource(strings = {"distinct", "repeated", "recursive", "local-head", "typed", "unknown"})
+    void delayedLocalApplicationsPreserveLazySharingAcrossTransportFallbacks(String form) throws Exception {
+        withRuntime((language, environment) -> {
+            var data = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+            var result = with(data, "evaluated", true);
+            var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+            var scalar = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
+            var second = form.equals("typed") ? scalar : form.equals("unknown")
+                ? map("kind", "unknown", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false) : data;
+            var a = list("var", "a", map("rep", data));
+            var b = list("var", "b", map("rep", second));
+            var parameters = list(map("id", "a", "lifted", true, "rep", data),
+                map("id", "b", "lifted", !form.equals("typed"), "rep", second));
+            var producer = map("id", "choose", "arity", 2, "lifted", true, "expr", list("lam", parameters,
+                form.equals("typed") ? a : b, map("resultRep", data)));
+            Object left = form.equals("recursive") ? list("var", "x", map("rep", data)) : a;
+            Object right = form.equals("repeated") ? a : form.equals("recursive") ? list("var", "y", map("rep", data)) : b;
+            var head = list("var", form.equals("local-head") ? "f" : "choose", map("rep", closure));
+            var application = list("app", head, list(left, right), list(true, !form.equals("typed")), false, false, map("rep", data));
+            var shared = list("var", "shared", map("rep", data));
+            Object body = list("let", false, list(map("id", "shared", "lifted", true, "rep", data, "expr", application)),
+                list("app", list("con", "Pair", 2), list(shared, shared), list(true, true), false, false, map("rep", result)), map("rep", result));
+            if (form.equals("recursive")) body = list("let", true,
+                list(map("id", "x", "lifted", true, "rep", data, "expr", a),
+                     map("id", "y", "lifted", true, "rep", data, "expr", b)), body, map("rep", result));
+            if (form.equals("local-head")) body = list("let", false,
+                list(map("id", "f", "lifted", true, "rep", closure, "expr", list("var", "choose", map("rep", closure)))),
+                body, map("rep", result));
+            var entry = map("id", "entry", "arity", 2, "lifted", true,
+                "expr", list("lam", parameters, body, map("resultRep", result)));
+            var module = map("instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "arity", 2, "tag", 1,
+                "kind", "boxed", "strictFields", list(false, false), "fieldLifted", list(true, true),
+                "fieldReps", list(list("BoxedRep (Just Lifted)"), list("BoxedRep (Just Lifted)")))), "bindings", list(producer, entry));
+            var leaf = new DataLayout(language, "Leaf", "Leaf", new String[0]);
+            Object first = leaf.create(new Object[0]);
+            Object last = form.equals("typed") ? 3_000_000_000L : leaf.create(new Object[0]);
+            Object expected = form.equals("repeated") || form.equals("typed") ? first : last;
+            for (String backend : list("ast", "bytecode")) {
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, module, false, false)
+                    : new BytecodeProgram(language, module, null, false);
+                var driver = new ForceDriver(new Metrics(true));
+                if (form.equals("distinct")) {
+                    for (int i = 0; i < 40; i++) {
+                        var setup = (DataValue) Calls.target(program.entryTarget("entry"), new Object[]{0L, first, last});
+                        assertSame(expected, driver.apply((Thunk) setup.getLayout().read(setup, 0)));
+                    }
+                    var target = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("entry");
+                    target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
+                }
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                var pair = (DataValue) Calls.target(program.entryTarget("entry"), new Object[]{0L, first, last});
+                if (form.equals("distinct")) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,
+                    backend + " first installed call must create the delayed binding in compiled execution");
+                var thunk = (Thunk) pair.getLayout().read(pair, 0);
+                assertSame(thunk, pair.getLayout().read(pair, 1), backend + " keeps one shared lazy binding");
+                assertEquals(0, thunk.getState(), backend + " constructing the pair must not demand either field");
+                assertSame(expected, driver.apply(thunk), backend + " " + form);
+                assertSame(expected, driver.apply(thunk), backend + " retains its shared answer");
+                assertEquals(2, thunk.getState());
+                assertReleased(thunk);
+            }
+        });
+    }
     private Map<String, Object> binding(String id, List<Object> expression) { return map("id", id, "name", id, "type", "Synthetic", "lifted", true, "arity", 0, "expr", expression); }
     private List<Object> delayed(List<Object> expression) { return list("case", list("lit", "int", "0"), "ignored", list(list("default", null, list(), expression))); }
     private Object invokeEntry(ExecutableProgram program, Thunk thunk) { return Calls.target(program.hostEntryTarget(0), new Object[]{thunk, new Object[0]}); }
