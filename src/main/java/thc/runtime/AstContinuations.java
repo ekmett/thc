@@ -7,18 +7,22 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import java.util.List;
 import java.util.ArrayDeque;
 import java.util.Collection;
+import java.util.Queue;
 
 public final class AstContinuations {
     private AstContinuations() {}
     /** Pending work belongs to this invocation; consumed prefixes are no longer roots. */
     public static Object resumeAstSteps(VirtualFrame frame, ArrayDeque<AstResumeStep> steps, Object input) {
+        return resumeAstSteps(frame, (Queue<AstResumeStep>) steps, input);
+    }
+    static Object resumeAstSteps(VirtualFrame frame, Queue<AstResumeStep> steps, Object input) {
         Object answer = input;
         Throwable primary = null;
         try {
             while (!steps.isEmpty()) {
                 // Do not retain the recipe around its instantiated scope: it still
                 // owns the immutable prefix needed by other delimited invocations.
-                AstResumeStep step = steps.removeFirst().forInvocation();
+                AstResumeStep step = steps.remove().forInvocation();
                 try { answer = step.resume(frame, answer); }
                 catch (AstCapture cut) { throw cut.appendRemaining(steps); }
                 catch (DelimitedCut cut) {

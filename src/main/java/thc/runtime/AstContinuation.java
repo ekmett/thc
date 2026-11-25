@@ -6,6 +6,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import java.util.List;
 import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
@@ -34,7 +35,7 @@ public final class AstContinuation implements SavedGuestContinuation {
     }
     private final MaskingState logicalMask;
     private final MaterializedFrame frame;
-    private final ArrayDeque<AstResumeStep> steps;
+    private final Queue<AstResumeStep> steps;
     private final StackAnnotationState annotations;
     private final boolean rootEntrySpill;
     private final ManagedSTM.Transaction transaction;
@@ -50,7 +51,7 @@ public final class AstContinuation implements SavedGuestContinuation {
     }
     /** Transfer an unpublished capture's queue; the caller must detach its reference. */
     AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
-                    ArrayDeque<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
+                    Queue<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
         this.sourceRoot = root; this.yielded = yielded; this.logicalMask = mask; this.frame = frame;
         this.spillPath = spillPath(yielded);
         this.steps = steps; this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
