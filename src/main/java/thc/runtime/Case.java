@@ -47,16 +47,18 @@ class Case extends Expr implements AstResumeStep {
         final boolean integer;
         @CompilationFinal(dimensions = 1) final long[] keys;
         @CompilationFinal(dimensions = 1) final int[] alternatives;
-        private LiteralIndex(boolean integer, long[] keys, int[] alternatives) {
-            this.integer = integer; this.keys = keys; this.alternatives = alternatives;
+        final int fallback;
+        private LiteralIndex(boolean integer, long[] keys, int[] alternatives, int fallback) {
+            this.integer = integer; this.keys = keys; this.alternatives = alternatives; this.fallback = fallback;
         }
         static LiteralIndex prepare(Alternative[] alternatives, CoreRepresentation proof) {
             if (!proof.isInt() && !proof.isLong()) return null;
             boolean integer = proof.isInt();
             var labels = new ArrayList<Label>();
+            int fallback = -1;
             for (int i = 0; i < alternatives.length; i++) {
                 Alternative arm = alternatives[i];
-                if (arm.getKind() == DEFAULT_ALTERNATIVE) continue;
+                if (arm.getKind() == DEFAULT_ALTERNATIVE) { fallback = i; continue; }
                 if (arm.getKind() != LITERAL_ALTERNATIVE ||
                         (integer ? !(arm.getValue() instanceof Integer) : !(arm.getValue() instanceof Long))) return null;
                 long value = integer ? ((Integer) arm.getValue()).longValue() : ((Long) arm.getValue()).longValue();
@@ -72,7 +74,7 @@ class Case extends Expr implements AstResumeStep {
                 if (i != 0 && keys[i - 1] == label.value) return null;
                 keys[i] = label.value; indices[i] = label.alternative;
             }
-            return new LiteralIndex(integer, keys, indices);
+            return new LiteralIndex(integer, keys, indices, fallback);
         }
         int find(long value) {
             int from = 0, end = keys.length - 1;
@@ -198,13 +200,18 @@ class Case extends Expr implements AstResumeStep {
     }
 
     private Expr select(VirtualFrame frame, boolean useDirect, DataValue direct) {
-        int choice = literalIndex == null ? -1 : literalChoice(frame);
+        if (literalIndex != null) {
+            int choice = literalChoice(frame);
+            int index = choice >= 0 ? choice : literalIndex.fallback;
+            if (index < 0) throw fault("Non-exhaustive Core case");
+            return selected(frame, alternatives[index], null);
+        }
         Alternative fallback = null;
         for (int index = 0; index < alternatives.length; index++) {
             Alternative alt = alternatives[index];
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             Object matched = alt.getKind() == DATA_ALTERNATIVE ? (useDirect ? direct : dataScrutinee(frame)) : null;
-            if (literalIndex == null ? (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) : choice == index) return selected(frame, alt, matched);
+            if (alt.getKind() == DATA_ALTERNATIVE ? alt.matchesData(frame, matched) : matches(frame, alt)) return selected(frame, alt, matched);
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
         return selected(frame, fallback);
