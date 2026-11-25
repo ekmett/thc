@@ -137,7 +137,7 @@ if(THC_VM_BUILD_TESTS)
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/t/prepare-graal-test.py")
   set_tests_properties(jam-prepare-graal-test PROPERTIES LABELS vm)
   add_test(NAME jam-release-runtime-test
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/t/release-runtime-test.py")
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/t/test-release-runtime.py")
   set_tests_properties(jam-release-runtime-test PROPERTIES LABELS vm)
   add_test(NAME jam-macos-deployment-test
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/t/macos-deployment-test.py")

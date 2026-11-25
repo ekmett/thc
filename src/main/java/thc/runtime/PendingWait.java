@@ -90,6 +90,7 @@ public final class PendingWait extends AbstractTruffleException implements Inter
         Object first = null, second = null, third = null;
         for (;;) {
             if (value instanceof PendingWait pending) return pending;
+            if (value instanceof AstContinuation saved && saved.hasWaitFreeSpillPath()) return null;
             // Only carriers with successors need cycle membership.
             if (!(value instanceof ThunkSuspended) && !(value instanceof CallSegmentSuspended) &&
                 !(value instanceof SavedGuestContinuation) && !(value instanceof ContinuationResult)) return null;

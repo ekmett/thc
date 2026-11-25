@@ -108,6 +108,30 @@ class SimdAstTransportTest {
     @Test void vectorArgumentsResultsPapAndNestedTupleKeepExactLanesAfterCompilation() throws Exception {
         for (boolean inlining : List.of(true, false)) try (var context = compiledContext(inlining)) { compiledEntries(context, false, module(), List.of("direct", "pap", "nested")); }
     }
+    @Test void unusedHeapVectorBinderReleasesItsPhysicalSlotWithoutChangingLiveFields() {
+        var source = heapModule();
+        var boxed = m("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
+        var value = app(l("con", "Heap", 2), List.of(broadcast(variable("x")), literal(13)), boxed);
+        var ignored = l("case", value, "whole", l(l("data", "Heap", l("unused", "bias"), variable("bias"),
+            m("binders", List.of(formal("unused", vector), formal("bias"))))), m("rep", integer, "binder", formal("whole", boxed)));
+        var bindings = new ArrayList<Object>((List<?>) source.get("bindings"));
+        bindings.add(binding("ignoreVector", lam(List.of(formal("x")), ignored)));
+        source = with(source, "bindings", bindings);
+        for (boolean bytecode : List.of(false, true))
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    ExecutableProgram program = bytecode ? new BytecodeProgram(language, source) : new Program(language, source);
+                    var dead = context.asValue(new EntryValue(program, "ignoreVector", 1));
+                    var live = context.asValue(new EntryValue(program, "heapDirect", 1));
+                    for (long x : List.of(-32768L, -1L, 0L, 32767L)) {
+                        assertEquals(13L, dead.execute(x).asLong());
+                        assertEquals((long) (short) x + 13L, live.execute(x).asLong());
+                    }
+                } finally { context.leave(); }
+            }
+    }
     @Test void astHeapVectorsOwnLanesAcrossClosureThunkConstructorAndPap() throws Exception {
         try (var context = compiledContext(null)) { compiledEntries(context, false, heapModule(), List.of("heapDirect", "heapPap", "captured", "thunk")); }
     }

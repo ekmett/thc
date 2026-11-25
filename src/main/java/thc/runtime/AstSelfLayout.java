@@ -68,7 +68,10 @@ public final class AstSelfLayout {
         for (int source : temporaries) frame.clear(source);
         throw AstSelfCall.INSTANCE;
     }
-    @ExplodeLoop public RuntimeException transfer(VirtualFrame frame, Closure function, int[] temporaries) {
+    public RuntimeException transfer(VirtualFrame frame, Closure function, int[] temporaries) {
+        throw prepareTransfer(frame, function, temporaries);
+    }
+    @ExplodeLoop AstSelfCall prepareTransfer(VirtualFrame frame, Closure function, int[] temporaries) {
         // Temporaries cannot alias lexical slots; captures cannot overwrite a pending operand.
         restoreEnvironment(frame, function);
         for (int i = 0; i < argumentSlots.length; i++) {
@@ -105,6 +108,6 @@ public final class AstSelfLayout {
         }
         // Even unused operands must not remain retained by this activation.
         for (int source : temporaries) frame.clear(source);
-        throw AstSelfCall.INSTANCE;
+        return AstSelfCall.INSTANCE;
     }
 }

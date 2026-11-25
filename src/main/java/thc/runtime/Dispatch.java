@@ -21,6 +21,7 @@ public abstract class Dispatch extends Node {
     public final int argsSize;
     public final boolean tailCall;
     public final Metrics metrics;
+    @CompilerDirectives.CompilationFinal boolean ownsArgumentScratch;
     @CompilerDirectives.CompilationFinal(dimensions = 1) public boolean[] evaluatedArguments = new boolean[0];
     @CompilerDirectives.CompilationFinal public ArgumentLayout argumentLayout;
     @Child private volatile InputDispatch typed;
@@ -48,6 +49,10 @@ public abstract class Dispatch extends Node {
         ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, argsSize);
         Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, argsSize));
         if (hasEnvironment) packet[1] = function.environment;
+        if (ownsArgumentScratch && !tailCall && cachedTarget.getRootNode() instanceof FunctionRoot root && root.consumesOrdinaryArguments()) {
+            Arrays.fill(arguments, null);
+            return caller.callOwned(frame, packet);
+        }
         return caller.call(frame, packet, tailCall);
     }
     @Specialization(guards = {"function.arity < argsSize", "function.arity == arity", "function.target == cachedTarget"}, limit = "3")

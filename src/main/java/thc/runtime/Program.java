@@ -523,6 +523,8 @@ public final class Program implements ExecutableProgram {
         final Map<String, Local> locals;
         final Map<String, LocalJoinTarget> joins;
         AstSelfLayout self;
+        List<Object> releasingTupleCall;
+        int[] releasedFormals;
         int programSlot = -1;
         final List<Object> deferredExpression;
         final List<DeferredArm> deferredArms;
@@ -602,7 +604,7 @@ public final class Program implements ExecutableProgram {
             if (reusableCode && kind == FrameSlotKind.Illegal) kind = FrameSlotKind.Object;
             int slot = layout.bind("<async operand " + bindings.size() + ">", kind);
             temporaries.add(slot);
-            bindings.add(new LocalBinding(slot, value, proof.isLong()));
+            bindings.add(new LocalBinding(slot, value, proof.isLong(), null, layout.referenceSlot(slot)));
             return new LocalRead(slot, false, layout.referenceSlot(slot) ? FrameSlotKind.Object : null).proven(proof);
         }
         Expr finish(Expr body) {
@@ -877,6 +879,7 @@ public final class Program implements ExecutableProgram {
         }
         if (role == FunctionRootRole.FUNCTION) scope.self = new AstSelfLayout(captures, environmentSlots,
             allArgumentSlots, allArgumentProofs, entryStrict.clone(), inputLayout, environmentVectorSlots);
+        if (initializedBody == null && initialization == null) prepareEntryFormalRelease(expression, args, scope);
         Expr body = initializedBody != null ? initializedBody : initialization == null ? compile(expression, scope, bodyTail) : initializer(initialization, scope);
         // This target is entered only by an existing demand on a thunk. Finish
         // that demand inside its resumable update scope, not at function returns.
@@ -904,6 +907,9 @@ public final class Program implements ExecutableProgram {
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
             delimited, role, outlineCaseArms || deferDefaultArm,
             scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
+        if (!metrics.getEnabled() && initializedBody == null && initialization == null && role == FunctionRootRole.FUNCTION &&
+                handoff == null && inputProofs.stream().anyMatch(CoreRepresentation::hasBoxedPointer))
+            root.enableOwnedOrdinaryArguments();
         // Same-frame regions deliberately expose the running activation to side roots.
         // Keep their frame identity even before any graph-budget extraction occurs.
         root.configureInitialFrameCopy(!delimited &&
@@ -940,8 +946,30 @@ public final class Program implements ExecutableProgram {
         if (reusableCode) codeTargets.add(target);
         return new FunctionSpec(target, captures, captureSources);
     }
-    private boolean sameFrameCandidate(List<Object> expression, Scope scope) {
-        if (!enableAsync || outlineCaseArms || deferDefaultArm || scope.joins.isEmpty() ||
+    /** The entry case owns the entire remaining continuation of these formals. */
+    private void prepareEntryFormalRelease(List<Object> expression, List<Map<String, Object>> formals, Scope scope) {
+        if (!"case".equals(expression.getFirst())) return;
+        var call = (List<Object>) expression.get(1);
+        if (!"app".equals(call.getFirst()) || !CoreRepresentations.expression(call).isTuple()) return;
+        Set<String> live = new LinkedHashSet<>();
+        for (var alternative : (List<List<Object>>) expression.get(3))
+            live.addAll(coreFreeVariables((List<Object>) alternative.get(3)));
+        Set<String> passed = new LinkedHashSet<>();
+        for (var argument : (List<List<Object>>) call.get(2))
+            if ("var".equals(argument.getFirst())) passed.add((String) argument.get(1));
+        List<Integer> dead = new ArrayList<>();
+        for (var formal : formals) {
+            String id = (String) formal.get("id");
+            Local local = scope.locals.get(id);
+            if (passed.contains(id) && !live.contains(id) && local != null && !local.cell &&
+                    local.tupleSlots == null && local.slot >= 0 && scope.layout.referenceSlot(local.slot))
+                dead.add(local.slot);
+        }
+        scope.releasingTupleCall = call;
+        scope.releasedFormals = ints(dead);
+    }
+    private boolean returningSideCandidate(List<Object> expression, Scope scope) {
+        if (!enableAsync || outlineCaseArms || deferDefaultArm ||
                 !Arrays.asList("app", "case", "let").contains(expression.getFirst())) return false;
         for (String free : coreFreeVariables(expression))
             if (scope.joins.containsKey(free)) return false;
@@ -988,7 +1016,7 @@ public final class Program implements ExecutableProgram {
         return size;
     }
     private Expr caseArm(List<Object> expression, Scope scope, boolean tail, int alternativeCount, boolean substantialSiblings) {
-        if (sameFrameCandidate(expression, scope)) {
+        if (!scope.joins.isEmpty() && returningSideCandidate(expression, scope)) {
             OperandBuilder operands = lowering().operands;
             lowering().operands = null;
             try { return new AstSameFrameArm(compile(expression, scope, tail)); }
@@ -1088,7 +1116,7 @@ public final class Program implements ExecutableProgram {
                     new boolean[]{local.proof.getEvaluated()}, FunctionRootRole.FUNCTION, false, null, null, true);
                 TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
                 if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
-                return new Delay(fn.target, local.slot).proven(evaluated(CoreRepresentations.expression(expr), false))
+                return new Delay(fn.target, local.slot, scope.layout.referenceSlot(local.slot)).proven(evaluated(CoreRepresentations.expression(expr), false))
                     .located(sources.expression(expr, lowering().source));
             }
         }
@@ -1396,7 +1424,7 @@ public final class Program implements ExecutableProgram {
             CoreRepresentations.requireJoinArgument(target.getProofs()[i], nodes[i].getRepresentation());
             // The returning argument may be larger than any one nested case arm.
             // Keep argument preparation and the actual local jump in this region.
-            if (sameFrameCandidate(args.get(i), scope)) nodes[i] = new AstSameFrameArm(nodes[i]);
+            if (!scope.joins.isEmpty() && returningSideCandidate(args.get(i), scope)) nodes[i] = new AstSameFrameArm(nodes[i]);
         }
         if (nodes.length == 1 && target.getProofs()[0].isEvaluatedReference()) {
             // A completed unary operand can be installed directly. There are
@@ -1507,7 +1535,8 @@ public final class Program implements ExecutableProgram {
             bodies.add(withSource(sources.binding(definition.getBinding(), lowering().source), () -> {
                 Expr node = compile(definition.getBody(), bodyScope, tail);
                 node.setRepresentation(node.getRepresentation().refine(evaluated(definition.getResult(), false)));
-                return node;
+                // This transport adds no source event; the original body keeps its probes.
+                return returningSideCandidate(definition.getBody(), bodyScope) ? new AstSameFrameArm(node, false) : node;
             }));
             bodySlotLimit = Math.max(bodySlotLimit, local.layout.nextSlot());
         }
@@ -1562,7 +1591,11 @@ public final class Program implements ExecutableProgram {
         return Primitive.arity(name) >= 0 || IndexManagedScalarAddress.operation(name) != null;
     }
     private Expr primitive(String name, Expr[] args, boolean someException) {
-        if (Primitive.arity(name) >= 0) return new Primitive(name, args);
+        if (Primitive.arity(name) >= 0) {
+            for (int i = 0; i < args.length; i++)
+                if (args[i] instanceof Evaluate demand) args[i] = demand.requiredLongOperand();
+            return new Primitive(name, args);
+        }
         NarrowScalarOp narrow = NarrowScalarOp.named(name);
         if (narrow != null) return new NarrowScalarExpression(name, narrow, args);
         Expr floating = FloatingPrimitives.floatingPrimitive(name, args);
@@ -1868,7 +1901,8 @@ public final class Program implements ExecutableProgram {
                         if (meta == null || !Boolean.FALSE.equals(meta.get("lifted"))) throw new UnsupportedCore("Vector constructor binder must be unlifted");
                         int[] lanes = {child.layout.bind(id + " constructor vector", FrameSlotKind.Object)};
                         vectorFields[physical] = lanes;
-                        slots.add(child.bindTuple(id, proof, lanes).slot);
+                        child.bindTuple(id, proof, lanes);
+                        slots.add(lanes[0]);
                     } else slots.add(child.bind(id, layout != null && layout.isLong(physical), proof,
                         false, null, null, FrameLayout.carrierKind(proof)).slot);
                 }
@@ -2808,7 +2842,8 @@ public final class Program implements ExecutableProgram {
                 return new AstOperands(prepared, temporaries,
                     new ScalarTupleTailCall(self, callee, arguments, shape, codeMetrics()));
             }
-            return new TupleApplication((thc.Language) language, shape, function, nodes, tail, codeMetrics(), vectorSlots);
+            return new TupleApplication((thc.Language) language, shape, function, nodes, tail, codeMetrics(), vectorSlots,
+                expr == scope.releasingTupleCall ? scope.releasedFormals : new int[0]);
         }
         AstSelfLayout self = scope.self;
         boolean emptyTuple = false;

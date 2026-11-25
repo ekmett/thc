@@ -16,6 +16,8 @@ public final class TupleDispatch extends Node {
     private final Metrics metrics;
     private final int argsSize;
     private final boolean tail;
+    @CompilationFinal private boolean ownsArgumentScratch;
+    TupleDispatch ownAstArgumentScratch() { ownsArgumentScratch = true; return this; }
     private final ArgumentLayout inputLayout;
     @Children private volatile DirectTupleCaller[] direct = new DirectTupleCaller[0];
     @Child private GenericTupleCaller generic;
@@ -61,7 +63,7 @@ public final class TupleDispatch extends Node {
                 for (DirectTupleCaller existing : direct) if (existing.matches(function)) return existing;
                 if (megamorphic) return null;
                 if (direct.length < 3) {
-                    DirectTupleCaller added = insert(new DirectTupleCaller(destination, metrics, argsSize, tail, function, inputLayout));
+                    DirectTupleCaller added = insert(new DirectTupleCaller(destination, metrics, argsSize, tail, function, inputLayout, ownsArgumentScratch));
                     DirectTupleCaller[] updated = Arrays.copyOf(direct, direct.length + 1);
                     updated[direct.length] = added;
                     direct = updated;

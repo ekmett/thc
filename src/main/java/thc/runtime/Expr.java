@@ -20,6 +20,7 @@ import com.oracle.truffle.api.source.SourceSection;
 public abstract class Expr extends Node implements InstrumentableNode {
     @Override public boolean isInstrumentable() { return coreSourceLocation != null && getSourceSection() != null; }
     @Override public WrapperNode createWrapper(ProbeNode probe) {
+        if (getRootNode() instanceof FunctionRoot root) root.preserveObservedArguments();
         var wrapper = new ExprWrapper(this, probe);
         wrapper.setRepresentation(representation);
         wrapper.setCoreSourceLocation(coreSourceLocation);

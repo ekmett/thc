@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import static thc.runtime.RuntimeFault.fault;
@@ -14,11 +15,15 @@ final class SelfRepeater extends Node implements RepeatingNode {
     private Metrics invocationMetrics(VirtualFrame frame) {
         return metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
     }
-    Object once(VirtualFrame frame) {
+    Object once(VirtualFrame frame) { return once(frame, false); }
+    private Object once(VirtualFrame frame, boolean directTransfer) {
         if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");
         root.forceEntry(frame);
         root.pollBeforeBody(this);
         HandoffEntry entry = root.getHandoff();
+        if (directTransfer && CompilerDirectives.inInterpreter() && body.allowsDirectSelfTransfer() &&
+            (entry == null || entry.destination(frame) < 0))
+            return body.executeInterpretedSelf(frame);
         // The ordinary route already demands these exact primitive results.
         // Evaluate once before selecting the caller's result transport.
         if (entry != null && entry.getResultInt() && body.ordinaryIntResult()) {
@@ -37,7 +42,13 @@ final class SelfRepeater extends Node implements RepeatingNode {
     }
     @Override public boolean executeRepeating(VirtualFrame frame) { throw new IllegalStateException("value loop"); }
     @Override public Object executeRepeatingWithValue(VirtualFrame frame) {
-        try { return once(frame); }
+        try {
+            Object result = once(frame, true);
+            if (!CompilerDirectives.inInterpreter() || result != AstSelfCall.INSTANCE) return result;
+            Metrics invocation = invocationMetrics(frame);
+            if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
+            return CONTINUE_LOOP_STATUS;
+        }
         catch (AstSelfCall ignored) {
             Metrics invocation = invocationMetrics(frame);
             if (invocation.getEnabled()) invocation.incrementSelfTailReentries();

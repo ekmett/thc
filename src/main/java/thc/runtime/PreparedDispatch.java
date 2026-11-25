@@ -47,6 +47,8 @@ public final class PreparedDispatch extends Node {
         typed = new GenericInputCall(new ScalarArrayInputSource(layout), count, tail, metrics, null, 0, true);
     }
 
+    void ownAstArgumentScratch() { adaptive.ownsArgumentScratch = true; }
+
     public Object execute(VirtualFrame frame, Closure function, Object[] arguments) {
         boolean cold = metrics == null || !observed && CompilerDirectives.inCompiledCode();
         // Overapplication owns a live suffix even when an earlier exact call has

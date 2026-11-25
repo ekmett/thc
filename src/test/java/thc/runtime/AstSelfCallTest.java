@@ -16,6 +16,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrumentation.EventContext;
+import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import org.graalvm.polyglot.Context;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
@@ -113,6 +119,193 @@ class AstSelfCallTest {
                         assertSame(second, FrameAccess.read(frame, slots[1]));
                     }
                 }
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void directInterpretedFunctionAndOperandCutsResumeWithoutReplayOrControlTokens() throws Exception {
+        for (String stage : List.of("function", "operand")) {
+            var loop = lambda(List.of("remaining"), choose(variable("remaining"), integer(42),
+                apply(variable("loop"), primitive("-#", variable("remaining"), integer(1)))));
+            withProgram(List.of(binding("loop", loop)), p -> {
+                Closure function = (Closure) p.entryValue("loop");
+                var root = (FunctionRoot) function.target.getRootNode();
+                var tail = NodeUtil.findFirstNodeInstance(root, AstTailApplication.class);
+                Expr child;
+                if (stage.equals("function")) {
+                    var evaluate = NodeUtil.findFirstNodeInstance(tail, Evaluate.class);
+                    child = (Expr) evaluate.getChildren().iterator().next();
+                } else child = NodeUtil.findFirstNodeInstance(tail, Primitive.class);
+                class CutSecond extends Expr {
+                    @Child private Expr delegate;
+                    int entries;
+                    MaterializedFrame saved;
+                    CutSecond(Expr delegate) { this.delegate = delegate; setRepresentation(delegate.getRepresentation()); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        entries++;
+                        if (entries == 2) {
+                            saved = frame.materialize();
+                            throw new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this));
+                        }
+                        return delegate.execute(frame);
+                    }
+                }
+                var cut = new CutSecond(child); child.replace(cut);
+                long reentries = count(p, "selfTailReentries");
+                var saved = assertInstanceOf(AstContinuation.class, Calls.target(function.target, new Object[]{0L, 2L}));
+                assertEquals(2, cut.entries); assertSame(root, saved.getSourceRoot());
+                Object input = stage.equals("function") ? function : 0L;
+                assertEquals(42L, saved.continueWith(input)); assertEquals(2, cut.entries);
+                assertEquals(reentries + 2, count(p, "selfTailReentries"));
+                for (int slot = 0; slot < root.getFrameDescriptor().getNumberOfSlots(); slot++)
+                    if (String.valueOf(root.getFrameDescriptor().getSlotName(slot)).startsWith("<self argument "))
+                        assertEquals(FrameSlotKind.Illegal.tag, cut.saved.getTag(slot));
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(input));
+            });
+        }
+    }
+
+    @Test void activeSelfLoopDelimitedImageResumesTwiceWithIndependentPendingArguments() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var proof = CoreRepresentations.parse(longRep);
+                var slots = new FrameLayout();
+                int remaining = slots.bind("remaining"), accumulated = slots.bind("total");
+                int[] scratch = {slots.bind("next remaining"), slots.bind("next total")};
+                int seen = slots.bind("seen");
+                var metrics = new Metrics(true);
+                class CutSecond extends Expr {
+                    @Child private Expr delegate = new Primitive("-#", new Expr[]{
+                        new LocalRead(remaining, false).proven(proof), new Literal(1L)});
+                    int entries;
+                    MaterializedFrame original;
+                    CutSecond() { setRepresentation(proof); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        entries++;
+                        if (entries == 2) {
+                            original = frame.materialize();
+                            throw new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                                SynchronousMasking.current(this), this);
+                        }
+                        return delegate.execute(frame);
+                    }
+                }
+                var capture = new CutSecond();
+                Closure[] function = {null};
+                Expr callee = new Expr() {
+                    { setRepresentation(CoreRepresentations.parse(closure)); }
+                    @Override public Object execute(VirtualFrame frame) { return function[0]; }
+                };
+                var layout = new AstSelfLayout(null, new int[0], new int[]{remaining, accumulated},
+                    new CoreRepresentation[]{proof, proof}, new boolean[]{false, false});
+                var tail = new AstTailApplication(callee, new Expr[]{capture,
+                    new Primitive("+#", new Expr[]{new LocalRead(accumulated, false).proven(proof), new Literal(1L)})},
+                    layout, scratch, metrics);
+                var body = new Case(new LocalRead(remaining, false).proven(proof), seen, new Alternative[]{
+                    new Alternative(Alternative.LITERAL_ALTERNATIVE, 0L, new int[0], new LocalRead(accumulated, false).proven(proof)),
+                    new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], tail)}, metrics, proof, true);
+                var root = new FunctionRoot(language, slots.build(), "active delimited self loop", null,
+                    new int[0], new int[]{remaining, accumulated}, new int[]{0, 1}, body, metrics,
+                    new CoreRepresentation[]{proof, proof}, proof, null, new boolean[]{false, false},
+                    null, null, new int[0], null, true, new int[0][], true, FunctionRootRole.FUNCTION, false);
+                root.configureEagerAsyncPolls(false);
+                function[0] = new Closure(null, 2, root.getCallTarget());
+                var cut = assertThrows(DelimitedCut.class,
+                    () -> Calls.target(root.getCallTarget(), new Object[]{0L, 3L, 0L}));
+                assertEquals(2, capture.entries);
+                assertEquals(1L, metrics.getSelfTailReentries(), "The cold transfer establishes the loop before capture");
+                assertEquals(2L, FrameAccess.read(capture.original, remaining));
+                assertEquals(1L, FrameAccess.read(capture.original, accumulated));
+                var copies = new ArrayList<MaterializedFrame>();
+                cut.append(capture.original, (saved, input, ambient, outer) -> {
+                    Object answer = input.get(); copies.add(saved);
+                    for (int slot : scratch)
+                        assertEquals(FrameSlotKind.Illegal.tag, saved.getTag(slot));
+                    return answer;
+                });
+                var image = new DelimitedStack(cut, null);
+                class Owner extends GuestRoot {
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    long value;
+                    Owner() { super(language, new FrameLayout().build()); }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) { return value; }
+                    Object resume(long input) {
+                        value = input;
+                        return image.resume(site, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor()),
+                            new Closure(null, 1, getCallTarget()));
+                    }
+                }
+                var owner = new Owner(); owner.getCallTarget();
+                assertEquals(2L, owner.resume(0L));
+                assertEquals(3L, owner.resume(1L), "The same image must restart with original pending total=1");
+                assertEquals(3, capture.entries, "Only the extra resumed lap evaluates the captured operand again");
+                assertEquals(4L, metrics.getSelfTailReentries());
+                assertEquals(2, copies.size()); assertNotSame(copies.get(0), copies.get(1));
+                for (var copy : copies) assertNotSame(capture.original, copy);
+                assertEquals(2L, FrameAccess.read(capture.original, remaining));
+                assertEquals(1L, FrameAccess.read(capture.original, accumulated));
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void selectedNonselfPartialApplicationStillChecksTheFunctionResult() throws Exception {
+        var parameters = list(map("id", "next", "name", "next", "lifted", true, "rep", closure), parameter("remaining"));
+        var worker = list("lam", parameters, choose(variable("remaining"), integer(42), apply(variable("next"), integer(1))),
+            map("rep", closure, "resultRep", longRep));
+        withProgram(List.of(binding("worker", worker), binding("other", lambda(List.of("a", "b"), variable("a")))), p -> {
+            var failure = assertThrows(RuntimeFault.class, () -> call(p, p.entryValue("worker"), p.entryValue("other"), 1L));
+            assertEquals("Expected primitive Long", failure.getMessage());
+        });
+    }
+
+    @Test void interpretedSelectedSelfTransferKeepsAttachedTailEvents() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var decrement = new ArrayList<>(primitive("-#", variable("remaining"), integer(1)));
+                decrement.add(false); decrement.add(false);
+                decrement.add(map("source", "tail", "sourceNotes", list("tail")));
+                var tail = apply(variable("loop"), decrement);
+                var module = map("sourceNotesEnabled", true, "instrument", true,
+                    "sourceFiles", list(map("id", "Loop.hs", "path", "Loop.hs", "content", "loop n = loop (n-1)\n")),
+                    "sourceSpans", list(map("id", "tail", "file", "Loop.hs", "startLine", 1, "startColumn", 10,
+                        "endLine", 1, "endColumn", 20, "charIndex", 9, "charLength", 10, "label", "tail")),
+                    "bindings", list(binding("loop", lambda(List.of("remaining"),
+                        choose(variable("remaining"), integer(42), tail)))));
+                var program = new Program(language, module);
+                var root = program.entryTarget("loop").getRootNode();
+                var call = NodeUtil.findFirstNodeInstance(root, AstTailApplication.class);
+                assertNotNull(call);
+                class TailWrapper extends Expr {
+                    @Child private AstTailApplication delegate;
+                    int entries;
+                    TailWrapper(AstTailApplication delegate) { this.delegate = delegate; setRepresentation(delegate.getRepresentation()); }
+                    @Override public Object execute(VirtualFrame frame) { entries++; return delegate.execute(frame); }
+                }
+                var wrapper = new TailWrapper(call); call.replace(wrapper);
+                var sourced = NodeUtil.findAllNodeInstances(root, Primitive.class).stream()
+                    .filter(node -> node.getCoreSourceLocation() != null).findFirst().orElseThrow();
+                var source = sourced.getSourceSection().getSource();
+                var attachment = context.getEngine().getInstruments().get("thc-activation-test").lookup(AstInstrumentationTest.Attachment.class);
+                int[] entered = {0};
+                var binding = attachment.attachStatements(source, new ExecutionEventListener() {
+                    @Override public void onEnter(EventContext event, VirtualFrame frame) {
+                        if (event.getInstrumentedNode() instanceof Primitive) entered[0]++;
+                    }
+                    @Override public void onReturnValue(EventContext event, VirtualFrame frame, Object value) {}
+                    @Override public void onReturnExceptional(EventContext event, VirtualFrame frame, Throwable failure) {}
+                });
+                try {
+                    assertEquals(42L, call(program, program.entryValue("loop"), 3L));
+                    assertEquals(3, entered[0]); assertEquals(3, wrapper.entries);
+                } finally { binding.dispose(); }
             } finally { context.leave(); }
         }
     }

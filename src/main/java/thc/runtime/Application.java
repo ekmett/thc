@@ -25,6 +25,7 @@ final class Application extends Expr {
         }
         inputLayout = ArgumentLayout.fromProofs(proofs);
         dispatch = new PreparedDispatch(arguments.length, tail, metrics, evaluated, inputLayout);
+        dispatch.ownAstArgumentScratch();
     }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
         Closure fn;

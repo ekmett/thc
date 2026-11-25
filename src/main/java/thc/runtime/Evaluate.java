@@ -21,6 +21,11 @@ public final class Evaluate extends Expr {
             proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
         setCoreSourceLocation(value.getCoreSourceLocation());
     }
+    /** A required Long consumer owns the same typed failure and both cut protocols. */
+    Expr requiredLongOperand() {
+        CoreRepresentation proof = value.getRepresentation();
+        return proof.getEvaluated() && proof.isLong() && getCoreSourceLocation() == value.getCoreSourceLocation() ? value : this;
+    }
     @Override public void prepareTuple(int[] slots, int offset) { value.prepareTuple(slots, offset); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         return value.executeTuple(frame, slots, offset);

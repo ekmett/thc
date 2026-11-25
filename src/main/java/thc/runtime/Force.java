@@ -760,8 +760,7 @@ public final class Force extends Node {
         boolean previous = safepoint.setAllowSideEffects(false);
         try {
             synchronized (thunk.getMonitor()) {
-                PendingWait pending = continuation instanceof AstContinuation ast && ast.hasWaitFreeSpillPath()
-                    ? null : PendingWait.of(continuation);
+                PendingWait pending = PendingWait.of(continuation);
                 if (pending != null) pending.retainUpdate(thunk, continuation.getIdentity());
                 thunk.setValue(continuation.getIdentity()); thunk.setTarget(null); thunk.setEnvironment(null);
                 thunk.setOwner(null); thunk.setState(5); thunk.notifyUpdate();

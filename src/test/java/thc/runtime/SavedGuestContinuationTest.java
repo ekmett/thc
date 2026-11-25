@@ -679,6 +679,42 @@ class SavedGuestContinuationTest {
             probe.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, enabled, new int[0][], false,
             FunctionRootRole.FUNCTION, false);
     }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void bytecodeDelimitedCompletionChecksOwnershipBeforeSavingItsSuffix(boolean tail) {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var probe = new CompletionProbe(); var owner = root(language, probe, true); owner.getCallTarget();
+                var cut = new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                    MaskingState.UNMASKED, probe);
+                var bytecode = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                    b.beginRoot();
+                    b.beginYield(); b.beginRecordContinuationOwner(); b.emitLoadConstant(cut);
+                    b.endRecordContinuationOwner(); b.endYield();
+                    b.beginReturn(); b.emitLoadConstant(23L); b.endReturn(); b.endRoot();
+                }).getNode(0);
+                var target = bytecode.getCallTarget();
+                var saved = (ContinuationResult) Calls.target(target, new Object[]{0L});
+                assertThrows(RuntimeFault.class, () -> probe.complete(saved, owner.getCallTarget()));
+                var scalar = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
+                var shape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, true, true, List.of("IntRep"),
+                    List.of(scalar), null, null, null, null), language);
+                Object result = tail ? new TailYield(saved, target) : saved;
+                assertThrows(RuntimeFault.class, () -> probe.complete(result, target, shape));
+                assertThrows(RuntimeFault.class, () -> probe.complete(new Saved(owner, new Object(), input -> null)));
+                assertTrue(cut.getFrames().isEmpty(), "Rejected completion must not append or resume the suffix");
+                assertSame(cut, assertThrows(DelimitedCut.class, () -> probe.complete(result, target)));
+                assertEquals(1, cut.getFrames().size());
+                var suffix = cut.getFrames().getFirst();
+                assertSame(saved.getFrame(), suffix.getFrame());
+                assertInstanceOf(DelimitedBytecodeStep.class, suffix.getStep());
+                for (int i = 0; i < 2; i++)
+                    assertEquals(23L, suffix.getStep().resume(DelimitedContinuations.copyContinuationFrame(suffix.getFrame()),
+                        new DelimitedResume(Unit.INSTANCE), MaskingState.UNMASKED, null));
+            } finally { context.leave(); }
+        }
+    }
     @Test void ordinaryCompletionKeepsItsFirstInstalledIdentityAndColdProofChecks() throws Exception {
         try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();
@@ -793,9 +829,12 @@ class SavedGuestContinuationTest {
                     public boolean ready() { return false; }
                     public GuestThreadStatus status() { return GuestThreadStatus.MVAR; }
                 }, threads.pollState(Thread.currentThread()).getCurrent(), MaskingState.UNMASKED, owner);
+                var wrapper = new Saved(owner, owner.returned, input -> fail("Inspection resumed the outer continuation"));
+                assertNull(PendingWait.of(wrapper));
                 var replacement = new Saved(owner, wait, input -> fail("Waiter resumed during publication"));
                 if (replaceThunk) shared.setValue(replacement);
                 else segment.setValue(replacement);
+                assertSame(wait, PendingWait.of(wrapper), "A replaced dependency invalidates the nested spill path");
                 var parent = new Thunk(owner.getCallTarget(), null);
                 assertThrows(ThunkSuspended.class, () -> new Driver(language).force(parent));
                 assertEquals(5, parent.getState());

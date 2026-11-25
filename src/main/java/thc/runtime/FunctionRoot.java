@@ -58,6 +58,13 @@ public final class FunctionRoot extends GuestRoot {
         catch (RuntimeException | Error failure) { throw failure; }
         catch (Throwable impossible) { throw CompilerDirectives.shouldNotReachHere(impossible); }
     }
+    // Only an exact, non-tail AST application with fresh private transport can issue this header.
+    static final Object OWNED_ZERO_BLOOM = new Object();
+    @CompilationFinal private boolean consumesOrdinaryArguments;
+    private volatile boolean observedArguments;
+    void preserveObservedArguments() { observedArguments = true; }
+    void enableOwnedOrdinaryArguments() { consumesOrdinaryArguments = true; }
+    boolean consumesOrdinaryArguments() { return consumesOrdinaryArguments && getTypedInput() == null; }
     private final String label;
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] environmentSlots;
@@ -681,11 +688,16 @@ public final class FunctionRoot extends GuestRoot {
             state.setPending(null);
             restoreHandoff(frame, input, true, state);
         } else {
+            Object[] arguments = frame.getArguments();
+            boolean owned = consumesOrdinaryArguments && arguments.length != 0 && arguments[0] == OWNED_ZERO_BLOOM;
+            if (owned) arguments[0] = 0L;
             if (entry != null) entry.initializeOrdinary(frame);
             // Delimited roots retain ancestry eagerly for their independently saved frames.
             deferredBloom = !needsCallState && !enableDelimited;
             if (!deferredBloom) initializeBloom(frame);
-            buildFrame(frame.getArguments(), frame);
+            buildFrame(arguments, frame);
+            // Saved guest frames own their live slots. The private packet was only ingress transport.
+            if (owned && !observedArguments) Arrays.fill(arguments, captureLayout == null ? 1 : 2, arguments.length, null);
         }
         if (metrics == null) {
             // Cached-code launchers fail closed on interpreter fallback. The check folds
@@ -791,6 +803,14 @@ public final class FunctionRoot extends GuestRoot {
             }
         }
         if (hasSelfTail) return loop.execute(frame);
+        try { return firstBody(frame); }
+        catch (AstSelfCall ignored) {
+            // The payload-bearing transfer handler has unwound. Only this
+            // payload-free singleton remains live while the loop executes.
+        }
+        return loop.execute(frame);
+    }
+    private Object firstBody(VirtualFrame frame) {
         if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function self-loop node");
         try { return repeating.once(frame); }
         catch (AstSelfCall ignored) {
@@ -798,7 +818,6 @@ public final class FunctionRoot extends GuestRoot {
             if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
-            return loop.execute(frame);
         } catch (HandoffTailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
@@ -806,7 +825,6 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreHandoff(frame, tail.getArguments(), false, null);
-            return loop.execute(frame);
         } catch (TailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
@@ -814,8 +832,8 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreTail(frame, tail);
-            return loop.execute(frame);
         }
+        throw AstSelfCall.INSTANCE;
     }
     @Override public SourceSection getSourceSection() { return coreSourceLocation == null ? null : coreSourceLocation.getSection(); }
     public List<CoreSourceNote> getCoreSourceNotes() { return coreSourceLocation == null ? List.of() : coreSourceLocation.getNotes(); }

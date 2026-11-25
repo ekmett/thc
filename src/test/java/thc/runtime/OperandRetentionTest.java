@@ -42,6 +42,10 @@ class OperandRetentionTest {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var program = new Program(language, module, true, false);
                     var target = program.entryTarget("entry");
+                    var primitive = com.oracle.truffle.api.nodes.NodeUtil.findAllNodeInstances(
+                        target.getRootNode(), Primitive.class).getFirst();
+                    for (var operand : primitive.getChildren())
+                        assertFalse(operand instanceof Evaluate, name);
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), name);
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
@@ -327,6 +331,129 @@ class OperandRetentionTest {
                 assertEquals(List.of("address", "element"), order);
                 assertThrows(RuntimeFault.class, () -> wrong.continueWith(0L));
             } finally { context.leave(); }
+        }
+    }
+    private static Map<String,Object> entryTupleModule(boolean live) {
+        var word = Map.of("kind", "long", "evaluated", true, "primReps", List.of("IntRep"));
+        var ref = Map.of("kind", "object", "evaluated", true, "primReps", List.of("BoxedRep (Just Lifted)"));
+        var closure = Map.of("kind", "closure", "evaluated", true, "primReps", List.of("BoxedRep (Just Lifted)"));
+        var tuple = Map.of("kind", "unknown", "evaluated", true, "aggregate", "unboxed-tuple",
+                "primReps", List.of("IntRep"), "components", List.of(word));
+        var literal = List.of("lit", "int", "42", Map.of("rep", word));
+        var reference = List.of("var", "input", Map.of("rep", ref, "source", "operand"));
+        var producer = List.of("app", List.of("con", "T", 1), List.of(literal), List.of(false), false, false, Map.of("rep", tuple));
+        var call = List.of("app", List.of("var", "worker", Map.of("rep", closure)),
+                List.of(reference, reference, reference), List.of(true, true, true), false, false, Map.of("rep", tuple));
+        Object continuation = literal;
+        if (live) {
+            var demand = List.of("case", reference, "used", List.of(java.util.Arrays.asList("default", null, List.of(), literal)),
+                    Map.of("rep", word, "binder", Map.of("id", "used", "rep", ref)));
+            // The reference is live in an untaken continuation arm too.
+            continuation = List.of("case", literal, "branch", List.of(
+                    List.of("lit", List.of("int", "42"), List.of(), literal),
+                    java.util.Arrays.asList("default", null, List.of(), demand)),
+                    Map.of("rep", word, "binder", Map.of("id", "branch", "rep", word)));
+        }
+        var body = List.of("case", call, "result", List.of(java.util.Arrays.asList("default", null, List.of(), continuation)),
+                Map.of("rep", word, "binder", Map.of("id", "result", "rep", tuple)));
+        var parameters = List.of("a", "b", "c").stream().map(id -> Map.of("id", id, "lifted", true, "rep", ref)).toList();
+        return Map.of("instrument", true, "sourceNotesEnabled", true,
+                "sourceFiles", List.of(Map.of("id", "file", "path", "formal-liveness.hs", "content", "input")),
+                "sourceSpans", List.of(Map.of("id", "operand", "file", "file", "startLine", 1, "startColumn", 1,
+                        "endLine", 1, "endColumn", 6, "charIndex", 0, "charLength", 5)), "constructors", List.of(Map.of("id", "T", "name", "T", "kind", "unboxed-tuple", "arity", 1)),
+                "bindings", List.of(
+                    Map.of("id", "worker", "name", "worker", "lifted", true, "rep", closure,
+                        "expr", List.of("lam", parameters, producer, Map.of("rep", closure, "resultRep", tuple))),
+                    Map.of("id", "entry", "name", "entry", "lifted", true, "rep", closure,
+                        "expr", List.of("lam", List.of(Map.of("id", "input", "lifted", true, "rep", ref)), body,
+                            Map.of("rep", closure, "resultRep", word)))));
+    }
+    @Test void entryTupleCallReleasesOnlyDeadFormalsAfterAllOperandsAndResumes() throws Exception {
+        for (boolean live : new boolean[]{false, true}) for (int mode = 0; mode < 4; mode++) {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var program = new Program(language, entryTupleModule(live), true);
+                    var entry = program.entryTarget("entry");
+                    var application = com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(entry.getRootNode(), TupleApplication.class);
+                    var field = TupleApplication.class.getDeclaredField("arguments"); field.setAccessible(true);
+                    var arguments = (Expr[]) field.get(application);
+                    var originalArguments = arguments.clone();
+                    assertNotNull(originalArguments[0].getSourceSection());
+                    int slot = -1;
+                    var descriptor = entry.getRootNode().getFrameDescriptor();
+                    for (int i = 0; i < descriptor.getNumberOfSlots(); i++) if ("input".equals(descriptor.getSlotName(i))) slot = i;
+                    assertTrue(slot >= 0); final int formal = slot, selectedMode = mode;
+                    Object marker = new String("retained reference"); var entered = new int[1]; var reads = new int[1];
+                    var current = new com.oracle.truffle.api.frame.MaterializedFrame[1];
+                    var failure = new RuntimeFault("pending operand");
+                    for (int i = 0; i < arguments.length; i++) {
+                        final int index = i; Expr original = arguments[i];
+                        var observed = new Expr() {
+                            @Child private Expr read = original;
+                            @Override public Object execute(VirtualFrame frame) {
+                                current[0] = frame.materialize(); reads[0]++;
+                                assertSame(marker, FrameAccess.read(frame, formal), "no clearing before the last operand");
+                                if (index == 1 && selectedMode == 1) throw new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED);
+                                if (index == 1 && selectedMode == 2) throw failure;
+                                if (index == 1 && selectedMode == 3) throw new DelimitedCut(new PromptTag(Language.currentState()),
+                                        Unit.INSTANCE, null, MaskingState.UNMASKED, this);
+                                return read.execute(frame);
+                            }
+                        }.proven(original.getRepresentation());
+                        original.replace(observed);
+                    }
+                    var produced = com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(program.entryTarget("worker").getRootNode(), TupleConstruct.class);
+                    var observedWorker = new Expr() {
+                        @Child private Expr original = produced;
+                        @Override public void prepareTuple(int[] slots, int offset) { original.prepareTuple(slots, offset); }
+                        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("typed worker"); }
+                        @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+                            entered[0]++;
+                            if (live) assertSame(marker, FrameAccess.read(current[0], formal));
+                            else try { assertCleared(current[0], new int[]{formal}); } catch (Exception error) { throw new AssertionError(error); }
+                            for (int i = 1; i <= 3; i++) assertSame(marker, frame.getArguments()[i]);
+                            return original.executeTuple(frame, slots, offset);
+                        }
+                    }.proven(produced.getRepresentation());
+                    produced.replace(observedWorker);
+                    int[] sourceEvents = new int[2];
+                    var attachment = context.getEngine().getInstruments().get("thc-activation-test").lookup(AstInstrumentationTest.Attachment.class);
+                    var probe = attachment.attachStatements(originalArguments[0].getSourceSection().getSource(), new ExecutionEventListener() {
+                        @Override public void onEnter(EventContext event, VirtualFrame frame) {
+                            if (event.getInstrumentedNode() == originalArguments[0]) sourceEvents[0]++;
+                            if (event.getInstrumentedNode() == originalArguments[2]) sourceEvents[1]++;
+                        }
+                        @Override public void onReturnValue(EventContext event, VirtualFrame frame, Object value) {}
+                        @Override public void onReturnExceptional(EventContext event, VirtualFrame frame, Throwable failure) {}
+                    });
+                    if (mode == 3) {
+                        var cut = assertThrows(DelimitedCut.class, () -> Calls.target(entry, new Object[]{0L, marker}));
+                        var pending = cut.getFrames().getFirst();
+                        assertSame(marker, FrameAccess.read(pending.getFrame(), formal));
+                        for (int invocation = 0; invocation < 2; invocation++) {
+                            var copy = DelimitedContinuations.copyContinuationFrame(pending.getFrame());
+                            assertNull(pending.getStep().resume(copy, new DelimitedResume(marker), MaskingState.UNMASKED, null));
+                            assertSame(marker, FrameAccess.read(pending.getFrame(), formal), "the multi-shot image remains live");
+                        }
+                        assertEquals(2, entered[0]); assertEquals(4, reads[0]);
+                    } else if (mode == 2) {
+                        assertSame(failure, assertThrows(RuntimeFault.class, () -> Calls.target(entry, new Object[]{0L, marker})));
+                        assertSame(marker, FrameAccess.read(current[0], formal)); assertEquals(0, entered[0]);
+                    } else {
+                        Object result = Calls.target(entry, new Object[]{0L, marker});
+                        if (mode == 1) {
+                            assertSame(marker, FrameAccess.read(current[0], formal)); assertEquals(0, entered[0]);
+                            result = assertInstanceOf(AstContinuation.class, result).continueWith(marker);
+                        }
+                        assertEquals(42L, result); assertEquals(1, entered[0]); assertEquals(3, reads[0]);
+                    }
+                    assertEquals(1, sourceEvents[0], "completed prefix source is never replayed");
+                    assertEquals(mode == 2 ? 0 : mode == 3 ? 2 : 1, sourceEvents[1]);
+                    probe.dispose();
+                } finally { context.leave(); }
+            }
         }
     }
     private static VirtualFrame frame(int slots) {

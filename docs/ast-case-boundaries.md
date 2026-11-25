@@ -128,6 +128,22 @@ when it can reduce the body. Existing body executions and parked continuations
 keep their frame, program counter and lexical cleanup. See the
 [stock-runtime workflow](contributing.md) for eligibility and limitations.
 
+Returning local-join bodies also retain a same-frame extraction boundary when
+lowering proves they do not reference an enclosing lexical join. Recursive
+backedges remain in their original loop. These boundaries stay inline until a
+real budget failure selects them; their typed side entries borrow the original
+activation and preserve the original body nodes and source probes. The added
+transport itself is not instrumentable and introduces no source event. A small
+returning body can compile independently even when its enclosing sides remain
+retired; this does not establish compilation of the whole owning function.
+
+Compiler-owned operand slots allocated as Object retain that storage contract
+across activations and saved writes. Their writers use the existing required
+child demand, then store the identical reference directly. Unary argument
+thunks can likewise read a captured slot directly when its allocation proves
+Object storage. Unknown or primitive slots retain the ordinary tag and widening
+checks; a storage proof does not evaluate a thunk or certify its result.
+
 On non-tail entry, a direct caller can adopt a compatible published recovery
 target before constructing a frame for the retired target. While publication is
 pending, the caller enters its current target and allows normal fresh-entry
