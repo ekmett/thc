@@ -791,9 +791,15 @@ public final class FunctionRoot extends GuestRoot {
             }
         }
         if (hasSelfTail) return loop.execute(frame);
+        try { return firstBody(frame); }
+        catch (AstSelfCall ignored) {
+            // The payload-bearing transfer handler has unwound. Only this
+            // payload-free singleton remains live while the loop executes.
+        }
+        return loop.execute(frame);
+    }
+    private Object firstBody(VirtualFrame frame) {
         if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function self-loop node");
-        // Ordinary results return directly. Enter the long-running loop only
-        // after leaving the first transfer's catch scope and its argument packet.
         try { return repeating.once(frame); }
         catch (AstSelfCall ignored) {
             tailCallProfile.enter();
@@ -815,7 +821,7 @@ public final class FunctionRoot extends GuestRoot {
             hasSelfTail = true;
             restoreTail(frame, tail);
         }
-        return loop.execute(frame);
+        throw AstSelfCall.INSTANCE;
     }
     @Override public SourceSection getSourceSection() { return coreSourceLocation == null ? null : coreSourceLocation.getSection(); }
     public List<CoreSourceNote> getCoreSourceNotes() { return coreSourceLocation == null ? List.of() : coreSourceLocation.getNotes(); }
