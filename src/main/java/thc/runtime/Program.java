@@ -523,6 +523,7 @@ public final class Program implements ExecutableProgram {
         final Map<String, Local> locals;
         final Map<String, LocalJoinTarget> joins;
         Set<Integer> joinCaptureSlots = Set.of();
+        LocalJoinTarget joinBodyTarget;
         AstSelfLayout self;
         List<Object> releasingTupleCall;
         int[] releasedFormals;
@@ -543,6 +544,7 @@ public final class Program implements ExecutableProgram {
             Scope child = new Scope(layout.scope(), new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), self,
                 deferredExpression, deferredArms).withProgramSlot(programSlot);
             child.joinCaptureSlots = joinCaptureSlots;
+            child.joinBodyTarget = joinBodyTarget;
             return child;
         }
         Scope withProgramSlot(int slot) { programSlot = slot; return this; }
@@ -1445,26 +1447,36 @@ public final class Program implements ExecutableProgram {
             // Keep argument preparation and the actual local jump in this region.
             if (!scope.joins.isEmpty() && returningSideCandidate(args.get(i), scope)) nodes[i] = new AstSameFrameArm(nodes[i]);
         }
+        LocalJoinCall call;
         if (nodes.length == 1 && target.getProofs()[0].isEvaluatedReference()) {
             // A completed unary operand can be installed directly. There are
             // no later arguments that need to see the previous formal.
-            return LocalJoinCall.unaryReference((thc.Language) language, target, nodes, codeMetrics());
-        }
-        int[][] typedTemps = new int[nodes.length][];
-        int[] temps = new int[nodes.length];
-        for (int i = 0; i < nodes.length; i++) {
-            if (target.getProofs()[i].isTypedTransport()) {
-                typedTemps[i] = new int[ArgumentLayout.leaves(target.getProofs()[i]).size()];
-                for (int j = 0; j < typedTemps[i].length; j++) typedTemps[i][j] = scope.layout.bind("<join typed argument " + i + " field " + j + ">", FrameLayout.carrierKind(ArgumentLayout.leaves(target.getProofs()[i]).get(j)));
-                temps[i] = -1;
-            } else {
-                CoreRepresentation proof = target.getProofs()[i];
-                FrameSlotKind scalar = joinScalarCarrier(proof);
-                temps[i] = scope.layout.bind("<join argument " + i + ">", scalar != null ? scalar :
-                    reusableCode ? FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal);
+            call = LocalJoinCall.unaryReference((thc.Language) language, target, nodes, codeMetrics());
+        } else {
+            int[][] typedTemps = new int[nodes.length][];
+            int[] temps = new int[nodes.length];
+            for (int i = 0; i < nodes.length; i++) {
+                if (target.getProofs()[i].isTypedTransport()) {
+                    typedTemps[i] = new int[ArgumentLayout.leaves(target.getProofs()[i]).size()];
+                    for (int j = 0; j < typedTemps[i].length; j++) typedTemps[i][j] = scope.layout.bind("<join typed argument " + i + " field " + j + ">", FrameLayout.carrierKind(ArgumentLayout.leaves(target.getProofs()[i]).get(j)));
+                    temps[i] = -1;
+                } else {
+                    CoreRepresentation proof = target.getProofs()[i];
+                    FrameSlotKind scalar = joinScalarCarrier(proof);
+                    temps[i] = scope.layout.bind("<join argument " + i + ">", scalar != null ? scalar :
+                        reusableCode ? FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal);
+                }
             }
+            call = new LocalJoinCall((thc.Language) language, target, nodes, temps, codeMetrics(), typedTemps, !reusableCode);
         }
-        return new LocalJoinCall((thc.Language) language, target, nodes, temps, codeMetrics(), typedTemps, !reusableCode);
+        LocalJoinTarget source = scope.joinBodyTarget;
+        if (source != null && source != target && source.getGroup() == target.getGroup()) {
+            // A group's formals have disjoint slots and are bound only in
+            // their own bodies. The next body cannot read the old formals.
+            int[] dead = Arrays.stream(source.getSlots()).filter(slot -> slot >= 0 && scope.layout.referenceSlot(slot)).toArray();
+            call.releaseSlotsOnTransfer(target.getGroup(), dead);
+        }
+        return call;
     }
     private Expr compileJoins(List<Object> expr, Scope outer, boolean tail, List<CoreJoinDefinition> definitions) {
         boolean recursive = Boolean.TRUE.equals(expr.get(1));
@@ -1574,6 +1586,7 @@ public final class Program implements ExecutableProgram {
             local.layout.alternativeSlot(firstBodySlot);
             CoreJoinDefinition definition = definitions.get(i);
             Scope bodyScope = bodyScopes.get(i);
+            bodyScope.joinBodyTarget = targets.get(i);
             bodies.add(withSource(sources.binding(definition.getBinding(), lowering().source), () -> {
                 Expr node = compile(definition.getBody(), bodyScope, tail);
                 if (node instanceof Case selection) releaseJoinCaseFormal(definition, bodyScope, selection);
@@ -1630,7 +1643,7 @@ public final class Program implements ExecutableProgram {
     }
 
     private static void releaseJoinEntrySlots(Expr edge, Object group, int[] slots) {
-        if (edge instanceof LocalJoinCall jump) jump.releaseOuterSlotsOnEntry(group, slots);
+        if (edge instanceof LocalJoinCall jump) jump.releaseSlotsOnTransfer(group, slots);
         else if (edge instanceof Case selection)
             for (Alternative alternative : selection.alternatives) releaseJoinEntrySlots(alternative.getBody(), group, slots);
     }

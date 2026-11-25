@@ -18,7 +18,8 @@ On a root-tail AST join, a direct initial jump can release scalar reference
 locals unused by the group or its enclosing join bodies. Lowering tracks
 captures by physical slot across the enclosing groups. The jump clears dead
 slots after copying its arguments. A conditional entry can do this on the arms
-that jump into the group. Loop backedges carry no such release.
+that jump into the group. Transfers to a sibling in the same group release
+the source's disjoint scalar reference formals after copying its arguments.
 
 Fixture-free controls in `TupleJoinLoweringTest` and `EmptyArgumentRuntimeTest`
 cover result scratch cleanup, an aliased destination, evaluated nonempty tuple

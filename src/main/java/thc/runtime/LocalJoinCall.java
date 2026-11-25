@@ -10,7 +10,7 @@ public final class LocalJoinCall extends Expr {
     private final LocalJoinTarget target;
     @Children private Expr[] arguments;
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] destinations;
-    @CompilerDirectives.CompilationFinal(dimensions = 1) private int[] releasedOuterSlots;
+    @CompilerDirectives.CompilationFinal(dimensions = 1) private int[] releasedSlots;
     private final boolean directArgument;
     private final Metrics metrics;
     private final boolean stableScalars;
@@ -50,9 +50,9 @@ public final class LocalJoinCall extends Expr {
         }
     }
     LocalJoinJump prepareTransfer(VirtualFrame frame) { prepare(frame, 0); return transfer(frame); }
-    /** Set before adoption on initial transfers proved to leave these outer slots dead. */
-    void releaseOuterSlotsOnEntry(Object group, int[] slots) {
-        if (target.getGroup() == group) releasedOuterSlots = slots;
+    /** Set before adoption on transfers proved to leave these slots dead. */
+    void releaseSlotsOnTransfer(Object group, int[] slots) {
+        if (slots.length != 0 && target.getGroup() == group) releasedSlots = slots;
     }
     @Override public Object execute(VirtualFrame frame) { throw prepareTransfer(frame); }
     @ExplodeLoop private void prepare(VirtualFrame frame, int first) {
@@ -101,7 +101,7 @@ public final class LocalJoinCall extends Expr {
         if (!directArgument) transferStaged(frame);
         // Every argument has arrived, including after suspension.
         target.clearBodySlots(frame);
-        if (releasedOuterSlots != null) for (int slot : releasedOuterSlots) frame.clear(slot);
+        if (releasedSlots != null) for (int slot : releasedSlots) frame.clear(slot);
         Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
         if (invocation.getEnabled()) invocation.incrementLocalJoinTransfers();
         return target.getJump();

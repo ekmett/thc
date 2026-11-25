@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -525,6 +527,48 @@ class CoreProofJoinTest {
                 var target = new Program(language, map("bindings", list(entry))).entryTarget("entry");
                 var marker = new Object();
                 assertSame(marker, Calls.target(target, new Object[]{0L, marker}));
+            } finally { context.leave(); }
+        }
+    }
+    @Test void siblingJoinReleasesTheOldFormalAfterCopyingItsValue() {
+        var ref = map("kind", "object", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+        var old = list("var", "old", meta(ref));
+        var newValue = list("var", "newValue", meta(ref));
+        var oldFormal = map("id", "old", "lifted", true, "rep", ref);
+        var newFormal = map("id", "newValue", "lifted", true, "rep", ref);
+        var other = list("app", list("var", "finish", meta(closure)), list(old), list(true), false, false, meta(ref));
+        var again = list("app", list("var", "start", meta(closure)), list(old, n(0)), list(true, false), false, false, meta(ref));
+        var branch = list("case", v("depth"), "count", list(
+            list("lit", list("int", "0"), list(), other), list("default", null, list(), again)),
+            with(meta(ref), "binder", arg("count")));
+        var forceNew = list("case", newValue, "forced", list(list("default", null, list(), list("var", "forced", meta(ref)))),
+            with(meta(ref), "binder", with(newFormal, "id", "forced")));
+        var result = map("rep", closure, "resultRep", ref);
+        var start = with(bind("start", list("lam", list(oldFormal, arg("depth")), branch, result), 2), "joinResultRep", ref);
+        var finish = with(bind("finish", list("lam", list(newFormal), forceNew, result), 1), "joinResultRep", ref);
+        var first = list("app", list("var", "start", meta(closure)),
+            list(list("var", "input", meta(ref)), n(1)), list(true, false), false, false, meta(ref));
+        var body = list("let", true, list(start, finish), first, meta(ref));
+        var entry = bind("entry", list("lam", list(with(oldFormal, "id", "input")), body, result));
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var target = new Program(language, map("bindings", list(entry))).entryTarget("entry");
+                var descriptor = target.getRootNode().getFrameDescriptor();
+                int oldSlot = java.util.stream.IntStream.range(0, descriptor.getNumberOfSlots())
+                    .filter(slot -> "old".equals(descriptor.getSlotName(slot))).findFirst().orElseThrow();
+                var marker = new Object();
+                var probe = new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        var tag = Truffle.getRuntime().iterateFrames(active -> active.getCallTarget() == target
+                            ? active.getFrame(FrameInstance.FrameAccess.READ_ONLY).getTag(oldSlot) : null);
+                        assertEquals(FrameSlotKind.Illegal.tag, tag);
+                        return marker;
+                    }
+                };
+                var thunk = new Thunk(probe.getCallTarget(), null);
+                assertSame(marker, Calls.target(target, new Object[]{0L, thunk}));
             } finally { context.leave(); }
         }
     }
