@@ -35,7 +35,11 @@ public final class AstSelfLayout {
     public boolean[] getEntryStrict() { return entryStrict; }
     public ArgumentLayout getInputLayout() { return inputLayout; }
 
-    @ExplodeLoop public RuntimeException transfer(VirtualFrame frame, Closure function, int[] temporaries) {
+    public RuntimeException transfer(VirtualFrame frame, Closure function, int[] temporaries) {
+        throw prepareTransfer(frame, function, temporaries);
+    }
+
+    @ExplodeLoop AstSelfCall prepareTransfer(VirtualFrame frame, Closure function, int[] temporaries) {
         // Temporaries cannot alias lexical slots; captures cannot overwrite a pending operand.
         if (captureLayout != null) {
             CapturedFrame environment = function.environment;
@@ -80,6 +84,6 @@ public final class AstSelfLayout {
         }
         // Even unused operands must not remain retained by this activation.
         for (int source : temporaries) frame.clear(source);
-        throw AstSelfCall.INSTANCE;
+        return AstSelfCall.INSTANCE;
     }
 }

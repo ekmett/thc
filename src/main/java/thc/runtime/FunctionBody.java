@@ -44,7 +44,8 @@ final class FunctionBody extends Node {
     // accepted by internal application/demand adapters.
     boolean needsCallState() { return rawResult || value.needsCallState(); }
     /** Keep a primitive body until the mandatory Object-returning root/call boundary. */
-    Object execute(VirtualFrame frame) {
+    Object execute(VirtualFrame frame) { return execute(frame, value); }
+    private Object execute(VirtualFrame frame, Expr value) {
         if (rawResult) return value.execute(frame);
         TupleShape shape = tuple;
         if (shape != null) {
@@ -83,6 +84,32 @@ final class FunctionBody extends Node {
             genericResult = true;
             return unexpected.getResult();
         }
+    }
+    boolean allowsDirectSelfTransfer() { return !rawResult && !initializer && tuple == null; }
+    Object executeInterpretedSelf(VirtualFrame frame) {
+        Expr selected = value;
+        if (selected.getClass() == Case.class) selected = ((Case) selected).interpretedBranch(frame, null, 0);
+        if (!(selected instanceof AstTailApplication call)) return execute(frame, selected);
+        Object result = call.prepareTransfer(frame);
+        if (result == AstSelfCall.INSTANCE) return result;
+        // Non-self dispatch may return a PAP or an ordinary result. Apply the
+        // same scalar/reference checks as AstTailApplication's inherited entries.
+        if (exactInt) {
+            if (!(result instanceof Integer)) throw fault("Expected primitive Int");
+        } else if (resultKind == CoreKind.LONG) {
+            if (!(result instanceof Long)) throw fault("Expected primitive Long");
+        } else if (resultKind == CoreKind.FLOAT) {
+            if (!(result instanceof Float)) throw fault("Expected primitive Float");
+        } else if (resultKind == CoreKind.DOUBLE) {
+            if (!(result instanceof Double)) throw fault("Expected primitive Double");
+        } else if (resultKind == CoreKind.DATA) {
+            if (!(result instanceof DataValue)) throw fault("Expected constructor value");
+        } else if (resultKind == CoreKind.CLOSURE) {
+            if (!(result instanceof Closure)) throw fault("Application of a non-function");
+        } else if (resultKind == CoreKind.ADDRESS) {
+            if (!(result instanceof ManagedAddress)) throw fault("Expected a managed literal Addr#");
+        } else if (!genericResult && !(result instanceof Long)) genericResult = true;
+        return result;
     }
     boolean ordinaryIntResult() { return !rawResult && !initializer && tuple == null && exactInt; }
     boolean ordinaryLongResult() { return !rawResult && !initializer && tuple == null && !exactInt && resultKind == CoreKind.LONG; }

@@ -44,28 +44,30 @@ public final class AstTailApplication extends Expr {
         forces = new Force[count];
         for (int i = 0; i < count; i++) forces[i] = new Force(metrics);
     }
-    @Override public Object execute(VirtualFrame frame) {
+    @Override public Object execute(VirtualFrame frame) { return execute(frame, false); }
+    Object prepareTransfer(VirtualFrame frame) { return execute(frame, true); }
+    private Object execute(VirtualFrame frame, boolean directTransfer) {
         boolean suspended = false;
         try {
             Closure fn;
             try { fn = function.executeRequiredClosure(frame); }
-            catch (AstCapture cut) { throw cut.append((saved, input) -> apply(saved, requireClosure(input))); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> apply(saved, requireClosure(input), false)); }
             catch (DelimitedCut cut) {
-                throw cut.append(frame, (saved, input, ambient, outer) -> apply(saved, requireClosure(input.get())));
+                throw cut.append(frame, (saved, input, ambient, outer) -> apply(saved, requireClosure(input.get()), false));
             }
-            return apply(frame, fn);
+            return apply(frame, fn, directTransfer);
         } catch (AstCapture cut) {
             suspended = true; throw cut.enclose(steps -> new Cleanup(this, steps));
         } catch (DelimitedCut cut) {
             suspended = true; throw cut.append(frame, new Cleanup(this));
         } finally { if (!suspended) clear(frame); }
     }
-    private Object apply(VirtualFrame frame, Closure fn) {
+    private Object apply(VirtualFrame frame, Closure fn, boolean directTransfer) {
         boolean self = !(getRootNode() instanceof FunctionRoot root && root.getRole$org_intelligence_thc() == FunctionRootRole.PASS_THROUGH) &&
             fn.arity == operands.length && fn.supplied.length == suppliedCount && selfTarget.matches(fn.target);
-        return writeOperands(frame, fn, self, 0);
+        return writeOperands(frame, fn, self, 0, directTransfer);
     }
-    @ExplodeLoop private Object writeOperands(VirtualFrame frame, Closure fn, boolean self, int start) {
+    @ExplodeLoop private Object writeOperands(VirtualFrame frame, Closure fn, boolean self, int start, boolean directTransfer) {
         for (int i = start; i < operands.length; i++) {
             try { operands[i].write(frame); }
             catch (AstCapture cut) {
@@ -78,7 +80,7 @@ public final class AstTailApplication extends Expr {
         }
         if (self) {
             for (int i = 0; i < suppliedCount; i++) FrameAccess.INSTANCE.write(frame, temporaries[i], fn.supplied[i]);
-            return forceStrict(frame, fn, 0);
+            return forceStrict(frame, fn, 0, directTransfer);
         }
         Object[] values = new Object[operands.length];
         for (int i = 0; i < operands.length; i++) values[i] = FrameAccess.INSTANCE.read(frame, temporaries[i + suppliedCount]);
@@ -86,9 +88,9 @@ public final class AstTailApplication extends Expr {
     }
     private Object resumeOperand(VirtualFrame frame, Closure fn, boolean self, int index, Object input) {
         if (input != Unit.INSTANCE) throw fault("Invalid self operand continuation");
-        return writeOperands(frame, fn, self, index + 1);
+        return writeOperands(frame, fn, self, index + 1, false);
     }
-    @ExplodeLoop private Object forceStrict(VirtualFrame frame, Closure fn, int start) {
+    @ExplodeLoop private Object forceStrict(VirtualFrame frame, Closure fn, int start, boolean directTransfer) {
         for (int i = start; i < strictPositions.length; i++) {
             int slot = temporaries[strictPositions[i]];
             Object value;
@@ -102,11 +104,12 @@ public final class AstTailApplication extends Expr {
             }
             FrameAccess.INSTANCE.write(frame, slot, value);
         }
+        if (directTransfer) return layout.prepareTransfer(frame, fn, temporaries);
         throw layout.transfer(frame, fn, temporaries);
     }
     private Object resumeStrict(VirtualFrame frame, Closure fn, int index, Object input) {
         FrameAccess.INSTANCE.write(frame, temporaries[strictPositions[index]], input);
-        return forceStrict(frame, fn, index + 1);
+        return forceStrict(frame, fn, index + 1, false);
     }
     @ExplodeLoop private void clear(VirtualFrame frame) { for (int slot : temporaries) frame.clear(slot); }
     private static final class Cleanup implements AstResumeStep, DelimitedStep {
