@@ -19,6 +19,7 @@ public final class TupleApplication extends Expr {
     private final Metrics metrics;
     @CompilationFinal(dimensions = 1) private final int[] vectorSlots;
     private final ArgumentLayout inputLayout;
+    @CompilationFinal(dimensions = 1) private final int[] releasedFormals;
     @Child private volatile TupleDispatch dispatch;
     @CompilationFinal(dimensions = 1) private int[] destinationSlots;
     @CompilationFinal private int destinationOffset = -1;
@@ -27,6 +28,11 @@ public final class TupleApplication extends Expr {
         this(language, shape, function, arguments, tail, metrics, null);
     }
     public TupleApplication(Language language, TupleShape shape, Expr function, Expr[] arguments, boolean tail, Metrics metrics, int[] vectorSlots) {
+        this(language, shape, function, arguments, tail, metrics, vectorSlots, new int[0]);
+    }
+    TupleApplication(Language language, TupleShape shape, Expr function, Expr[] arguments, boolean tail, Metrics metrics,
+                     int[] vectorSlots, int[] releasedFormals) {
+        this.releasedFormals = releasedFormals;
         this.language = language; this.shape = shape; this.function = new Evaluate(function, metrics);
         this.arguments = arguments; this.tail = tail; this.metrics = metrics; this.vectorSlots = vectorSlots;
         ArrayList<CoreRepresentation> proofs = new ArrayList<>(arguments.length);
@@ -121,6 +127,9 @@ public final class TupleApplication extends Expr {
             });
         }
         if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Check failed.");
+        // Every operand, including repeated reads of a formal, is now in the packet.
+        // Resumed operands reach this same point with their own completed prefix.
+        for (int slot : releasedFormals) frame.clear(slot);
         child.execute(frame, closure, values);
         return null;
     }

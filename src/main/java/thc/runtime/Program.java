@@ -523,6 +523,8 @@ public final class Program implements ExecutableProgram {
         final Map<String, Local> locals;
         final Map<String, LocalJoinTarget> joins;
         AstSelfLayout self;
+        List<Object> releasingTupleCall;
+        int[] releasedFormals;
         int programSlot = -1;
         final List<Object> deferredExpression;
         final List<DeferredArm> deferredArms;
@@ -877,6 +879,7 @@ public final class Program implements ExecutableProgram {
         }
         if (role == FunctionRootRole.FUNCTION) scope.self = new AstSelfLayout(captures, environmentSlots,
             allArgumentSlots, allArgumentProofs, entryStrict.clone(), inputLayout, environmentVectorSlots);
+        if (initializedBody == null && initialization == null) prepareEntryFormalRelease(expression, args, scope);
         Expr body = initializedBody != null ? initializedBody : initialization == null ? compile(expression, scope, bodyTail) : initializer(initialization, scope);
         // This target is entered only by an existing demand on a thunk. Finish
         // that demand inside its resumable update scope, not at function returns.
@@ -939,6 +942,28 @@ public final class Program implements ExecutableProgram {
         RootCallTarget target = root.getCallTarget();
         if (reusableCode) codeTargets.add(target);
         return new FunctionSpec(target, captures, captureSources);
+    }
+    /** The entry case owns the entire remaining continuation of these formals. */
+    private void prepareEntryFormalRelease(List<Object> expression, List<Map<String, Object>> formals, Scope scope) {
+        if (!"case".equals(expression.getFirst())) return;
+        var call = (List<Object>) expression.get(1);
+        if (!"app".equals(call.getFirst()) || !CoreRepresentations.expression(call).isTuple()) return;
+        Set<String> live = new LinkedHashSet<>();
+        for (var alternative : (List<List<Object>>) expression.get(3))
+            live.addAll(coreFreeVariables((List<Object>) alternative.get(3)));
+        Set<String> passed = new LinkedHashSet<>();
+        for (var argument : (List<List<Object>>) call.get(2))
+            if ("var".equals(argument.getFirst())) passed.add((String) argument.get(1));
+        List<Integer> dead = new ArrayList<>();
+        for (var formal : formals) {
+            String id = (String) formal.get("id");
+            Local local = scope.locals.get(id);
+            if (passed.contains(id) && !live.contains(id) && local != null && !local.cell &&
+                    local.tupleSlots == null && local.slot >= 0 && scope.layout.referenceSlot(local.slot))
+                dead.add(local.slot);
+        }
+        scope.releasingTupleCall = call;
+        scope.releasedFormals = ints(dead);
     }
     private boolean returningSideCandidate(List<Object> expression, Scope scope) {
         if (!enableAsync || outlineCaseArms || deferDefaultArm ||
@@ -2792,7 +2817,8 @@ public final class Program implements ExecutableProgram {
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);
             int[] vectorSlots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<vector call result ", tupleProof) : null;
-            return new TupleApplication((thc.Language) language, shape, function, nodes, tail, codeMetrics(), vectorSlots);
+            return new TupleApplication((thc.Language) language, shape, function, nodes, tail, codeMetrics(), vectorSlots,
+                expr == scope.releasingTupleCall ? scope.releasedFormals : new int[0]);
         }
         AstSelfLayout self = scope.self;
         boolean emptyTuple = false;
