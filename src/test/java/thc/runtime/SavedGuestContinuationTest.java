@@ -1161,11 +1161,11 @@ class SavedGuestContinuationTest {
                     var threads = java.lang.management.ManagementFactory.getThreadMXBean();
                     long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
                     while (true) {
-                        var info = threads.getThreadInfo(carrier.get().threadId(), 32);
+                        var info = threads.getThreadInfo(carrier.get().threadId());
                         if (info != null && info.getThreadState() == Thread.State.BLOCKED &&
-                                info.getLockInfo().getIdentityHashCode() == System.identityHashCode(thunk) &&
-                                Arrays.stream(info.getStackTrace()).anyMatch(frame ->
-                                    frame.getClassName().equals(Force.class.getName()) && frame.getMethodName().equals("executeOne"))) break;
+                                info.getLockOwnerId() == Thread.currentThread().threadId() &&
+                                info.getLockInfo().getClassName().equals(thunk.getClass().getName()) &&
+                                info.getLockInfo().getIdentityHashCode() == System.identityHashCode(thunk)) break;
                         assertTrue(System.nanoTime() < deadline, "Fresh demand did not reach the held thunk monitor");
                         Thread.sleep(1);
                     }
