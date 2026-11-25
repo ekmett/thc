@@ -107,6 +107,8 @@ final class BytecodeContinuations {
     }
     static void preflight(SavedGuestContinuation saved) {
         if (saved instanceof BytecodeSavedContinuation bytecode) preflight(bytecode.saved);
+        else if (saved instanceof RootlessApplicationNode.Continuation application) application.requireOwner();
+        else if (saved instanceof ExactThunkApplication.OwnedContinuation application) application.requireOwner();
     }
     /** A saved AST waiter can lead to a bytecode child. Authorize the cold
      * dependency path before inspecting logical wait ownership, without changing

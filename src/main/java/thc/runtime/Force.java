@@ -29,6 +29,7 @@ public final class Force extends Node {
     private final boolean asyncMode;
     @Child private DispatchThunkTarget calls;
     @Child private TailCallLoop trampoline;
+    @Child private RootlessApplicationNode exactApplications;
     private final BranchProfile tailCallProfile = BranchProfile.create();
     private final BranchProfile resumeProfile = BranchProfile.create();
     private final BranchProfile suspensionProfile = BranchProfile.create();
@@ -39,9 +40,12 @@ public final class Force extends Node {
         this.metrics = metrics; this.asyncMode = asyncMode;
         calls = DispatchThunkTargetNodeGen.create();
         trampoline = new TailCallLoop(metrics);
+        exactApplications = new RootlessApplicationNode();
     }
     public Object execute(VirtualFrame frame, Object value) {
         if (!(value instanceof Thunk original)) return value;
+        ExactThunkApplication applicationOwner = original.exactApplication();
+        if (applicationOwner != null) applicationOwner.requireOwner(this);
         Metrics invocationMetrics = metrics;
         if (invocationMetrics == null) {
             if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Missing reusable force owner");
@@ -670,6 +674,15 @@ public final class Force extends Node {
         }, segment);
     }
 
+    Object exactApplicationValue(Object value, Metrics invocationMetrics) {
+        if (!(value instanceof Thunk thunk)) return value;
+        ExactThunkApplication application = thunk.exactApplication();
+        if (application != null) application.requireOwner(this);
+        return executeThunk(thunk, invocationMetrics);
+    }
+    Object exactApplicationTail(TailCall tail, Metrics invocationMetrics) {
+        tailCallProfile.enter(); return trampoline.execute(tail, invocationMetrics);
+    }
     private Object evaluateOwned(Thunk thunk, SavedGuestContinuation continuation, Object resumeValue) {
         return evaluateOwned(thunk, continuation, resumeValue, metrics);
     }
@@ -685,7 +698,12 @@ public final class Force extends Node {
                 try {
                     RootCallTarget target = thunk.getTarget();
                     if (target == null) throw fault("Unevaluated thunk has no body");
-                    returned = calls.execute(this, target, thunk.getEnvironment(), thunk.argument(), thunk.hasArgument(), metrics);
+                    ExactThunkApplication application = thunk.exactApplication();
+                    if (application != null) {
+                        returned = exactApplications.execute(this, application, metrics);
+                        if (returned == RootlessApplicationNode.FALLBACK)
+                            returned = calls.execute(this, target, null, application.argument, true, metrics);
+                    } else returned = calls.execute(this, target, thunk.getEnvironment(), thunk.argument(), thunk.hasArgument(), metrics);
                 } catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail, metrics); }
             } else returned = resumeOwnedContinuation(continuation, resumeValue, metrics);
             if (returned instanceof TailYield || returned instanceof AstTailYield ||
@@ -713,6 +731,9 @@ public final class Force extends Node {
             thunk.getTarget() == null ? null : thunk.getTarget().getRootNode();
         if (!(returned instanceof TailYield) && !(returned instanceof AstTailYield) && !sameContinuationBody(saved.getSourceRoot(), expectedRoot))
             throw new IllegalStateException("Nested guest yield has no captured caller segment");
+        ExactThunkApplication application = thunk.exactApplication();
+        if (application != null && !(saved instanceof RootlessApplicationNode.Continuation))
+            saved = new ExactThunkApplication.OwnedContinuation(saved, application.plan.context());
         AsyncRequest request = asyncRequest(saved);
         publishContinuation(thunk, saved);
         return new ThunkSuspended(thunk, request, stackSpill(saved));

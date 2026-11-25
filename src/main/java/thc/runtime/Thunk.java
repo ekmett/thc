@@ -51,6 +51,7 @@ public final class Thunk implements Lifted, AstControl.ResumeChild {
     public void setTarget(RootCallTarget target) { this.target = target; }
     public CapturedFrame getEnvironment() { return argumentPayload ? null : (CapturedFrame) payload; }
     boolean hasArgument() { return argumentPayload; }
+    ExactThunkApplication exactApplication() { return argumentPayload && payload instanceof ExactThunkApplication application ? application : null; }
     Object argument() { return argumentPayload ? payload : null; }
     public void setEnvironment(CapturedFrame environment) { this.payload = environment; }
     /** Acquire the answer, failure or continuation published with this state. */

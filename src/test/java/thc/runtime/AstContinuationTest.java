@@ -22,6 +22,280 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** A real blocked MVar cut, owned thunk, and continuation resumed on another Java thread. */
 class AstContinuationTest {
+    @Test void exactApplicationFallbackRetainsContextOwnershipWhileItsHeadIsCold() {
+        try (var engine = org.graalvm.polyglot.Engine.create();
+             var first = Context.newBuilder("thc").engine(engine).build();
+             var second = Context.newBuilder("thc").engine(engine).build()) {
+            first.initialize("thc"); second.initialize("thc");
+            Thunk shared; Object expected; Object saved; RootCallTarget driver;
+            var effects = new ArrayList<String>();
+            first.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, rootlessModule(), false, false);
+                expected = new DataLayout(language, "ColdFallbackLeaf", "ColdFallbackLeaf", new String[0]).create(new Object[0]);
+                Object leaf = expected;
+                var argument = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { effects.add("argument"); return leaf; }
+                }.getCallTarget(), null);
+                var head = new GlobalBinding("cold identity");
+                head.defer(new PreparationLock(Language.currentState().getEnv().getContext()), () -> {
+                    effects.add("head"); return program.entryValue("identity");
+                });
+                var owner = rootlessOwner(language, head);
+                shared = Thunk.withArgument(owner, new ExactThunkApplication(new ExactThunkApplication.Plan(owner, head, Language.currentState()), argument));
+                var force = new ForceRoot(language, shared); driver = force.getCallTarget();
+                var scope = AstStacks.astStackScope(force); scope.setDepth(AstStackScope.MAX_DEPTH - 1); scope.setDriving(true);
+                try { assertSame(shared, assertThrows(ThunkSuspended.class, () -> Calls.target(driver, new Object[]{0L})).getThunk()); }
+                finally { scope.setDepth(0); scope.setDriving(false); }
+                assertTrue(effects.isEmpty()); assertEquals(5, shared.getState());
+                saved = shared.getValue(); assertInstanceOf(ExactThunkApplication.OwnedContinuation.class, saved);
+            } finally { first.leave(); }
+            second.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var foreign = new ForceRoot(language, shared).getCallTarget();
+                assertTrue(assertThrows(RuntimeFault.class, () -> Calls.target(foreign, new Object[]{0L})).getMessage().contains("another context"));
+                assertSame(saved, shared.getValue()); assertEquals(5, shared.getState()); assertTrue(effects.isEmpty());
+            } finally { second.leave(); }
+            first.enter(); try {
+                assertSame(expected, Calls.target(driver, new Object[]{0L}));
+                assertEquals(List.of("head", "argument"), effects);
+                assertSame(expected, Calls.target(driver, new Object[]{0L})); assertEquals(2, effects.size());
+            } finally { first.leave(); }
+        }
+    }
+    @Test void exactApplicationThunkCellsRemainSharedAcrossMultiShotCallerFrames() {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, rootlessModule(), false, false);
+                var leaf = new DataLayout(language, "MultiShotRootlessLeaf", "MultiShotRootlessLeaf", new String[0]).create(new Object[0]);
+                var effects = new AtomicInteger();
+                var argument = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { effects.incrementAndGet(); return leaf; }
+                }.getCallTarget(), null);
+                var shared = rootlessShared(program, argument); assertNotNull(shared.exactApplication());
+                var layout = new FrameLayout(); int slot = layout.bind("shared", com.oracle.truffle.api.frame.FrameSlotKind.Object);
+                var descriptor = layout.build();
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, descriptor); frame.setObject(slot, shared);
+                var force = new RootNode(language) {
+                    @Child private Force demand = new Force(new Metrics(false));
+                    @Override public Object execute(VirtualFrame input) { return demand.execute(input, input.getArguments()[0]); }
+                }.getCallTarget();
+                var source = new GuestRoot(language, descriptor) {
+                    @Override public long bloom(VirtualFrame input) { return 0L; }
+                    @Override public Object execute(VirtualFrame input) { return Unit.INSTANCE; }
+                }; source.getCallTarget();
+                var cut = new DelimitedCut(new PromptTag(Language.currentState()), null, null, MaskingState.UNMASKED, source);
+                var fresh = new ArrayList<Thunk>();
+                cut.append(frame, (saved, input, ambient, outer) -> {
+                    input.get(); assertSame(shared, saved.getObject(slot));
+                    var created = rootlessShared(program, argument); assertNotNull(created.exactApplication());
+                    for (Thunk earlier : fresh) assertNotSame(earlier, created, "Each resumed creation owns a new update cell");
+                    fresh.add(created);
+                    assertSame(leaf, Calls.target(force, new Object[]{shared}));
+                    assertSame(leaf, Calls.target(force, new Object[]{created}));
+                    return leaf;
+                });
+                var image = new DelimitedStack(cut, null).closure(language, new Metrics(false));
+                var action = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame input) { return 0L; }
+                    @Override public Object execute(VirtualFrame input) { return Unit.INSTANCE; }
+                }.getCallTarget());
+                for (int i = 0; i < 2; i++) assertSame(leaf, Calls.target(image.target, new Object[]{0L, action, Unit.INSTANCE}));
+                assertEquals(2, fresh.size()); assertEquals(1, effects.get());
+                assertSame(shared, frame.getObject(slot)); assertEquals(2, shared.getState());
+                for (Thunk created : fresh) { assertEquals(2, created.getState()); assertSame(leaf, created.getValue()); }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void exactApplicationThunkPreservesAnEntryPollAdmittedAfterCreation() {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var state = Language.currentState(); var threads = state.getThreads();
+                state.admitGuestOrigin(); threads.enterCurrent();
+                try {
+                    var program = new Program(language, rootlessModule(), false, false);
+                    var leaf = new DataLayout(language, "PollRootlessLeaf", "PollRootlessLeaf", new String[0]).create(new Object[0]);
+                    var effects = new AtomicInteger();
+                    var argument = new Thunk(new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) { effects.incrementAndGet(); return leaf; }
+                    }.getCallTarget(), null);
+                    var shared = rootlessShared(program, argument); assertNotNull(shared.exactApplication());
+                    assertFalse(GuestThreads.ordinaryPollEnabled(shared.getTarget().getRootNode()));
+                    var compiled = new AtomicInteger();
+                    var driver = new RootNode(language) {
+                        @Child private Force force = new Force(new Metrics(false));
+                        @Override public Object execute(VirtualFrame frame) {
+                            if (CompilerDirectives.inCompiledCode()) compiled.incrementAndGet();
+                            return force.execute(frame, shared);
+                        }
+                    }.getCallTarget();
+                    state.admitGuestConcurrency();
+                    var installed = (com.oracle.truffle.runtime.OptimizedCallTarget) driver;
+                    installed.compile(true); installed.waitForCompilation(); assertTrue(installed.isValidLastTier());
+                    assertTrue(GuestThreads.ordinaryPollEnabled(shared.getTarget().getRootNode()));
+                    var request = threads.send(threads.currentIdentity(), "rootless entry poll");
+                    var cut = assertThrows(ThunkSuspended.class, () -> Calls.target(driver, new Object[]{0L}));
+                    assertSame(shared, cut.getThunk()); assertSame(request, cut.getAsyncRequest());
+                    assertEquals(1, compiled.get(), "The first installed force must capture the original entry delivery without warmup");
+                    assertInstanceOf(RootlessApplicationNode.Continuation.class, shared.getValue());
+                    assertEquals(0, effects.get(), "Entry delivery precedes the head call and lazy operand");
+                    request.acknowledge();
+                    assertSame(leaf, Calls.target(driver, new Object[]{0L}));
+                    assertSame(leaf, Calls.target(driver, new Object[]{0L})); assertEquals(1, effects.get());
+                } finally { threads.leaveCurrent(); }
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void exactApplicationThunkForeignContextsCannotClaimFreshOrParkedUpdates(boolean parked) {
+        try (var engine = org.graalvm.polyglot.Engine.create();
+             var first = Context.newBuilder("thc").engine(engine).build();
+             var second = Context.newBuilder("thc").engine(engine).build()) {
+            first.initialize("thc"); second.initialize("thc");
+            Thunk shared; Object expected; Object saved; RootCallTarget driver;
+            first.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var module = rootlessModule();
+                if (parked) {
+                    var bindings = (List<Map<String,Object>>) module.get("bindings");
+                    var lambda = (List<Object>) bindings.getFirst().get("expr");
+                    Object input = lambda.get(2);
+                    lambda.set(2, list("case", input, "demanded", list(list("default", null, list(), input)),
+                        map("rep", map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true))));
+                }
+                var program = new Program(language, module, false, false);
+                expected = new DataLayout(language, "ForeignRootlessLeaf", "ForeignRootlessLeaf", new String[0]).create(new Object[0]);
+                shared = rootlessShared(program, expected); assertNotNull(shared.exactApplication());
+                var force = new ForceRoot(language, shared); driver = force.getCallTarget();
+                if (parked) {
+                    var scope = AstStacks.astStackScope(force); scope.setDepth(AstStackScope.MAX_DEPTH - 1); scope.setDriving(true);
+                    try { assertSame(shared, assertThrows(ThunkSuspended.class, () -> Calls.target(driver, new Object[]{0L})).getThunk()); }
+                    finally { scope.setDepth(0); scope.setDriving(false); }
+                    assertEquals(5, shared.getState()); assertInstanceOf(RootlessApplicationNode.Continuation.class, shared.getValue());
+                }
+                saved = shared.getValue();
+            } finally { first.leave(); }
+            second.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var foreignDriver = new ForceRoot(language, shared).getCallTarget();
+                var failure = assertThrows(RuntimeFault.class, () -> Calls.target(foreignDriver, new Object[]{0L}));
+                assertTrue(failure.getMessage().contains("another context"));
+                assertEquals(parked ? 5 : 0, shared.getState(), "Foreign rejection must precede any update claim");
+                assertSame(saved, shared.getValue());
+            } finally { second.leave(); }
+            first.enter(); try {
+                assertSame(expected, Calls.target(driver, new Object[]{0L}));
+                assertSame(expected, Calls.target(driver, new Object[]{0L})); assertEquals(2, shared.getState());
+            } finally { first.leave(); }
+        }
+    }
+    private Map<String,Object> rootlessModule() {
+        var data = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+        var done = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var formal = map("id", "x", "lifted", true, "rep", data);
+        var producer = map("id", "identity", "arity", 1, "lifted", true,
+            "expr", list("lam", list(formal), list("var", "x", map("rep", data)), map("resultRep", data)));
+        var call = list("app", list("var", "identity", map("rep", closure)),
+            list(list("var", "x", map("rep", data))), list(true), false, false, map("rep", data));
+        var shared = list("var", "shared", map("rep", data));
+        var body = list("let", false, list(map("id", "shared", "lifted", true, "rep", data, "expr", call)),
+            list("app", list("con", "Pair", 2), list(shared, shared), list(true, true), false, false, map("rep", done)), map("rep", done));
+        var entry = map("id", "entry", "arity", 1, "lifted", true,
+            "expr", list("lam", list(formal), body, map("resultRep", done)));
+        return map("instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "arity", 2, "tag", 1,
+            "kind", "boxed", "strictFields", list(false, false), "fieldLifted", list(true, true),
+            "fieldReps", list(list("BoxedRep (Just Lifted)"), list("BoxedRep (Just Lifted)")))), "bindings", list(producer, entry));
+    }
+    private Thunk rootlessShared(ExecutableProgram program, Object argument) {
+        var pair = (DataValue) Calls.target(program.entryTarget("entry"), new Object[]{0L, argument});
+        var shared = (Thunk) pair.getLayout().read(pair, 0);
+        assertSame(shared, pair.getLayout().read(pair, 1)); assertEquals(0, shared.getState());
+        return shared;
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void exactApplicationThunksCreateAndForceOnTheirFirstInstalledCalls(String backend) {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, rootlessModule(), false, false) :
+                    new BytecodeProgram(language, rootlessModule(), null, false);
+                var leaf = new DataLayout(language, "RootlessLeaf", "RootlessLeaf", new String[0]).create(new Object[0]);
+                var effects = new AtomicInteger();
+                var input = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { effects.incrementAndGet(); return leaf; }
+                }.getCallTarget(), null);
+                var creation = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("entry");
+                creation.compile(true); creation.waitForCompilation(); assertTrue(creation.isValidLastTier());
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                var shared = rootlessShared(program, input);
+                assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,
+                    "First installed entry must create the real delayed application without warmup");
+                assertEquals(0, effects.get());
+                if (backend.equals("ast")) assertNotNull(shared.exactApplication(), "Real lowerer must admit this exact delayed application");
+                else assertNull(shared.exactApplication());
+                var compiled = new AtomicInteger();
+                var force = new RootNode(language) {
+                    @Child private Force demand = new Force(new Metrics(false));
+                    @Override public Object execute(VirtualFrame frame) {
+                        if (CompilerDirectives.inCompiledCode()) compiled.incrementAndGet();
+                        Object answer = demand.execute(frame, frame.getArguments()[0]);
+                        if (CompilerDirectives.inCompiledCode()) compiled.incrementAndGet();
+                        return answer;
+                    }
+                }.getCallTarget();
+                var installed = (com.oracle.truffle.runtime.OptimizedCallTarget) force;
+                installed.compile(true); installed.waitForCompilation(); assertTrue(installed.isValidLastTier());
+                assertSame(leaf, Calls.target(force, new Object[]{shared}));
+                assertEquals(2, compiled.get(), "First force must enter and return through installed code");
+                assertSame(leaf, Calls.target(force, new Object[]{shared})); assertEquals(1, effects.get());
+                assertEquals(2, shared.getState()); assertNull(shared.getTarget()); assertNull(shared.exactApplication());
+            } finally { context.leave(); }
+        }
+    }
+    private RootCallTarget rootlessOwner(Language language, GlobalBinding head) {
+        var layout = new FrameLayout(); int slot = layout.bind("argument");
+        var data = CoreRepresentations.binder(map("lifted", true, "rep", map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false)));
+        var closure = CoreRepresentations.binder(map("lifted", true, "rep", map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true)));
+        var metrics = new Metrics(false);
+        Expr body = new Evaluate(new Application(new GlobalRead(head).proven(closure),
+            new Expr[]{new LocalRead(slot, false).proven(data)}, false, metrics), metrics);
+        var root = new FunctionRoot(language, layout.build(), "exact application owner", null, new int[0],
+            new int[]{slot}, new int[]{0}, body, metrics, new CoreRepresentation[]{data}, data, null,
+            new boolean[1], null, null, new int[0], null, true, new int[0][], false, FunctionRootRole.FUNCTION, true);
+        root.configureInputProofs(List.of(data)); root.configureEagerAsyncPolls(false);
+        return root.getCallTarget();
+    }
+    @Test void exactApplicationThunksDelayHeadPreparationAndArgumentEffectsInOrder() {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter(); try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, rootlessModule(), false, false);
+                var leaf = new DataLayout(language, "OrderedRootlessLeaf", "OrderedRootlessLeaf", new String[0]).create(new Object[0]);
+                var effects = new ArrayList<String>();
+                var argument = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { effects.add("argument"); return leaf; }
+                }.getCallTarget(), null);
+                var original = rootlessShared(program, argument); assertNotNull(original.exactApplication());
+                var head = new GlobalBinding("delayed identity");
+                head.defer(new PreparationLock(Language.currentState().getEnv().getContext()), () -> {
+                    effects.add("head"); return program.entryValue("identity");
+                });
+                var owner = rootlessOwner(language, head);
+                var plan = new ExactThunkApplication.Plan(owner, head, Language.currentState());
+                var shared = Thunk.withArgument(owner, new ExactThunkApplication(plan, argument));
+                assertTrue(effects.isEmpty());
+                var driver = new ForceRoot(language, shared).getCallTarget();
+                assertSame(leaf, Calls.target(driver, new Object[]{0L}));
+                assertEquals(List.of("head", "argument"), effects);
+                assertSame(leaf, Calls.target(driver, new Object[]{0L})); assertEquals(2, effects.size());
+            } finally { context.leave(); }
+        }
+    }
     @Test void freezingTransfersPendingStepsWithoutSharingCaptureMutation() {
         try (var context = Context.create("thc")) {
             context.initialize("thc"); context.enter();

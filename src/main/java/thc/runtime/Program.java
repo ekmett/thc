@@ -823,7 +823,7 @@ public final class Program implements ExecutableProgram {
             Map<String, Object> arg = args.get(i);
             boolean lifted = representation(arg);
             CoreRepresentation proof = CoreRepresentations.binder(arg);
-            if (lifted) proof = evaluated(proof, entryStrict[i]);
+            if (lifted && !thunkDemand) proof = evaluated(proof, entryStrict[i]);
             if (proof.isTypedTransport()) {
                 if (lifted) throw new RuntimeFault("Typed formal cannot be lifted");
                 List<CoreRepresentation> fields = ArgumentLayout.leaves(proof);
@@ -1113,9 +1113,14 @@ public final class Program implements ExecutableProgram {
                 var formal = Map.<String, Object>of("id", operand.get(1), "name", operand.get(1),
                     "lifted", true, "coercion", false, "rep", proof);
                 FunctionSpec fn = function(label, List.of(formal), expr, scope, CoreRepresentations.expression(expr),
-                    new boolean[]{local.proof.getEvaluated()}, FunctionRootRole.FUNCTION, false, null, null, true);
+                    new boolean[1], FunctionRootRole.FUNCTION, false, null, null, true);
                 TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
                 if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
+                if (local.proof.getKind() == CoreKind.DATA && CoreRepresentations.expression((List<Object>) head).getKind() == CoreKind.CLOSURE &&
+                        CoreRepresentations.expression((List<Object>) head).getEvaluated())
+                    return new DelayExactApplication(fn.target, required(globals, (String) head.get(1)),
+                        thc.Language.currentState(), local.slot, scope.layout.referenceSlot(local.slot))
+                        .proven(evaluated(CoreRepresentations.expression(expr), false)).located(sources.expression(expr, lowering().source));
                 return new Delay(fn.target, local.slot, scope.layout.referenceSlot(local.slot)).proven(evaluated(CoreRepresentations.expression(expr), false))
                     .located(sources.expression(expr, lowering().source));
             }
