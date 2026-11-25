@@ -13,7 +13,6 @@ public final class CallSegment {
     private volatile int state = 5;
     private Object value;
     private Thread owner;
-    private final Object monitor = new Object();
 
     public CallSegment(Object continuation) { this(continuation, MaskingState.UNMASKED); }
     public CallSegment(Object continuation, MaskingState logicalMask) { this(continuation, logicalMask, MaskingState.UNMASKED); }
@@ -63,5 +62,5 @@ public final class CallSegment {
     }
     public Thread getOwner() { return owner; }
     public void setOwner(Thread owner) { this.owner = owner; }
-    public Object getMonitor() { return monitor; }
+    public Object getMonitor() { return this; }
 }
