@@ -27,8 +27,12 @@ public final class AstTypedApplication extends Expr {
         this(function, arguments, frameLayout, tail, metrics, shape, false);
     }
     public AstTypedApplication(Expr function, Expr[] arguments, FrameLayout frameLayout, boolean tail, Metrics metrics, TupleShape shape, boolean selfTransfer) {
+        this(function, arguments, frameLayout, tail, metrics, shape, selfTransfer, new int[0]);
+    }
+    AstTypedApplication(Expr function, Expr[] arguments, FrameLayout frameLayout, boolean tail, Metrics metrics,
+                        TupleShape shape, boolean selfTransfer, int[] releasedReferences) {
         this.tail = tail; this.metrics = metrics; this.shape = shape; this.selfTransfer = selfTransfer;
-        this.function = new Evaluate(function, metrics); operands = new AstInputOperands(arguments, frameLayout);
+        this.function = new Evaluate(function, metrics); operands = new AstInputOperands(arguments, frameLayout, releasedReferences);
         if (selfTransfer) selfTarget = new AstSelfTarget();
         if (shape == null) dispatch = new InputDispatch(operands.getSource(), arguments.length, tail, metrics);
         vector = shape != null && shape.getProof().isVector() ? new VectorLayout(shape.getProof()) : null;

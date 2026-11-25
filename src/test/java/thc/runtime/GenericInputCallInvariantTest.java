@@ -128,7 +128,7 @@ class GenericInputCallInvariantTest {
                     var layout = new FrameLayout();
                     int[] arguments = {layout.bind("first number"), layout.bind("first marker"), layout.bind("second number"), layout.bind("second marker"), layout.bind("remaining number"), layout.bind("remaining marker")};
                     int[] result = {layout.bind("answer")};
-                    var source = new AstInputSource(ArgumentLayout.fromProofs(List.of(operand, operand, operand)), arguments);
+                    var source = new AstInputSource(ArgumentLayout.fromProofs(List.of(operand, operand, operand)), arguments, true);
                     var call = new Expr() {
                         @Child private InputDispatch cached = new InputDispatch(source, 3, false, new Metrics(false), new AstTupleDestination(shape, result, 0));
                         @Child private GenericInputCall indirect = new GenericInputCall(source, 3, false, new Metrics(false), new AstTupleDestination(shape, result, 0), 0);

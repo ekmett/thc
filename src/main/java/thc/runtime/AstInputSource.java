@@ -9,7 +9,17 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 
 public final class AstInputSource extends InputSource {
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final int[] slots;
-    public AstInputSource(ArgumentLayout layout, int[] slots) { super(layout); this.slots = slots; }
+    private final boolean ownsScratch;
+    public AstInputSource(ArgumentLayout layout, int[] slots) { this(layout, slots, false); }
+    AstInputSource(ArgumentLayout layout, int[] slots, boolean ownsScratch) {
+        super(layout);
+        this.slots = slots;
+        this.ownsScratch = ownsScratch;
+    }
+    /** Release private scratch when a packed exact call leaves no operands to read. */
+    void releaseAfterPacking(VirtualFrame frame, int logicalEnd) {
+        if (ownsScratch && logicalEnd == getLayout().getLogicalArity()) clear(frame);
+    }
     public int[] getSlots() { return slots; }
     @Override public int readInt(VirtualFrame frame, Node node, Object[] values, int index) {
         if (frame.isInt(slots[index])) return frame.getInt(slots[index]);

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
@@ -12,7 +13,12 @@ public final class AstInputOperands extends Node {
     @Children private Expr[] arguments;
     private final ArgumentLayout layout;
     private final AstInputSource source;
+    @CompilationFinal(dimensions = 1) private final int[] releasedReferences;
     public AstInputOperands(Expr[] arguments, FrameLayout frameLayout) {
+        this(arguments, frameLayout, new int[0]);
+    }
+    AstInputOperands(Expr[] arguments, FrameLayout frameLayout, int[] releasedReferences) {
+        this.releasedReferences = releasedReferences;
         this.arguments = arguments;
         ArrayList<CoreRepresentation> proofs = new ArrayList<>();
         for (Expr argument : arguments) proofs.add(argument.getRepresentation());
@@ -20,7 +26,7 @@ public final class AstInputOperands extends Node {
         int[] slots = new int[layout.getPhysicalArity()];
         for (int i = 0; i < slots.length; i++) slots[i] = frameLayout.bind("<typed input " + i + ">",
             FrameLayout.carrierKind(layout.getPhysicalProofs()[i]));
-        source = new AstInputSource(layout, slots);
+        source = new AstInputSource(layout, slots, true);
         for (int i = 0; i < arguments.length; i++) if (layout.isTyped(i)) arguments[i].prepareTuple(slots, layout.offset(i));
     }
     public ArgumentLayout getLayout() { return layout; }
@@ -45,6 +51,8 @@ public final class AstInputOperands extends Node {
                 throw cut.append(frame, (saved, input, ambient, outer) -> resumeOperand(saved, index, input.get()));
             }
         }
+        // The callee's operands now own their values, including after an interrupted evaluation.
+        for (int slot : releasedReferences) frame.clear(slot);
     }
     private Object resumeOperand(VirtualFrame frame, int index, Object input) {
         CoreRepresentation proof = layout.proof(index);

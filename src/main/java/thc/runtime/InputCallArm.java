@@ -80,6 +80,8 @@ final class InputCallArm extends Node {
                     long generation = loan.getGeneration();
                     boolean transferred = false;
                     try {
+                        if (arity == count && source instanceof AstInputSource ast)
+                            ast.releaseAfterPacking(frame, start + count);
                         if (isTail) {
                             try { checkTypedTail(frame, this, target, loan, input.getPacket(), metrics); }
                             catch (TailCall transfer) { transferred = transfer.getInput() == loan; throw transfer; }

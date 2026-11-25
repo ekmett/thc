@@ -949,6 +949,17 @@ public final class Program implements ExecutableProgram {
         if (reusableCode) codeTargets.add(target);
         return new FunctionSpec(target, captures, captureSources);
     }
+    /** A tail call has no remaining Core expression in the caller once all operands are staged. */
+    private static int[] tailOperandReferences(List<List<Object>> arguments, Scope scope) {
+        var slots = new LinkedHashSet<Integer>();
+        for (var argument : arguments) {
+            if (!"var".equals(argument.getFirst())) continue;
+            Local local = scope.locals.get(argument.get(1));
+            if (local != null && !local.cell && local.slot >= 0 && scope.layout.referenceSlot(local.slot))
+                slots.add(local.slot);
+        }
+        return slots.stream().mapToInt(Integer::intValue).toArray();
+    }
     /** The entry case owns the entire remaining continuation of these formals. */
     private void prepareEntryFormalRelease(List<Object> expression, List<Map<String, Object>> formals, Scope scope) {
         if (!"case".equals(expression.getFirst())) return;
@@ -2827,10 +2838,14 @@ public final class Program implements ExecutableProgram {
         }
         Expr function = compile(fn, scope, false);
         ArgumentLayout input = ArgumentLayout.fromProofs(loweredProofs(nodes));
-        if (input != null && input.getRequiresTyped()) return new AstTypedApplication(function, nodes, scope.layout, tail, codeMetrics(),
-            tupleProof.isTypedTransport() ? new TupleShape(tupleProof, (thc.Language) language) : null,
-            !reusableCode && tail && scope.self != null &&
-                TypedInputs.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
+        if (input != null && input.getRequiresTyped()) {
+            int[] dead = tail ? tailOperandReferences(args, scope) :
+                expr == scope.releasingTupleCall ? scope.releasedFormals : new int[0];
+            return new AstTypedApplication(function, nodes, scope.layout, tail, codeMetrics(),
+                tupleProof.isTypedTransport() ? new TupleShape(tupleProof, (thc.Language) language) : null,
+                !reusableCode && tail && scope.self != null &&
+                    TypedInputs.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input), dead);
+        }
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);
             int[] vectorSlots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<vector call result ", tupleProof) : null;

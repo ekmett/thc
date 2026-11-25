@@ -6,6 +6,8 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.List;
@@ -99,6 +101,58 @@ class TypedInputOwnershipTest {
             TypedInputs.writeInputReference(frame, slots.fields[1], frame.getArguments()[1]);
             return dispatch.execute(frame, function);
         }
+    }
+    @Test void exactTypedEntryReleasesOnlyOwnedAstOperands() throws ReflectiveOperationException {
+        withLanguage(language -> {
+            var input = input(language);
+            var proof = input.getLogical().proof(0);
+            var shape = new TupleShape(proof, language);
+            var pointer = new Object();
+            var metrics = new Metrics(false);
+            for (boolean generic : new boolean[]{false, true}) for (boolean owned : new boolean[]{false, true}) {
+                var layout = new FrameLayout();
+                var operands = new AstInputOperands(
+                    new Expr[]{new TupleConstruct(shape, new Expr[]{new Literal(4097L), new Literal(pointer)})}, layout);
+                var slots = operands.getSource().getSlots();
+                var source = owned ? operands.getSource() : new AstInputSource(input.getLogical(), slots);
+                var saved = new MaterializedFrame[1];
+                var receiver = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false}, false); configureInput(input.getLogical()); configureTypedInput(input); }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        var carrier = input.take(frame.getArguments());
+                        try {
+                            assertEquals(4097L, input.getPacket().getLong(carrier, input.getHeader()));
+                            if (owned) {
+                                for (int slot : slots) assertEquals(FrameSlotKind.Illegal.tag, saved[0].getTag(slot));
+                            } else {
+                                assertEquals(4097L, saved[0].getLong(slots[0]));
+                                assertSame(pointer, saved[0].getObject(slots[1]));
+                            }
+                            return input.getPacket().getObject(carrier, input.getHeader() + 1);
+                        } finally { input.releaseChecked(carrier); }
+                    }
+                };
+                var function = new Closure(null, 1, receiver.getCallTarget());
+                var caller = new RootNode(language, layout.build()) {
+                    @Child private AstInputOperands arguments = operands;
+                    @Child private InputDispatch direct = generic ? null : new InputDispatch(source, 1, false, metrics);
+                    @Child private GenericInputCall indirect = generic ? new GenericInputCall(source, 1, false, metrics, null, 0) : null;
+                    @Override public Object execute(VirtualFrame frame) {
+                        arguments.evaluate(frame);
+                        saved[0] = frame.materialize();
+                        try {
+                            return generic ? indirect.execute(frame, function, null) : direct.execute(frame, function);
+                        } finally {
+                            if (owned) source.clear(frame);
+                            saved[0] = null;
+                        }
+                    }
+                };
+                assertSame(pointer, caller.getCallTarget().call());
+                clear(language);
+            }
+        });
     }
     @Test void actualDeoptimizationAfterPartialRestoreClearsFreshReferenceWithoutPoolLoan() throws ReflectiveOperationException {
         withLanguage(language -> {

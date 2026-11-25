@@ -113,6 +113,8 @@ public final class GenericInputCall extends Node {
         long generation = storage.getGeneration();
         boolean transferred = false;
         try {
+            if (function.arity == count + start - offset && source instanceof AstInputSource ast)
+                ast.releaseAfterPacking(frame, count + start);
             if (isTail) {
                 try { checkTypedTail(frame, this, function.target, storage, input.getPacket(), metrics); }
                 catch (TailCall transfer) { transferred = transfer.getInput() == storage; throw transfer; }
