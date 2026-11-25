@@ -290,8 +290,9 @@ class FastRunnerTest(unittest.TestCase):
         legacy = "deb [signed-by=/keys/ubuntu.gpg] http://azure.archive.ubuntu.com/ubuntu/ resolute main universe\n"
         deb822 = "Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: resolute resolute-updates resolute-security\nComponents: main universe\nSigned-By: /keys/ubuntu.gpg\n"
         vendor = "deb https://packages.example.org/ubuntu stable main\n"
-        (sources / "sources.list").write_text(legacy)
-        (parts / "ubuntu.sources").write_text(deb822)
+        vendor822 = "Types: deb\nURIs: https://packages.microsoft.com/ubuntu/26.04/prod\nSuites: resolute\nComponents: main\nSigned-By: /keys/vendor.gpg\n"
+        (sources / "sources.list").write_text(vendor + legacy)
+        (parts / "ubuntu.sources").write_text(vendor822 + "\n" + deb822)
         (parts / "vendor.list").write_text(vendor)
         (parts / "vendor.list").chmod(0o600)
         packages = ["clang-18", "llvm-18", "libgmp-dev", "cmake", "ninja-build"]
@@ -326,16 +327,20 @@ class FastRunnerTest(unittest.TestCase):
                             self.assertEqual(packages, argv[-5:])
                         self.assertIn("Acquire::Retries=0", argv)
                         self.assertIn("APT::Update::Error-Mode=any", argv)
+                        self.assertTrue(any(opt.startswith("Dir::Etc::sourcelist=") for opt in argv))
+                        self.assertTrue(any(opt.startswith("Dir::Etc::sourceparts=") for opt in argv))
+                        primary_end = 1 if statuses[0] else 2
+                        fallback = statuses[primary_end - 1] != 0 and len(apt_calls) > primary_end
                         for opt in argv:
                             if opt.startswith("Dir::Etc::sourcelist="):
                                 copy = Path(opt.split("=", 1)[1])
-                                self.assertEqual(legacy.replace("http://azure.archive.ubuntu.com/ubuntu/", "https://archive.ubuntu.com/ubuntu/"), copy.read_text())
-                                self.assertEqual(deb822.replace("mirror+file:/etc/apt/apt-mirrors.txt", "https://archive.ubuntu.com/ubuntu"), (copy.parent / "sources.list.d/ubuntu.sources").read_text())
+                                self.assertEqual(legacy.replace("http://azure.archive.ubuntu.com/ubuntu/", "https://archive.ubuntu.com/ubuntu/") if fallback else legacy, copy.read_text())
+                                self.assertEqual(deb822.replace("mirror+file:/etc/apt/apt-mirrors.txt", "https://archive.ubuntu.com/ubuntu") if fallback else deb822, (copy.parent / "sources.list.d/ubuntu.sources").read_text())
                                 staged_vendor = copy.parent / "sources.list.d/vendor.list"
-                                self.assertEqual(vendor, staged_vendor.read_text())
+                                self.assertFalse(staged_vendor.exists())
                                 self.assertEqual(0o700, copy.parent.stat().st_mode & 0o777)
                                 self.assertEqual(0o700, staged_vendor.parent.stat().st_mode & 0o777)
-                                self.assertEqual(0o600, staged_vendor.stat().st_mode & 0o777)
+                                self.assertEqual(0o600, copy.stat().st_mode & 0o777)
                         code = next(remaining)
                         if code and kwargs.get("check"):
                             raise subprocess.CalledProcessError(code, argv)
@@ -360,25 +365,44 @@ class FastRunnerTest(unittest.TestCase):
                         ci.install_linux_native(sources)
                 self.assertEqual(len(statuses), len(apt_calls))
                 self.assertEqual([], list(remaining))
-                self.assertEqual(legacy, (sources / "sources.list").read_text())
-                self.assertEqual(deb822, (parts / "ubuntu.sources").read_text())
+                self.assertEqual(vendor + legacy, (sources / "sources.list").read_text())
+                self.assertEqual(vendor822 + "\n" + deb822, (parts / "ubuntu.sources").read_text())
+                self.assertEqual(vendor, (parts / "vendor.list").read_text())
 
     def test_linux_native_acquisition_rejects_unknown_source_and_exhausted_budget(self):
         sources = self.root / "apt-unknown"
         sources.mkdir()
-        original = "deb https://azure.archive.ubuntu.com.example/ubuntu resolute main\n"
-        (sources / "sources.list").write_text(original)
-        for clock, expected_calls in (([0, 10], 2), ([0, 301], 1)):
-            with self.subTest(clock=clock), patch.object(ci.os, "geteuid", return_value=0), \
+        for uri, clock, error in (
+                ("https://azure.archive.ubuntu.com.example/ubuntu", [], "requires supported Ubuntu sources"),
+                ("http://azure.archive.ubuntu.com/ubuntu", [0, 301, 302, 603], "both mirror attempts")):
+            original = f"deb {uri} resolute main\n"
+            (sources / "sources.list").write_text(original)
+            with self.subTest(uri=uri), patch.object(ci.os, "geteuid", return_value=0), \
                     patch.object(ci, "acquire_process", return_value=100) as acquire, \
                     patch.object(ci.platform, "system", return_value="Linux"), \
                     patch.object(ci.platform, "machine", return_value="x86_64"), \
                     patch.object(ci.time, "monotonic", side_effect=clock), \
                     patch.object(ci.subprocess, "run", return_value=subprocess.CompletedProcess([], 100, "")) as run:
-                with self.assertRaisesRegex(RuntimeError, "no supported Ubuntu mirror"):
+                with self.assertRaisesRegex(RuntimeError, error):
                     ci.install_linux_native(sources)
-                self.assertEqual(expected_calls, run.call_count + acquire.call_count)
+                acquire.assert_not_called()
+                self.assertEqual(1, run.call_count)  # Only dpkg-query, never install.
                 self.assertEqual(original, (sources / "sources.list").read_text())
+
+    def test_ubuntu_sources_preserve_fields_in_mixed_uri_stanzas(self):
+        source = ("Types: deb deb-src\nURIs: https://packages.example.org/ubuntu\n"
+                  "# A comment before the Ubuntu continuation.\n"
+                  " https://archive.ubuntu.com/ubuntu/ http://security.ubuntu.com/ubuntu\n"
+                  "# A comment does not end this URI field.\n https://packages.example.net/ubuntu\n"
+                  "Suites: resolute resolute-updates resolute-security\nComponents: main universe\n"
+                  "Architectures: amd64\nSigned-By:\n -----BEGIN PGP PUBLIC KEY BLOCK-----\n"
+                  " .\n a-key\n -----END PGP PUBLIC KEY BLOCK-----\n")
+        expected = source.replace(
+            "https://packages.example.org/ubuntu\n# A comment before the Ubuntu continuation.\n ", "").replace(
+            "# A comment does not end this URI field.\n https://packages.example.net/ubuntu\n", "")
+        self.assertEqual(expected, ci.ubuntu_native_sources(source, deb822=True))
+        self.assertEqual("", ci.ubuntu_native_sources(
+            "Types: deb\nURIs: https://archive.ubuntu.com.example/ubuntu\nSuites: resolute\n", deb822=True))
 
     def test_apple_bootstrap_preserves_config_and_selects_one_toolchain(self):
         with patch.object(ci, "git", return_value="a" * 40):

@@ -475,6 +475,34 @@ def acquire_process(argv, seconds):
     return code
 
 
+def ubuntu_native_sources(text, deb822=False):
+    """Select Ubuntu entries without changing their suites or authentication."""
+    # LINUX_NATIVE_PACKAGES come from Ubuntu, not ambient third-party repos.
+    uri = re.compile(r"(?:https?://(?:(?:[a-z0-9-]+\.)?archive|security)\.ubuntu\.com/ubuntu/?|"
+                     r"mirror\+file:/etc/apt/apt-mirrors\.txt)\Z")
+    selected = []
+    if deb822:
+        for stanza in re.split(r"\n[ \t]*\n", text):
+            # Deb822 comments may interrupt a continued field. Indented lines
+            # remain significant, notably embedded Signed-By keys.
+            stanza = "\n".join(line for line in stanza.splitlines() if not line.startswith("#"))
+            field = re.search(r"^URIs:[^\n]*(?:\n[ \t]+[^\n]*)*", stanza, re.MULTILINE | re.IGNORECASE)
+            if field is None:
+                continue
+            urls = field[0].split(":", 1)[1].split()
+            kept = [url for url in urls if uri.fullmatch(url)]
+            if kept:
+                # Keep a multi-URI stanza's other fields, including Signed-By.
+                replacement = field[0] if kept == urls else "URIs: " + " ".join(kept)
+                selected.append((stanza[:field.start()] + replacement + stanza[field.end():]).strip("\n"))
+        return "\n\n".join(selected) + ("\n" if selected else "")
+    for line in text.splitlines(keepends=True):
+        entry = re.match(r"\s*deb(?:-src)?\s+(?:\[[^\]]*\]\s+)?(\S+)", line)
+        if entry and uri.fullmatch(entry[1]):
+            selected.append(line)
+    return "".join(selected)
+
+
 def install_linux_native(apt_etc=Path("/etc/apt")):
     """Bound acquisition before installing; mirror failover never interrupts dpkg."""
     require((platform.system(), platform.machine()) == ("Linux", "x86_64") and os.geteuid() == 0,
@@ -505,33 +533,40 @@ def install_linux_native(apt_etc=Path("/etc/apt")):
 
         with tempfile.TemporaryDirectory(prefix="thc-apt-sources-") as temporary:
             stage = Path(temporary)
-            source_options = []
+            parts = stage / "sources.list.d"
+            # The privileged apt frontend parses sources before starting workers.
+            parts.mkdir(mode=0o700)
+            (stage / "sources.list").touch(mode=0o600)
+            paths = [apt_etc / "sources.list", *sorted((apt_etc / "sources.list.d").glob("*.list")),
+                     *sorted((apt_etc / "sources.list.d").glob("*.sources"))]
+            staged = []
+            for source in paths:
+                if not source.is_file():
+                    continue
+                selected = ubuntu_native_sources(source.read_text(), source.suffix == ".sources")
+                if not selected:
+                    continue
+                destination = stage / "sources.list" if source == apt_etc / "sources.list" else parts / source.name
+                destination.write_text(selected)
+                destination.chmod(0o600)
+                staged.append(destination)
+            require(staged, "Native apt acquisition requires supported Ubuntu sources")
+            source_options = ["-o", f"Dir::Etc::sourcelist={stage / 'sources.list'}",
+                              "-o", f"Dir::Etc::sourceparts={parts}"]
             if not acquire(source_options):
                 # Match exact Ubuntu runner URIs, including its mirror+file
-                # transport. Keep suites, components, Signed-By and other repos.
+                # transport. Keep suites, components and Signed-By.
                 uri = re.compile(r"(?<!\S)(?:https?://azure\.archive\.ubuntu\.com/ubuntu/?|"
                                  r"mirror\+file:/etc/apt/apt-mirrors\.txt)(?=\s|$)")
-                parts = stage / "sources.list.d"
-                # The privileged apt frontend parses sources before starting workers.
-                parts.mkdir(mode=0o700)
-                (stage / "sources.list").touch(mode=0o600)
                 changed = False
-                paths = [apt_etc / "sources.list", *sorted((apt_etc / "sources.list.d").glob("*.list")),
-                         *sorted((apt_etc / "sources.list.d").glob("*.sources"))]
-                for source in paths:
-                    if not source.is_file():
-                        continue
-                    original = source.read_text()
+                for destination in staged:
+                    original = destination.read_text()
                     def alternate(match):
                         return "https://archive.ubuntu.com/ubuntu" + ("/" if match[0].endswith("/") else "")
                     rewritten = uri.sub(alternate, original)
                     changed |= rewritten != original
-                    destination = stage / "sources.list" if source == apt_etc / "sources.list" else parts / source.name
                     destination.write_text(rewritten)
-                    destination.chmod(0o600)
                 require(changed, "Native apt acquisition failed; no supported Ubuntu mirror to replace")
-                source_options = ["-o", f"Dir::Etc::sourcelist={stage / 'sources.list'}",
-                                  "-o", f"Dir::Etc::sourceparts={parts}"]
                 print("Retrying native apt acquisition via https://archive.ubuntu.com/ubuntu", flush=True)
                 require(acquire(source_options), "Native apt acquisition failed on both mirror attempts")
             # Preserve apt signature/hash validation and forbid hidden network
