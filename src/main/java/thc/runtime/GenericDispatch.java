@@ -25,6 +25,19 @@ public abstract class GenericDispatch extends Node {
             @Cached(value = "createForce(metrics)", neverDefault = true) Force force,
             @Cached(value = "createTyped(layout, logicalCount, tailCall, metrics)", neverDefault = true) GenericInputCall typed,
             @Cached InlinedConditionProfile underapplied, @Cached InlinedConditionProfile exact) {
+        // Keep the initial exact application outside the overapplication loop:
+        // its known closure must not merge with an unknown returned closure.
+        int initialRemaining = logicalCount - initialOffset;
+        if (CompilerDirectives.isPartialEvaluationConstant(initial) && initial != null && initial.arity == initialRemaining) {
+            TruffleSafepoint.poll(node);
+            ArgumentLayout.validate(initial, layout, initialOffset, initialRemaining);
+            if (initial.target.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null)
+                return typed.execute(frame, initial, arguments, initialOffset);
+            underapplied.profile(node, false);
+            Object[] packet = packet(initial, arguments, layout, initialOffset, initialRemaining);
+            exact.profile(node, true);
+            return caller.call(frame, initial.target, packet, tailCall);
+        }
         Closure function = initial;
         int offset = initialOffset;
         while (true) {
@@ -39,13 +52,7 @@ public abstract class GenericDispatch extends Node {
                 return function.papCompact(arguments, physicalOffset, arguments.length - physicalOffset, remaining);
             }
             int count = function.arity;
-            int physicalCount = ArgumentLayout.offset(layout, offset + count) - physicalOffset;
-            boolean hasEnvironment = function.environment != null;
-            int skip = hasEnvironment ? 2 : 1;
-            Object[] packet = new Object[skip + function.supplied.length + physicalCount];
-            if (hasEnvironment) packet[1] = function.environment;
-            System.arraycopy(function.supplied, 0, packet, skip, function.supplied.length);
-            System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.length, physicalCount);
+            Object[] packet = packet(function, arguments, layout, offset, count);
             if (exact.profile(node, count == remaining)) return caller.call(frame, function.target, packet, tailCall);
             if (AstControl.captures(node)) {
                 int next = offset + count;
@@ -85,6 +92,17 @@ public abstract class GenericDispatch extends Node {
             offset += count;
             function = requireClosure(force.execute(frame, result));
         }
+    }
+    private static Object[] packet(Closure function, Object[] arguments, ArgumentLayout layout, int offset, int count) {
+        int physicalOffset = ArgumentLayout.offset(layout, offset);
+        int physicalCount = ArgumentLayout.offset(layout, offset + count) - physicalOffset;
+        boolean hasEnvironment = function.environment != null;
+        int skip = hasEnvironment ? 2 : 1;
+        Object[] packet = new Object[skip + function.supplied.length + physicalCount];
+        if (hasEnvironment) packet[1] = function.environment;
+        System.arraycopy(function.supplied, 0, packet, skip, function.supplied.length);
+        System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.length, physicalCount);
+        return packet;
     }
     private static DelimitedCut captureOverapplication(VirtualFrame frame, Node node, DelimitedCut cut, Object[] arguments,
             int logicalCount, ArgumentLayout layout, boolean tailCall, Metrics metrics, int next,
