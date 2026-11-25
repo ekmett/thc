@@ -42,6 +42,33 @@ class SavedGuestContinuationTest {
             return force.drainStack((SavedGuestContinuation) frame.getArguments()[0]);
         }
     }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void rawThunkAnswerCanBeTheSameCellsSuspensionObject(boolean astCaller) {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var target = new RootNode(language) {
+                    ThunkSuspended answer;
+                    int entries;
+                    @Override public Object execute(VirtualFrame frame) { entries++; return answer; }
+                };
+                var thunk = new Thunk(target.getCallTarget(), null);
+                target.answer = new ThunkSuspended(thunk);
+                var driver = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false));
+                    @Override public Object execute(VirtualFrame frame) {
+                        return astCaller ? AstControl.forceCallback(frame, this, force, thunk) : force.execute(frame, thunk);
+                    }
+                }.getCallTarget();
+                assertSame(target.answer, Calls.target(driver, new Object[0]));
+                assertSame(target.answer, Calls.target(driver, new Object[0]));
+                assertEquals(1, target.entries);
+                assertEquals(2, thunk.getState());
+            } finally { context.leave(); }
+        }
+    }
+
     private static final class LifetimeObservation {
         WeakReference<Object> produced;
     }

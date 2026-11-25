@@ -15,6 +15,11 @@ public final class ThunkSuspended extends AbstractTruffleException implements In
         super("Internal bytecode thunk suspension", null, 0, null);
         this.thunk = thunk; this.asyncRequest = asyncRequest; this.stackSpill = stackSpill;
     }
+    /** A completed raw host result can itself be a suspension object. A newly
+     * published marker is created after its cell parks and is private until this handoff. */
+    boolean parked(Thunk demanded) {
+        return thunk == demanded && !(demanded.getState() == 2 && demanded.getValue() == this);
+    }
     public Thunk getThunk() { return thunk; }
     public AsyncRequest getAsyncRequest() { return asyncRequest; }
     public boolean getStackSpill() { return stackSpill; }

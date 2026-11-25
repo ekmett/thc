@@ -42,6 +42,12 @@ public final class Force extends Node {
     }
     public Object execute(VirtualFrame frame, Object value) {
         if (!(value instanceof Thunk original)) return value;
+        Object result = demand(frame, original);
+        if (result instanceof ThunkSuspended suspended && suspended.parked(original)) throw suspended;
+        return result;
+    }
+    /** A fresh parked update owns its saved state before its caller receives the marker. */
+    Object demand(VirtualFrame frame, Thunk original) {
         Metrics invocationMetrics = metrics;
         if (invocationMetrics == null) {
             if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Missing reusable force owner");
@@ -254,7 +260,11 @@ public final class Force extends Node {
                     }
                 }
                 switch (claim) {
-                    case 0 -> { return evaluateOwned(original, continuation, resumeValue, metrics); }
+                    case 0 -> {
+                        Object result = evaluateOwned(original, continuation, resumeValue, metrics);
+                        if (!retryOuterAfterWait && result instanceof ThunkSuspended suspended && suspended.parked(original)) throw suspended;
+                        return result;
+                    }
                     case 1 -> {
                         awaitOwner(original);
                         // Ordinary demand refreshes in its outer loop; a resumed
@@ -671,7 +681,9 @@ public final class Force extends Node {
     }
 
     private Object evaluateOwned(Thunk thunk, SavedGuestContinuation continuation, Object resumeValue) {
-        return evaluateOwned(thunk, continuation, resumeValue, metrics);
+        Object result = evaluateOwned(thunk, continuation, resumeValue, metrics);
+        if (result instanceof ThunkSuspended suspended && suspended.parked(thunk)) throw suspended;
+        return result;
     }
     private Object evaluateOwned(Thunk thunk, SavedGuestContinuation continuation, Object resumeValue, Metrics metrics) {
         try {
@@ -691,7 +703,7 @@ public final class Force extends Node {
             if (returned instanceof TailYield || returned instanceof AstTailYield ||
                     returned instanceof SavedGuestContinuation || returned instanceof ContinuationResult) {
                 suspensionProfile.enter();
-                throw suspendReturnedThunk(thunk, continuation, returned);
+                return suspendReturnedThunk(thunk, continuation, returned);
             }
             if (returned instanceof Thunk) throw fault("Thunk target violated WHNF convention");
             thunk.publishSuccess(returned);

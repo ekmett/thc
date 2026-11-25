@@ -84,10 +84,14 @@ public final class AstControl {
     }
     /** A shared callback owns an explicit one-shot resume scope in either backend. */
     static Object forceCallback(VirtualFrame frame, Node node, Force force, Object value) {
-        try { return force.execute(frame, value); }
+        if (!(value instanceof Thunk thunk)) return value;
+        Object answer;
+        try { answer = force.demand(frame, thunk); }
         catch (RuntimeException failure) {
             throw captureForceFailure(node, force, value, failure);
         }
+        if (answer instanceof ThunkSuspended suspended && suspended.parked(thunk)) throw captureChild(node, suspended);
+        return answer;
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
     private static RuntimeException captureForceFailure(Node node, Force force, Object value, RuntimeException failure) {
