@@ -57,8 +57,13 @@ public final class LocalJoinRegion extends Expr implements Function<ArrayDeque<A
         ResumeAsyncRegion(LocalJoinRegion region, ArrayDeque<AstResumeStep> steps, int[] slots, int offset) { this.region = region; this.steps = steps; this.slots = slots; this.offset = offset; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             try {
-                try { AstContinuations.resumeAstSteps(frame, steps, input); }
-                catch (LocalJoinJump jump) {
+                LocalJoinRepeater direct = slots == null && region.tuple == null ? region.single : null;
+                LocalJoinJump jump;
+                try {
+                    Object result = AstContinuations.resumeAstSteps(frame, steps, input, direct);
+                    jump = direct == null ? null : (LocalJoinJump) result;
+                } catch (LocalJoinJump thrown) { jump = thrown; }
+                if (jump != null) {
                     if (jump.getTarget().getGroup() != region.group) throw jump;
                     LocalJoinRepeater once = region.single;
                     if (once != null) once.executeTarget(frame, jump.getTarget().getIndex());

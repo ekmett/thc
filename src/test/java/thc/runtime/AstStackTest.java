@@ -90,6 +90,53 @@ public class AstStackTest {
             } finally { context.leave(); }
         }
     }
+    @Test void resumedCaseCanSuspendAgainWhilePreparingTheSelectedJoin() {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var proof = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
+                class Operand extends Expr {
+                    final long value; final boolean suspends;
+                    int entries, completions;
+                    Operand(long value, boolean suspends) { this.value = value; this.suspends = suspends; setRepresentation(proof); }
+                    @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                    @Override public long executeLong(VirtualFrame frame) {
+                        entries++;
+                        if (suspends) throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> {
+                            assertSame(Unit.INSTANCE, input); completions++; return value;
+                        });
+                        completions++; return value;
+                    }
+                }
+                for (boolean suspendArgument : new boolean[]{false, true}) {
+                    var layout = new FrameLayout();
+                    int binder = layout.bind("scrutinee"), selector = layout.bind("selector"), result = layout.bind("result");
+                    int arg = layout.bind("argument"), temporary = layout.bind("temporary");
+                    var metrics = new Metrics(false); var group = new Object();
+                    var target = new LocalJoinTarget(group, 1, new int[]{arg}, new CoreRepresentation[]{proof}, new boolean[]{false}, proof);
+                    var scrutinee = new Operand(7L, true); var argument = new Operand(41L, suspendArgument);
+                    var call = new LocalJoinCall(language, target, new Expr[]{argument}, new int[]{temporary}, metrics);
+                    var selection = new Case(scrutinee, binder,
+                        new Alternative[]{new Alternative(Alternative.DEFAULT_ALTERNATIVE, null, new int[0], call)}, metrics, proof, false);
+                    var body = new Expr() {
+                        int entries;
+                        { setRepresentation(proof); }
+                        @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                        @Override public long executeLong(VirtualFrame frame) { entries++; return frame.getLong(arg) + 1; }
+                    };
+                    var region = new LocalJoinRegion(group, selector, result, new Expr[]{selection, body}, proof, false);
+                    var root = new FunctionRoot(language, layout.build(), "resumed scalar join", null, new int[0], new int[0],
+                        new int[0], region, metrics, new CoreRepresentation[0], proof, null, new boolean[0], null, null,
+                        new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true);
+                    assertEquals(42L, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                    assertEquals(1, scrutinee.entries); assertEquals(1, scrutinee.completions);
+                    assertEquals(1, argument.entries); assertEquals(1, argument.completions); assertEquals(1, body.entries);
+                    var stack = AstStacks.astStackScope(root); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                }
+            } finally { context.leave(); }
+        }
+    }
     @Test void synchronousPassThroughEntrySpillResumesOnceWithoutInstallingATailCatcher() {
         try (var context = Context.newBuilder("thc").build()) {
             context.initialize("thc"); context.enter();
