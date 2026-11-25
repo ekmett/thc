@@ -105,11 +105,10 @@ public final class CoreModules {
             }
             // Direct-unit startup registration belongs to CoreUnitProgram.
             if (admission != null && prepared == null) admissions.add(admission);
-            if (prepared == null) CoreForeignArtifacts.validateArchive(module);
+            var packageLink = prepared == null ? CoreForeignArtifacts.validateArchive(module, true, null) : prepared.getPackageLink();
             var nativeArchive = prepared == null ? PackageNativeArchives.read(module) : prepared.getArchive();
             var boxed = prepared == null ? CoreBoxedForeignDeclarations.read(module, true) : prepared.getBoxedImports();
             if (boxed != null) boxedImports.add(boxed);
-            var packageLink = prepared == null ? PackageScalarLinks.read(module) : prepared.getPackageLink();
             if (packageLink != null) packageProvenance(packageLink);
             var link = prepared == null ? CoreForeignArtifacts.linked(module) : prepared.getForeignLink();
             boolean archiveOnly = Objects.equals(module.get("schema"), 2L) || Objects.equals(module.get("schema"), 2), managedExport = admission != null;

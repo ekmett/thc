@@ -25,10 +25,9 @@ public final class CoreModuleAdmission {
             Map<String,PackageScalarLink> components) {
         this.module = module;
         exports = CoreModules.admission(module, binding::apply);
-        CoreForeignArtifacts.validateArchive(module, false);
+        var admitted = CoreForeignArtifacts.validateArchive(module, false, null);
         archive = PackageNativeArchives.read(module, false);
         boxedImports = CoreBoxedForeignDeclarations.read(module, false);
-        var admitted = PackageScalarLinks.read(module, true, false);
         if (admitted == null) packageLink = null;
         else {
             var link = admitted.link();

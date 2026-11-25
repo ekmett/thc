@@ -152,11 +152,10 @@ public final class CoreForeignArtifacts {
     public static void validateArchive(Map<?,?> module, boolean completeBindings) {
         validateArchive(module, completeBindings, null);
     }
-    static void validateArchive(Map<?,?> module, boolean completeBindings, List<?> actualCalls) {
+    static PackageScalarAdmission validateArchive(Map<?,?> module, boolean completeBindings, List<?> actualCalls) {
         if (version(module.get("schema"), 1)) {
             require(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"), "Foreign artifacts require Core schema 2");
-            PackageScalarLinks.read(module, true, completeBindings, actualCalls);
-            return;
+            return PackageScalarLinks.read(module, true, completeBindings, actualCalls);
         }
         require(version(module.get("schema"), 2), "Unsupported Core schema: " + module.get("schema"));
         var artifacts = artifactRecord(module.get("foreign"), "schema", "execution", "stubs", "files");
@@ -177,7 +176,9 @@ public final class CoreForeignArtifacts {
         }
         require(nonempty, "Core schema 2 requires foreign artifacts");
         if (module.containsKey("foreignLink")) linked(module, completeBindings);
-        if (PackageScalarLinks.read(module, true, completeBindings, actualCalls) == null) ManagedImportAdmission.read(module, completeBindings);
+        var admitted = PackageScalarLinks.read(module, true, completeBindings, actualCalls);
+        if (admitted == null) ManagedImportAdmission.read(module, completeBindings);
+        return admitted;
     }
     private static Map<?,?> artifactRecord(Object value, String... keys) {
         require(value instanceof Map<?,?> map && map.keySet().equals(Set.of(keys)), "Invalid Core foreign artifact record");
@@ -200,9 +201,9 @@ public final class CoreForeignArtifacts {
                 stubs.get("finalizers") instanceof List<?> finalizers && !finalizers.isEmpty();
     }
     public static void requireExecutable(Map<?,?> module) {
-        validateArchive(module);
+        var packageLink = validateArchive(module, true, null);
         require(!module.containsKey("packageNativeArchive"), "Archive-only package native obligations require strict entry reachability");
-        require(version(module.get("schema"), 1) || linked(module) != null || PackageScalarLinks.read(module) != null || ManagedImportAdmission.read(module) != null,
+        require(version(module.get("schema"), 1) || linked(module) != null || packageLink != null || ManagedImportAdmission.read(module) != null,
                 "Unsupported foreign code/registration for " + module.get("unit") + ":" + module.get("module") +
                 ": Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked");
     }
