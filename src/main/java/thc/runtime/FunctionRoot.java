@@ -534,7 +534,7 @@ public final class FunctionRoot extends GuestRoot {
     public void pollBeforeBody(Node node) {
         if (!enableAsync) return;
         boolean enteredCompiled = CompilerDirectives.inCompiledCode();
-        AsyncRequest request = GuestThreads.pollCurrent(node, false);
+        AsyncRequest request = GuestThreads.pollCurrent(node, this, false);
         if (request == null) return;
         request.compiledCapture = enteredCompiled;
         throw new AstCapture(request, SynchronousMasking.current(node)).append(new ResumeBody(this));

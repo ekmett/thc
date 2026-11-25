@@ -923,25 +923,30 @@ public final class GuestThreads {
     }
     /** The caller resolved this owner for its admission check in the same poll. */
     static AsyncRequest pollCurrent(Node node, RootNode owner, boolean interruptible) {
-        if (!ordinaryPollEnabled(node, owner)) return null;
-        checkpointCurrent(node);
-        if (ordinaryMailboxUnpublished(node, owner)) return null;
-        return pollMandatoryCurrentWithoutYield(node, interruptible);
+        var context = Language.currentState(node);
+        if (!ordinaryPollEnabled(context, owner)) return null;
+        var threads = context.getThreads();
+        if (threads.loom != null) threads.loom.checkpoint();
+        if (threads.ordinaryMailboxUnpublished(owner)) return null;
+        return pollMandatoryCurrentWithoutYield(context, node, interruptible);
     }
     /** Only ordinary polls speculate. Calls and their capture handlers never do. */
     public static boolean ordinaryPollEnabled(Node node) {
-        return ordinaryPollEnabled(node, node == null ? null : node.getRootNode());
+        RootNode owner = node == null ? null : node.getRootNode();
+        return !(owner instanceof GuestRoot root) || root.getEagerAsyncPolls() ||
+            concurrencyAdmitted(Language.currentState(node), root);
     }
-    private static boolean ordinaryPollEnabled(Node node, RootNode owner) {
-        if (!(owner instanceof GuestRoot root) || root.getEagerAsyncPolls()) return true;
-        var context = Language.currentState(node);
+    private static boolean ordinaryPollEnabled(Language.State context, RootNode owner) {
+        return !(owner instanceof GuestRoot root) || root.getEagerAsyncPolls() || concurrencyAdmitted(context, root);
+    }
+    private static boolean concurrencyAdmitted(Language.State context, GuestRoot root) {
         return root instanceof FunctionRoot function && function.usesRuntimeAsyncAdmission() ?
             context.isGuestConcurrencyAdmitted() : !context.getSingleGuestOriginAssumption().isValid();
     }
     /** Self throwTo is synchronous even while the single-origin assumption is valid. */
     public static AsyncRequest pollMandatoryCurrent(Node node, boolean interruptible) {
         checkpointCurrent(node);
-        return pollMandatoryCurrentWithoutYield(node, interruptible);
+        return pollMandatoryCurrentWithoutYield(Language.currentState(node), node, interruptible);
     }
     public static void checkpointCurrent(Node node) {
         var context = Language.currentState(node);
@@ -950,18 +955,17 @@ public final class GuestThreads {
     /** Used under commit/owner locks; scheduling yield happens before acquiring them. */
     public static AsyncRequest pollCurrentWithoutYield(Node node, boolean interruptible) {
         RootNode owner = node == null ? null : node.getRootNode();
-        if (!ordinaryPollEnabled(node, owner)) return null;
-        if (ordinaryMailboxUnpublished(node, owner)) return null;
-        return pollMandatoryCurrentWithoutYield(node, interruptible);
+        var context = Language.currentState(node);
+        if (!ordinaryPollEnabled(context, owner) || context.getThreads().ordinaryMailboxUnpublished(owner)) return null;
+        return pollMandatoryCurrentWithoutYield(context, node, interruptible);
     }
-    private static boolean ordinaryMailboxUnpublished(Node node, RootNode owner) {
+    private boolean ordinaryMailboxUnpublished(RootNode owner) {
         // Eager delivery and prepared roots retain polling without this speculation.
         if (owner instanceof GuestRoot root &&
                 (root.getEagerAsyncPolls() || root instanceof FunctionRoot function && function.usesRuntimeAsyncAdmission())) return false;
-        return current(node).noAsyncRequestPublished.isValid();
+        return noAsyncRequestPublished.isValid();
     }
-    private static AsyncRequest pollMandatoryCurrentWithoutYield(Node node, boolean interruptible) {
-        var context = Language.currentState(node);
+    private static AsyncRequest pollMandatoryCurrentWithoutYield(Language.State context, Node node, boolean interruptible) {
         var slot = context.getThreadPollState().get().current;
         return slot == null ? null : context.getThreads().poll(slot, node, interruptible);
     }
