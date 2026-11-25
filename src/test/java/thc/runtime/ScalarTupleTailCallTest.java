@@ -84,11 +84,28 @@ class ScalarTupleTailCallTest {
     }
     @Test void nonselfTargetKeepsOrdinaryTupleDispatchAndResultDestination() throws Exception {
         entered(language -> {
-            var program=new Program(language,module(false));
-            var root=program.entryTarget("worker").getRootNode();
-            assertNotNull(NodeUtil.findFirstNodeInstance(root,ScalarTupleTailCall.class));
-            for(int i=0;i<3;i++)assertArrayEquals(new long[]{19,1},invoke(program,1,7,19));
-            assertFalse(NodeUtil.findAllNodeInstances(root,TupleDispatch.class).isEmpty());
+            for (boolean partial : List.of(false, true)) {
+                var input = module(false);
+                if (partial) {
+                    @SuppressWarnings("unchecked")
+                    var bindings = (List<Map<String, Object>>) input.get("bindings");
+                    @SuppressWarnings("unchecked")
+                    var lambda = (List<Object>) bindings.get(1).get("expr");
+                    lambda.set(1, List.of(parameter("prefix"), parameter("n"), parameter("x"), parameter("y"), parameter("count")));
+                }
+                var program = new Program(language, input);
+                var root = program.entryTarget("worker").getRootNode();
+                assertNotNull(NodeUtil.findFirstNodeInstance(root, ScalarTupleTailCall.class));
+                if (partial) {
+                    var pap = ((Closure) program.entryValue("other")).pap(new Object[]{99L});
+                    var callee = NodeUtil.findFirstNodeInstance(root, ScalarTupleTailCall.Callee.class);
+                    var demand = callee.getChildren().iterator().next();
+                    var value = demand.getChildren().iterator().next();
+                    value.replace(new Literal(pap).proven(CoreRepresentations.parse(closure)));
+                }
+                for (int i = 0; i < 3; i++) assertArrayEquals(new long[]{19, 1}, invoke(program, 1, 7, 19));
+                assertFalse(NodeUtil.findAllNodeInstances(root, TupleDispatch.class).isEmpty());
+            }
         });
     }
     @Test void savedTypedPreparationResumesWithoutBoxedArgumentEntriesOrReplay() throws Exception {
