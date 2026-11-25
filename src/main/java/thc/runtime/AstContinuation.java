@@ -82,6 +82,15 @@ public final class AstContinuation implements SavedGuestContinuation {
         if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);
         if (!claimed.compareAndSet(false, true)) throw fault("AST continuation was already resumed");
         yielded = null;
+        // A terminal child delivery transfers its checked update. A following
+        // demand has no work when the value is already in weak head normal form.
+        if (input instanceof ChildResume completed && completed.getFailure() == null &&
+                steps.peek() instanceof AstControl.ResumeChild child &&
+                (steps.size() == 1 || steps.size() == 2 && steps.peekLast() instanceof Evaluate &&
+                    !(completed.getValue() instanceof Thunk)) && child.completedWith(completed.getValue())) {
+            steps.clear();
+            return completed.takeValue();
+        }
         MaskingState ambient = SynchronousMasking.current(sourceRoot);
         StackAnnotationState ambientAnnotations = StackAnnotations.current(sourceRoot);
         AstStackScope stack = AstStacks.astStackScope(sourceRoot);
