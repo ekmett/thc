@@ -7,6 +7,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import java.util.AbstractQueue;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Queue;
@@ -51,6 +52,18 @@ public final class AstCapture extends ControlFlowException {
             if (second != null) return List.of(first, second);
             return first != null ? List.of(first) : List.of();
         }
+        /** A scope takes exclusive ownership of its accumulated work. Its recipe
+         * keeps that work read-only across independent delimited invocations. */
+        Collection<AstResumeStep> takeScope() {
+            if (many != null) {
+                var owned = many;
+                many = null;
+                return owned;
+            }
+            var owned = snapshot();
+            first = second = null;
+            return owned;
+        }
         @Override public Iterator<AstResumeStep> iterator() {
             return many != null ? many.iterator() : snapshot().iterator();
         }
@@ -68,13 +81,12 @@ public final class AstCapture extends ControlFlowException {
     /** Keep the lexical exception/cleanup scope around the saved child work. */
     @TruffleBoundary public AstCapture enclose(Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper) {
         var steps = pendingSteps();
-        AstResumeStep scope = new ScopeRecipe(wrapper, steps.snapshot());
-        steps.clear();
+        AstResumeStep scope = new ScopeRecipe(wrapper, steps.takeScope());
         steps.add(scope);
         return this;
     }
     private record ScopeRecipe(Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper,
-                               List<AstResumeStep> steps) implements AstResumeStep {
+                               Collection<AstResumeStep> steps) implements AstResumeStep {
         @Override public AstResumeStep forInvocation() { return wrapper.apply(new ArrayDeque<>(steps)); }
         @Override public Object resume(com.oracle.truffle.api.frame.VirtualFrame frame, Object input) {
             throw new IllegalStateException("Captured scope recipe must be instantiated before resumption");
