@@ -389,9 +389,16 @@ class DelimitedContinuationsTest {
                                     effects[1]++;
                                     assertEquals(7, saved.getLong(0), "Each invocation owns a fresh control slot");
                                     saved.setLong(0, 99);
+                                    return input;
+                                });
+                                cut.append((saved, input) -> {
                                     assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this));
                                     assertEquals(List.of(inner, ambient), StackAnnotations.current(this).values());
-                                    return pack(unpack(input) + 7);
+                                    return pack(unpack(input) + 3);
+                                });
+                                cut.append((saved, input) -> {
+                                    assertEquals(99, saved.getLong(0));
+                                    return pack(unpack(input) + 4);
                                 });
                                 cut.enclose(steps -> new AstAnnotationScope(this, annotations, steps));
                                 cut.enclose(steps -> new AstMaskScope(this, prior, steps));
