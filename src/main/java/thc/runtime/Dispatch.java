@@ -47,7 +47,7 @@ public abstract class Dispatch extends Node {
             @Cached("createCaller(cachedTarget, prefixCount)") DirectCallerNode caller) {
         if (cachedTarget.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) return typed(frame, function, arguments);
         ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, argsSize);
-        Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, argsSize));
+        Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, prefixSize, arguments, 0, ArgumentLayout.width(argumentLayout, argsSize));
         if (hasEnvironment) packet[1] = function.environment;
         if (ownsArgumentScratch && !tailCall && cachedTarget.getRootNode() instanceof FunctionRoot root && root.consumesOrdinaryArguments()) {
             Arrays.fill(arguments, null);
@@ -65,7 +65,7 @@ public abstract class Dispatch extends Node {
             @Cached("createRemainder(arity)") Dispatch rest, @Cached("createForce()") Force force) {
         if (cachedTarget.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) return typed(frame, function, arguments);
         ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, arity);
-        Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, arity));
+        Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, prefixSize, arguments, 0, ArgumentLayout.width(argumentLayout, arity));
         if (hasEnvironment) packet[1] = function.environment;
         if (AstControl.captures(this)) {
             Object result;
@@ -121,7 +121,7 @@ public abstract class Dispatch extends Node {
         if (function.target.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) return typed(frame, function, arguments);
         boolean hasEnvironment = function.environment != null;
         ArgumentLayout.validate(function, argumentLayout, 0, Math.min(argsSize, function.arity));
-        Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, function.supplied.length, arguments, ArgumentLayout.width(argumentLayout, argsSize));
+        Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, function.supplied.length, arguments, 0, ArgumentLayout.width(argumentLayout, argsSize));
         if (hasEnvironment) packet[1] = function.environment;
         return caller.call(frame, function.target, packet, tailCall);
     }

@@ -10,7 +10,6 @@ import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import java.util.ArrayDeque;
 import java.util.IdentityHashMap;
@@ -72,6 +71,18 @@ public final class Force extends Node {
     private Object attemptThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
         switch (original.getState()) {
+            case 0 -> {
+                try {
+                    if (!original.tryClaimFresh()) return RETRY;
+                    return evaluateOwned(original, null, thc.runtime.Unit.INSTANCE, invocationMetrics);
+                } catch (Throwable failure) {
+                    // State never returns to 0. This fresh observation cannot
+                    // inherit ownership from an earlier call on this thread.
+                    // Cover the claim itself, including a failed monitor exit.
+                    suspendOwned(original);
+                    throw failure;
+                }
+            }
             case 2 -> { if (invocationMetrics.getEnabled()) invocationMetrics.incrementThunkHits(); return original.getValue(); }
             case 3 -> throw rethrowFailure(original);
             case 4 -> throw fault("Interrupted thunk has no resumable continuation");
@@ -204,10 +215,9 @@ public final class Force extends Node {
         return request != null && request.getTarget() == Thread.currentThread() &&
             request.getTargetId() == GuestThreads.current(this).currentId() && request.getState() == AsyncRequestState.CLAIMED;
     }
-    // Partial evaluation reaches this only with retryOuterAfterWait=true: every
-    // claim returns or throws on its first iteration. The false callers belong
-    // to the parked-demand boundaries, which retain the actual wait loop.
-    @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_UNROLL_UNTIL_RETURN)
+    // Contended demands and parked resumptions retain the complete ownership
+    // loop. Fresh claims keep only their guest evaluation in partial evaluation.
+    @TruffleBoundary(transferToInterpreterOnException = false)
     private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics,
                               boolean retryOuterAfterWait) {
         boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;

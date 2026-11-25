@@ -823,7 +823,9 @@ public final class Program implements ExecutableProgram {
             Map<String, Object> arg = args.get(i);
             boolean lifted = representation(arg);
             CoreRepresentation proof = CoreRepresentations.binder(arg);
-            if (lifted) proof = evaluated(proof, entryStrict[i]);
+            // A thunk's private formals carry the lexical values captured at its Delay.
+            // Ordinary formals establish an evaluated proof through their entry demand.
+            if (lifted && !thunkDemand) proof = evaluated(proof, entryStrict[i]);
             if (proof.isTypedTransport()) {
                 if (lifted) throw new RuntimeFault("Typed formal cannot be lifted");
                 List<CoreRepresentation> fields = ArgumentLayout.leaves(proof);
@@ -890,7 +892,8 @@ public final class Program implements ExecutableProgram {
                 ownRoot.configureCoreIdentity(CoreFunctionIdentity.from(sourceModule, initialization));
         }
         HandoffEntry handoff = null;
-        if (!reusableCode && (inputLayout == null || !inputLayout.getRequiresTyped())) {
+        // Force enters private thunk targets with an ordinary packet that it owns.
+        if (!thunkDemand && !reusableCode && (inputLayout == null || !inputLayout.getRequiresTyped())) {
             List<CoreRepresentation> declared = new ArrayList<>();
             for (Map<String, Object> arg : args) declared.add(CoreRepresentations.binder(arg));
             handoff = HandoffEntry.create(language, scope.layout, declared, resultProof, captures != null);
@@ -907,7 +910,7 @@ public final class Program implements ExecutableProgram {
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
             delimited, role, outlineCaseArms || deferDefaultArm,
             scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
-        if (!metrics.getEnabled() && initializedBody == null && initialization == null && role == FunctionRootRole.FUNCTION &&
+        if (!thunkDemand && !metrics.getEnabled() && initializedBody == null && initialization == null && role == FunctionRootRole.FUNCTION &&
                 handoff == null && inputProofs.stream().anyMatch(CoreRepresentation::hasBoxedPointer))
             root.enableOwnedOrdinaryArguments();
         // Same-frame regions deliberately expose the running activation to side roots.
@@ -1113,7 +1116,7 @@ public final class Program implements ExecutableProgram {
                 var formal = Map.<String, Object>of("id", operand.get(1), "name", operand.get(1),
                     "lifted", true, "coercion", false, "rep", proof);
                 FunctionSpec fn = function(label, List.of(formal), expr, scope, CoreRepresentations.expression(expr),
-                    new boolean[]{local.proof.getEvaluated()}, FunctionRootRole.FUNCTION, false, null, null, true);
+                    new boolean[1], FunctionRootRole.FUNCTION, false, null, null, true);
                 TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
                 if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
                 return new Delay(fn.target, local.slot, scope.layout.referenceSlot(local.slot)).proven(evaluated(CoreRepresentations.expression(expr), false))
