@@ -138,21 +138,21 @@ class Case extends Expr {
     }
     protected final void prepare(VirtualFrame frame) { prepareData(frame, null, 0); }
     protected final void prepare(VirtualFrame frame, int[] destination, int offset) { prepareData(frame, destination, offset); }
+    // The case owns scrutinee capture. A saved binder write precedes selection on either protocol.
     private DataValue prepareData(VirtualFrame frame, int[] destination, int offset) {
         try {
             if (directDataScrutinee) {
-                DataValue value = scrutinee.evaluateDataWithSavedWrite(frame);
+                DataValue value = (DataValue) scrutinee.evaluate(frame);
                 if (!unusedBinder) FrameAccess.writeObject(frame, binderSlot, value);
                 return value;
             }
-            scrutinee.write(frame);
+            scrutinee.writeValue(frame);
             return null;
         }
         catch (AstCapture cut) { throw appendCapture(cut, destination, offset); }
         catch (DelimitedCut cut) {
+            scrutinee.appendWrite(frame, cut);
             if (!delimited) throw cut;
-            // Enter the capture path before constructing its saved selection.
-            CompilerDirectives.transferToInterpreter();
             throw cut.append(frame, new DelimitedStep() {
                 @Override public Object resume(MaterializedFrame frame, DelimitedResume input,
                                                MaskingState ambient, DelimitedStep outerMask) {
@@ -167,7 +167,7 @@ class Case extends Expr {
     /** Construct the saved selection only at the capture boundary that owns it. */
     @TruffleBoundary(transferToInterpreterOnException = false)
     private AstCapture appendCapture(AstCapture cut, int[] destination, int offset) {
-        return cut.append(new AstResumeStep() {
+        return scrutinee.appendWrite(cut).append(new AstResumeStep() {
             @Override public Object resume(VirtualFrame frame, Object input) {
                 Expr branch = select(frame);
                 return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);

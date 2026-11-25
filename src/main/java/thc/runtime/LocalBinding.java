@@ -46,26 +46,16 @@ public final class LocalBinding extends Node {
         if (referenceKind == CoreKind.ADDRESS) return value.executeRequiredAddress(frame);
         return value.execute(frame);
     }
-    /** Exact DATA case preparation may keep a dead binder off the direct path.
-     * A suspended child still installs the original binder before saved selection. */
-    DataValue evaluateDataWithSavedWrite(VirtualFrame frame) {
-        try { return value.executeRequiredDataValue(frame); }
-        catch (AstCapture cut) { throw appendWrite(cut); }
-        catch (DelimitedCut cut) {
-            CompilerDirectives.transferToInterpreter();
-            throw cut.append(frame, (saved, input, ambient, outer) -> resumeWrite(saved, input.get()));
-        }
-    }
     public void write(VirtualFrame frame) {
         try { writeValue(frame); }
         catch (AstCapture cut) { throw appendWrite(cut); }
-        catch (DelimitedCut cut) {
-            // append enters the interpreter too; enter before constructing its saved suffix.
-            CompilerDirectives.transferToInterpreter();
-            throw cut.append(frame, (saved, input, ambient, outer) -> resumeWrite(saved, input.get()));
-        }
+        catch (DelimitedCut cut) { throw appendWrite(frame, cut); }
     }
-    @TruffleBoundary private AstCapture appendWrite(AstCapture cut) {
+    DelimitedCut appendWrite(VirtualFrame frame, DelimitedCut cut) {
+        CompilerDirectives.transferToInterpreter();
+        return cut.append(frame, (saved, input, ambient, outer) -> resumeWrite(saved, input.get()));
+    }
+    @TruffleBoundary AstCapture appendWrite(AstCapture cut) {
         return cut.append(this::resumeWrite);
     }
     private Object resumeWrite(VirtualFrame frame, Object input) {
@@ -75,7 +65,7 @@ public final class LocalBinding extends Node {
         }
         return thc.runtime.Unit.INSTANCE;
     }
-    private void writeValue(VirtualFrame frame) {
+    void writeValue(VirtualFrame frame) {
         if (typedSlots != null) { value.executeTuple(frame, typedSlots, 0); return; }
         if (objectSlot) { frame.setObject(slot, evaluate(frame)); return; }
         if (value.getRepresentation().isInt()) { FrameAccess.INSTANCE.writeInt(frame, slot, value.executeRequiredInt(frame)); return; }
