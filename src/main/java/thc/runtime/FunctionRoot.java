@@ -805,8 +805,9 @@ public final class FunctionRoot extends GuestRoot {
         if (hasSelfTail) return loop.execute(frame);
         try { return firstBody(frame); }
         catch (AstSelfCall ignored) {
-            // The payload-bearing transfer handler has unwound. Only this
-            // payload-free singleton remains live while the loop executes.
+            // The payload-bearing transfer handler has unwound. Enter the newly
+            // discovered self loop in the interpreter after publishing hasSelfTail.
+            CompilerDirectives.transferToInterpreterAndInvalidate();
         }
         return loop.execute(frame);
     }
