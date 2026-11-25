@@ -151,6 +151,7 @@ class DelimitedContinuationsTest {
                     @Child private Expr application;
                     @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
                     DelimitedStack image;
+                    boolean priming;
                     Root() {
                         super(language, layout.build());
                         var target = new GuestRoot(language, new FrameLayout().build()) {
@@ -163,10 +164,26 @@ class DelimitedContinuationsTest {
                                 var carrier = shape.getLayout().create(); shape.getLayout().setLong(carrier, 0, result); return carrier;
                             }
                         };
-                        var fn = new Expr() { @Override public Object execute(VirtualFrame frame) { return new Closure(null, 2, target.getCallTarget()); } };
+                        RootCallTarget callee = target.getCallTarget();
+                        if (!tupleResult) {
+                            var formals = new FrameLayout();
+                            int left = formals.bind("left", FrameSlotKind.Object), right = formals.bind("right", FrameSlotKind.Object);
+                            var scalar = new Expr() {
+                                @Override public Object execute(VirtualFrame frame) {
+                                    effects[2]++;
+                                    return (Long) frame.getObject(left) * 100 + (Long) frame.getObject(right);
+                                }
+                            };
+                            var worker = new FunctionRoot(language, formals.build(), "scalar pair", null, new int[0],
+                                new int[]{left, right}, new int[]{0, 1}, scalar, new Metrics(false));
+                            worker.enableOwnedOrdinaryArguments();
+                            callee = worker.getCallTarget();
+                        }
+                        var fn = new Literal(new Closure(null, 2, callee));
                         var first = new Expr() {
                             { setRepresentation(number); }
                             @Override public Object execute(VirtualFrame frame) {
+                                if (priming) return 4L;
                                 effects[0]++;
                                 throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> {
                                     throw new DelimitedCut(new PromptTag(Language.currentState()), null, null, SynchronousMasking.current(this), this);
@@ -176,6 +193,7 @@ class DelimitedContinuationsTest {
                         var second = new Expr() {
                             { setRepresentation(number); }
                             @Override public Object execute(VirtualFrame frame) {
+                                if (priming) return 2L;
                                 effects[1]++;
                                 if (nested[0]) return 2L;
                                 nested[0] = true;
@@ -204,7 +222,14 @@ class DelimitedContinuationsTest {
                         return image.resume(site, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor()), action);
                     }
                 }
-                var root = new Root(); var saved = (AstContinuation) root.getCallTarget().call(0L);
+                var root = new Root();
+                if (!tupleResult) {
+                    root.priming = true;
+                    assertEquals(402L, root.getCallTarget().call(0L));
+                    root.priming = false;
+                    effects[2] = 0;
+                }
+                var saved = (AstContinuation) root.getCallTarget().call(0L);
                 root.image = new DelimitedStack(assertThrows(DelimitedCut.class, () -> saved.continueWith(Unit.INSTANCE)), null);
                 assertEquals(1001L, root.resume(10L)); assertEquals(2002L, nestedResult[0]);
                 assertEquals(3001L, root.resume(30L)); assertEquals(2002L, nestedResult[0]);

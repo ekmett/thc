@@ -49,6 +49,15 @@ public final class PreparedDispatch extends Node {
 
     void ownAstArgumentScratch() { adaptive.ownsArgumentScratch = true; }
 
+    /** An observed ordinary exact AST call can evaluate operands into the final packet. */
+    int packetHeader(Closure function) {
+        if (!observed || tail || layout != null || function.arity != count || function.supplied.length != 0)
+            return 0;
+        int header = function.environment == null ? 1 : 2;
+        return function.target.getRootNode() instanceof FunctionRoot root && root.getTypedInput() == null
+            && root.getEntryArgumentOffset() == header ? header : 0;
+    }
+
     public Object execute(VirtualFrame frame, Closure function, Object[] arguments) {
         boolean cold = metrics == null || !observed && CompilerDirectives.inCompiledCode();
         // Overapplication owns a live suffix even when an earlier exact call has

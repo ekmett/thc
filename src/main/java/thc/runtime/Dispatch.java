@@ -47,10 +47,10 @@ public abstract class Dispatch extends Node {
             @Cached("createCaller(cachedTarget, prefixCount)") DirectCallerNode caller) {
         if (cachedTarget.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) return typed(frame, function, arguments);
         ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, argsSize);
-        Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, argsSize));
+        Object[] packet = exactPacket(function, hasEnvironment, prefixSize, arguments);
         if (hasEnvironment) packet[1] = function.environment;
         if (ownsArgumentScratch && !tailCall && cachedTarget.getRootNode() instanceof FunctionRoot root && root.consumesOrdinaryArguments()) {
-            Arrays.fill(arguments, null);
+            if (packet != arguments) Arrays.fill(arguments, null);
             return caller.callOwned(frame, packet);
         }
         return caller.call(frame, packet, tailCall);
@@ -121,7 +121,7 @@ public abstract class Dispatch extends Node {
         if (function.target.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) return typed(frame, function, arguments);
         boolean hasEnvironment = function.environment != null;
         ArgumentLayout.validate(function, argumentLayout, 0, Math.min(argsSize, function.arity));
-        Object[] packet = appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, function.supplied.length, arguments, ArgumentLayout.width(argumentLayout, argsSize));
+        Object[] packet = exactPacket(function, hasEnvironment, function.supplied.length, arguments);
         if (hasEnvironment) packet[1] = function.environment;
         return caller.call(frame, function.target, packet, tailCall);
     }
@@ -129,6 +129,11 @@ public abstract class Dispatch extends Node {
     protected Object indirectOverapplied(VirtualFrame frame, Closure function, Object[] arguments, @Bind Node node,
             @Cached(inline = true) GenericDispatch generic) {
         return generic.execute(frame, node, function, arguments, argsSize, argumentLayout, tailCall, metrics, 0);
+    }
+    private Object[] exactPacket(Closure function, boolean hasEnvironment, int prefixSize, Object[] arguments) {
+        int width = ArgumentLayout.width(argumentLayout, argsSize);
+        if (ownsArgumentScratch && arguments.length != width) return arguments;
+        return appendWithHeader(hasEnvironment ? 2 : 1, function.supplied, prefixSize, arguments, width);
     }
     public ArgumentLayout targetInputLayout(RootCallTarget target) { return target.getRootNode() instanceof GuestRoot root ? root.getInputLayout() : null; }
     public DirectCallerNode createCaller(RootCallTarget target, int prefixSize) { return new DirectCallerNode(target, metrics, evaluatedArguments, prefixSize); }
