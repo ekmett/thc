@@ -209,13 +209,20 @@ public final class TypedInputs {
     }
     static Object[] scalarPacket(VirtualFrame frame, Node node, Closure function, InputSource source, Object[] values, int start, int count, int genericMaximum) {
         check(function.typedSupplied == null);
-        Object[] args = genericMaximum >= 0 ? GenericTypedInputs.genericScalarValues(frame, node, source, values, genericMaximum, start, count) :
-            scalarValues(frame, node, source, values, start, count);
+        // An ordinary scalar-array source already contains the physical references in call order.
+        Object[] args = values;
+        int from = start, width = count;
+        if (!(source instanceof ScalarArrayInputSource) || source.getLayout() != null || values == null) {
+            args = genericMaximum >= 0 ? GenericTypedInputs.genericScalarValues(frame, node, source, values, genericMaximum, start, count) :
+                scalarValues(frame, node, source, values, start, count);
+            from = 0;
+            width = args.length;
+        }
         int skip = function.environment == null ? 1 : 2;
-        Object[] packet = new Object[skip + function.supplied.length + args.length];
+        Object[] packet = new Object[skip + function.supplied.length + width];
         if (function.environment != null) packet[1] = function.environment;
         System.arraycopy(function.supplied, 0, packet, skip, function.supplied.length);
-        System.arraycopy(args, 0, packet, skip + function.supplied.length, args.length);
+        System.arraycopy(args, from, packet, skip + function.supplied.length, width);
         return packet;
     }
     static Closure legacyPap(VirtualFrame frame, Node node, Closure function, InputSource source, Object[] values, int start, int count) {
