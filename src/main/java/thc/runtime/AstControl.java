@@ -129,6 +129,9 @@ public final class AstControl {
         if (tailTarget != null && !root.isSelf(tailTarget) || tailTarget == null && expectedTarget != null && !root.isSelf(expectedTarget))
             throw fault("AST call returned an unrelated continuation");
         if (tupleShape != null && !root.hasTupleResult(tupleShape)) throw fault("AST call continuation changed its tuple result shape");
+        // A shared AST application can call a bytecode control0# action. Preserve
+        // its delimited suffix before classifying asynchronous scheduling cuts.
+        DelimitedControl.captureBytecode(result, tupleShape);
         if (!AsyncContinuations.isYieldMarker(saved.getYielded())) throw fault("AST call returned an unsupported continuation cut");
         AsyncContinuations.deliverIfCaught(saved, caughtIOAction, node);
         MaskingState callerMask = SynchronousMasking.current(node);
