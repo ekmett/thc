@@ -160,18 +160,15 @@ class ReusableHigherOrderTest {
                         assertEquals(59L, call(second, "apply", chosen, 0L));
                         var lazy = (Thunk)first.entryValue("lazyFunction"); assertEquals(0, lazy.getState());
                         if (joins) {
-                            // The join retains a lazy result proof; the enclosing
-                            // FunctionBody demands that result at its boundary.
-                            var returned = assertInstanceOf(Closure.class, call(first, "choose", lazy, 0L));
-                            assertSame(lazy.getValue(), returned);
-                            assertSame(first, returned.environment.getProgram());
-                            assertEquals(2, lazy.getState());
-                            assertEquals(2L, count(first, "thunkEvaluations"));
+                            assertSame(lazy, call(first, "choose", lazy, 0L));
+                            assertEquals(0, lazy.getState());
+                            assertEquals(1L, count(first, "thunkEvaluations"));
                             assertEquals(3L, count(first, "localJoinTransfers"));
                             assertEquals(0L, count(second, "localJoinTransfers"));
                         }
                         assertEquals(47L, call(first, "apply", lazy, 2L));
                         assertEquals(2, lazy.getState()); assertEquals(2L, count(first, "thunkEvaluations"));
+                        assertSame(first, assertInstanceOf(Closure.class, lazy.getValue()).environment.getProgram());
                         assertEquals(0, ((Thunk)second.entryValue("lazyFunction")).getState());
                         assertEquals(0L, count(second, "papAllocations"));
                         assertEquals(0L, count(first, "loweredRootCount")); assertEquals(0L, count(second, "loweredRootCount"));
