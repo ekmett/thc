@@ -42,6 +42,10 @@ class OperandRetentionTest {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var program = new Program(language, module, true, false);
                     var target = program.entryTarget("entry");
+                    var primitive = com.oracle.truffle.api.nodes.NodeUtil.findAllNodeInstances(
+                        target.getRootNode(), Primitive.class).getFirst();
+                    for (var operand : primitive.getChildren())
+                        assertFalse(operand instanceof Evaluate, name);
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), name);
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();

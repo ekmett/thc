@@ -1562,7 +1562,11 @@ public final class Program implements ExecutableProgram {
         return Primitive.arity(name) >= 0 || IndexManagedScalarAddress.operation(name) != null;
     }
     private Expr primitive(String name, Expr[] args, boolean someException) {
-        if (Primitive.arity(name) >= 0) return new Primitive(name, args);
+        if (Primitive.arity(name) >= 0) {
+            for (int i = 0; i < args.length; i++)
+                if (args[i] instanceof Evaluate demand) args[i] = demand.requiredLongOperand();
+            return new Primitive(name, args);
+        }
         NarrowScalarOp narrow = NarrowScalarOp.named(name);
         if (narrow != null) return new NarrowScalarExpression(name, narrow, args);
         Expr floating = FloatingPrimitives.floatingPrimitive(name, args);
