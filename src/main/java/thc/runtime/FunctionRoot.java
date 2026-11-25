@@ -61,6 +61,8 @@ public final class FunctionRoot extends GuestRoot {
     // Only an exact, non-tail AST application with fresh private transport can issue this header.
     static final Object OWNED_ZERO_BLOOM = new Object();
     @CompilationFinal private boolean consumesOrdinaryArguments;
+    private volatile boolean observedArguments;
+    void preserveObservedArguments() { observedArguments = true; }
     void enableOwnedOrdinaryArguments() { consumesOrdinaryArguments = true; }
     boolean consumesOrdinaryArguments() { return consumesOrdinaryArguments && getTypedInput() == null; }
     private final String label;
@@ -695,7 +697,7 @@ public final class FunctionRoot extends GuestRoot {
             if (!deferredBloom) initializeBloom(frame);
             buildFrame(arguments, frame);
             // Saved guest frames own their live slots. The private packet was only ingress transport.
-            if (owned) Arrays.fill(arguments, captureLayout == null ? 1 : 2, arguments.length, null);
+            if (owned && !observedArguments) Arrays.fill(arguments, captureLayout == null ? 1 : 2, arguments.length, null);
         }
         if (metrics == null) {
             // Cached-code launchers fail closed on interpreter fallback. The check folds

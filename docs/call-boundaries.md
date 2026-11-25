@@ -35,7 +35,9 @@ into a fresh ordinary packet for a lowered Core function with reference
 formals. The private header represents zero inherited ancestry. Once the
 callee has restored its live locals, it restores the ordinary bloom header
 and clears the consumed payload entries, preserving any capture environment.
-A saved guest frame retains its live slots. External calls with borrowed
+Instrumented programs retain the ordinary path. A source probe on the
+callee preserves the input payload for subsequent entries. A saved guest
+frame retains its live slots. External calls with borrowed
 arrays keep their argument values. If strict argument preparation suspends,
 the resumed call keeps its packet available for replay.
 
