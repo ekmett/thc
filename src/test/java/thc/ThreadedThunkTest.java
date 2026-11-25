@@ -380,10 +380,14 @@ class ThreadedThunkTest {
             var make = list("let", false, list(map("id", "work", "name", "work", "arity", 0, "lifted", true, "rep", lazy, "expr", body)), envelope, map("rep", boxed));
             var args = list(map("id", "ready", "lifted", false, "rep", reference), map("id", "gate", "lifted", false, "rep", reference),
                 map("id", "s", "lifted", false, "rep", state));
+            // Taking and putting declare the RTS deadlock CAF even when this gate is released normally.
+            var blocked = map("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR,
+                "type", "SomeException", "lifted", true, "arity", 0, "rep", lazy,
+                "expr", list("var", CoreBlockedExceptions.MVAR, map("rep", lazy)));
             var source = map("schema", 1, "ghc", "9.14.1", "constructors", list(sparkEnvelope(),
                 map("id", "Done", "name", "Done", "arity", 0, "tag", 1, "kind", "boxed", "fieldReps", list(), "fieldLifted", list(), "strictFields", list()),
                 map("id", "tuple2", "name", "(#,#)", "arity", 2, "tag", 1, "kind", "unboxed-tuple")),
-                "bindings", list(map("id", "make", "name", "make", "arity", 3, "lifted", true, "rep", closure,
+                "bindings", list(blocked, map("id", "make", "name", "make", "arity", 3, "lifted", true, "rep", closure,
                     "expr", list("lam", args, make, map("rep", closure, "resultRep", boxed)))));
             ExecutableProgram program = backend.equals("ast") ? new Program(language, source, true, false) : new BytecodeProgram(language, source, null, true);
             var container = (DataValue) ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"), new Object[]{0L, ready, gate, Unit.INSTANCE});
