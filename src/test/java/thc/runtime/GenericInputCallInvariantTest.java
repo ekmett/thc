@@ -7,7 +7,10 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.EventContext;
+import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.Arrays;
 import java.util.List;
@@ -34,14 +37,17 @@ class GenericInputCallInvariantTest {
                         return frame.getObject(formal);
                     }
                 };
+                var source = Source.newBuilder("thc", "x", "reference-worker.hs").build();
+                var location = new CoreSourceLocation(source.createSection(0, 1), List.of());
+                body.setCoreSourceLocation(location);
                 var metrics = new Metrics(true);
                 var root = new FunctionRoot(language, layout.build(), "reference worker", null, new int[0],
                     new int[]{formal}, new int[]{0}, body, metrics, new CoreRepresentation[]{CoreRepresentation.UNKNOWN},
-                    body.getRepresentation(), null, new boolean[]{false}, null, null, new int[0], null,
+                    body.getRepresentation(), location, new boolean[]{false}, null, null, new int[0], null,
                     false, new int[0][], false, FunctionRootRole.FUNCTION, false);
                 root.enableOwnedOrdinaryArguments();
                 var closure = new Closure(null, 1, root.getCallTarget());
-                var value = new Object();
+                var value = "observed argument";
                 Object[] borrowed = {0L, value};
                 assertSame(value, Calls.target(closure.target, borrowed));
                 assertSame(value, borrowed[1]);
@@ -58,6 +64,22 @@ class GenericInputCallInvariantTest {
                 assertNull(saved[0].getArguments()[1]);
                 assertSame(value, saved[0].getObject(formal));
                 assertSame(value, borrowed[1]);
+
+                var attachment = context.getEngine().getInstruments().get("thc-activation-test")
+                    .lookup(AstInstrumentationTest.Attachment.class);
+                int[] observed = {0};
+                var binding = attachment.attachStatements(source, new ExecutionEventListener() {
+                    @Override public void onEnter(EventContext event, VirtualFrame frame) {
+                        assertSame(value, frame.getArguments()[1]);
+                        observed[0]++;
+                    }
+                    @Override public void onReturnValue(EventContext event, VirtualFrame frame, Object result) {}
+                    @Override public void onReturnExceptional(EventContext event, VirtualFrame frame, Throwable failure) {}
+                });
+                try {
+                    assertSame(value, Calls.target(caller.getCallTarget(), new Object[]{0L}));
+                    assertEquals(1, observed[0]);
+                } finally { binding.dispose(); }
             } finally { context.leave(); }
         }
     }
