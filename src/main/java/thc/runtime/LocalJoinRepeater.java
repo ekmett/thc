@@ -78,12 +78,12 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
     }
     void executeOnce(VirtualFrame frame) {
         LocalJoinJump jump;
-        try { jump = executeBody(frame, bodies[0], true); }
-        catch (LocalJoinJump thrown) { jump = thrown; }
-        if (jump != null) {
-            if (jump.getTarget().getGroup() != group) throw jump;
-            executeTarget(frame, jump.getTarget().getIndex());
-        }
+        try {
+            jump = executeBody(frame, bodies[0], true);
+            if (jump == null) return;
+        } catch (LocalJoinJump thrown) { jump = thrown; }
+        if (jump.getTarget().getGroup() != group) throw jump;
+        executeTarget(frame, jump.getTarget().getIndex());
     }
     @Override public boolean executeRepeating(VirtualFrame frame) {
         try {
