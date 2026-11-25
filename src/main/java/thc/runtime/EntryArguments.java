@@ -36,6 +36,7 @@ public final class EntryArguments extends Node {
         forces = new Force[positions.length];
         for (int i = 0; i < forces.length; i++) forces[i] = new Force(metrics);
     }
+    boolean isEmpty() { return positions.length == 0; }
     static boolean captures(GuestRoot root) {
         return root instanceof BytecodeRoot bytecode && bytecode.isAsyncEnabled() ||
             root instanceof FunctionRoot ast && ast.getCapturesContinuations$org_intelligence_thc();
