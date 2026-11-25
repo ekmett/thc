@@ -66,6 +66,50 @@ class AstContinuationTest {
             } finally { context.leave(); }
         }
     }
+    @ParameterizedTest @ValueSource(ints = {1, 2, 4})
+    void recaptureAppendsOriginalSiblingsAfterTheInterruptedStep(int siblings) {
+        try (var context = Context.create("thc")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var root = new GuestRoot(language, new FrameLayout().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) { return Unit.INSTANCE; }
+                };
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, root.getFrameDescriptor());
+                for (boolean discard : new boolean[]{false, true}) {
+                    var resumed = new ArrayList<Integer>();
+                    var discarded = new ArrayList<Integer>();
+                    class Step implements AstResumeStep {
+                        final int id;
+                        Step(int id) { this.id = id; }
+                        @Override public Object resume(VirtualFrame frame, Object input) { resumed.add(id); return input; }
+                        @Override public void discard() { discarded.add(id); }
+                    }
+                    var capture = new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED).append((activation, input) -> {
+                        resumed.add(0);
+                        throw new AstCapture(Unit.INSTANCE, MaskingState.UNMASKED).append(new Step(1));
+                    });
+                    for (int i = 0; i < siblings; i++) capture.append(new Step(i + 2));
+                    var first = capture.freeze(root, frame);
+                    var second = assertInstanceOf(AstContinuation.class, first.continueWith(Unit.INSTANCE));
+                    first.discard(); capture.discard();
+                    var expected = java.util.stream.IntStream.range(1, siblings + 2).boxed().toList();
+                    if (discard) {
+                        second.discard(); second.discard();
+                        assertEquals(List.of(0), resumed);
+                        assertEquals(expected, discarded);
+                    } else {
+                        assertSame(Unit.INSTANCE, second.continueWith(Unit.INSTANCE));
+                        second.discard();
+                        assertEquals(List.of(0), resumed.subList(0, 1));
+                        assertEquals(expected, resumed.subList(1, resumed.size()));
+                        assertTrue(discarded.isEmpty());
+                    }
+                }
+            } finally { context.leave(); }
+        }
+    }
     private static List<Object> list(Object... values) { return Arrays.asList(values); }
     private static Map<String, Object> map(Object... fields) { var result = new LinkedHashMap<String, Object>(); for (int i = 0; i < fields.length; i += 2) result.put((String) fields[i], fields[i + 1]); return result; }
     private final Map<String, Object> stateRep = map("kind", "void", "primReps", List.of(), "evaluated", true);
