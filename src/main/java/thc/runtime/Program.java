@@ -1537,6 +1537,9 @@ public final class Program implements ExecutableProgram {
         List<Scope> bodyScopes = new ArrayList<>();
         for (CoreJoinDefinition definition : definitions) {
             Scope scope = local.child();
+            // A nonrecursive definition can reach enclosing joins, but its
+            // own group is visible only in the let body.
+            if (!recursive) scope.joinCaptureSlots = outer.joinCaptureSlots;
             boolean[] entryStrict = CoreEntries.join(definition);
             for (int i = 0; i < definition.getParameters().size(); i++) {
                 Map<String, Object> parameter = definition.getParameters().get(i);

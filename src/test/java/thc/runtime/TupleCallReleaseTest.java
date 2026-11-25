@@ -89,8 +89,11 @@ class TupleCallReleaseTest {
         var join = Map.of("id", "done", "name", "done", "joinValueArity", 1, "joinResultRep", ref, "lifted", true, "rep", closure,
             "expr", List.of("lam", List.of(parameter("out", ref)), live ? source : List.of("var", "out", Map.of("rep", ref)),
                 Map.of("rep", closure, "resultRep", ref)));
+        var writer = Map.of("id", "write", "name", "write", "joinValueArity", 0, "joinResultRep", ref,
+            "lifted", true, "rep", ref, "expr", selection);
+        var invokeWriter = List.of("let", false, List.of(writer), List.of("var", "write", Map.of("rep", ref)), Map.of("rep", ref));
         var sourceBinding = Map.of("id", "source", "name", "source", "lifted", true, "rep", ref, "expr", input);
-        var body = List.of("let", false, List.of(sourceBinding), List.of("let", false, List.of(join), selection, Map.of("rep", ref)), Map.of("rep", ref));
+        var body = List.of("let", false, List.of(sourceBinding), List.of("let", false, List.of(join), invokeWriter, Map.of("rep", ref)), Map.of("rep", ref));
         var packed = List.of("app", List.of("con", "T", 1), List.of(List.of("var", "forced", Map.of("rep", ref))),
             List.of(true), false, false, Map.of("rep", tuple));
         var force = List.of("case", List.of("var", "arg", Map.of("rep", ref)), "forced",
