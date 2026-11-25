@@ -792,19 +792,14 @@ public final class FunctionRoot extends GuestRoot {
         }
         if (hasSelfTail) return loop.execute(frame);
         if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function self-loop node");
-        // Finish the first transfer before entering the long-running loop. Its
-        // exception and argument packet can otherwise retain a consumed list prefix.
-        Object result = firstLap(frame, repeating);
-        return result == AstSelfCall.INSTANCE ? loop.execute(frame) : result;
-    }
-    private Object firstLap(VirtualFrame frame, SelfRepeater repeating) {
+        // Ordinary results return directly. Enter the long-running loop only
+        // after leaving the first transfer's catch scope and its argument packet.
         try { return repeating.once(frame); }
         catch (AstSelfCall ignored) {
             tailCallProfile.enter();
             if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
-            return AstSelfCall.INSTANCE;
         } catch (HandoffTailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
@@ -812,7 +807,6 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreHandoff(frame, tail.getArguments(), false, null);
-            return AstSelfCall.INSTANCE;
         } catch (TailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
@@ -820,8 +814,8 @@ public final class FunctionRoot extends GuestRoot {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreTail(frame, tail);
-            return AstSelfCall.INSTANCE;
         }
+        return loop.execute(frame);
     }
     @Override public SourceSection getSourceSection() { return coreSourceLocation == null ? null : coreSourceLocation.getSection(); }
     public List<CoreSourceNote> getCoreSourceNotes() { return coreSourceLocation == null ? List.of() : coreSourceLocation.getNotes(); }
