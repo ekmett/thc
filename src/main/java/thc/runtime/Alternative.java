@@ -93,25 +93,26 @@ final class Alternative extends Node {
             CompilerDirectives.transferToInterpreter();
     }
     private boolean matchesLiteral(VirtualFrame frame, int slot) {
-        // Case preparation initializes the binder; sibling widening still needs activation tags.
         if (value instanceof Integer literal) {
-            if (frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Int || frame.isInt(slot)) return frame.getInt(slot) == literal;
-            Object scrutinee = numericObject(frame, slot);
-            return scrutinee instanceof Integer number && number.intValue() == literal.intValue();
+            if (knownKind(frame, slot, FrameSlotKind.Int) || frame.isInt(slot)) return frame.getInt(slot) == literal;
+            return literal.equals(numericObject(frame, slot));
         }
         if (value instanceof Long literal) {
-            if (frame.getFrameDescriptor().getSlotKind(slot) == FrameSlotKind.Long || frame.isLong(slot)) return frame.getLong(slot) == literal;
-            Object scrutinee = numericObject(frame, slot);
-            return scrutinee instanceof Long number && number.longValue() == literal.longValue();
+            if (knownKind(frame, slot, FrameSlotKind.Long) || frame.isLong(slot)) return frame.getLong(slot) == literal;
+            return literal.equals(numericObject(frame, slot));
         }
-        // Remaining literal Addr# carriers compare by identity, never guest equals.
-        return FrameAccess.INSTANCE.read(frame, slot) == value;
+        return FrameAccess.read(frame, slot) == value;
+    }
+    private static boolean knownKind(VirtualFrame frame, int slot, FrameSlotKind kind) {
+        // A prepared case binder can use its known descriptor. Saved frames need their activation tags.
+        var descriptor = frame.getFrameDescriptor();
+        return CompilerDirectives.isPartialEvaluationConstant(descriptor) && descriptor.getSlotKind(slot) == kind;
     }
     private static Object numericObject(VirtualFrame frame, int slot) {
-        if (frame.isObject(slot)) return frame.getObject(slot);
-        // Other primitive carriers cannot match; do not box them just to reject them.
-        if (frame.isInt(slot) || frame.isLong(slot) || frame.isFloat(slot) ||
-            frame.isDouble(slot) || frame.isBoolean(slot)) return null;
-        throw fault("Unsupported runtime frame slot tag");
+        return switch (FrameSlotKind.fromTag(frame.getTag(slot))) {
+            case Object -> frame.getObject(slot);
+            case Int, Long, Float, Double, Boolean -> null;
+            default -> throw fault("Unsupported runtime frame slot tag");
+        };
     }
 }
