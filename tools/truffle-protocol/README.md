@@ -172,7 +172,7 @@ body and program counter. See [AST recovery](../../docs/ast-case-boundaries.md).
 including with `Throw`, `Diagnose` and `ExitVM` reporting. If omitted, those
 reporting actions retain their upstream diagnostic default. Admission control
 does not interrupt a compiler invocation that has already started. The launcher
-sets the explicit opt-out and a speculative graph budget of 1,000 nodes.
+sets the explicit opt-out and a speculative graph budget of 64,000 nodes.
 
 OSR selection and submission remain under the owner's AST lock; any foreground
 wait occurs outside it. The request retains its exact target and task, not a

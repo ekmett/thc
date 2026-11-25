@@ -11,6 +11,7 @@ import com.oracle.truffle.api.profiles.CountingConditionProfile;
 import static thc.runtime.RuntimeFault.fault;
 
 final class Alternative extends Node {
+    static final int UNUSED_FIELD = Integer.MIN_VALUE;
     static final int DEFAULT_ALTERNATIVE = 0;
     static final int DATA_ALTERNATIVE = 1;
     static final int LITERAL_ALTERNATIVE = 2;

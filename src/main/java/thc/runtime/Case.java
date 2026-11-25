@@ -396,6 +396,7 @@ class Case extends Expr {
         if (alt.getKind() == DATA_ALTERNATIVE) {
             if (!(scrutinee instanceof DataValue data)) throw fault("Invalid constructor case");
             for (int i = 0; i < alt.getFields().length; i++) {
+                if (alt.getFields()[i] == Alternative.UNUSED_FIELD) continue;
                 int[] lanes = i < alt.getVectorFields().length ? alt.getVectorFields()[i] : null;
                 if (lanes == null) alt.restore(data, i, frame, alt.getFields()[i]);
                 else alt.restoreVector(data, i, frame, lanes);
