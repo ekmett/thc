@@ -76,6 +76,74 @@ class TypedInputProtocolTest {
         for (var node : NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class)) if (node.getCallTarget() == original) result.add((RootCallTarget) node.getCurrentCallTarget());
         return result;
     }
+    @Test void unusedTupleFormalStillEvaluatesTheOperandWithoutRestoringItsLeaves() throws ReflectiveOperationException {
+        withLanguage(false, (context, language) -> {
+            var mixed = map("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", true,
+                "primReps", list("IntRep", "BoxedRep (Just Lifted)"), "components", list(integer, ref));
+            var packed = app(list("con", "Pair", 2), List.of(n(31), v("pointer", ref)), mixed, List.of(false, true));
+            var workerParameters = List.of(arg("tuple", mixed), arg("fallback", ref));
+            var workerResult = list("case", v("tuple", mixed), "whole",
+                list(list("data", "Pair", list("number", "payload"), v("payload", ref),
+                    map("binders", list(arg("number"), arg("payload", ref))))),
+                map("rep", ref, "binder", arg("whole", mixed)));
+            for (boolean used : List.of(false, true)) {
+                var worker = bind("worker", lam(workerParameters, used ? workerResult : v("fallback", ref), ref));
+                var entry = bind("entry", lam(List.of(arg("pointer", ref), arg("other", ref)),
+                    app(v("worker", closure), List.of(packed, v("other", ref)), ref, List.of(false, true)), ref));
+                var p = program(language, "ast", List.of(worker, entry));
+                var root = (FunctionRoot) p.entryTarget("worker").getRootNode();
+                var layout = root.getTypedInput().getLogical();
+                assertEquals(2, layout.getLogicalArity());
+                assertTrue(layout.isTuple(0));
+                assertEquals(2, layout.offset(1));
+                assertEquals(List.of("IntRep", "BoxedRep (Just Lifted)", "BoxedRep (Just Lifted)"), layout.getPhysicalStorageReps());
+                var indices = FunctionRoot.class.getDeclaredField("argumentIndices");
+                indices.setAccessible(true);
+                assertArrayEquals(used ? new int[]{0, 1} : new int[]{2}, (int[]) indices.get(root));
+
+                var operand = NodeUtil.findFirstNodeInstance(p.entryTarget("entry").getRootNode(), TupleConstruct.class);
+                var evaluations = new int[1];
+                var failure = new RuntimeFault("tuple operand failed");
+                operand.replace(new Expr() {
+                    @Child private Expr child = operand;
+                    @Override public Object execute(VirtualFrame frame) { return child.execute(frame); }
+                    @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+                        if (++evaluations[0] == 2) throw failure;
+                        return child.executeTuple(frame, slots, offset);
+                    }
+                }.proven(operand.getRepresentation()));
+                var pointer = new Object();
+                var fallback = new Object();
+                assertSame(used ? pointer : fallback, run(p, "entry", pointer, fallback));
+                assertEquals(1, evaluations[0]);
+                clear(language);
+                assertSame(failure, assertThrows(RuntimeFault.class, () -> run(p, "entry", pointer, fallback)));
+                assertEquals(2, evaluations[0]);
+                clear(language);
+            }
+        });
+    }
+    @Test void unusedTupleFormalStillChecksEvaluatedReferenceCarriers() throws ReflectiveOperationException {
+        withLanguage(false, (context, language) -> {
+            var mixed = map("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", true,
+                "primReps", list("IntRep", "BoxedRep (Just Lifted)"), "components", list(integer, closure));
+            var p = program(language, "ast", List.of(bind("worker", lam(List.of(arg("tuple", mixed)), n(73)))));
+            var target = p.entryTarget("worker");
+            var input = ((FunctionRoot) target.getRootNode()).getTypedInput();
+            var packet = input.getPacket();
+            var worker = p.entryValue("worker");
+            for (Object leaf : List.of(worker, new Object())) {
+                var loan = input.state().getArguments().acquire(packet);
+                loan.setInputMode(1);
+                packet.setLong(loan, 0, 0L);
+                packet.setLong(loan, input.getHeader(), 31L);
+                packet.setObject(loan, input.getHeader() + 1, leaf);
+                if (leaf == worker) assertEquals(73L, TypedInputs.invokeTypedInput(input, loan, args -> Calls.target(target, args)));
+                else assertThrows(RuntimeFault.class, () -> TypedInputs.invokeTypedInput(input, loan, args -> Calls.target(target, args)));
+                clear(language);
+            }
+        });
+    }
     @Test void threeTargetAndPrefixedThreeTargetCyclesReturnTypedResults() throws ReflectiveOperationException {
         for (String backend : List.of("ast", "bytecode", "bytecode-async")) for (boolean inlining : new boolean[]{true, false}) withLanguage(inlining, (context, language) -> {
             class Builders {
