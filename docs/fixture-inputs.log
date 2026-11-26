@@ -1343,34 +1343,25 @@ Consumer reads receipt paths, manifest, native TSV, pre CBD and reports. Group
   executes that generator; keep table ownership separate from its consumer.
 
 039  data-to-tag
-Fixture rationale (039 data-to-tag)
 Purpose: Check constructor tags survive evaluation and accepted/rejected representation
   cases.
-Produces/consumed result: Stage CBDs and oracle.tsv.
-Cost and overlap: Retain observable tag behavior and essential rejection cases. Exact
-  application counts and output-directory discovery are unjustified; quarantined.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+Build status: ADMITTED as fixture-data-to-tag.
 
-Producer: bin/prepare-data-to-tag.py:main; consumer thc.runtime.DataToTagTest.
-IN: producer, t/fixtures/compiler/DataToTagAudit.hs, exporter/plugin and full
-  auditor/decoder closure listed above. GHC9.14.1 also runs a ghc-package -e signature query.
-Under build/data-to-tag/:
-  pre/core/DataToTagAudit.cbd and post/core/DataToTagAudit.cbd
-    IN source/exporter/stage option; OUT CBDs, stage/ghc/ scratch. Every CBD in
-    each stage/core directory is read/retained, including any stale file.
-  <stage>/<entry>.audit.json: IN entire stage CBD list, capability table, Python
-    auditor and entry name; OUT reports for seven accepted/five rejected entries.
-  NativeDataToTag.hs: IN producer driver template/entries; OUT generated driver.
-  native/data-to-tag-oracle: IN generated driver plus audit source/native packages;
-    OUT executable and native/ intermediates.
-  expected.tsv: IN producer model and cases; OUT independently computed results.
-  oracle.tsv: IN executable and in-memory requests; OUT matching native results.
-  exceptions.tsv: IN executable with forceCase -1; OUT observed exception row.
-  manifest.json: IN all outputs above and source receipt, GHC API signature/info;
-    OUT hashes, stages and audit inventory.
-Consumer reads manifest/receipts, stage CBD, oracle. Receipt omits plugin.py,
-  thc.cabal and auditor import-time tables. Exact exported application counts in
-  producer deserve later redundancy/optimization review.
+CMake fixture-data-to-tag; consumer thc.runtime.DataToTagTest.
+  IN DataToTagAudit.hs, DataToTagAuditNative.hs, exporter, plugin publication
+    and pinned GHC interfaces and native libraries.
+  Under build/data-to-tag/:
+    <pre|post>/core/DataToTagAudit.cbd: seven accepted entries and five rejected
+      family frontiers. Each export writes only this module.
+    <pre|post>/ghc/DataToTagAudit.{hi,o}: export intermediates.
+    native/data-to-tag-oracle, native/{Main,DataToTagAudit}.{hi,o}: native driver
+      and audit source built with the selected GHC and native toolchain.
+    oracle.tsv: 45 signed inputs per entry; forceCase uses only nonnegative inputs.
+  Java checks the stage boundaries and compares native and guest results against
+    an independent tag model. Both backends and inlining choices check installed
+    validity before the first compiled call, compiled entry execution and zero
+    outstanding argument and result loans. The rejected frontiers, forceCase's
+    bottom at -1 and malformed family metadata are Java controls.
 
 040  backend-annotations
 Fixture rationale (040 backend-annotations)

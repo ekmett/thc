@@ -1279,14 +1279,14 @@ class FastInputTests(unittest.TestCase):
                    "javaRelease": {"path": str(self.temp_root / "jdk/release"), "sha256": "b" * 64}}
         self.tool_patch = patch.object(cache, "toolchain", side_effect=lambda root: copy.deepcopy(self.tc))
         self.tool_patch.start(); self.addCleanup(self.tool_patch.stop)
-        self.required_patch = patch.object(cache, "REQUIRED", ("build/data-to-tag/manifest.json",))
+        self.required_patch = patch.object(cache, "REQUIRED", ("build/int-arrays/manifest.json",))
         self.required_patch.start(); self.addCleanup(self.required_patch.stop)
         self.current = cache.identity(self.root)
-        self.put("build/data-to-tag/oracle.tsv", "0\t17\n")
+        self.put("build/int-arrays/oracle.tsv", "0\t17\n")
         self.put("build/core/Fixtures.cbd", json.dumps({"module": "Fixture", "bindings": []}))
         self.manifest = {"inputHashes": {"CMakeLists.txt": self.current["sources"]["CMakeLists.txt"],
                                          self.pinned_name: cache.sha(self.pinned_source)},
-                         "artifactHashes": {"build/data-to-tag/oracle.tsv": cache.digest(self.root / "build/data-to-tag/oracle.tsv")}}
+                         "artifactHashes": {"build/int-arrays/oracle.tsv": cache.digest(self.root / "build/int-arrays/oracle.tsv")}}
         self.write_manifest()
         self.bundle = self.temp_root / "bundle.tar.gz"
 
@@ -1296,7 +1296,7 @@ class FastInputTests(unittest.TestCase):
         p.write_bytes(content if isinstance(content, bytes) else content.encode())
 
     def write_manifest(self):
-        self.put("build/data-to-tag/manifest.json", json.dumps(self.manifest))
+        self.put("build/int-arrays/manifest.json", json.dumps(self.manifest))
 
     def pack(self):
         return cache.pack(self.root, self.current, self.bundle)
@@ -1326,15 +1326,15 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(before, after)
 
     def test_round_trip_preserves_original_provenance_and_all_bytes(self):
-        original = (self.root / "build/data-to-tag/manifest.json").read_bytes()
+        original = (self.root / "build/int-arrays/manifest.json").read_bytes()
         manifest = self.pack(); self.remove_payload(manifest)
         result = cache.restore(self.root, self.current, self.bundle)
         self.assertEqual(manifest, result)
-        self.assertEqual(original, (self.root / "build/data-to-tag/manifest.json").read_bytes())
+        self.assertEqual(original, (self.root / "build/int-arrays/manifest.json").read_bytes())
         for name, expected in result["payload"].items():
             self.assertEqual(expected, cache.digest(self.root / name))
         # Existing identical files are accepted, never overwritten.
-        p = self.root / "build/data-to-tag/oracle.tsv"; before = p.stat().st_mtime_ns
+        p = self.root / "build/int-arrays/oracle.tsv"; before = p.stat().st_mtime_ns
         cache.restore(self.root, self.current, self.bundle)
         self.assertEqual(before, p.stat().st_mtime_ns)
 
@@ -1437,7 +1437,7 @@ class FastInputTests(unittest.TestCase):
 
     def test_original_source_and_artifact_hash_mismatch_rejected(self):
         for section, name in (("inputHashes", "CMakeLists.txt"),
-                              ("artifactHashes", "build/data-to-tag/oracle.tsv"),
+                              ("artifactHashes", "build/int-arrays/oracle.tsv"),
                               ("inputHashes", self.pinned_name)):
             with self.subTest(name=name):
                 old = self.manifest[section][name]; self.manifest[section][name] = "f" * 64
@@ -1531,14 +1531,14 @@ class FastInputTests(unittest.TestCase):
         manifest = self.pack(); self.remove_payload(manifest)
         for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.DIRTYPE, tarfile.FIFOTYPE, tarfile.CHRTYPE):
             def mutate(es):
-                m = tarfile.TarInfo("files/build/data-to-tag/evil.json"); m.type = kind; m.linkname = "/tmp/escape"
+                m = tarfile.TarInfo("files/build/int-arrays/evil.json"); m.type = kind; m.linkname = "/tmp/escape"
                 return es + [(m, b"")]
             with self.subTest(kind=kind): self.rejected_without_writes(self.rewrite(mutate))
 
     def test_self_consistent_unknown_or_tracked_payload_is_not_accepted(self):
         manifest = self.pack(); self.remove_payload(manifest)
         for name in ("build/fast/pass.json", "build/test-results/test/pass.xml", "build/classes/Evil.class",
-                     "build/data-to-tag/evil.sh", "CMakeLists.txt", "vendor/ghc-9.14.1/unknown.hs"):
+                     "build/int-arrays/evil.sh", "CMakeLists.txt", "vendor/ghc-9.14.1/unknown.hs"):
             def mutate(es):
                 doc = json.loads(es[0][1]); doc["payload"][name] = cache.sha(b"evil")
                 return [(es[0][0], cache.canonical(doc)), *es[1:], (tarfile.TarInfo("files/"+name), b"evil")]
@@ -1546,16 +1546,16 @@ class FastInputTests(unittest.TestCase):
 
     def test_symlink_destination_and_conflicting_file_preserved(self):
         manifest = self.pack(); self.remove_payload(manifest)
-        target = self.root / "build/data-to-tag/oracle.tsv"
+        target = self.root / "build/int-arrays/oracle.tsv"
         target.symlink_to(self.temp_root / "missing-target")
         with self.assertRaises(cache.CacheMiss): cache.restore(self.root, self.current, self.bundle)
         self.assertTrue(target.is_symlink()); target.unlink()
-        self.put("build/data-to-tag/oracle.tsv", "existing different evidence")
+        self.put("build/int-arrays/oracle.tsv", "existing different evidence")
         self.rejected_without_writes(self.bundle)
 
     def test_parent_symlink_and_non_directory_conflict(self):
         manifest = self.pack(); self.remove_payload(manifest)
-        directory = self.root / "build/data-to-tag"; directory.rmdir()
+        directory = self.root / "build/int-arrays"; directory.rmdir()
         outside = self.temp_root / "outside"; outside.mkdir()
         directory.symlink_to(outside, target_is_directory=True)
         with self.assertRaises(cache.CacheMiss): cache.restore(self.root, self.current, self.bundle)
@@ -1566,15 +1566,15 @@ class FastInputTests(unittest.TestCase):
     def test_original_provenance_payload_inventory_cannot_be_extended(self):
         manifest = self.pack(); self.remove_payload(manifest)
         def mutate(es):
-            doc = json.loads(es[0][1]); doc["payload"]["build/data-to-tag/unreferenced.json"] = cache.sha(b"{}")
+            doc = json.loads(es[0][1]); doc["payload"]["build/int-arrays/unreferenced.json"] = cache.sha(b"{}")
             return [(es[0][0], cache.canonical(doc)), *es[1:],
-                    (tarfile.TarInfo("files/build/data-to-tag/unreferenced.json"), b"{}")]
+                    (tarfile.TarInfo("files/build/int-arrays/unreferenced.json"), b"{}")]
         self.rejected_without_writes(self.rewrite(mutate))
 
     def test_archive_file_directory_collision(self):
         manifest = self.pack(); self.remove_payload(manifest)
         def mutate(es):
-            doc = json.loads(es[0][1]); name = "build/data-to-tag/oracle.tsv/child.json"
+            doc = json.loads(es[0][1]); name = "build/int-arrays/oracle.tsv/child.json"
             doc["payload"][name] = cache.sha(b"{}")
             return [(es[0][0], cache.canonical(doc)), *es[1:], (tarfile.TarInfo("files/"+name), b"{}")]
         self.rejected_without_writes(self.rewrite(mutate))
@@ -1703,6 +1703,28 @@ class FastInputTests(unittest.TestCase):
                      "pre/core/Extra.cbd", "post/core/Extra.json", "native/Other.o", "oracle.tsv.tmp"):
             self.assertFalse(cache.allowed_payload("build/boxed-arrays/" + name), name)
 
+    def test_data_to_tag_products_exclude_receipts_and_unrelated_outputs(self):
+        import fast_fixtures
+        manifest, _ = fast_fixtures._manifest(Path(__file__).resolve().parents[2])
+        group = manifest["groups"]["data-to-tag"]
+        binary = "build/data-to-tag/native/data-to-tag-oracle"
+        products = {
+            *(f"build/data-to-tag/{stage}/core/DataToTagAudit.cbd" for stage in ("pre", "post")),
+            *(f"build/data-to-tag/{stage}/ghc/DataToTagAudit.{suffix}" for stage in ("pre", "post")
+              for suffix in ("hi", "o")),
+            *(f"build/data-to-tag/native/{module}.{suffix}" for module in ("Main", "DataToTagAudit")
+              for suffix in ("hi", "o")),
+            binary, "build/data-to-tag/oracle.tsv",
+        }
+        self.assertEqual(products, set(group["outputs"]))
+        for name in products:
+            self.assertTrue(cache.allowed_payload(name), name)
+            self.assertIn(name, DECLARED_REQUIRED)
+        self.assertEqual(0o755, cache.safe_mode(0o755, binary))
+        for name in ("manifest.json", "expected.tsv", "exceptions.tsv", "NativeDataToTag.hs", "pre/smallCase.audit.json",
+                     "pre/core/THC.InterfaceClosure.cbd", "post/core/Extra.cbd", "native/Other.o", "oracle.tsv.tmp"):
+            self.assertFalse(cache.allowed_payload("build/data-to-tag/" + name), name)
+
     def test_floating_tuple_products_exclude_receipts_and_unrelated_compiler_outputs(self):
         import fast_fixtures
         manifest, _ = fast_fixtures._manifest(Path(__file__).resolve().parents[2])
@@ -1749,8 +1771,8 @@ class FastInputTests(unittest.TestCase):
                 self.assertFalse(cache.allowed_payload(f"build/{family}/{stage}-core/Other.cbd"))
             self.assertFalse(cache.allowed_payload(f"build/{family}/unreviewed-core/{module}.cbd"))
 
-    def test_address_and_tag_cbd_payloads_admit_only_exact_modules_and_stages(self):
-        for family, module in (("address-fields", "AddressFieldAudit"), ("data-to-tag", "DataToTagAudit")):
+    def test_address_cbd_payloads_admit_only_exact_modules_and_stages(self):
+        for family, module in (("address-fields", "AddressFieldAudit"),):
             for stage in ("pre", "post"):
                 for exported in (module, "THC.InterfaceClosure"):
                     self.assertTrue(cache.allowed_payload(f"build/{family}/{stage}/core/{exported}.cbd"))
@@ -1831,16 +1853,16 @@ class FastInputTests(unittest.TestCase):
         interface = folder/"Foo.dyn_hi"; interface.write_bytes(b"installed interface")
         raw = str(folder/".."/"lib"/"Foo.dyn_hi")
         self.manifest["installedInterface"] = {"path": raw, "sha256": cache.digest(interface)}
-        self.write_manifest(); original = (self.root/"build/data-to-tag/manifest.json").read_bytes()
+        self.write_manifest(); original = (self.root/"build/int-arrays/manifest.json").read_bytes()
         m = self.pack();self.assertIn(raw,m["external"]);self.remove_payload(m)
         cache.restore(self.root,self.current,self.bundle)
-        self.assertEqual(original,(self.root/"build/data-to-tag/manifest.json").read_bytes())
+        self.assertEqual(original,(self.root/"build/int-arrays/manifest.json").read_bytes())
         self.assertFalse(cache.external_allowed(str(folder/"../../../etc/passwd"),self.current))
 
     def test_native_execute_mode_preserved_and_special_or_data_execute_modes_rejected(self):
-        path = self.root/"build/data-to-tag/oracle.tsv"
+        path = self.root/"build/int-arrays/oracle.tsv"
         # A real executable has a native executable name, not an oracle TSV.
-        name = "build/data-to-tag/native/oracle"
+        name = "build/int-arrays/native/oracle"
         self.put(name,b"native bytes");(self.root/name).chmod(0o755)
         self.manifest["artifactHashes"][name]=cache.digest(self.root/name);self.write_manifest()
         m=self.pack();self.remove_payload(m);cache.restore(self.root,self.current,self.bundle)
@@ -1850,7 +1872,7 @@ class FastInputTests(unittest.TestCase):
         with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o755,"build/core/Fixtures.cbd")
 
     def test_pack_sanitizes_write_permissions_without_overwriting_existing_modes(self):
-        name = "build/data-to-tag/oracle.tsv"
+        name = "build/int-arrays/oracle.tsv"
         path = self.root / name
         original = path.read_bytes()
         path.chmod(0o664)

@@ -1340,11 +1340,34 @@
       "sources": ["t/fixtures/compiler/TupleArithmeticAudit.hs", "t/fixtures/compiler/Explicit64PrimopsAudit.hs", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs", "bin/check-demand-metadata.py", "bin/check-cbv-metadata.py"]
     },
     "data-to-tag": {
-      "quarantined": true,
+      "cmakeTarget": "fixture-data-to-tag",
+      "ciPlatforms": ["Linux", "Darwin"],
       "junit": ["thc.runtime.DataToTagTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-data-to-tag.py"]}],
-      "outputs": ["build/data-to-tag"],
-      "sources": ["bin/prepare-data-to-tag.py", "t/fixtures/compiler/DataToTagAudit.hs"]
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-data-to-tag"]}],
+      "outputs": [
+        "build/data-to-tag/pre/core/DataToTagAudit.cbd",
+        "build/data-to-tag/post/core/DataToTagAudit.cbd",
+        "build/data-to-tag/pre/ghc/DataToTagAudit.hi",
+        "build/data-to-tag/pre/ghc/DataToTagAudit.o",
+        "build/data-to-tag/post/ghc/DataToTagAudit.hi",
+        "build/data-to-tag/post/ghc/DataToTagAudit.o",
+        "build/data-to-tag/native/data-to-tag-oracle",
+        "build/data-to-tag/native/Main.hi",
+        "build/data-to-tag/native/Main.o",
+        "build/data-to-tag/native/DataToTagAudit.hi",
+        "build/data-to-tag/native/DataToTagAudit.o",
+        "build/data-to-tag/oracle.tsv"
+      ],
+      "sources": [
+        "cmake/CoreFixtures.cmake",
+        "cmake/CaptureOutput.cmake",
+        "cmake/NativeGhc.cmake",
+        "t/fixtures/compiler/DataToTagAudit.hs",
+        "t/fixtures/compiler/DataToTagAuditNative.hs",
+        "bin/export-core.sh",
+        "bin/toolchain.sh",
+        "bin/plugin.py"
+      ]
     },
     "mutable-bytearray-size": {
       "quarantined": true,
