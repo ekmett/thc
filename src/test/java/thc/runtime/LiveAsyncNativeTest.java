@@ -44,7 +44,14 @@ public class LiveAsyncNativeTest {
         var module = thc.CoreCbdFixtures.read(new File(root, "build/live-async/" + stage + "/core/LiveAsyncAudit.cbd").toPath());
         var bindings = new LinkedHashMap<Object, Map<String, Object>>();
         for (var entry : entries) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(module, "main:LiveAsyncAudit." + entry).get("bindings")) bindings.putIfAbsent(binding.get("id"), binding);
+        bindings.putIfAbsent(CoreBlockedExceptions.MVAR, blockedMVarPlaceholder());
         var result = new LinkedHashMap<>(module); result.put("bindings", new ArrayList<>(bindings.values())); result.put("instrument", true); return result;
+    }
+    // MVar primitives implicitly reference this RTS CAF; this fixture links only its own module.
+    private static Map<String, Object> blockedMVarPlaceholder() {
+        Map<String, Object> rep = Map.of("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
+        return Map.of("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR, "type", "SomeException",
+            "lifted", true, "arity", 0, "rep", rep, "expr", List.of("var", CoreBlockedExceptions.MVAR, Map.of("rep", rep)));
     }
     private void compile(RootCallTarget target) throws Exception {
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);

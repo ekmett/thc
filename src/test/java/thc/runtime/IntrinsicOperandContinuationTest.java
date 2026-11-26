@@ -24,6 +24,12 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Real MVar cuts in foreign and intrinsic operands retain prefixes and pending calls. */
 class IntrinsicOperandContinuationTest {
     private static final String PREFIX = "main:IntrinsicOperands.";
+    // MVar primitives implicitly reference this RTS CAF; this fixture links only its own module.
+    private static Map<String, Object> blockedMVarPlaceholder() {
+        Map<String, Object> rep = Map.of("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
+        return Map.of("id", CoreBlockedExceptions.MVAR, "name", CoreBlockedExceptions.MVAR, "type", "SomeException",
+            "lifted", true, "arity", 0, "rep", rep, "expr", List.of("var", CoreBlockedExceptions.MVAR, Map.of("rep", rep)));
+    }
     @SuppressWarnings("unchecked") private static Map<String, Object> module(boolean vector, boolean nested) throws Exception {
         var path = Path.of(System.getProperty("thc.projectRoot"), "build/truffle-strings");
         var manifest = (Map<String, Object>) Json.parse(Files.readString(path.resolve("manifest.json")));
@@ -32,7 +38,8 @@ class IntrinsicOperandContinuationTest {
                 var bytes = Files.readAllBytes(Path.of(System.getProperty("thc.projectRoot"), entry.getKey()));
                 assertEquals(entry.getValue(), HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)));
             }
-        var source = thc.CoreCbdFixtures.read(path.resolve("core/IntrinsicOperands.cbd"));
+        var source = new LinkedHashMap<>(thc.CoreCbdFixtures.read(path.resolve("core/IntrinsicOperands.cbd")));
+        var linked = new ArrayList<>((List<Map<String, Object>>) source.get("bindings")); linked.add(blockedMVarPlaceholder()); source.put("bindings", linked);
         String name = vector ? "vectorOperands" : "stringOperands";
         var selected = CoreModules.reachable(source, List.of(PREFIX + name, PREFIX + "takeRaw", PREFIX + "takeIndex", PREFIX + "takeInt64"), true);
         selected.put("instrument", true);
