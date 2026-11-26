@@ -65,6 +65,12 @@ public final class FunctionRoot extends GuestRoot {
     void preserveObservedArguments() { observedArguments = true; }
     void enableOwnedOrdinaryArguments() { consumesOrdinaryArguments = true; }
     boolean consumesOrdinaryArguments() { return consumesOrdinaryArguments && getTypedInput() == null; }
+    record InputReferenceCheck(int index, Class<?> carrier) {}
+    private static final InputReferenceCheck[] NO_INPUT_CHECKS = new InputReferenceCheck[0];
+    @CompilationFinal(dimensions = 1) private InputReferenceCheck[] unusedInputChecks = NO_INPUT_CHECKS;
+    void configureUnusedInputChecks(List<InputReferenceCheck> checks) {
+        unusedInputChecks = checks.toArray(InputReferenceCheck[]::new);
+    }
     private final String label;
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] environmentSlots;
@@ -551,6 +557,8 @@ public final class FunctionRoot extends GuestRoot {
         TypedInputLayout entry = getTypedInput();
         if (entry == null) throw fault("Target does not support typed tuple inputs");
         entry.validateSelfSource(source, frame, node);
+        for (InputReferenceCheck check : unusedInputChecks)
+            requireReferenceCarrier(source.reference(frame, node, null, check.index()), check.carrier());
         for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(source.reference(frame, node, null, index));
         for (int i = 0; i < argumentSlots.length; i++) {
             int from = argumentIndices[i], to = argumentSlots[i];
@@ -574,6 +582,8 @@ public final class FunctionRoot extends GuestRoot {
         if (entry == null) throw fault("Target does not support typed tuple inputs");
         try {
             if (initial) entry.validate(input); else entry.validateTail(input);
+            for (InputReferenceCheck check : unusedInputChecks)
+                requireReferenceCarrier(entry.getPacket().getObject(input, entry.getHeader() + check.index()), check.carrier());
             for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(entry.getPacket().getObject(input, index + entry.getHeader()));
             if (initial) frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(entry.getPacket().getLong(input, 0)));
             for (int i = 0; i < argumentSlots.length; i++) {

@@ -39,8 +39,10 @@ optional dense scalar handoff mode.
 
 A typed call passes a single precise generated storage object in the outer Truffle
 argument array. Tuple primitive leaves never become Object[] payload elements.
-The callee copies the fields into its own typed locals and releases the input
-before guest continuation. Input and result storage have independent ownership;
+For a wholly unused tuple formal, AST lowering omits its callee frame slots.
+The caller still evaluates and transports the tuple, and entry still checks
+any required reference carriers. A used tuple formal keeps its full set of
+typed locals. The callee releases the input before guest continuation. Input and result storage have independent ownership;
 an outstanding result cannot be overwritten by preparing the next call.
 Once a typed tail call has staged every operand, the AST can clear reference
 locals passed directly as arguments. A tuple-result call scrutinized by an

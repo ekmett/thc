@@ -825,6 +825,7 @@ public final class Program implements ExecutableProgram {
         int[] environmentSlots = ints(captureDestinations);
         int[][] environmentVectorSlots = vectorDestinations.toArray(int[][]::new);
         List<Integer> argumentSlots = new ArrayList<>(), argumentIndices = new ArrayList<>();
+        List<FunctionRoot.InputReferenceCheck> unusedInputChecks = null;
         List<CoreRepresentation> argumentProofs = new ArrayList<>();
         for (int i = 0; i < args.size(); i++) {
             Map<String, Object> arg = args.get(i);
@@ -836,6 +837,17 @@ public final class Program implements ExecutableProgram {
             if (proof.isTypedTransport()) {
                 if (lifted) throw new RuntimeFault("Typed formal cannot be lifted");
                 List<CoreRepresentation> fields = ArgumentLayout.leaves(proof);
+                if (proof.isTuple() && !free.contains(arg.get("id"))) {
+                    // Keep the full input ABI and its carrier checks. No destination is read by this body.
+                    for (int leaf = 0; leaf < fields.size(); leaf++) {
+                        Class<?> carrier = fields.get(leaf).referenceCarrier();
+                        if (carrier != null) {
+                            if (unusedInputChecks == null) unusedInputChecks = new ArrayList<>();
+                            unusedInputChecks.add(new FunctionRoot.InputReferenceCheck(inputLayout.offset(i) + leaf, carrier));
+                        }
+                    }
+                    continue;
+                }
                 int[] slots = new int[fields.size()];
                 for (int leaf = 0; leaf < slots.length; leaf++) slots[leaf] = scope.layout.bind(arg.get("id") + " typed input " + leaf);
                 scope.bindTuple((String) arg.get("id"), proof, slots);
@@ -927,6 +939,7 @@ public final class Program implements ExecutableProgram {
         root.configureInitialClears(scope.layout.firstLocalSlot(), scope.layout.initialClears(), scope.layout.usesIllegalDefault());
         root.configureInputProofs(inputProofs);
         root.configureScalarVoidInputs(inputProofs);
+        if (unusedInputChecks != null) root.configureUnusedInputChecks(unusedInputChecks);
         root.configureEagerAsyncPolls(eagerAsyncPolls);
         if (reusableCode) root.configureProgramSlot(scope.programSlot, codeIdentity);
         if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {
