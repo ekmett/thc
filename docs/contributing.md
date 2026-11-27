@@ -77,7 +77,9 @@ the platform's normal decoding and newline conversion. `exit.txt` appears only
 after capture completes; its absence means an incomplete invocation, not a
 passing check. Intensive cancellation artifacts
 include these directories and `commands.log`. Preparation remains bounded by
-the outer job, while runtime checks retain their individual deadlines.
+the outer job, while runtime checks retain their individual deadlines. Invalid
+project rejection has its own diagnostic-preserving deadline and runs before
+checkout plugin preparation; a timeout is a failed check, not a valid rejection.
 
 Package integration checks retain their focused selectors for explicit runs.
 The driver suite's public-package smoke compares Integer, Text, ByteString and

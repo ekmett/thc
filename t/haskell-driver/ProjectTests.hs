@@ -10,7 +10,7 @@
 -- Portability : Native GHC; fixture compiler and host process services
 --
 -- Tests for project.
-module ProjectTests (tests, acquisitionTests, buildTests, exceptionBridgeTests, interopTests, cstringTests, installedProducerTests) where
+module ProjectTests (tests, rejectionTests, acquisitionTests, buildTests, exceptionBridgeTests, interopTests, cstringTests, installedProducerTests) where
 
 import Control.Monad (foldM, forM_, when)
 import Data.Aeson (Value)
@@ -23,6 +23,7 @@ import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist,
 import System.FilePath ((</>), takeDirectory, takeFileName)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
+import NativeCacheTests (withScratch)
 
 -- | A selected installed root must reject incompatible or missing products
 -- before creating project output or attempting a checkout producer rebuild.
@@ -218,6 +219,23 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
     unusedSidecar <- doesFileExist (linkedOutput </> "native/runtime-sidecar/cabal.project")
     assertBool "already linked bridge does not build another runtime" (not unusedSidecar)
 
+-- | Invalid projects must be rejected by Cabal without preparing the plugin.
+-- The empty THC root deliberately has no producer: premature preparation fails
+-- with a different diagnostic. A timeout remains a test failure with raw output.
+rejectionTests :: Env -> Test
+rejectionTests env = TestLabel "project rejection precedes plugin preparation" $ TestCase $
+  withScratch $ \base -> do
+    let producer = base </> "empty-thc"
+    createDirectoryIfMissing True producer
+    forM_ [("acquire", "runnable"), ("build", "build")] $ \(command, selection) -> do
+      rejected <- run env base Nothing 60
+        [command, "fail-frontier", "--project-dir", base, "--thc-root", producer]
+      assertFailure rejected
+      assertNoStdout rejected
+      assertContains ("Cabal " ++ selection ++ " target selection failed") (err rejected)
+    assertBool "rejection does not prepare a checkout plugin" . not
+      =<< doesDirectoryExist (producer </> "build")
+
 acquisitionTests :: Env -> Test
 acquisitionTests env = TestLabel "project acquisition stops before audit and execution" $ TestCase $
   -- Acquire the original MonadFail/exception program with complete pinned Core.
@@ -234,10 +252,6 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
       assertNoStdout rejected
       published <- doesFileExist (output </> "packages.json")
       assertBool "CLI rejects runtime options before acquisition" (not published)
-    notProject <- runPreparation env base
-      ["acquire", "--project-dir", base, "fail-frontier", "--thc-root", thcRoot env]
-    assertFailure notProject
-    assertContains "Cabal runnable target selection failed" (err notProject)
     acquired <- runPreparation env base arguments
     assertSuccess acquired
     assertNoStdout acquired
