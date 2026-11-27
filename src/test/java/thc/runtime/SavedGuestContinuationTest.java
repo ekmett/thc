@@ -595,7 +595,7 @@ class SavedGuestContinuationTest {
              var stranger = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build();
              var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
             owner.initialize("thc"); stranger.initialize("thc");
-            for (int route = 0; route < 5; route++) {
+            for (int route = 0; route < 6; route++) {
                 Driver driver; ContinuationResult token; Object boundary; ManagedMVar.Request request;
                 PendingWait pending; GuestThreads threads; var cell = new ManagedMVar();
                 owner.enter();
@@ -617,12 +617,15 @@ class SavedGuestContinuationTest {
                     child.setTarget(null); child.setValue(token); child.setState(5);
                     if (route == 0) boundary = child;
                     else if (route == 1) boundary = new CallSegment(token);
-                    else if (route == 2) {
+                    else if (route == 2 || route == 5) {
                         var source = new LifetimeOwner(language);
                         var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, source.getFrameDescriptor());
+                        if (route == 5) child.setValue(new AstContinuation(source, AstStackSpill.INSTANCE,
+                            MaskingState.UNMASKED, frame, List.of(), StackAnnotationState.EMPTY));
                         var ast = new AstContinuation(source, new ThunkSuspended(child), MaskingState.UNMASKED,
                             frame, List.of((activation, input) -> ((ChildResume) input).takeValue()), StackAnnotationState.EMPTY);
                         boundary = parked(source.getCallTarget(), ast);
+                        if (route == 5) child.setValue(token);
                     } else {
                         var wait = new Force.DriverWait(driver.force, root, new CallSegment(token), pending, false, new Metrics(false));
                         boundary = route == 3 ? wait : parked(root.getCallTarget(), wait);

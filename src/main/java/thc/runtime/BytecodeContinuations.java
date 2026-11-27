@@ -115,6 +115,7 @@ final class BytecodeContinuations {
         ContinuationVisited seen = null;
         Object first = null, second = null, third = null;
         for (;;) {
+            if (value instanceof AstContinuation ast && ast.hasWaitFreeSpillPath()) return;
             if (value != null) {
                 if (seen == null) {
                     if (value == first || value == second || value == third)
