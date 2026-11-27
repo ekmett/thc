@@ -379,28 +379,21 @@ buildProject action opts target = do
   inherited <- getEnvironment
   launchEnvironment <- runtimeDebugEnvironment Host.os opts inherited
   let environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
-  -- Cabal can build thc's executable without building its library. Publish the
-  -- actual Cabal plugin registration before consulting the plugin manifest.
-  plugin <- case producer of
+  -- Validate installed producers immediately. Checkout publication is deferred
+  -- until Cabal accepts the requested project and target; selection only queries
+  -- the native compiler and does not load the THC plugin.
+  preparePlugin <- case producer of
     Just installed -> do
       runCommandWithEnv True "python3" ["-B", thcRoot </> "bin/plugin.py", "--root", thcRoot,
         "--check-installed", "--ghc", compiler, "--ghc-pkg", packageTool] thcRoot (Just environment)
-      pure installed
-    Nothing -> do
+      pure (pure installed)
+    Nothing -> pure $ do
       requireFile buildPlugin
       let tools = thcRoot </> "build/compiler"
       createDirectoryIfMissing True tools
       withLock (tools </> "cabal-tools.lock") $ do
         runCommandWithEnv True buildPlugin [] thcRoot (Just environment)
         readJson (tools </> "plugin.json")
-  schema <- field plugin "schema" :: IO Int
-  require (schema == 1) "unsupported THC plugin manifest"
-  pluginDb <- field plugin "packageDb"
-  pluginUnit <- field plugin "unitId"
-  pluginLibrary <- field plugin "sharedLibrary"
-  registeredLibrary <- field plugin "cabalSharedLibrary"
-  requireFile pluginLibrary
-  requireDirectory pluginDb
   let requested = distDirectory flags
       requestedOutput = if isAbsolute requested then requested else project </> requested
   createDirectoryIfMissing True requestedOutput
@@ -409,8 +402,8 @@ buildProject action opts target = do
   source <- traverse canonicalizePath (runGhcSource opts)
   withProjectLock output $
     runBuiltProject action project working thcRoot runtime output native (runTarget opts) projectOptions
-                    pluginDb pluginUnit pluginLibrary compiler (Just packageTool) (runInstalledCore opts)
-                    source registeredLibrary (runVerifyArtifacts opts) launchEnvironment (runArguments opts)
+                    preparePlugin compiler (Just packageTool) (runInstalledCore opts)
+                    source (runVerifyArtifacts opts) launchEnvironment (runArguments opts)
 
 resolveRunnable :: FilePath -> String -> [String] -> [(String, String)] -> FilePath -> IO Unit
 resolveRunnable working target configuration environment native = do
@@ -690,17 +683,18 @@ withOriginalStoreCapture context helper planned selected project environment bod
       pure path
 
 runBuiltProject :: ProjectAction -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
-                   String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> [(String, String)] -> [String] -> IO ()
+                   String -> [String] -> IO Value -> FilePath ->
+                   Maybe FilePath -> String -> Maybe FilePath -> Bool -> [(String, String)] -> [String] -> IO ()
 runBuiltProject action project working thcRoot runtime output native target projectOptions
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts launchEnvironment guestArguments = do
+                preparePlugin ghc ghcPkg installedPolicy ghcSource verifyArtifacts launchEnvironment guestArguments = do
   driver <- getExecutablePath
   producer <- installedProducer thcRoot
   layout <- maybe (pure (thcRoot </> "src/driver/cbits/target-layout.c")) (`field` "targetLayout") producer
+  installedDb <- traverse (`field` "packageDb") producer
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
       packageTool = maybe (takeDirectory ghc </> "ghc-pkg") id ghcPkg
-      configuration = projectOptions ++ ["--package-db=" ++ pluginDb | producer /= Nothing] ++ ["--builddir", native,
+      configuration = projectOptions ++ ["--package-db=" ++ database | Just database <- [installedDb]] ++ ["--builddir", native,
                        "--with-compiler", proxy, "--with-hc-pkg", packageTool]
   createDirectoryIfMissing True (takeDirectory proxy)
   let wrapper = "#!/bin/sh\n# compiler " ++ shaHex (BL.toStrict (encode (ghc, packageTool))) ++
@@ -714,11 +708,11 @@ runBuiltProject action project working thcRoot runtime output native target proj
   let overrides = [("THC_PROXY_DRIVER", driver), ("THC_PROXY_GHC", ghc),
                    ("THC_PROXY_NATIVE_RECIPES", receipts), ("THC_PROXY_GLOBAL_UNITS", ""),
                    ("THC_PROXY_CAPTURE", native </> "cache/thc/capture"),
-                   ("THC_PROXY_PLUGIN_DB", pluginDb), ("THC_PROXY_PLUGIN_UNIT", pluginUnit),
-                   ("THC_PROXY_PLUGIN_LIBRARY", pluginLibrary),
                    ("THC_PROXY_NO_LINK_UNIT", ""),
                    ("THC_PROXY_NATIVE_PIECES", native </> "cache/thc/native-pieces-v1")]
-      selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_BUILD_ADMISSION" : map fst overrides)) inherited
+      pluginKeys = ["THC_PROXY_PLUGIN_DB", "THC_PROXY_PLUGIN_UNIT", "THC_PROXY_PLUGIN_LIBRARY"]
+      selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem`
+        ("THC_PROXY_BUILD_ADMISSION" : pluginKeys ++ map fst overrides)) inherited
       cabal = maybe "cabal" id (lookup "CABAL" selectionEnvironment)
   selectedUnits <- case action of
     BuildTargets _ targets -> resolveBuildTargets working targets configuration selectionEnvironment native
@@ -741,14 +735,25 @@ runBuiltProject action project working thcRoot runtime output native target proj
         runnable = maybe False ((`elem` ["exe", "test", "bench"]) . takeWhile (/= ':'))
           (jsonField (unitValue unit) "component-name" :: Maybe String)
     pure [unitId unit | guestOnly && runnable]
-  let initialEnvironment = ("THC_PROXY_NO_LINK_UNIT", unlines noLinkUnits) :
-        filter ((/= "THC_PROXY_NO_LINK_UNIT") . fst) selectionEnvironment
   targetComponents <- forM selectedUnits $ \unit -> do
     name <- componentTarget unit
     component <- field (unitValue unit) "component-name"
     require (takeWhile (/= ':') component `elem` ["lib", "exe", "test", "bench"])
       ("Core acquisition does not support Cabal component " ++ name)
     pure name
+  plugin <- preparePlugin
+  schema <- field plugin "schema" :: IO Int
+  require (schema == 1) "unsupported THC plugin manifest"
+  pluginDb <- field plugin "packageDb"
+  pluginUnit <- field plugin "unitId"
+  pluginLibrary <- field plugin "sharedLibrary"
+  registeredLibrary <- field plugin "cabalSharedLibrary"
+  requireFile pluginLibrary
+  requireDirectory pluginDb
+  let initialEnvironment = [("THC_PROXY_NO_LINK_UNIT", unlines noLinkUnits),
+        ("THC_PROXY_PLUGIN_DB", pluginDb), ("THC_PROXY_PLUGIN_UNIT", pluginUnit),
+        ("THC_PROXY_PLUGIN_LIBRARY", pluginLibrary)] ++
+        filter ((/= "THC_PROXY_NO_LINK_UNIT") . fst) selectionEnvironment
   selectionCompiler <- field selectionPlan "compiler-id"
   selectionAbi <- field selectionPlan "compiler-abi"
   selectionOs <- field selectionPlan "os"
